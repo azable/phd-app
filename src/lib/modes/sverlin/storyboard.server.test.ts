@@ -217,11 +217,6 @@ describe('storyboards', () => {
       'The scene then passes lo to Card, which reads no state'
     ],
     [
-      'an input not passed',
-      storyboard(scene('name="search"', '<Search values={values} lo={lo} />')),
-      '<Search> declares hi among its inputs, and the scene search passes none'
-    ],
-    [
       'two scenes of one name',
       storyboard(scene('name="search"'), scene('name="search"')),
       'Two scenes are named search'

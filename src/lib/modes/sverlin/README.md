@@ -23,8 +23,8 @@ of a pair should differ in how they show the algorithm.
 
 Most refused first sources break one of these rules, each explained below:
 
-- A layout's `of` lists every variable it reads, and those of the layouts it
-  draws by tag. Labels need no listing.
+- A layout reads the variables and labels its body names: write no `of`, and
+  draw a layout by its bare tag, `<Range />`.
 - Inside a labelled block every statement is in a label, except declarations at
   its top.
 - A label is named by its full path, `@pass.scan.newMin`, never `@pass.newMin`.
@@ -73,20 +73,17 @@ layout, a view, or a node with a `kind`.
 
 - The top level holds views, at least one layout, and the storyboard (see
   Storyboard): every source declares its layouts, and one without is refused. A
-  layout,
-  `<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>`,
-  names its inputs in `of`, the input and algorithm variables it reads, as
-  `values`, and reads no other variable: one it reads without declaring is
-  refused, naming what to add. Labels are the whole algorithm's, so a layout
-  reads any label, as `{@insert.compare}` or `<When of="@scan.found">`, without
-  listing it. Its two props are written as they are, never computed.
-- A layout is drawn in another by its tag, `<Range lo={lo} hi={hi} />`, which
-  passes every variable it declares by name, each as the state of its own name;
-  one missing, extra, or passed another value is refused. The layout drawing it
-  declares what it passes. A tag is closed at once, `/>`, and a layout drawn
-  inside itself is refused. A tag in a node of text and values is drawn inline,
-  as a value is, as
-  `<Node>Searching for <Target target={target} /> in the list</Node>`.
+  layout, `<Layout name="Range"><Node>between {lo} and {hi}</Node></Layout>`,
+  reads the input and algorithm variables and the labels its body names, as `lo`
+  and `{@insert.compare}`, and those of the layouts it draws; a name that is
+  none of them is refused where it is written. Its name is written as it is,
+  never computed. An `of` listing variables, as `of="lo, hi"`, is still read,
+  and then the layout reads only those.
+- A layout is drawn in another by its tag, `<Range />`, reading the state at
+  that step. A tag may pass a variable by its own name, `<Range />`, as older
+  sources do, never another value. A tag is closed at once, `/>`, and a layout
+  drawn inside itself is refused. A tag in a node of text and values is drawn
+  inline, as a value is, as `<Node>Searching for <Target /> in the list</Node>`.
 - A layout a scene shows (see Storyboard) arranges the whole page: its body is
   one root `<Node>`, the frame (see Page frame), which holds values, layout
   tags, with `{#if}` and `{#each}` around them, a `<Listing />`, and nodes
@@ -97,11 +94,11 @@ layout, a view, or a node with a `kind`.
   Draw the layouts in the root rather than one layout holding the whole page.
 
 ```svelte
-<Layout name="Side" of="values, lo, hi">
-  <Node layout="row"><Board values={values} /><Node><Range lo={lo} hi={hi} /><Listing /></Node></Node>
+<Layout name="Side">
+  <Node layout="row"><Board /><Node><Range /><Listing /></Node></Node>
 </Layout>
-<Layout name="Stacked" of="values, lo, hi">
-  <Node><Title /><Board values={values} /><Range lo={lo} hi={hi} /></Node>
+<Layout name="Stacked">
+  <Node><Title /><Board /><Range /></Node>
 </Layout>
 ```
 
@@ -155,9 +152,9 @@ scene at least.
 
 ```svelte
 <Storyboard>
-  <Scene name="sort" case="main"><Arrays values={values} from={from} /></Scene>
+  <Scene name="sort" case="main"><Arrays /></Scene>
   <Scene name="one-merge" case="main" within="@sort.merge#1" pause="@sort.merge.take">
-    <Arrays values={values} from={from} />
+    <Arrays />
   </Scene>
   <Scene name="then"><Note /></Scene>
 </Storyboard>
@@ -165,9 +162,9 @@ scene at least.
 
 - A scene can also step through a query's result with `over` and `as` (see
   Queries).
-- A scene is a stepping scene if it passes state, and a single frame otherwise,
-  as a title card or a note between cases: its layout reads no state, and
-  `case`, `pause`, `within`, or `at` on a scene whose layout reads none is
+- A scene is a stepping scene if its layout reads state, and a single frame
+  otherwise, as a title card or a note between cases: its layout reads no state,
+  and `case`, `pause`, `within`, or `at` on a scene whose layout reads none is
   refused.
 - A stepping scene names the case it shows, as `case="present"` (see Cases); one
   naming none, or a case no `<Case>` names, is refused. Its stops, `within`,
@@ -485,15 +482,15 @@ Binary search, stopping where it finds the target:
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Index" name="Mark"><Pointed /></View>
-<Layout name="Title" of="target"><Node>Binary search for {target}</Node></Layout>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Range" of="lo, hi"><Node>between {lo} and {hi}</Node></Layout>
+<Layout name="Title"><Node>Binary search for {target}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Range"><Node>between {lo} and {hi}</Node></Layout>
 
-<Layout name="Stacked" of="lo, mid, hi, target, values">
+<Layout name="Stacked">
   <Node>
-    <Title target={target} />
-    <Cells values={values} />
-    <Range lo={lo} hi={hi} />
+    <Title />
+    <Cells />
+    <Range />
     {lo}
     {mid}
     {hi}
@@ -503,7 +500,7 @@ Binary search, stopping where it finds the target:
 <Case name="main" values={[2, 5, 8, 12, 16, 23, 38]} target={23} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked lo={lo} mid={mid} hi={hi} target={target} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -676,13 +673,13 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
 <View of="NodeRef" name="Here"><Pointed /></View>
-<Layout name="List" of="nodes">
+<Layout name="List">
   <Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node>
 </Layout>
 
-<Layout name="Stacked" of="nodes, prev, cur">
+<Layout name="Stacked">
   <Node>
-    <List nodes={nodes} />
+    <List />
     {prev}
     {cur}
   </Node>
@@ -693,7 +690,7 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
       nodes.add(ListNode({ name: 'C', next: End('end') })) })) }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin, @rewire"><Stacked nodes={nodes} prev={prev} cur={cur} /></Scene>
+  <Scene name="main" case="main" pause="@begin, @rewire"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -713,12 +710,12 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   layout reads a field through a reference too, from the node it refers to, as
   `{#each queue as q}{q.name}{/each}`; a view drawing a reference itself as a
   value is refused, as it would show the node's place.
-- The pool is a value as any input is: a scene passes it to a layout, which
-  declares it, and `{#each nodes as n}` draws every node, each through the
-  record's view, in a free layout that places them by their links. A node stays
-  in the pool to the end, keeping its identity as its links change, so it stays
-  put; one nothing refers to any more is still drawn. A step records a reference
-  as its node's place in the pool, so a circular list stays finite.
+- The pool is a value as any input is: a layout reads it by name, and
+  `{#each nodes as n}` draws every node, each through the record's view, in a
+  free layout that places them by their links. A node stays in the pool to the
+  end, keeping its identity as its links change, so it stays put; one nothing
+  refers to any more is still drawn. A step records a reference as its node's
+  place in the pool, so a circular list stays finite.
 - `<Link to={n.next} />` with no `from`, in a node of the record's view, leaves
   that node for the node the field refers to, and the free layout around the
   nodes lays it out; a link beside the view's nodes, in none, leaves nothing.
@@ -842,10 +839,10 @@ place:
   <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
 <Layout name="Swapping"><Node>out of order, so they swap</Node></Layout>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Board" of="values, @sweep.pair.test, @sweep.pair.swap">
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Board">
   <Node layout="column">
-    <Cells values={values} />
+    <Cells />
     <OneOf><When of="@sweep.pair.test">
       {@sweep.pair.test}
     </When><When of="@sweep.pair.swap">
@@ -854,16 +851,16 @@ place:
   </Node>
 </Layout>
 
-<Layout name="Stacked" of="values, @sweep.pair.test, @sweep.pair.swap">
+<Layout name="Stacked">
   <Node>
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
 <Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked values={values} /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -997,16 +994,14 @@ beside the layouts:
   call to the calls it makes (see Calls).
 - `max` is the most rows any input can give, required, so the layout keeps room
   for all of them and nothing moves as rows come and go.
-- The result is state: a layout declares it, as
-  `<Layout name="Stack" of="stack">`, and a scene passes it, as
-  `<Stack stack={stack} />`.
+- The result is state, which a layout reads by name, as `{#each stack as call}`.
 
 A scene can step through a query's result, one row a step, in the result's
 order:
 
 ```svelte
 <Select name="levels" from="@sort" where="ended <= now" group="depth" order="depth, lo" max="8" />
-<Scene name="levels" case="main" over={levels} as="level"><Level level={level} /></Scene>
+<Scene name="levels" case="main" over={levels} as="level"><Level /></Scene>
 ```
 
 - The query is read as the case ends. Each step holds one row as `level`, or,
@@ -1054,7 +1049,7 @@ const SortCall = call('sort', { max: 15 });
   <Node layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
 </View>
 <Select name="calls" from="SortCall" where="started <= now" order="started" />
-<Layout name="Tree" of="calls">
+<Layout name="Tree">
   <Node>
     <Node kind="Calls" layout="free">
       {#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}
@@ -1591,18 +1586,18 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Pointed /></View>
-<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Board" of="key, values">
+<Layout name="Key"><Node>key {key}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Board">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Key key={key} /><Cells values={values} /></Node>
+    <Node layout="column"><Key /><Cells /></Node>
   </Node>
 </Layout>
 
-<Layout name="Stacked" of="i, j, key, values">
+<Layout name="Stacked">
   <Node>
-    <Board key={key} values={values} />
+    <Board />
     {i}
     {j}
   </Node>
@@ -1611,7 +1606,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 <Case name="main" values={[5, 2, 4, 1]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -1731,7 +1726,7 @@ covers the layer.
 cell by `row` and `col`, usually loop indices or positions:
 
 ```svelte
-<Layout name="Table" of="x, y, t">
+<Layout name="Table">
   <Node layout="grid">
     {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
     {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
@@ -1927,7 +1922,7 @@ at marked and the queue drawn by number:
 <View of="VertexRef" name="RefCard"><Node value={this} /></View>
 <View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
 <View of="VertexRef" name="Marked"><Pointed /></View>
-<Layout name="Graph" of="vertices, out">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as v, k}
       <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
@@ -1935,12 +1930,12 @@ at marked and the queue drawn by number:
     {/each}
   </Node>
 </Layout>
-<Layout name="QueueLine" of="queue"><Node>queue {queue}</Node></Layout>
+<Layout name="QueueLine"><Node>queue {queue}</Node></Layout>
 
-<Layout name="Stacked" of="current, vertices, out, queue, @visit.look.check.next">
+<Layout name="Stacked">
   <Node>
-    <Graph vertices={vertices} out={out} />
-    <QueueLine queue={queue} />
+    <Graph />
+    <QueueLine />
     {current}
     {@visit.look.check.next}
   </Node>
@@ -1955,6 +1950,6 @@ at marked and the queue drawn by number:
   ]} out={[[1, 2], [3], [3], [4], []]} />
 
 <Storyboard>
-  <Scene name="search" case="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="search" case="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked /></Scene>
 </Storyboard>
 ```

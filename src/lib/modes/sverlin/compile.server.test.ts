@@ -1215,7 +1215,7 @@ describe('scope', () => {
           '<Layout name="Main" of="key"><Node>{key}{#if never}<Node>Never</Node>{/if}</Node></Layout>'
         )
       )
-    ).toThrow('The view reads never, which nothing gives it');
+    ).toThrow('The view reads never, which is no variable or label of the algorithm');
   });
 });
 

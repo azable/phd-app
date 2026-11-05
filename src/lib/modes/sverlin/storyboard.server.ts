@@ -42,7 +42,7 @@ export type Scene = {
 
 type Problem = { message: string; start: number };
 /** What a layout reads: the variables and labels it declares. */
-type Inputs = { variables: readonly string[]; labels: readonly string[] };
+type Inputs = { variables: readonly string[]; labels: readonly string[]; inferred?: boolean };
 
 const sceneName = /^[A-Za-z][\w-]*$/u;
 const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
@@ -299,7 +299,7 @@ function sceneOf(
     if (!inputs.variables.includes(input))
       return fail(
         inputs.variables.length || inputs.labels.length
-          ? `${layout} has no input ${input}: it declares of="${[...inputs.variables, ...inputs.labels.map((each) => `@${each}`)].join(', ')}".`
+          ? `${layout} has no input ${input}: it reads ${[...inputs.variables, ...inputs.labels.map((each) => `@${each}`)].join(', ')}.`
           : `The scene ${name} passes ${input} to ${layout}, which reads no state: a layout reading none is one frame, as a title card; declare ${input} in its of to show it.`
       );
     if (value !== input)
@@ -312,11 +312,6 @@ function sceneOf(
   if (over && (live !== undefined || inputs.labels.length))
     return fail(
       `The scene ${name} steps over ${over.list}, whose steps are no moments of the case, so ${layout} reads only ${over.list} and ${over.item}: ${live ?? `@${inputs.labels[0]}`} has no value at such a step.`
-    );
-  const missing = inputs.variables.find((input) => !passed.has(input));
-  if (missing !== undefined)
-    return fail(
-      `<${layout}> declares ${missing} among its inputs, and the scene ${name} passes none: pass it, as ${missing}={${missing}}.`
     );
   const reads = inputs.variables.length > 0 || inputs.labels.length > 0;
   const moments = ['case', 'pause', 'within', 'at'].filter((key) => given.has(key));

@@ -19,8 +19,12 @@ import type { ColumnShift } from './written-columns';
 /** One layout as declared: its name, its inputs, whether a tag renders it, and where it is. */
 export type DeclaredLayout = {
   name: string;
-  /** The state it reads, variables by name and labels as @insert.compare. */
-  inputs: { variables: string[]; labels: string[] };
+  /**
+   * The state it reads, variables by name and labels as @insert.compare: as its of lists them, or,
+   * with no of, inferred from the names its body uses (inferred), the build keeping those of the
+   * state and naming any other.
+   */
+  inputs: { variables: string[]; labels: string[]; inferred?: boolean };
   /** Whether another layout renders it as a tag, which makes it a part of that layout. */
   part: boolean;
   start: number;
@@ -50,6 +54,40 @@ const label = /^@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/u;
 const labelReference = /(?<![\w$.@])@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/gu;
 // Svelte's own tags, {@render …} and {@html …}, written with an @ that names no label.
 const svelteTags = new Set(['render', 'html', 'const', 'debug', 'attach']);
+// Words in a layout's braces that name no variable: keywords, the markup's own, and globals.
+const unnamed = new Set([
+  ...['if', 'else', 'each', 'as', 'key', 'await', 'then', 'catch', 'snippet', 'const', 'let'],
+  ...['true', 'false', 'null', 'undefined', 'typeof', 'new', 'in', 'of', 'this', 'return'],
+  ...['Math', 'Number', 'String', 'Boolean', 'Array', 'Object', 'JSON', 'Infinity', 'NaN'],
+  ...['count', 'spans', 'at', ...svelteTags]
+]);
+
+/**
+ * The names a layout's body uses in its braces that could be the algorithm's variables: every name
+ * not after a dot, not a key, not a word of the markup's own, and not one an {#each} or {@const}
+ * names there. The build keeps those of the state (see layoutReadProblems).
+ */
+function namesUsed(body: string): string[] {
+  const used: string[] = [];
+  const local = new Set<string>();
+  for (const [, inside] of body.matchAll(/\{((?:[^{}]|\{[^{}]*\})*)\}/gu)) {
+    let code = inside.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/gu, "''");
+    const each = /^#each\s+([\s\S]*?)\s+as\s+([\s\S]*)$/u.exec(code);
+    if (each) {
+      for (const [alias] of each[2].matchAll(/[A-Za-z_$][\w$]*/gu)) local.add(alias);
+      code = each[1];
+    }
+    const constant = /^@const\s+([A-Za-z_$][\w$]*)\s*=([\s\S]*)$/u.exec(code);
+    if (constant) {
+      local.add(constant[1]);
+      code = constant[2];
+    }
+    if (/^@/u.test(code) && !constant) continue;
+    for (const match of code.matchAll(/(?<![\w$.@#/:])([A-Za-z_$][\w$]*)(?!\w|:[^:])/gu))
+      if (!unnamed.has(match[1])) used.push(match[1]);
+  }
+  return [...new Set(used.filter((each) => !local.has(each)))];
+}
 const layoutOpening = /<Layout\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
 const layoutProp = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
@@ -183,7 +221,11 @@ export function layoutTags(source: string): {
       });
       continue;
     }
-    const inputs = { variables: [] as string[], labels: [] as string[] };
+    const inputs: DeclaredLayout['inputs'] = {
+      variables: [],
+      labels: [],
+      ...(given.has('of') ? {} : { inferred: true })
+    };
     for (const input of (given.get('of') ?? '')
       .split(',')
       .map((each) => each.trim())
@@ -235,8 +277,24 @@ export function layoutTags(source: string): {
     const own = named.get(layoutName);
     return own ? [...own.labels, ...own.drawn.flatMap((other) => readLabels(other, seen))] : [];
   };
-  for (const layout of declared)
+  // With no of, a layout reads the names its body uses, and those of the layouts it draws.
+  const readNames = (layoutName: string, seen = new Set<string>()): string[] => {
+    if (seen.has(layoutName)) return [];
+    seen.add(layoutName);
+    const layout = byName.get(layoutName);
+    if (!layout) return [];
+    return [
+      ...namesUsed(scanned.slice(layout.body.start, layout.body.end)),
+      ...(named.get(layoutName)?.drawn ?? []).flatMap((other) => readNames(other, seen))
+    ];
+  };
+  for (const layout of declared) {
     layout.inputs.labels = [...new Set([...layout.inputs.labels, ...readLabels(layout.name)])];
+    if (layout.inputs.inferred)
+      layout.inputs.variables = [...new Set(readNames(layout.name))].filter(
+        (each) => !byName.has(each)
+      );
+  }
   const views = [...scanned.matchAll(/<View\b[\s\S]*?<\/View\s*>/gu)].map((match) => ({
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
@@ -291,16 +349,13 @@ export function layoutTags(source: string): {
         rest = rest.slice(prop[0].length);
       }
     }
-    for (const input of layout.inputs.variables)
-      if (!problem && !passed.has(input))
-        problem = `<${tagged}> declares ${input} among its inputs, and this tag passes none: pass it, as ${input}={${input}}.`;
     for (const [input, value] of passed) {
       if (problem) break;
       if (!layout.inputs.variables.includes(input))
-        problem = `${tagged} has no input ${input}: it declares of="${[...layout.inputs.variables, ...layout.inputs.labels.map((each) => `@${each}`)].join(', ')}".`;
+        problem = `${tagged} has no input ${input}: it reads ${[...layout.inputs.variables, ...layout.inputs.labels.map((each) => `@${each}`)].join(', ') || 'nothing of the state'}.`;
       else if (value !== input)
         problem = `${input}={${value}} passes ${input} another value: an input is passed as the state of its own name, as ${input}={${input}}, so it keeps its places and pointers.`;
-      else if (!around.inputs.variables.includes(input))
+      else if (!around.inputs.inferred && !around.inputs.variables.includes(input))
         problem = `${around.name} passes ${input} to ${tagged} without reading it: add ${input} to ${around.name}'s inputs, of="${[...around.inputs.variables, input].join(', ')}".`;
     }
     if (problem) {
@@ -461,6 +516,12 @@ export function layoutReadProblems(
     const layout = layoutName === undefined ? undefined : byName.get(layoutName);
     if (!layout) continue;
     const start = node.start ?? 0;
+    if (layout.inputs.inferred) {
+      // With no of, it reads the names its body uses that are the state's; any other the view's
+      // own check names where it is written.
+      layout.inputs.variables = layout.inputs.variables.filter((each) => variables.has(each));
+      continue;
+    }
     for (const input of layout.inputs.variables)
       if (!variables.has(input))
         problems.push({

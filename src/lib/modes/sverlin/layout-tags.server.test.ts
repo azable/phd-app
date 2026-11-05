@@ -71,6 +71,24 @@ describe('layouts with inputs', () => {
     expect(prepared.storyboard.scenes[0].layout).toBe('Main');
   });
 
+  it('infers what a layout with no of reads, a tag or scene passing none of it', () => {
+    const page = (body: string) =>
+      `<Layout name="Target"><Node>{target}</Node></Layout>\n<Layout name="Main">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n  </Node>\n</Layout>\n<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`;
+    expect(problemOf(page('<Target />'))).toBe('');
+    // A tag may still pass a value by its own name, as old sources do.
+    expect(problemOf(page('<Target target={target} />'))).toBe('');
+    // An old source declaring of builds as before, its tags passing what it declares or nothing.
+    expect(problemOf(`${target}${main('<Target />')}`)).toBe('');
+  });
+
+  it('names a misspelt variable in a layout with no of', () => {
+    const misspelt =
+      '<Layout name="Main"><Node>{values}{taget}</Node></Layout>\n<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>';
+    expect(problemOf(misspelt)).toContain(
+      'The view reads taget, which is no variable or label of the algorithm'
+    );
+  });
+
   it('takes a label declared by a shorter one around it', () => {
     const reading =
       '<Layout name="Asked" of="@probe"><When of="@probe.check"><Node>checking</Node></When></Layout>\n' +
@@ -80,14 +98,9 @@ describe('layouts with inputs', () => {
 
   it.each([
     [
-      'a tag missing an input',
-      `${target}${main('<Target />')}`,
-      '<Target> declares target among its inputs, and this tag passes none: pass it, as target={target}.'
-    ],
-    [
       'a tag passing an input the layout has not',
       `${target}${main('<Target target={target} lo={lo} />')}`,
-      'Target has no input lo: it declares of="target".'
+      'Target has no input lo: it reads target.'
     ],
     [
       'an input passed another value',
