@@ -9,6 +9,7 @@ import { browserTestsOn as enabled, openPage, showStep } from './testing/browser
 
 import { sandboxDocument } from '../sandbox';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import search from './fixtures/search-places.sverlin?raw';
 import { pausingAt } from './testing/every-pause';
 import { colourCss } from './library/node/design';
 
@@ -174,52 +175,6 @@ it.skipIf(!enabled)(
     await page.close();
   }
 );
-
-const search = `<script domain>
-  const Int = type('integer', { min: 0, max: 99 });
-  const Values = array(Int, { max: 8 });
-  const Index = index(Values);
-  const Flag = type('boolean');
-</script>
-<script input>
-  const values = Values;
-  const target = Int;
-</script><Case name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
-<script algorithm>
-  @range[let lo = Index(0);
-  let hi = values.length - 1;]
-  while (@open[lo <= hi]) @probe{
-    const mid = @mid[Index(Math.floor((lo + hi) / 2))];
-    if (@low[values[mid] < target]) @right[lo = mid + 1;]
-    else @left[hi = mid - 1;]
-  }
-</script>
-<script listing="pseudocode">
-  @range[$lo[lo] = 0, $hi[hi] = length(A) - 1]
-  while @open[$lo[lo] <= $hi[hi]]
-    @probe[@mid[$mid[mid] = (lo + hi) / 2]
-    if @low[$mid[A[mid]] < $target[target]]
-      @right[$lo[lo] = mid + 1]
-    else
-      @left[$hi[hi] = mid - 1]]
-</script>
-<View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Arrow"><Pointed /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
-<Layout name="Main" of="lo, hi, mid, target, values">
-  <Node layout="row">
-    <Listing />
-    <Node><Goal target={target} /><Cells values={values} /></Node>
-    {lo}
-    {hi}
-    {mid}
-  </Node>
-</Layout>
-
-<Storyboard>
-  <Scene name="main" case="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
-</Storyboard>`;
 
 it.skipIf(!enabled)(
   'lights a place in the listing and the picture alike, hovering one outlining the others',

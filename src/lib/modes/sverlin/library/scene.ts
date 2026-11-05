@@ -68,6 +68,12 @@ export type SceneNode = {
   look: SceneLook;
   /** The colours its variant gave it, by name, such as 'amber-100' for the current element. */
   colours?: { fill?: string; stroke?: string; color?: string };
+  /** The places it refers to, where a listing's tokens name them (see listing/places.ts). */
+  places?: string[];
+  /** The value it draws, by the trace's identity, the same at every step it is drawn. */
+  identity?: string;
+  /** The free layout it arranges its children by, as a selection names it. */
+  arrangement?: Omit<ArrangementLayout, 'node'>;
 };
 
 /** One line of one piece of text, as the page laid it out, with its own style. */
@@ -84,6 +90,8 @@ export type SceneText = {
   case?: TextCase;
   /** A link's label, drawn over the links, as the page draws it. */
   overLinks?: true;
+  /** The places it refers to, as a listing's token names them (see listing/places.ts). */
+  places?: string[];
 };
 
 /** Paint behind a stretch of text: its box, colours, corners, and stroke drawn inside it. */
@@ -139,7 +147,15 @@ export type SceneStep = {
   error?: string;
 };
 
-export type SceneFrame = { width: number; height: number; background: string };
+export type SceneFrame = {
+  width: number;
+  height: number;
+  background: string;
+  /** The page's own node, which a click on the frame's empty space selects, and what it is called. */
+  node?: { id: string; label: string };
+  /** The colour each place a listing's tokens name lights in (see listing/places.ts). */
+  places?: Record<string, string>;
+};
 
 const round = (value: number) => Math.round(value * 100) / 100;
 

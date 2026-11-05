@@ -24,8 +24,10 @@ import {
   shownFrame,
   stepsOf,
   unpackStates,
+  colourCss,
   type FrameExtent,
   type SceneRequest,
+  type StepListing,
   type ShownFrame
 } from 'sverlin';
 // The layered form's engine, dagre, which only the server's layout loads (library/node/engines.ts).
@@ -141,7 +143,12 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
   const frame = shownFrame(extents, ratio === 'fit', fitShapes);
   if (drawn) scope.__sverlinDrawn = JSON.stringify(drawn);
   if (shown && frame && extents.length) {
-    const size = { width: extents[0].frame.width, height: frame.height, fit: frame.fit };
+    const size = {
+      width: extents[0].frame.width,
+      height: frame.height,
+      fit: frame.fit,
+      places: placeColours((listing as StepListing | null)?.places?.paints)
+    };
     const [markups, reserve] = shown;
     const described = scenesOf(
       markups,
@@ -159,6 +166,16 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
   }
   return JSON.stringify(geometryOf(layouts, { devicePixelRatio, borders }, frame, reservation));
 };
+
+/** The colour each place lights in, as CSS, from its design colour (see listing/places.ts). */
+function placeColours(paints: Record<string, string> | undefined): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(paints ?? {}).flatMap(([place, paint]) => {
+      const css = colourCss(paint);
+      return css ? [[place, css]] : [];
+    })
+  );
+}
 
 /**
  * How large the frame every step shows in draws, with the parts of the step whose content needs

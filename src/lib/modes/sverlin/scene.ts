@@ -36,7 +36,8 @@ const sceneTextSchema = v.strictObject({
   fontWeight,
   decoration: v.optional(v.picklist(['underline', 'strike'])),
   case: v.optional(v.picklist(['uppercase', 'small-caps'])),
-  overLinks: v.optional(v.literal(true))
+  overLinks: v.optional(v.literal(true)),
+  places: v.optional(v.pipe(v.array(text), v.maxLength(100)))
 });
 
 const sceneMarkSchema = v.strictObject({
@@ -99,6 +100,17 @@ const sceneNodeSchema = v.strictObject({
       stroke: v.optional(colourName),
       color: v.optional(colourName)
     })
+  ),
+  places: v.optional(v.pipe(v.array(text), v.maxLength(100))),
+  identity: v.optional(text),
+  arrangement: v.optional(
+    v.strictObject({
+      kind: v.optional(text),
+      seed: v.number(),
+      form: v.optional(text),
+      direction: v.optional(text),
+      curve: v.optional(text)
+    })
   )
 });
 
@@ -130,7 +142,13 @@ const sceneStepSchema = v.strictObject({
   error: v.optional(text)
 });
 
-const sceneFrameSchema = v.strictObject({ width: length, height: length, background: colour });
+const sceneFrameSchema = v.strictObject({
+  width: length,
+  height: length,
+  background: colour,
+  node: v.optional(v.strictObject({ id: text, label: text })),
+  places: v.optional(v.record(text, colour))
+});
 
 /** The page's answer to a request for its scene: every step, or why it could not describe them. */
 export const sceneMessageSchema = v.union([

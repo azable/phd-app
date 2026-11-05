@@ -16,7 +16,7 @@ export { default as SverlinUnion } from './node/Union.svelte';
 export { themeCss } from './theme';
 export { pageAncestors, pageCss } from './page';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
-export { kindKey, type DesignValues } from './node/design';
+export { colourCss, kindKey, type DesignValues } from './node/design';
 export type { FrameExtent, LayoutMemory } from './type-context';
 export { provideEnds, providePointers } from './type-context';
 export { linePairs } from './node/lines';

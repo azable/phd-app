@@ -8,8 +8,10 @@ import { expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
+import search from './fixtures/search-places.sverlin?raw';
 import { scenesOnServer } from './layout.server';
-import { pausingEveryLabel } from './testing/every-pause';
+import { colourCss } from './library/node/design';
+import { pausingAt, pausingEveryLabel } from './testing/every-pause';
 
 it(
   'draws one kind of node again with other design values, without building again',
@@ -38,5 +40,37 @@ it(
     );
     const filled = amber!.steps[0].nodes.filter(({ kind }) => kind === 'VertexCard');
     expect(filled.map(({ colours }) => colours?.fill)).toEqual(cards.map(() => 'amber-100'));
+  }
+);
+
+it(
+  'names the page, each value, each free layout and each place, as selections and motion need',
+  { timeout: 120_000 },
+  async () => {
+    const graph = await bundlePresentation(prepareSvelteComponent(pausingEveryLabel(dijkstra)), 1);
+    const { frame, steps } = graph.layout.scenes!;
+    expect(frame.node).toEqual({
+      id: expect.any(String),
+      label: expect.stringMatching(/^the page/u)
+    });
+    const nodes = steps.flatMap((step) => step.nodes);
+    expect(nodes.some(({ identity }) => identity)).toBe(true);
+    expect(nodes.find(({ arrangement }) => arrangement)?.arrangement).toEqual(
+      expect.objectContaining({ seed: expect.any(Number), form: expect.any(String) })
+    );
+
+    const lit = await bundlePresentation(
+      prepareSvelteComponent(pausingAt(search, '@probe.low')),
+      1,
+      {
+        chosen: { 'IntCell@target.stroke': 'violet-500', 'listing.places': 'fill' }
+      }
+    );
+    const scenes = lit.layout.scenes!;
+    expect(scenes.frame.places).toHaveProperty('@target', colourCss('violet-500'));
+    const step = scenes.steps[1];
+    const tokens = step.nodes.flatMap(({ runs = [] }) => runs).filter(({ places }) => places);
+    expect(tokens.map(({ text, places }) => [text, places])).toContainEqual(['target', ['@target']]);
+    expect(step.nodes.some(({ places }) => places?.includes('@target'))).toBe(true);
   }
 );

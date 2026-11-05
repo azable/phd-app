@@ -58,6 +58,8 @@ type Context = Place & {
   label: boolean;
   /** Inside the part asked for, whose nodes and links are described. */
   inPart: boolean;
+  /** The places the nearest listing token round the text names (see listing/places.ts). */
+  places?: string[];
 };
 
 /**
@@ -78,12 +80,13 @@ export function scenesOf(
   drawnLike: readonly number[],
   stepCount: number,
   options: ReserveOptions,
-  frame: SceneFrameSize,
+  frame: SceneFrameSize & Pick<SceneFrame, 'places'>,
   request: SceneRequest = {}
 ): { frame: SceneFrame; steps: SceneStep[] } | undefined {
   const described = new Map<number, SceneStep>();
   const steps: SceneStep[] = [];
   let background: string | undefined;
+  let page: SceneFrame['node'];
   for (let step = 0; step < stepCount; step++) {
     if (request.steps && !request.steps.includes(step)) continue;
     const state = drawnLike[2 * step + 1];
@@ -97,6 +100,7 @@ export function scenesOf(
           const laid = sceneOf(markup, { ...options, memory }, frame, request.part);
           scene = laid.scene;
           background ??= laid.background;
+          page ??= laid.page;
         } catch {
           return undefined;
         }
@@ -105,7 +109,13 @@ export function scenesOf(
     steps.push(scene);
   }
   return {
-    frame: { width: frame.width, height: frame.height, background: background ?? '#ffffff' },
+    frame: {
+      width: frame.width,
+      height: frame.height,
+      background: background ?? '#ffffff',
+      ...(page ? { node: page } : {}),
+      ...(frame.places && Object.keys(frame.places).length ? { places: frame.places } : {})
+    },
     steps
   };
 }
@@ -116,7 +126,7 @@ export function sceneOf(
   options: ReserveOptions,
   frame: SceneFrameSize,
   part?: SceneRequest['part']
-): { scene: SceneStep; background?: string } {
+): { scene: SceneStep; background?: string; page?: SceneFrame['node'] } {
   const isPart = ({ attributes }: ModelElement) =>
     attributes['data-sv-node'] !== undefined &&
     ((part?.node !== undefined && attributes['data-sv-node'] === part.node) ||
@@ -253,7 +263,12 @@ export function sceneOf(
       const mark = markOf(element, styled, sceneBox(left, top, box.width, box.height), placedLabel);
       if (mark) (nearest.node.marks ??= []).push(mark);
     }
-    const next: Context = { ...context, open, hidden, inPart };
+    const places = isNode
+      ? undefined
+      : attributes['data-sv-place'] !== undefined
+        ? attributes['data-sv-place'].split(' ')
+        : context.places;
+    const next: Context = { ...context, open, hidden, inPart, places };
     const drawsLinks = inPart && !hidden;
     // Its children and its text in order, the text drawn in lines by the nearest node.
     const texts = new Map(
@@ -271,7 +286,8 @@ export function sceneOf(
               text.text,
               sceneBox(context.x + x, context.y + y, width, height),
               nearest.element,
-              context.label
+              context.label,
+              places
             )
           );
         }
@@ -300,6 +316,19 @@ export function sceneOf(
     // Placed as Arranged.svelte places them: each child laid out on its own at its place.
     const props = JSON.parse(attributes['data-sv-arrange'] ?? '{}') as ArrangementProps;
     const arranged = arrangeChildren(model.hostReader(at, host), host, props, reserve.memory);
+    const arranging = open.at(-1)?.node;
+    const seed = Number(attributes['data-sv-layout-seed']);
+    if (arranging && attributes['data-sv-layout-seed'] !== undefined && Number.isFinite(seed)) {
+      const kind = attributes['data-sv-layout-kind'];
+      const { form, direction, curve } = arranged.choices;
+      arranging.arrangement = {
+        ...(kind ? { kind } : {}),
+        seed,
+        ...(form ? { form } : {}),
+        ...(direction ? { direction } : {}),
+        ...(curve ? { curve } : {})
+      };
+    }
     arranged.elements.forEach((child, index) => {
       const layout = model.layOutAlone(at, child, true);
       const own = layout.boxes.get(child) ?? { x: 0, y: 0 };
@@ -401,7 +430,9 @@ export function sceneOf(
           : {}),
         ...(attributes['data-sv-fill-style'] === 'hatched' ? { fillStyle: 'hatched' as const } : {})
       },
-      ...(colours && Object.keys(colours).length ? { colours } : {})
+      ...(colours && Object.keys(colours).length ? { colours } : {}),
+      ...(attributes['data-sv-place'] ? { places: attributes['data-sv-place'].split(' ') } : {}),
+      ...(attributes['data-sv-identity'] ? { identity: attributes['data-sv-identity'] } : {})
     };
   }
 
@@ -410,7 +441,8 @@ export function sceneOf(
     text: string,
     box: SceneBox,
     node: ModelElement,
-    overLinks: boolean
+    overLinks: boolean,
+    places: string[] | undefined
   ): SceneText {
     const { look, paint } = styled;
     const marked = node.attributes['data-sv-decoration'];
@@ -424,7 +456,8 @@ export function sceneOf(
       fontWeight: Number(look.fontWeight) || 400,
       ...(marked === 'underline' || marked === 'strike' ? { decoration: marked } : {}),
       ...(textCase ? { case: textCase } : {}),
-      ...(overLinks ? { overLinks: true as const } : {})
+      ...(overLinks ? { overLinks: true as const } : {}),
+      ...(places?.length ? { places } : {})
     };
   }
 
@@ -475,7 +508,12 @@ export function sceneOf(
     label: false
   });
   const background = at.styled.get(at.frame)?.paint.background;
-  return { scene: { nodes, links }, ...(background ? { background } : {}) };
+  const label = at.frame.attributes['data-sv-label'];
+  return {
+    scene: { nodes, links },
+    ...(background ? { background } : {}),
+    ...(frameRef && label ? { page: { id: frameRef, label } } : {})
+  };
 }
 
 /**
