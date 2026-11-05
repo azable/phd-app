@@ -1,8 +1,12 @@
 import type { ChatBotAttemptProfile } from './types';
 
 /**
- * One bounded Sol attempt ladder shared by visualization modes: a first call, three repairs at
- * rising effort, and a simpler fallback that explains what it reduced, five calls at most. With the
+ * One bounded Sol attempt ladder shared by visualization modes: a first call, two repairs at
+ * rising effort, and a simpler fallback that explains what it reduced, four calls at most. On
+ * 2026-11-05, across six projects, ten of thirteen repairs ran at medium and most fixed the first
+ * version; the xhigh repair ran once and took 91 s, and in project 7464186f the fallback succeeded
+ * at once where two repairs had failed. So the xhigh repair was dropped and the fallback runs at
+ * high: the worst case falls from about five minutes to about two, in a 15-minute session. With the
  * 180-second request ceiling (chat-adapters/openai.ts) and provider retries off, a turn can never
  * outlast the 15-minute study phase, and each condition's turns stay bounded and comparable. A
  * feedback turn's first attempt thinks less, as it mostly edits, varies, compares, or replies, and
@@ -11,12 +15,8 @@ import type { ChatBotAttemptProfile } from './types';
  * helpers on (projects/view-helpers.ts), a turn adds at most three Luna calls at low effort after its
  * reply has shown, each time-boxed to 30 seconds: they add cost, about 40k input tokens and 2k
  * output tokens a turn with the guide's extract, but never delay the reply, and none counts
- * against the ladder's five.
+ * against the ladder's four.
  */
-// The output budget of the xhigh attempts. Reasoning counts against it: project 0c34d124's xhigh
-// repair spent 12000 tokens in 113 seconds without answering, ending its turn. At that rate the
-// 180-second request ceiling ends a call near 19000, so the ceiling, not the budget, bounds these.
-const xhighOutputTokens = 20000;
 
 export function visualizationAttemptProfiles(
   maxOutputTokens: number
@@ -36,20 +36,8 @@ export function visualizationAttemptProfiles(
       parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'high', maxOutputTokens }
     },
     {
-      purpose: 'repair',
-      parameters: {
-        model: 'gpt-5.6-sol',
-        reasoningEffort: 'xhigh',
-        maxOutputTokens: Math.max(maxOutputTokens, xhighOutputTokens)
-      }
-    },
-    {
       purpose: 'fallback',
-      parameters: {
-        model: 'gpt-5.6-sol',
-        reasoningEffort: 'xhigh',
-        maxOutputTokens: Math.max(maxOutputTokens, xhighOutputTokens)
-      }
+      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'high', maxOutputTokens }
     }
   ];
 }

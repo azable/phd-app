@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import aiAssistant from './bot.server';
 
 describe('single-component Svelte assistant', () => {
-  it('uses the five-call Luna/Sol ladder with a bounded fallback', () => {
+  it('uses the four-call Sol ladder with a bounded fallback', () => {
     expect(
       aiAssistant.attemptProfiles.map(({ purpose, parameters }) => [
         purpose,
@@ -14,11 +14,10 @@ describe('single-component Svelte assistant', () => {
       ['initial', 'gpt-5.6-sol', 'medium'],
       ['repair', 'gpt-5.6-sol', 'medium'],
       ['repair', 'gpt-5.6-sol', 'high'],
-      ['repair', 'gpt-5.6-sol', 'xhigh'],
-      ['fallback', 'gpt-5.6-sol', 'xhigh']
+      ['fallback', 'gpt-5.6-sol', 'high']
     ]);
     expect(aiAssistant.attemptProfiles.map(({ parameters }) => parameters.maxOutputTokens)).toEqual(
-      [12_000, 12_000, 12_000, 20_000, 20_000]
+      [12_000, 12_000, 12_000, 12_000]
     );
   });
 
