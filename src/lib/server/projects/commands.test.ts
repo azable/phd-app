@@ -1606,6 +1606,59 @@ describe('submitProjectFeedback', () => {
       expect(returnedWarnings([guessed, steps], false)).toEqual([guessed, steps]);
     });
 
+    it('keeps a first source whose steps repeat the picture before them, as a merge sort’s singleton calls do', async () => {
+      const { returnedWarnings } = await import('./commands');
+      const repeated =
+        '8 steps at @sort draw the same picture as the step before them, as @sort#4:before to @sort#4: what changes there shows nowhere in the view.';
+      expect(returnedWarnings([repeated], true)).toEqual([]);
+      expect(returnedWarnings([repeated], false)).toEqual([repeated]);
+    });
+
+    it('takes the quick retries only after a source refused as written, one after another', async () => {
+      const { nextAttempt, refusedAsWritten, softReturnLeft } = await import('./commands');
+      const { visualizationAttemptProfiles, writtenRetries } =
+        await import('$lib/server/chat-bots/attempt-profiles');
+      const ladder = visualizationAttemptProfiles(12_000);
+      const failed = (...codes: string[]) => ({
+        source: '',
+        diagnostics: codes.map((code) => ({ code, message: `A problem of ${code}.` }))
+      });
+      const written = failed('algorithm_written', 'view_label', 'listing_label');
+      const run = failed('algorithm_error');
+      expect(refusedAsWritten(written)).toBe(true);
+      expect(refusedAsWritten(failed('view_storyboard'))).toBe(true);
+      expect(refusedAsWritten(run)).toBe(false);
+      expect(refusedAsWritten(failed('view_label', 'layout_failed'))).toBe(false);
+      expect(refusedAsWritten({ source: '', diagnostics: [{ message: 'No code.' }] })).toBe(false);
+      expect(refusedAsWritten(undefined)).toBe(false);
+
+      // Terra's first call, its quick retries, then Sol's repairs and fallback.
+      expect(writtenRetries).toBe(2);
+      expect(ladder.map(({ parameters }) => parameters.model)).toEqual([
+        'gpt-6.1-terra',
+        'gpt-6.1-terra',
+        'gpt-6.1-terra',
+        'gpt-6.1-sol',
+        'gpt-6.1-sol',
+        'gpt-6.1-sol'
+      ]);
+      const sol = 1 + writtenRetries + 1;
+      expect(nextAttempt(ladder, 1, written)).toBe(2);
+      expect(nextAttempt(ladder, 2, written)).toBe(3);
+      expect(nextAttempt(ladder, 3, written)).toBe(sol);
+      expect(nextAttempt(ladder, 1, run)).toBe(sol);
+      expect(nextAttempt(ladder, 2, run)).toBe(sol);
+      expect(nextAttempt(ladder, 1)).toBe(sol);
+      // Never back to a quick retry once Sol has repaired.
+      expect(nextAttempt(ladder, sol, written)).toBe(sol + 1);
+
+      // A picture that built goes back only to a repair, never to the fallback.
+      expect(softReturnLeft(ladder, 1)).toBe(true);
+      expect(softReturnLeft(ladder, sol)).toBe(true);
+      expect(softReturnLeft(ladder, sol + 1)).toBe(false);
+      expect(softReturnLeft(ladder, ladder.length)).toBe(false);
+    });
+
     it('takes problems a later stage of the build finds as progress, not wandering', async () => {
       const { repairWandered } = await import('./commands');
       const failed = (...codes: string[]) => ({
@@ -3468,6 +3521,78 @@ describe('several variants from chat', () => {
     expect(result.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(
       true
     );
+
+    // As in project a60d96ec: built with warnings at the last repair, it shows as built rather
+    // than going to the fallback, which would simplify it and begin its reply with a difficulty.
+    const last = mocks.attemptProfiles.length - 1;
+    const late = await attempts(
+      ({ attempt }) => ({
+        ...generation(undefined, 'Each check.', {
+          struggledWith: 'the steps',
+          simplified: 'the pauses'
+        }),
+        decision: {
+          action: 'revise',
+          source: attempt.number < last ? repeated.replace('</Layout>', '</Layout') : repeated,
+          summary: 'Each check'
+        }
+      }),
+      'Late warnings'
+    );
+    expect(mocks.generatePrepared).toHaveBeenCalledTimes(last);
+    expect(
+      late.appendedEvents.some(
+        (event) => event.type === 'revision.edits-rejected' && event.payload.rejected === 'warnings'
+      )
+    ).toBe(false);
+    expect(late.appendedEvents.some(({ type }) => type === 'artifact.version-created')).toBe(true);
+    expect(JSON.stringify(replies(late.appendedEvents))).not.toContain('I ran into a difficulty');
+  });
+
+  it('retries a source refused as written on the quick profile before the slower repairs', async () => {
+    const { visualizationAttemptProfiles } = await import('$lib/server/chat-bots/attempt-profiles');
+    const kept = mocks.attemptProfiles.splice(0, mocks.attemptProfiles.length);
+    mocks.attemptProfiles.push(...(visualizationAttemptProfiles(12_000) as unknown as typeof kept));
+    try {
+      const lines = (close: string) =>
+        [
+          '<script algorithm></script>',
+          '<Layout name="Shown"><Node>one</Node></Layout>',
+          '<Layout name="Main"><Node>',
+          '<Node><Shown /></Node>',
+          '<Node>two</Node>',
+          `</Node>${close}`,
+          '<Storyboard><Scene name="main"><Main /></Scene></Storyboard>'
+        ].join('\n');
+      const working = lines('</Layout>');
+      const unclosed = lines('</Layout');
+      const attemptsOf = () =>
+        mocks.preparePrompt.mock.calls.map(([options]) => options.attempt as number);
+      const tried = (sources: string[]) =>
+        attempts(
+          ({ attempt }) => ({
+            ...generation(undefined, 'Done.'),
+            decision: {
+              action: 'revise',
+              source: sources[attempt.number - 1] ?? working,
+              summary: 'Done'
+            }
+          }),
+          'Quick retries'
+        );
+
+      await tried([unclosed, working]);
+      expect(attemptsOf()).toEqual([1, 2]);
+      expect(mocks.attemptProfiles[1].parameters.model).toBe('gpt-6.1-terra');
+
+      mocks.preparePrompt.mockClear();
+      await tried([unclosed, unclosed, unclosed]);
+      // Both quick retries, then Sol.
+      expect(attemptsOf()).toEqual([1, 2, 3, 4]);
+      expect(mocks.attemptProfiles[3].parameters.model).toBe('gpt-6.1-sol');
+    } finally {
+      mocks.attemptProfiles.splice(0, mocks.attemptProfiles.length, ...kept);
+    }
   });
 
   // A linear search whose numbers have two views, so a version shown alone has an alternative.
