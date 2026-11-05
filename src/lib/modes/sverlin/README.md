@@ -1208,16 +1208,20 @@ positions that keep each node near the next). `direction`, `down` or `right`, is
 the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
 would: it starts `right`, across the wide stage, a tree too, so a page starts
 near 16:9; set `down` where the participant asks for it. A layout with a `flow`
-has none. A layout whose data makes no structure has no `form` or `direction`
-and is laid out freely, unless the page finds a structure in the links it draws,
-which it draws `natural`. `curve`, `straight` (the start) or `curved`, is how
-its arrows prefer to run. `layoutSeed`, 1 to 32, is what its spacing and nudges
-are drawn from: the order each layer of a layered graph starts in, a `wave`'s,
-`arc`'s or `scatter`'s shape, and where a layout with no structure starts; a
-tree or a path drawn `natural` is the same at every seed. A free layout keeps
-its form's own proportions and takes the size of everything it draws, its links'
-curves, heads and labels included, so the same values draw the same layout
-wherever it is, whatever the frame or what is beside it.
+has none. A layered graph also takes `layered`: its layers as in `natural`, but
+each packed by its own nodes' sizes, so the graph is tighter (dagre, the layout
+of Graphviz's dot, on the server); a tree, whose children keep their order, does
+not take it, and its seed changes nothing. A layout whose data makes no
+structure has no `form` or `direction` and is laid out freely, unless the page
+finds a structure in the links it draws, which it draws `natural`. `curve`,
+`straight` (the start) or `curved`, is how its arrows prefer to run.
+`layoutSeed`, 1 to 32, is what its spacing and nudges are drawn from: the order
+each layer of a layered graph starts in, a `wave`'s, `arc`'s or `scatter`'s
+shape, and where a layout with no structure starts; a tree or a path drawn
+`natural` is the same at every seed. A free layout keeps its form's own
+proportions and takes the size of everything it draws, its links' curves, heads
+and labels included, so the same values draw the same layout wherever it is,
+whatever the frame or what is beside it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,

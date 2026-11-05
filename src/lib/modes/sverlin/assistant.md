@@ -105,6 +105,9 @@ Some features suit common needs. Offer them as alternatives where they fit:
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against
   `keywords`) as an alternative (see the guide's Listing).
+- A layered graph, as one a search or a shortest path explores, often reads
+  tighter in the `layered` form, each layer packed by its own nodes; where its
+  arrangement is open, compare it with `natural`.
 - When a node of a graph shows several states or fields, show its state as
   paint, as `<Node fill={this.state}>`, a border or opacity, rather than words
   that widen every node, with a short legend; compare it with words.
