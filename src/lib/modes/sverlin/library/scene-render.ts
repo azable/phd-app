@@ -394,18 +394,20 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
       else pair(now, was);
     }
   }
-  // What a value's node holds, where it paired with a node of another id, pairs in order.
+  // What a value's node holds, where it paired with a node of another id, pairs in order within
+  // each kind, so a pointer's arrow and label still move with it when the element it points at
+  // nests in another pointer that has come to the same element, and leaves its list.
   const inside = (scene: DrawnScene, node: DrawnNode) =>
     scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
   for (const now of to.nodes) {
     const was = pairs.get(now.key);
     if (!was || was.id === now.id || !now.identity || was.identity !== now.identity) continue;
     const olds = inside(from, was);
-    inside(to, now).forEach((held, index) => {
-      const old = olds[index];
-      if (old && old.kind === held.kind && !claimed.has(old) && !pairs.has(held.key))
-        pair(held, old);
-    });
+    for (const held of inside(to, now)) {
+      if (pairs.has(held.key)) continue;
+      const old = olds.find((other) => other.kind === held.kind && !claimed.has(other));
+      if (old) pair(held, old);
+    }
   }
   for (const now of to.nodes) {
     if (pairs.has(now.key)) continue;

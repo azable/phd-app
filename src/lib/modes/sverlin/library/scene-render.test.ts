@@ -159,6 +159,38 @@ describe('scenes drawn as SVG', () => {
     expect([pairs.get('x')?.id, pairs.get('x#2')?.id]).toEqual(['x#2', 'x']);
   });
 
+  it("moves a pointer's arrow and label with it onto an element another pointer is at", () => {
+    // hi comes to lo's cell: the cell nests in hi's mark, so hi's arrow is no longer its first node.
+    const mark = (id: string, x: number, pointer: string, kind: string) =>
+      node(id, x, { identity: `pointer:${pointer}`, kind });
+    const part = (id: string, x: number, parent: string, kind: string, identity?: string) =>
+      node(id, x, { parent, kind, ...(identity ? { identity } : {}) });
+    const lo = (x: number, parent?: string) => ({ ...mark('lo#5', x, '0', 'Lo'), parent });
+    const from = drawnScene(
+      step([
+        lo(100),
+        part('cell#6', 100, 'lo#5', 'Lo.Pointed', '6'),
+        part('loTip#5', 100, 'lo#5', 'Lo.Tip'),
+        mark('hi#7', 300, '1', 'Hi'),
+        part('cell#8', 300, 'hi#7', 'Hi.Pointed', '8'),
+        part('hiTip#7', 300, 'hi#7', 'Hi.Tip')
+      ])
+    );
+    const to = drawnScene(
+      step([
+        mark('hi#5', 100, '1', 'Hi'),
+        lo(100, 'hi#5'),
+        part('cell#6', 100, 'lo#5', 'Hi.Pointed', '6'),
+        part('loTip#5', 100, 'lo#5', 'Lo.Tip'),
+        part('hiTip#5', 100, 'hi#5', 'Hi.Tip')
+      ])
+    );
+    const pairs = pairNodes(from, to);
+    expect(pairs.get('hiTip#5')?.id).toBe('hiTip#7');
+    expect(pairs.get('loTip#5')?.id).toBe('loTip#5');
+    expect(sceneBetween(from, to, 0.5).nodes.find(({ key }) => key === 'hiTip#5')?.box.x).toBe(200);
+  });
+
   it('starts a copy where its source was, the source keeping its own place', () => {
     // 31 copies 29 at this step; 29 stays where it is.
     const from = drawnScene(step([node('s', 0, { identity: '29' })]));
