@@ -103,7 +103,10 @@ async function saveWaiting(projectId: string): Promise<void> {
       ...(from ? { from } : { root: true })
     });
     if (!command.success) {
-      console.error(`The demo example ${name} was not saved: ${v.summarize(command.issues)}`);
+      const why = `The demo example ${name} was not saved: ${v.summarize(command.issues)}`;
+      console.error(why);
+      // In the chat too, as an example that vanished from the inbox otherwise shows nowhere.
+      await postNote(projectId, name, why.slice(0, 2000), 'warning');
       continue;
     }
     await projectOperationExecutor.accept({
@@ -123,8 +126,13 @@ async function saveWaiting(projectId: string): Promise<void> {
   }
 }
 
-/** Post a developer's note to the demo project's chat, as a notice of its own. */
-async function postNote(projectId: string, name: string, text: string): Promise<void> {
+/** Post a developer's note, or why an example was refused, to the demo project's chat, as a notice. */
+async function postNote(
+  projectId: string,
+  name: string,
+  text: string,
+  severity: 'info' | 'warning' = 'info'
+): Promise<void> {
   const note = v.safeParse(noteSchema, text);
   if (!note.success) {
     console.error(`The note of demo example ${name} was not posted: ${v.summarize(note.issues)}`);
@@ -136,7 +144,7 @@ async function postNote(projectId: string, name: string, text: string): Promise<
       type: 'system.notified',
       operationId: randomUUID(),
       actor: { kind: 'system' },
-      payload: { severity: 'info', message: note.output }
+      payload: { severity, message: note.output }
     })
   ]);
 }
