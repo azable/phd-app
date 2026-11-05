@@ -72,17 +72,36 @@ export async function openPresentation(
     errors?: string[];
     /** Draw the steps from their scene data (library/SceneView.svelte), as `?scenes=1` does. */
     scenes?: boolean;
+    /** Scene data the page is sent as it asks, as the app sends what the server drew. */
+    served?: { frame: SceneFrame; steps: SceneStep[] };
   } = {}
 ): Promise<Page> {
   const page = await openPage(options);
   if (options.errors) page.on('pageerror', (error) => options.errors!.push(error.message));
+  const head = (options.head ?? '') + (options.served ? servingScript(options.served) : '');
   await page.setContent(
-    sandboxDocument('', javascript, options.step ?? 0, 1, undefined, undefined, options.head, {
-      scenes: options.scenes
+    sandboxDocument('', javascript, options.step ?? 0, 1, undefined, undefined, head, {
+      scenes: options.served ? 'served' : options.scenes
     })
   );
   await settled(page, options.step ?? 0);
   return page;
+}
+
+/**
+ * A script answering the page's requests for scenes as Viewport.svelte does, from the scenes given;
+ * the page is its own parent here, so it hears what it posts.
+ */
+function servingScript(served: { frame: SceneFrame; steps: SceneStep[] }): string {
+  const scenes = JSON.stringify(served).replace(/</gu, '\\u003c');
+  return `<script>(() => {
+    const served = ${scenes};
+    addEventListener('message', ({ data }) => {
+      if (data?.type !== 'sverlin:scenes-wanted') return;
+      const steps = data.steps.map((step) => [step, served.steps[step]]);
+      postMessage({ type: 'sverlin:scenes', frame: served.frame, steps }, '*');
+    });
+  })();</script>`;
 }
 
 /**

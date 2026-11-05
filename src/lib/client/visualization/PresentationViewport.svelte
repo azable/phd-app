@@ -14,6 +14,8 @@
 
   type ViewportProps = {
     presentation: RenderablePresentation;
+    /** The project the presentation is in, for modes that fetch more of it from the server. */
+    projectId?: string;
     step: number;
     label: string;
     /** Ids of the elements to show selected, in modes that support selection. */
@@ -28,6 +30,7 @@
 
   let {
     presentation,
+    projectId,
     step,
     label,
     selection,
@@ -72,6 +75,7 @@
     <Viewport
       bind:this={viewport}
       {presentation}
+      {projectId}
       {step}
       {label}
       {selection}

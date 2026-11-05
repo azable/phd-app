@@ -9,6 +9,8 @@ import {
 } from './compile.server';
 import type { BuildRequest, ModeBuildResult } from '../server';
 
+export { versionScenes as scenes } from './scenes.server';
+
 /** Text cut to what a presentation stores, as presentations.ts bounds it, so a long warning never fails the turn. */
 const within = (most: number) => (text: string) =>
   text.length > most ? `${text.slice(0, most - 1)}…` : text;

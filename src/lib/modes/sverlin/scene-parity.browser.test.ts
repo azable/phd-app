@@ -1,7 +1,7 @@
 /**
- * Steps drawn from their scene data (library/SceneView.svelte, `?scenes=1`) against the mounted
- * page, in a real browser, for the replay and graph fixtures. At each step the two pages, the same
- * size, are compared node by node (box within 2 px, same text), link by link (ends within 2 px), and
+ * Steps drawn from the scene data the server drew (library/SceneView.svelte, `?scenes=1`) against
+ * the mounted page, in a real browser, for the replay and graph fixtures. At each step the two
+ * pages, the same size, are compared node by node (box within 2 px, same text), link by link (ends within 2 px), and
  * by their screenshots (the share of drawn pixels alike); small differences are allowed, so each
  * fixture's scores are written to test-results/scene-parity.json and only gross failures fail. While
  * SceneView moves between steps, every node and link it draws must lie between where it was and
@@ -234,7 +234,10 @@ describe('steps drawn from their scenes', () => {
         const errors: string[] = [];
         const options = { viewport: { width: 1200, height: 700 }, still: true, errors };
         const mounted = await openPresentation(built.javascript, options);
-        const scene = await openPresentation(built.javascript, { ...options, scenes: true });
+        const scene = await openPresentation(built.javascript, {
+          ...options,
+          served: built.layout.scenes!
+        });
         const steps = Math.min(built.labels.length, stepsCompared);
         const row: Row = {
           fixture: name,
@@ -271,6 +274,9 @@ describe('steps drawn from their scenes', () => {
         row.examples = row.examples.slice(0, 8);
         rows.push(row);
         expect(errors).toEqual([]);
+        expect(await scene.evaluate(() => document.getElementById('app')?.dataset.svScenes)).toBe(
+          'served'
+        );
         // Gross failures only: most of what the page draws is drawn alike.
         expect(row.boxesOff / Math.max(1, row.nodes)).toBeLessThan(0.25);
         expect(row.pixels).toBeGreaterThan(0.5);
@@ -376,7 +382,7 @@ describe('SceneView’s motion', () => {
   )) {
     it.skipIf(!enabled)(`${name} moves nothing by a jump`, { timeout: 300_000 }, async () => {
       const built = await bundlePresentation(prepareSvelteComponent(source), 1, { chosen });
-      const page = await openPresentation(built.javascript, { scenes: true });
+      const page = await openPresentation(built.javascript, { served: built.layout.scenes! });
       let moving = 0;
       for (let step = 1; step < Math.min(built.labels.length, stepsCompared); step++) {
         const samples = await framesTo(page, step);

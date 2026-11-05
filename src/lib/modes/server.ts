@@ -3,6 +3,7 @@
 import { buildLimit } from './build-limit.server';
 import { modeCatalog } from './catalog';
 import type {
+  BrowserBundlePresentation,
   DesignValues,
   VisualizationMode,
   RenderablePresentation,
@@ -80,9 +81,24 @@ export type SourceBatchBuilder = (
   signal?: AbortSignal
 ) => Promise<ModeBuildResult[]>;
 
+/** Why a version has no scenes from the server, for the page to describe its own instead. */
+export class UnavailableScenesError extends Error {
+  override name = 'UnavailableScenesError';
+}
+
+/**
+ * Some steps of a version as scene data (all, where none are named), drawn on the server; throws
+ * an UnavailableScenesError where it has none, for the page to describe its own.
+ */
+export type SceneSource = (
+  presentation: BrowserBundlePresentation,
+  steps?: readonly number[]
+) => Promise<unknown>;
+
 type ModeBuilders = {
   buildPresentation?: PresentationBuilder;
   buildBatch?: SourceBatchBuilder;
+  scenes?: SceneSource;
 };
 
 const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {
@@ -96,8 +112,9 @@ export const modeBuilders = Object.fromEntries(
 
 function limited(builders: ModeBuilders | undefined): ModeBuilders | undefined {
   if (!builders) return undefined;
-  const { buildPresentation, buildBatch } = builders;
+  const { buildPresentation, buildBatch, scenes } = builders;
   return {
+    ...(scenes && { scenes }),
     ...(buildPresentation && {
       buildPresentation: (...options: Parameters<PresentationBuilder>) =>
         buildLimit.run(() => buildPresentation(...options))

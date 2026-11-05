@@ -52,7 +52,7 @@ const playback = window as typeof window & {
    */
   __sverlinGeometry?: Geometry[];
   /** Draw every step as SVG from its scene data (see library/SceneView.svelte), not the view. */
-  __sverlinScenes?: boolean;
+  __sverlinScenes?: boolean | 'served';
 };
 // Step k is states 2k and 2k + 1 (see library/steps.ts); the page rests on a step's after.
 const clampStep = (step: number) => Math.min(Math.max(step, 0), stepCount - 1);
@@ -412,10 +412,16 @@ async function describeSteps(
 
 /**
  * Steps drawn from their scene data (see library/SceneView.svelte), as the app asks with
- * `__sverlinScenes`: each step's scene is described from the view mounted in a hidden layer, one
- * at a time and once, the steps either side of the one shown prefetched, and drawn as SVG.
+ * `__sverlinScenes`, each once, the steps either side of the one shown prefetched, and drawn as
+ * SVG: served, the app sends each scene the server drew as the page asks for it (see
+ * Viewport.svelte); otherwise, or where the server has none, the page describes it from the view
+ * mounted in a hidden layer, one at a time.
  */
-const scenes = playback.__sverlinScenes === true;
+const scenes = playback.__sverlinScenes === true || playback.__sverlinScenes === 'served';
+let served = playback.__sverlinScenes === 'served';
+// Each step asked of the app, and what takes its scene; none where the server has none.
+const awaitedScenes = new Map<number, (scene: SceneStep | undefined) => void>();
+let wantedScenes: number[] = [];
 type ScenePlayer = {
   show(step: number, scene: SceneStep): void;
   select(ids: readonly string[]): void;
@@ -429,6 +435,40 @@ let sceneToken = 0;
 function sceneOf(step: number): Promise<SceneStep> {
   const cached = sceneCache.get(step);
   if (cached) return cached;
+  const scene = served ? servedScene(step) : describedScene(step);
+  sceneCache.set(step, scene);
+  return scene;
+}
+
+/** A step's scene from the server, asked for with the others asked in the same task. */
+function servedScene(step: number): Promise<SceneStep> {
+  if (!wantedScenes.length)
+    queueMicrotask(() => {
+      window.parent.postMessage({ type: 'sverlin:scenes-wanted', steps: wantedScenes }, '*');
+      wantedScenes = [];
+    });
+  wantedScenes.push(step);
+  return new Promise<SceneStep | undefined>((done) => awaitedScenes.set(step, done)).then(
+    (scene) => scene ?? describedScene(step)
+  );
+}
+
+/** Scenes the app sent: some steps', or why the server has none, when the page describes its own. */
+function takeScenes(data: { frame?: unknown; steps?: unknown; failure?: unknown }) {
+  if (typeof data.failure === 'string' || !Array.isArray(data.steps)) {
+    served = false;
+    for (const done of awaitedScenes.values()) done(undefined);
+    awaitedScenes.clear();
+    return;
+  }
+  sceneFrame ??= data.frame as SceneFrame;
+  for (const [step, scene] of data.steps as [number, SceneStep][]) {
+    awaitedScenes.get(step)?.(scene);
+    awaitedScenes.delete(step);
+  }
+}
+
+function describedScene(step: number): Promise<SceneStep> {
   const scene = describing.then(
     () =>
       new Promise<SceneStep>((done) => {
@@ -440,7 +480,6 @@ function sceneOf(step: number): Promise<SceneStep> {
       })
   );
   describing = scene.catch(() => undefined);
-  sceneCache.set(step, scene);
   return scene;
 }
 
@@ -485,6 +524,8 @@ async function showScene(step: number) {
     }) as unknown as ScenePlayer;
   }
   player.show(step, scene);
+  // Whether the steps come from the server, for tests and debugging.
+  root.dataset.svScenes = served ? 'served' : 'described';
   for (const near of [step + 1, step - 1])
     if (near >= 0 && near < stepCount) void sceneOf(near).catch(() => undefined);
 }
@@ -516,6 +557,10 @@ addEventListener('message', (event: MessageEvent) => {
           '*'
         )
       );
+    return;
+  }
+  if (scenes && data?.type === 'sverlin:scenes') {
+    takeScenes(data as Parameters<typeof takeScenes>[0]);
     return;
   }
   if (scenes && data?.type === 'sverlin:select') {

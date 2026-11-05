@@ -34,6 +34,7 @@ import {
 import type {
   BrowserBundlePresentation,
   DesignValues,
+  RenderablePresentation,
   VariantRequest
 } from '$lib/shared/presentations';
 import {
@@ -1325,6 +1326,21 @@ export function basedRequests(
     };
     return Object.keys(variant).length > 0 ? { seed, variant } : { seed };
   });
+}
+
+/** A presentation the project presented, by its id. */
+export async function presentedVersion(
+  projectId: string,
+  presentationId: string,
+  dependencies: ProjectServiceDependencies = defaultProjectServiceDependencies
+): Promise<RenderablePresentation | undefined> {
+  const document = await dependencies.repository.load(projectId);
+  const presented = document.events.findLast(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === presentationId
+  );
+  return presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
 }
 
 /** A presentation's variant, when it recorded one. */

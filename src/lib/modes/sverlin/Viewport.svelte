@@ -15,12 +15,15 @@
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
+  import type { SceneFrame, SceneStep } from './library';
   import { sceneMessageSchema, type SverlinScene } from './scene';
+  import { fetchScenes } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
 
   let {
     presentation,
+    projectId,
     step,
     label,
     selection = [],
@@ -30,6 +33,8 @@
     onLoadTiming = () => {}
   }: {
     presentation: BrowserBundlePresentation;
+    /** The project the presentation is in, whose server draws its scenes (see server-scenes.ts). */
+    projectId?: string;
     step: number;
     label: string;
     /** Ids of the elements to show selected. */
@@ -64,7 +69,7 @@
       undefined,
       untrack(() => selection),
       embeddedFontsHead,
-      { scenes: scenesWanted }
+      { scenes: scenesWanted && (untrack(() => projectId) ? 'served' : true) }
     );
   });
   // Whether the page has loaded and listens for steps; a new document starts unloaded.
@@ -91,11 +96,36 @@
     return sverlinTargets.map(({ id, title, animated }) => ({ id, title, animated }));
   }
 
-  /** Export this presentation as a target's file, from its every step as scene data. */
+  /**
+   * Export this presentation as a target's file, from its every step as scene data: drawn on the
+   * server, or, where it has none, described by the page.
+   */
   export async function render(target: string): Promise<RenderedFile> {
     const chosen = sverlinTargets.find(({ id }) => id === target);
     if (!chosen) throw new Error(`There is no ${target} export.`);
-    return chosen.render(await describeScene());
+    const served = projectId
+      ? await fetchScenes(projectId, presentation.presentationId).catch((cause: unknown) => {
+          console.warn(
+            `${logName()} has no scenes from the server; the page describes them`,
+            cause
+          );
+          return undefined;
+        })
+      : undefined;
+    return chosen.render(served ? sceneOf(served) : await describeScene());
+  }
+
+  /** The scene render targets read, from every step's scene data. */
+  function sceneOf({ frame, steps }: { frame: SceneFrame; steps: SceneStep[] }): SverlinScene {
+    const { presentationId, seed, labels, variant } = presentation;
+    return {
+      format: 'sverlin-scene-v1',
+      presentationId,
+      seed,
+      ...(variant ? { variant } : {}),
+      frame,
+      steps: steps.map((step, index) => ({ ...step, label: labels[index] }))
+    };
   }
 
   /** Every step of this presentation as scene data, laid out as it is shown. */
@@ -103,7 +133,7 @@
     const page = iframe?.contentWindow;
     if (!page || !loaded) return Promise.reject(new Error('The visualization has not loaded yet.'));
     const request = crypto.randomUUID();
-    const { presentationId, seed, labels, variant } = presentation;
+    const { labels } = presentation;
     return new Promise<SverlinScene>((resolve, reject) => {
       const timeout = setTimeout(
         () => answer(new Error('The visualization took too long to describe its steps.')),
@@ -116,15 +146,7 @@
         else if ('failure' in reply) reject(new Error(reply.failure));
         else if (reply.steps.length !== labels.length)
           reject(new Error('The visualization described a different number of steps.'));
-        else
-          resolve({
-            format: 'sverlin-scene-v1',
-            presentationId,
-            seed,
-            ...(variant ? { variant } : {}),
-            frame: reply.frame,
-            steps: reply.steps.map((step, index) => ({ ...step, label: labels[index] }))
-          });
+        else resolve(sceneOf(reply));
       }
       sceneRequests[request] = answer;
       page.postMessage({ type: 'sverlin:describe', request }, '*');
@@ -148,6 +170,36 @@
       '*'
     );
   });
+
+  // The page asks for the scenes of the step it shows and those either side (see entry.ts).
+  const scenesWantedMessage = v.object({
+    type: v.literal('sverlin:scenes-wanted'),
+    steps: v.pipe(
+      v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      v.minLength(1),
+      v.maxLength(32)
+    )
+  });
+
+  /** Send the page some steps' scenes drawn on the server, or why there are none. */
+  function serveScenes(steps: number[]) {
+    const page = iframe?.contentWindow;
+    if (!page || !projectId) return;
+    const shown = presentation.presentationId;
+    const send = (message: object) => {
+      // A page loaded for another presentation since cannot use them.
+      if (presentation.presentationId === shown)
+        page.postMessage({ type: 'sverlin:scenes', ...message }, '*');
+    };
+    fetchScenes(projectId, shown, steps).then(
+      ({ frame, steps: drawn }) =>
+        send({ frame, steps: steps.map((step, index) => [step, drawn[index]]) }),
+      (cause: unknown) => {
+        console.warn(`${logName()} has no scenes from the server; the page describes them`, cause);
+        send({ failure: cause instanceof Error ? cause.message : String(cause) });
+      }
+    );
+  }
 
   // The page runs authored code, so every selection it reports is checked.
   const selectionMessage = v.object({
@@ -266,6 +318,11 @@
             ? parsed.output
             : new Error('The visualization described its steps in an unexpected form.')
         );
+        return;
+      }
+      if (data?.type === 'sverlin:scenes-wanted') {
+        const parsed = v.safeParse(scenesWantedMessage, data);
+        if (parsed.success) serveScenes(parsed.output.steps);
         return;
       }
       if (data?.type === 'sverlin:timing') {

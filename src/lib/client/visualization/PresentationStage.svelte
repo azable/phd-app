@@ -662,6 +662,7 @@
             <PresentationViewport
               bind:this={viewports[presentationId]}
               presentation={entry.presentation}
+              projectId={session.projectId}
               step={localStep(entry)}
               label={`Visualization ${index + 1}`}
               selection={selected?.elements.map(({ id }) => id) ?? []}
