@@ -67,7 +67,7 @@
     {hand}
     {i}
     {j}
-    <Node kind="KeyRow" layout="row">key {key}</Node>
+    <Node kind="KeyRow" layout="row"><Node kind="KeyCaption">key</Node>{key}</Node>
   </Node>
 </Layout>
 

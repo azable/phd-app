@@ -440,6 +440,46 @@ ${views}
     expect(marked.warnings).toBeUndefined();
   });
 
+  it('warns of a pause on a label marking only the value a declaration gives, the view drawing the name', async () => {
+    const search = (algorithm: string, pause: string) => `<script domain>
+  const Int = type('integer', { min: 0, max: 20 });
+  const Values = array(Int, { max: 5 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  ${algorithm}
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<Layout name="Scan" of="values, mid">
+  <Node>
+    <Node>{#each values as v}{v}{/each}</Node>
+    {mid}
+  </Node>
+</Layout>
+<Case name="main" values={[4, 9, 2, 7]} />
+<Storyboard>
+  <Scene name="scan" case="main" pause="${pause}"><Scan values={values} mid={mid} /></Scene>
+</Storyboard>`;
+    const value = '@probe[const mid = @mid[Index(Math.floor(values.length / 2))];]';
+    const before = await bundlePresentation(prepareSvelteComponent(search(value, '@probe.mid')), 1);
+    expect(before.warnings).toContain(
+      '@probe.mid wraps only the value given to mid, so a scene pausing there pauses after the value is worked out but before mid holds it: mid does not exist at that step, and nothing drawing it shows. Label the whole statement, as @mid[const mid = …;].'
+    );
+    const whole = await bundlePresentation(
+      prepareSvelteComponent(
+        search('@mid[const mid = Index(Math.floor(values.length / 2));]', '@mid')
+      ),
+      1
+    );
+    expect(whole.warnings ?? []).not.toContainEqual(
+      expect.stringContaining('wraps only the value')
+    );
+  });
+
   it('tells one repeat by both steps, each label once, within a scene, and at most five labels', () => {
     const scene = (name: string) => ({ name, layout: 'Main', frame: false, start: 0 });
     const [first, second] = [scene('first'), scene('second')];

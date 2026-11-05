@@ -33,7 +33,7 @@
 <Layout name="Main" of="lo, hi, mid, target, values">
   <Node layout="row">
     <Listing />
-    <Node><Goal target={target} /><Cells values={values} /></Node>
+    <Node layout="column"><Goal target={target} /><Cells values={values} /></Node>
     {lo}
     {hi}
     {mid}

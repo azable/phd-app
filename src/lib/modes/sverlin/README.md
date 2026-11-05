@@ -114,7 +114,11 @@ layout, a view, or a node with a `kind`.
   and explains. A node of text and renders with no `layout` reads as a line of
   text, its renders inline at their own sizes, wrapping between words, as
   `<Node>Found {target} at index {i}.</Node>`, which keeps each value sized and
-  looking as it does elsewhere, unlike `{target}`.
+  looking as it does elsewhere, unlike `{target}`. A node with a `layout` holds
+  only nodes, renders and blocks, never words: put its words in a node of their
+  own, as `<Node kind="Caption">Find the target</Node>`. Blocks in a node with
+  no `layout` and no words, as `<Node><Goal /><Cells /></Node>`, wrap against
+  each other with no gap, and the build warns: give it a layout.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
 - Write text in the participant's words about what the algorithm does, never a
@@ -887,8 +891,12 @@ that expression gave since the step before, drawn at the step's after, and
 missing where it gave none or several. It is held at the step ending the span
 around it (see Steps), which shows that span whole. So a view shows what a
 step's code held though no variable holds it, as the key a whole insertion
-inserts, `{@insert.key}`, out of scope once its block ends. A label giving a
-position is drawn by a pointer, pointing while that code runs.
+inserts, `{@insert.key}`, out of scope once its block ends. Its step ends before
+the declaration's name holds the value, so `key` does not exist there: to pause
+where a view draws `key`, label the whole statement,
+`@key[const key = values[i];]`, and the build warns of a pause on the value
+alone where the view draws the name. A label giving a position is drawn by a
+pointer, pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -1689,8 +1697,8 @@ A node is one of three things:
   own node does with its value;
 - content: `<Node>any text or markup</Node>` shows its children, for titles,
   explanations, captions, indices, and pointer names, and with `layout` arranges
-  them, as a view of an array arranges its elements' views; without `layout`,
-  children flow as ordinary text;
+  them, as a view of an array arranges its elements' views, its words each in a
+  node of their own; without `layout`, children flow as ordinary text;
 - a shape: `<Node />` has no value or children, and draws only its box, for
   marks such as dots, sized by its kind's padding and least size.
 

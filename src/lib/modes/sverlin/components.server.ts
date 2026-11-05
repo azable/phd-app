@@ -837,7 +837,9 @@ export function pointerCalls(
   positions: ReadonlyMap<
     string,
     { into: string; numberView?: string; markViews: readonly string[] }
-  > = new Map()
+  > = new Map(),
+  /** The renders drawing a collection, by name: its type's and its views'. */
+  collections: ReadonlySet<string> = new Set()
 ): {
   removals: Insertion[];
   calls: string[];
@@ -876,8 +878,11 @@ export function pointerCalls(
       if (typeof name === 'string' && argument && !renders.has(name))
         renders.set(name, text(argument));
     }
+    if (isPart(part)) parts.add(String((part.expression as Part | undefined)?.name));
     for (const [key, child] of Object.entries(part)) if (key !== 'parent') gather(child);
   };
+  // The layouts drawn by tag, each a snippet rendered with no arguments by now.
+  const parts = new Set<string>();
   gather(markup);
   const visit = (
     node: unknown,
@@ -1012,8 +1017,39 @@ export function pointerCalls(
           (child) => child.type === 'Text' && String(child.data ?? '').trim()
         )
       : words;
+    if (isNode && !worded) blocksFlowing(part);
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions, inside, worded);
+  };
+  // A node with no layout places its children as text, so two blocks in it, holding no words of
+  // its own, wrap against each other with no gap (as a goal and its cells did on 5 November).
+  const blocksFlowing = (node: Part) => {
+    const attributes = (node.attributes as Part[] | undefined) ?? [];
+    if (attributes.some((attribute) => attribute.name === 'layout')) return;
+    const blocks = ((node.children as Part[] | undefined) ?? []).flatMap((child) => {
+      const callee = ((child.expression as Part | undefined)?.callee as Part | undefined)?.name;
+      if (child.type === 'RenderTag' && typeof callee === 'string')
+        return parts.has(callee)
+          ? [`<${callee} />`]
+          : collections.has(callee)
+            ? [`{${text(((child.expression as Part).arguments as Part[])[0] ?? child)}}`]
+            : [];
+      if (child.type === 'EachBlock') return [`{#each ${text(child.expression as Part)}}`];
+      const laid =
+        child.type === 'InlineComponent' &&
+        child.name === 'Node' &&
+        ((child.attributes as Part[] | undefined) ?? []).some(({ name }) => name === 'layout');
+      return laid ? ['a node with a layout'] : [];
+    });
+    if (blocks.length < 2) return;
+    const kind = attributes.find((attribute) => attribute.name === 'kind');
+    const written = Array.isArray(kind?.value) ? (kind.value[0] as Part | undefined)?.data : '';
+    const where = written
+      ? `<Node kind="${written}">`
+      : `A node with no layout in ${drawnByTag ?? layout ?? 'a view'}`;
+    warnings.push(
+      `${written ? `${where}, a node with no layout,` : where} holds ${blocks.join(', ')} and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.`
+    );
   };
   /** An {#each} over a label's values so far whose only content is a pointer at each. */
   const listPointer = (each: Part): { view: string; list: string } | undefined => {
