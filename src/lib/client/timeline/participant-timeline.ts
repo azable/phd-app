@@ -132,6 +132,11 @@ export function participantTimeline(
   };
   const questions = projectQuestions(events);
   const asked = new Map(questions.map((question) => [question.eventId, question]));
+  const released = new Set(
+    events.flatMap((event) =>
+      event.type === 'assistant.responded' && event.payload.releases !== undefined ? [event.id] : []
+    )
+  );
   const pairQuestions = new Map(
     questions.flatMap((question) =>
       question.displaySetId ? [[question.displaySetId, question] as const] : []
@@ -205,10 +210,14 @@ export function participantTimeline(
     const compared = new Set(
       holder.comparisons.flatMap(({ question }) => question.presentationIds)
     );
-    for (const { question } of turns) {
+    for (const { question, eventId } of turns) {
       const about = question?.question.presentationIds[0];
       if (!question || !about) continue;
-      question.pill = !named.has(about) && !compared.has(about);
+      // A held question asked after its comparisons is about the picture, not a pair's side.
+      question.pill =
+        !(eventId !== undefined && released.has(eventId)) &&
+        !named.has(about) &&
+        !compared.has(about);
       holder.appended = holder.appended.filter((id) => id !== about);
     }
     for (const turn of turns)
