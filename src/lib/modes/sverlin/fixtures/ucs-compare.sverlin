@@ -1,0 +1,223 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
+  const Weight = type('integer', { min: 1, max: 9 });
+  const Cost = type('integer', { min: 0, max: 30 });
+  const Unreached = type(['∞']);
+  const MaybeCost = union(Cost, Unreached);
+  const Settled = type('boolean');
+  const Vertex = record({
+    name: Name,
+    cost: MaybeCost,
+    settled: Settled
+  });
+  const Vertices = array(Vertex, { max: 6 });
+  const VertexRef = index(Vertices);
+  const Edge = record({
+    from: VertexRef,
+    to: VertexRef,
+    weight: Weight
+  });
+  const Edges = array(Edge, { max: 8 });
+  const EdgeIndex = index(Edges);
+  const Entry = record({ vertex: VertexRef, cost: Cost });
+  const Frontier = array(Entry, { max: 5 });
+  const FrontierIndex = index(Frontier);
+</script>
+
+<script input>
+  const vertices = Vertices;
+  const edges = Edges;
+  const start = VertexRef;
+  const goal = VertexRef;
+</script>
+
+<script algorithm>
+  @init[
+    vertices[start].cost = Cost(0);
+    let frontier = Frontier([]);
+    frontier.push({ vertex: start, cost: Cost(0) });
+  ]
+  while (@has[frontier.length > 0]) @search{
+    @choose[let best = FrontierIndex(frontier, 0);]
+    for (
+      @scanStart[let p = FrontierIndex(frontier, 1)];
+      @scanMore[p < frontier.length];
+      @scanNext[p++]
+    ) @scan{
+      if (@cheaper[frontier[p].cost < frontier[best].cost]) @newBest{
+        best = p;
+      }
+    }
+    @take[const entry = frontier[best];]
+    for (
+      @gapStart[let move = FrontierIndex(frontier, best)];
+      @gapMore[move < frontier.length - 1];
+      @gapNext[move++]
+    ) @closeGap{
+      @move[frontier[move] = frontier[move + 1];]
+    }
+    @remove[frontier.pop();]
+    if (@stale[vertices[entry.vertex].settled]) @skip{
+      continue;
+    }
+    @settle[
+      const current = entry.vertex;
+      vertices[current].settled = true;
+    ]
+    if (@atGoal[current === goal]) @goal{
+      return;
+    }
+    for (
+      @edgeStart[let e = EdgeIndex(edges, 0)];
+      @edgeMore[e < edges.length];
+      @edgeNext[e++]
+    ) @edges{
+      if (@outgoing[edges[e].from === current]) @consider{
+        const next = edges[e].to;
+        const candidate = Cost(entry.cost + Cost(edges[e].weight));
+        if (
+          @better[
+            !vertices[next].settled &&
+            (vertices[next].cost === '∞' ||
+              candidate < vertices[next].cost)
+          ]
+        ) @relax{
+          vertices[next].cost = candidate;
+          frontier.push({ vertex: next, cost: candidate });
+        }
+      }
+    }
+  }
+  @missing[return;]
+</script>
+
+<View of="Name" name="NameText">
+  <Node value={this} />
+</View>
+<View of="Cost" name="CostText">
+  <Node value={this} />
+</View>
+<View of="Unreached" name="InfinityText">
+  <Node value={this} />
+</View>
+<View of="Weight" name="WeightText">
+  <Node value={this} />
+</View>
+<View of="VertexRef" name="VertexName">
+  <Node>{at(this).name}</Node>
+</View>
+<View of="VertexRef" name="CurrentMark">
+  <Node layout="column">
+    <Pointed />
+    <Node kind="CurrentLabel">expand</Node>
+  </Node>
+</View>
+<View of="Vertex" name="VertexCard">
+  <Node layout="column" fill={this.settled}>
+    <Node kind="VertexLabel">{this.name}</Node>
+    <Node kind="VertexCost">{this.cost}</Node>
+  </Node>
+</View>
+<View of="Entry" name="FrontierEntry">
+  <Node layout="column">
+    <Node kind="EntryName">{at(this.vertex).name}</Node>
+    <Node kind="EntryCost">{this.cost}</Node>
+  </Node>
+</View>
+<View of="Frontier" name="FrontierItems">
+  <Node>
+    {#each this as entry}
+      {entry}
+    {/each}
+  </Node>
+</View>
+
+<Layout name="Graph">
+  <Node layout="free">
+    {#each vertices as vertex}
+      {vertex}
+    {/each}
+    {#each edges as edge}
+      <Link from={edge.from} to={edge.to}>{edge.weight}</Link>
+    {/each}
+  </Node>
+</Layout>
+
+<Layout name="FrontierLine">
+  <Node layout="row">
+    <Node kind="FrontierTitle">frontier</Node>
+    {frontier}
+  </Node>
+</Layout>
+
+<Layout name="Status">
+  <Node layout="stack">
+    <Node when="@init">
+      Start {start} enters the frontier at cost 0.
+    </Node>
+    <Node when="@search.settle">
+      Expand {current} at cost {entry.cost}; this cost is final.
+    </Node>
+    <Node when="@search.edges.consider.relax">
+      A cheaper route reaches {next}: record cost {candidate}.
+    </Node>
+    <Node when="@search.goal">
+      Goal {goal} is expanded at cost {entry.cost}; it is optimal.
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Page">
+  <Node layout="column">
+    <Node kind="Header" layout="row">
+      <Node kind="Heading">
+        Uniform-cost search: {start} to {goal}
+      </Node>
+      <Node kind="Legend">
+        filled = expanded · number = best cost
+      </Node>
+    </Node>
+    <Graph />
+    <Node kind="Footer" layout="row">
+      <FrontierLine />
+      <Status />
+    </Node>
+    {current}
+  </Node>
+</Layout>
+
+<Case
+  name="main"
+  vertices={[
+    { name: 'A', cost: '∞', settled: false },
+    { name: 'B', cost: '∞', settled: false },
+    { name: 'C', cost: '∞', settled: false },
+    { name: 'D', cost: '∞', settled: false },
+    { name: 'E', cost: '∞', settled: false },
+    { name: 'F', cost: '∞', settled: false }
+  ]}
+  edges={[
+    { from: 0, to: 1, weight: 2 },
+    { from: 0, to: 2, weight: 5 },
+    { from: 1, to: 2, weight: 1 },
+    { from: 1, to: 3, weight: 7 },
+    { from: 2, to: 3, weight: 2 },
+    { from: 2, to: 4, weight: 4 },
+    { from: 3, to: 5, weight: 1 },
+    { from: 4, to: 5, weight: 1 }
+  ]}
+  start={0}
+  goal={5}
+/>
+
+<Storyboard>
+  <Scene
+    name="search"
+    case="main"
+    pause="@init, @search.settle, @search.edges.consider.relax,
+      @search.goal"
+  >
+    <Page />
+  </Scene>
+</Storyboard>
+

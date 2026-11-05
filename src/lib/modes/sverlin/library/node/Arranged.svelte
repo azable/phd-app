@@ -21,7 +21,7 @@
   import LinkLines, { type LineStyle } from './LinkLines.svelte';
   import { placeLabels } from './markers';
   import type { Spacing } from './props';
-  import { mountedReader } from './reader';
+  import { layoutReader } from './reader';
 
   let {
     flow,
@@ -103,7 +103,7 @@
     if (!host) return;
     const placed = host;
     const props = { flow, form, direction, curve, layoutSeed, gap, scope };
-    const laid = untrack(() => arrangeChildren(mountedReader(placed), placed, props, memory));
+    const laid = untrack(() => arrangeChildren(layoutReader(placed), placed, props, memory));
     for (const problem of laid.problems) console.warn(`Node layout: ${problem}`);
     laid.elements.forEach((element, index) => {
       element.style.left = `${laid.placements[index].x}px`;
@@ -126,14 +126,6 @@
       styles: laid.styles
     };
     if (resized) parent?.changed();
-    // Boxes are read where they are on screen, so one laid out while a step's moves run, as when a
-    // child's size animates, places links at boxes still moving: lay out again once they end, as
-    // panning or zooming used to be the only thing that did.
-    const moving = placed
-      .getAnimations({ subtree: true })
-      .filter(({ playState }) => playState === 'running');
-    if (moving.length)
-      void Promise.allSettled(moving.map(({ finished }) => finished)).then(() => revision++);
   });
 </script>
 

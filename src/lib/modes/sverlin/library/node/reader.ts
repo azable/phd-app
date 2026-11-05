@@ -43,6 +43,39 @@ export const contains = <E>(read: Reader<E>, outer: E, inner: E): boolean =>
 export const hasClass = <E>(read: Reader<E>, element: E, name: string): boolean =>
   (read.attribute(element, 'class') ?? '').split(/\s+/u).includes(name);
 
+/** Where an element is laid out in the page, by the offsets layout gives it: no transform moves it. */
+function laidOut(element: HTMLElement): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  for (let at: HTMLElement | null = element; at; at = at.offsetParent as HTMLElement | null) {
+    x += at.offsetLeft;
+    y += at.offsetTop;
+  }
+  return { x, y };
+}
+
+/**
+ * Mounted elements, their boxes where layout places them, in layout pixels: never where a step's
+ * moves or the frame's scale and zoom draw them for now. Read on screen, a box a move was carrying
+ * placed links at its old place, as when two presentations of a comparison took turns on one
+ * thread and a layout fell inside the other's move (project d20bd3f6).
+ */
+export function layoutReader(host: Element): Reader<HTMLElement> {
+  return {
+    ...mountedReader(host),
+    boxIn: (inner, outer) => {
+      const at = laidOut(inner);
+      const from = laidOut(outer);
+      return {
+        x: at.x - from.x,
+        y: at.y - from.y,
+        width: inner.offsetWidth,
+        height: inner.offsetHeight
+      };
+    }
+  };
+}
+
 /**
  * Mounted elements, their boxes read in layout pixels whatever the frame's scale (see unscaled.ts),
  * as at the scale `scaled` is drawn at.

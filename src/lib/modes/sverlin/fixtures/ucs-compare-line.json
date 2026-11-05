@@ -1,0 +1,8 @@
+{
+  "Graph.form": "line",
+  "Graph.Link.route": "straight",
+  "VertexCard@vertex.fill": "white",
+  "VertexCard@vertex.stroke": "neutral-300",
+  "FrontierItems.FrontierEntry@entry.fill": "white",
+  "FrontierItems.FrontierEntry@entry.stroke": "neutral-300"
+}
