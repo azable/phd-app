@@ -3366,6 +3366,14 @@ describe('several variants from chat', () => {
     expect(mocks.generatePrepared).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for no comparison of a form the participant has already answered', async () => {
+    const { unofferedAlternatives } = await import('./commands');
+    const bundle = { views: { Int: ['IntCell', 'IntBar'] }, variant: { 'Tree.layoutSeed': 1 } };
+    expect(unofferedAlternatives(bundle, new Set(['views.Int']))).toContain('arrangement of Tree');
+    expect(unofferedAlternatives(bundle, new Set(['views.Int']))).not.toContain('views.Int');
+    expect(unofferedAlternatives(bundle, new Set(['views.Int', 'Tree.direction']))).toBeUndefined();
+  });
+
   it('shows a version whose source offers no other form at once', async () => {
     const result = await attempts(
       () => revised(twoViews('<View of="Int" name="Cell"><Node value={this} /></View>')),
