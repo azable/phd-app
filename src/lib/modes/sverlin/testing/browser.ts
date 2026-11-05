@@ -65,12 +65,20 @@ export async function openPage({
 /** Opens a built presentation at a step and waits until it has settled there. */
 export async function openPresentation(
   javascript: string,
-  options: PageOptions & { step?: number; head?: string; errors?: string[] } = {}
+  options: PageOptions & {
+    step?: number;
+    head?: string;
+    errors?: string[];
+    /** Draw the steps from their scene data (library/SceneView.svelte), as `?scenes=1` does. */
+    scenes?: boolean;
+  } = {}
 ): Promise<Page> {
   const page = await openPage(options);
   if (options.errors) page.on('pageerror', (error) => options.errors!.push(error.message));
   await page.setContent(
-    sandboxDocument('', javascript, options.step ?? 0, 1, undefined, undefined, options.head)
+    sandboxDocument('', javascript, options.step ?? 0, 1, undefined, undefined, options.head, {
+      scenes: options.scenes
+    })
   );
   await settled(page, options.step ?? 0);
   return page;
