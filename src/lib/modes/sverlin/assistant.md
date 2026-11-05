@@ -93,6 +93,9 @@ Some features suit common needs. Offer them as alternatives where they fit:
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against
   `keywords`) as an alternative (see the guide's Listing).
+- To reveal a node of a graph over time, keep it drawn and bind its look to the
+  state, as `<Node opacity={this.seen}>`: it keeps its place and its links. An
+  `{#if}` that leaves the node empty also removes every link into it.
 
 Choose a case whose input shows how the algorithm works, small enough to step
 through. For example: a power of two for divide and conquer, as 8 values for
