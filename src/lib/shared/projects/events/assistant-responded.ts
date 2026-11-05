@@ -9,6 +9,12 @@ import { elementIdSchema, messageContentSchema } from './message-content';
 import { participantIntakeStepSchema } from './assistant-intake';
 import { eventEnvelope, positiveSchema } from './values';
 
+const questionSchema = v.object({
+  text: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  presentationId: v.optional(presentationIdSchema),
+  elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
+});
+
 /** Runtime schema for an assistant's user-facing response. */
 export const assistantRespondedEventSchema = v.object({
   ...eventEnvelope,
@@ -22,13 +28,14 @@ export const assistantRespondedEventSchema = v.object({
      * words, or about a presentation, one shown before or the first its decision presented, with
      * elements in it to highlight.
      */
-    question: v.optional(
-      v.object({
-        text: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
-        presentationId: v.optional(presentationIdSchema),
-        elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
-      })
-    ),
+    question: v.optional(questionSchema),
+    /**
+     * A question asked with comparisons, held back so it is read after them: a reply of its own
+     * asks it (releases) once the last of them is answered, or the participant writes first.
+     */
+    heldQuestion: v.optional(questionSchema),
+    /** The reply whose held question this one asks, made with no model call. */
+    releases: v.optional(positiveSchema),
     /** Attributes of the design brief its decision set (see shared/projects/brief.ts). */
     brief: v.optional(v.array(briefEntrySchema))
   })

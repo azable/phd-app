@@ -49,7 +49,11 @@ import { stepRuns } from '$lib/shared/differing-steps';
 import { readabilityText } from '$lib/shared/readability';
 import { interfacePartsFor, type InterfacePartId } from '$lib/shared/interface-parts';
 import type { ConversationMessage } from '$lib/server/chat-bots/types';
-import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
+import {
+  heldQuestion,
+  projectQuestions,
+  type ProjectQuestion
+} from '$lib/shared/projects/questions';
 
 import { projectBrief } from '$lib/shared/projects/brief';
 
@@ -285,6 +289,12 @@ export type AiProjectContext = {
    */
   waitingComparisons?: string[];
   /**
+   * Your latest question, not a comparison's, and where it stands: held, asked with comparisons and
+   * shown once the last is answered or the participant writes; shown, in the chat and not yet
+   * answered; or answered.
+   */
+  question?: { text: string; status: 'held' | 'shown' | 'answered' };
+  /**
    * What the preference model believes from every answer so far (preference-summary.ts): each
    * touched choice's likeliest option and whether it is settled, what is most worth asking next,
    * and what was never compared. Recorded with each request's prompt, so the export shows what the
@@ -455,6 +465,20 @@ export function projectConversationMessages(
       event.type === 'feedback.submitted'
         ? [{ role: 'user' as const, content: feedbackMessage(event, questions) }]
         : matchProjectEvent<ConversationMessage[]>(event, conversationCases);
+    // A held question is read with its reply as held, and asked where the application asks it.
+    const held = event.type === 'assistant.responded' ? event.payload.heldQuestion : undefined;
+    if (held)
+      return messages.map((message) => ({
+        ...message,
+        content: `${message.content}\n[Held until its comparisons are answered: “${held.text}”]`
+      }));
+    if (event.type === 'assistant.responded' && event.payload.releases)
+      return [
+        {
+          role: 'assistant',
+          content: `[Your held question, asked now: “${event.payload.question?.text ?? ''}”]`
+        }
+      ];
     // A question is read with its reply, and an answer with its question.
     const question =
       event.type === 'assistant.responded'
@@ -471,6 +495,16 @@ export function projectConversationMessages(
           : `[Answering your question “${question.text}”] ${message.content}`
     }));
   });
+}
+
+/** The assistant's latest question, not a comparison's, and where it stands. */
+function latestQuestion(events: readonly ProjectEvent[]): Pick<AiProjectContext, 'question'> {
+  const held = heldQuestion(events)?.payload.heldQuestion;
+  if (held) return { question: { text: held.text, status: 'held' } };
+  const latest = projectQuestions(events).findLast(({ kind }) => kind !== 'pair');
+  return latest
+    ? { question: { text: latest.text, status: latest.answer ? 'answered' : 'shown' } }
+    : {};
 }
 
 /** A question as the assistant asked it, with what it is about. */
@@ -625,6 +659,7 @@ export function projectAiContext(
     activePresentations: activePresentationSummaries(snapshot),
     interaction,
     ...(waiting.length ? { waitingComparisons: waiting } : {}),
+    ...latestQuestion(document.events),
     ...(preferences ? { preferences } : {}),
     brief: briefContext(
       brief,

@@ -3482,6 +3482,177 @@ describe('several variants from chat', () => {
     await createComparisonProject('First source');
     expect(mocks.preparePrompt.mock.calls[0]?.[0]).toMatchObject({ turn: 'authoring' });
   });
+
+  describe('a question asked with comparisons', () => {
+    const asking = (text: string) =>
+      decide(
+        {
+          action: 'vary',
+          values: [],
+          randomise: [],
+          count: null,
+          comparisons: [views('IntCell', 'IntTally'), marks],
+          question: { text, presentation: null },
+          summary: 'Asks two questions and who it is for'
+        },
+        {}
+      );
+    const prefer = async (
+      projectId: string,
+      [left, right]: string[],
+      answer: { preferred: string } | { outcome: 'tie' | 'skip' }
+    ) => {
+      const { submitProjectPreference } = await import('./commands');
+      const document = await serviceDependencies.repository.load(projectId);
+      return submitProjectPreference(
+        {
+          projectId,
+          expectedHead: projectHead(document).id,
+          presentations: [left, right],
+          answer,
+          step: 0,
+          operationId: crypto.randomUUID()
+        },
+        commandDependencies
+      );
+    };
+    const write = async (projectId: string, text: string) => {
+      const { submitProjectFeedback } = await import('./commands');
+      const document = await serviceDependencies.repository.load(projectId);
+      return submitProjectFeedback(
+        feedbackOptions(document, text, crypto.randomUUID()),
+        commandDependencies
+      );
+    };
+    const prompted = () => mocks.preparePrompt.mock.calls.at(-1)?.[0].project;
+
+    it('is held back, and asked with an open alternative once the last pair is answered, with no model call', async () => {
+      const { projectAiContext } = await import('$lib/server/chat-bots/project-context');
+      const { result } = await asking('Who is it for?');
+      const [reply] = replies(result.appendedEvents);
+      expect(reply).toMatchObject({ heldQuestion: { text: 'Who is it for?' } });
+      expect(reply).not.toHaveProperty('question');
+      const projectId = result.document.projectId;
+      expect(projectAiContext(result.document).question).toEqual({
+        text: 'Who is it for?',
+        status: 'held'
+      });
+
+      const ids = presented(result.appendedEvents).map(
+        ({ payload }) => payload.presentation.presentationId
+      );
+      mocks.generatePrepared.mockClear();
+      const first = await prefer(projectId, ids.slice(0, 2), { preferred: ids[1] });
+      expect(replies(first.appendedEvents)).toEqual([]);
+      const last = await prefer(projectId, ids.slice(2, 4), { outcome: 'skip' });
+      const held = result.appendedEvents.find((event) => event.type === 'assistant.responded');
+      const text =
+        'Who is it for? Or tell me what you’d like to change, or ask me for suggestions.';
+      expect(replies(last.appendedEvents)).toEqual([
+        { content: markdownMessage(text), question: { text }, releases: held?.id }
+      ]);
+      expect(mocks.generatePrepared).not.toHaveBeenCalled();
+      expect(projectAiContext(last.document).question).toEqual({ text, status: 'shown' });
+
+      // The participant's next message answers it, and the assistant sees it answered.
+      mocks.generatePrepared
+        .mockReset()
+        .mockResolvedValue({ ...generation(undefined, 'Noted.'), decision: { action: 'respond' } });
+      const answered = await write(projectId, 'Students new to searching.');
+      expect(answered.appendedEvents[0]).toMatchObject({
+        type: 'feedback.submitted',
+        payload: { answers: last.appendedEvents.at(-1)?.id }
+      });
+      expect(prompted()?.question).toEqual({ text, status: 'answered' });
+    });
+
+    it('is asked by the queued turn the last answer requests, with no model call', async () => {
+      const { queueProjectPreference, runQueuedAssistantTurn } = await import('./commands');
+      const { result } = await asking('Who is it for?');
+      const projectId = result.document.projectId;
+      const ids = presented(result.appendedEvents).map(
+        ({ payload }) => payload.presentation.presentationId
+      );
+      const accept = async (operationId: string, kind: 'prefer' | 'assistant-turn') => {
+        const head = projectHead(await serviceDependencies.repository.load(projectId)).id;
+        await serviceDependencies.repository.append(projectId, head, [
+          {
+            type: 'operation.accepted',
+            actor: { kind: kind === 'prefer' ? 'user' : 'system' },
+            operationId,
+            createdAt: new Date().toISOString(),
+            payload: { kind }
+          }
+        ]);
+      };
+      const queue = async ([left, right]: string[]) => {
+        const operationId = crypto.randomUUID();
+        await accept(operationId, 'prefer');
+        return queueProjectPreference(
+          {
+            projectId,
+            operationId,
+            presentations: [left, right],
+            answer: { outcome: 'tie' },
+            step: 0
+          },
+          commandDependencies
+        );
+      };
+      await queue(ids.slice(0, 2));
+      const last = await queue(ids.slice(2, 4));
+      const request = last.appendedEvents.find(({ type }) => type === 'assistant.turn-requested');
+      const preference = last.appendedEvents.find(
+        ({ type }) => type === 'visualization.preference-recorded'
+      );
+      const turn = crypto.randomUUID();
+      await accept(turn, 'assistant-turn');
+      const head = projectHead(await serviceDependencies.repository.load(projectId)).id;
+      await serviceDependencies.repository.append(projectId, head, [
+        {
+          type: 'assistant.turn-started',
+          actor: { kind: 'system' },
+          operationId: turn,
+          createdAt: new Date().toISOString(),
+          payload: { requestEventIds: [request!.id], interactionEventIds: [preference!.id] }
+        }
+      ]);
+      mocks.generatePrepared.mockClear();
+      const ran = await runQueuedAssistantTurn(
+        { projectId, operationId: turn },
+        commandDependencies
+      );
+      expect(replies(ran.appendedEvents)).toMatchObject([
+        { question: { text: expect.stringMatching(/^Who is it for\? Or tell me/u) } }
+      ]);
+      expect(mocks.generatePrepared).not.toHaveBeenCalled();
+    });
+
+    it('is asked when the participant writes before the pairs are answered, after their message', async () => {
+      const { result } = await asking('Who is it for? Or tell me what to change.');
+      mocks.generatePrepared
+        .mockReset()
+        .mockResolvedValue({
+          ...generation(undefined, 'Bigger.'),
+          decision: { action: 'respond' }
+        });
+      const written = await write(result.document.projectId, 'Make it bigger.');
+      const types = written.appendedEvents.map(({ type }) => type);
+      expect(types[0]).toBe('feedback.submitted');
+      expect(written.appendedEvents[0].payload).not.toHaveProperty('answers');
+      // Asked as written, as it offers another way already; then the model's reply.
+      const [released, answer] = replies(written.appendedEvents);
+      expect(released).toMatchObject({
+        question: { text: 'Who is it for? Or tell me what to change.' },
+        releases: expect.any(Number)
+      });
+      expect(answer.content).toEqual(markdownMessage('Bigger.'));
+      expect(prompted()?.question).toEqual({
+        text: 'Who is it for? Or tell me what to change.',
+        status: 'shown'
+      });
+    });
+  });
 });
 
 describe('a reply’s text', () => {

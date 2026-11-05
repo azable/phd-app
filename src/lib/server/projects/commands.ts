@@ -102,7 +102,7 @@ import type {
   SourceDecision,
   SourceDecisionOf
 } from '$lib/server/chat-bots/source-decisions';
-import { openQuestion } from '$lib/shared/projects/questions';
+import { heldQuestion, openQuestion } from '$lib/shared/projects/questions';
 import {
   briefAttribute,
   projectBrief,
@@ -441,6 +441,13 @@ export async function runQueuedAssistantTurn(
       concurrentDependencies
     );
   if (waiting) return { document: current, appendedEvents: appendedSince(current) };
+  // A question held back with comparisons is asked once the last is answered, or when the
+  // participant writes first; answers alone then wait with it for the participant's reply.
+  const answersOnly = preferences.length === interactions.length;
+  if (heldQuestion(current.events) && !(answersOnly && waitingComparisons(current).length)) {
+    current = await releaseHeldQuestion(current, options.operationId, concurrentDependencies);
+    if (answersOnly) return { document: current, appendedEvents: appendedSince(current) };
+  }
   const intake = await handleParticipantIntake(
     current,
     options.operationId,
@@ -544,6 +551,7 @@ async function submitProjectFeedbackUnlocked(
   );
   document = intake.document;
   if (!intake.author) return finishMutation(before, document);
+  document = await releaseHeldQuestion(document, options.operationId, dependencies);
   if (projectSnapshotAt(document).mode !== 'sverlin') {
     document = await submitCandidateFeedback(
       document,
@@ -605,6 +613,11 @@ export function submitProjectPreference(
     );
     document = answered.document;
     if (answered.waiting) return finishMutation(before, document);
+    if (heldQuestion(document.events))
+      return finishMutation(
+        before,
+        await releaseHeldQuestion(document, options.operationId, dependencies)
+      );
     document = await runSverlinAssistantTurn(
       document,
       options.operationId,
@@ -837,11 +850,13 @@ async function runSverlinAssistantTurn(
       // reply, its question, and what it presents arrive together; its candidate-refs, and a
       // question about the new version, name what this turn presented. A blank reply to a change
       // says what the change does instead; the fallback's starts with what it simplified. A note
-      // follows what the reply says, as which comparisons were left out.
+      // follows what the reply says, as which comparisons were left out. A question asked with
+      // comparisons is held back, to be read after them (releaseHeldQuestion).
       const recordReply = (
         document: ProjectDocument,
         presented: readonly RenderablePresentation[] = [],
-        note?: string
+        note?: string,
+        compared = false
       ) => {
         const { reply, decision, recovery } = generation.result;
         const summary = 'summary' in decision ? decision.summary : undefined;
@@ -865,7 +880,10 @@ async function runSverlinAssistantTurn(
           operationId,
           dependencies,
           inReplyTo,
-          { ...(question ? { question } : {}), ...(brief ? { brief } : {}) }
+          {
+            ...(question ? (compared ? { heldQuestion: question } : { question }) : {}),
+            ...(brief ? { brief } : {})
+          }
         );
       };
 
@@ -1223,7 +1241,8 @@ async function runSverlinAssistantTurn(
         current = await recordReply(
           current,
           pairs?.[0]?.swapped ? [presented[1], presented[0], ...presented.slice(2)] : presented,
-          leftOut
+          leftOut,
+          pairs !== undefined
         );
         if (pairs)
           current = await presentRemainingComparisons(
@@ -2692,10 +2711,14 @@ function appendAssistantResponse(
   {
     intakeStep,
     question,
+    heldQuestion,
+    releases,
     brief
   }: {
     intakeStep?: ParticipantIntakeStepId;
     question?: AssistantQuestion;
+    heldQuestion?: AssistantQuestion;
+    releases?: EventId;
     brief?: BriefEntry[];
   } = {}
 ) {
@@ -2711,12 +2734,39 @@ function appendAssistantResponse(
           ...(inReplyTo.length > 0 ? { inReplyTo: [...inReplyTo] } : {}),
           ...(intakeStep ? { intakeStep } : {}),
           ...(question ? { question } : {}),
+          ...(heldQuestion ? { heldQuestion } : {}),
+          ...(releases ? { releases } : {}),
           ...(brief?.length ? { brief } : {})
         }
       })
     ],
     dependencies.projectService
   );
+}
+
+/** What a question the application asks ends with, so the participant never has to answer it. */
+const openAlternative = 'Or tell me what you’d like to change, or ask me for suggestions.';
+
+/**
+ * Ask the question held back with comparisons (heldQuestion) in a reply of its own, with no model
+ * call: once the last of them is answered, or when the participant writes first. It ends with the
+ * open alternative, unless it offers one already or would grow too long.
+ */
+function releaseHeldQuestion(
+  document: ProjectDocument,
+  operationId: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  const held = heldQuestion(document.events);
+  const question = held?.payload.heldQuestion;
+  if (!held || !question || held.actor.kind !== 'assistant') return Promise.resolve(document);
+  const open = /\bor (?:tell|ask)\b|\bsuggest/iu.test(question.text);
+  const opened = `${question.text} ${openAlternative}`;
+  const text = open || opened.length > 200 ? question.text : opened;
+  return appendAssistantResponse(document, text, held.actor.botId, operationId, dependencies, [], {
+    question: { ...question, text },
+    releases: held.id
+  });
 }
 
 function assistantBotId(event: NewProjectEvent<'ai.generation-succeeded'>): string {

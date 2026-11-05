@@ -88,7 +88,7 @@ export type ConversationState = {
   /**
    * The questions in words the assistant has asked since anything new was last shown, a version
    * or a pair: a reply is recorded after what its decision presents, so a question asked with a
-   * new version counts.
+   * new version counts, and one held back with comparisons counts again once asked after them.
    */
   questionsSinceShown: number;
   /** Whether any comparison has been offered yet. */
@@ -112,7 +112,10 @@ export function conversationState(events: readonly ProjectEvent[]): Conversation
     if (event.type === 'visualization.presented') {
       questionsSinceShown = 0;
       compared ||= event.payload.question !== undefined;
-    } else if (event.type === 'assistant.responded' && event.payload.question)
+    } else if (
+      event.type === 'assistant.responded' &&
+      (event.payload.question || event.payload.heldQuestion)
+    )
       questionsSinceShown += 1;
   }
   return { questionsSinceShown, compared };

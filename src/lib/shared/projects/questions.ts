@@ -8,7 +8,7 @@
  * counts.
  */
 
-import type { ProjectEvent } from './events';
+import type { ProjectEvent, ProjectEventOf } from './events';
 import type { MessageContent } from './events/message-content';
 import { comparisonOutcome, preferredPresentation } from './events/visualization-presented';
 
@@ -98,4 +98,21 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
 export function openQuestion(events: readonly ProjectEvent[]): ProjectQuestion | undefined {
   const latest = projectQuestions(events).findLast(({ kind }) => kind !== 'pair');
   return latest && !latest.answer ? latest : undefined;
+}
+
+/**
+ * The reply whose question, asked with comparisons, is held back to be read after them
+ * (assistant.responded heldQuestion), while no reply has asked it yet (releases).
+ */
+export function heldQuestion(
+  events: readonly ProjectEvent[]
+): ProjectEventOf<'assistant.responded'> | undefined {
+  const held = events.findLast(
+    (event): event is ProjectEventOf<'assistant.responded'> =>
+      event.type === 'assistant.responded' && event.payload.heldQuestion !== undefined
+  );
+  const released = events.some(
+    (event) => event.type === 'assistant.responded' && event.payload.releases === held?.id
+  );
+  return held && !released ? held : undefined;
 }
