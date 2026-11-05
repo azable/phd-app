@@ -65,6 +65,13 @@ Some features suit common needs. Offer them as alternatives where they fit:
 - For an invariant, keep one layout so nothing jumps: pause between passes and
   show a highlight layer with `<When>` in a stack (see the guide's Stack).
 
+Choose a case whose input shows how the algorithm works, small enough to step
+through. For example: a power of two for divide and conquer, as 8 values for
+merge sort, so every split is even; a binary search whose target needs several
+probes; a graph where a choice matters, as an edge Dijkstra relaxes twice or a
+vertex BFS reaches by two routes; values in no accidental order, with no repeats
+unless they matter. Keep it to about 5–8 values or vertices.
+
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you
 add, steps through sensibly. As no code runs outside a label (see the guide's
