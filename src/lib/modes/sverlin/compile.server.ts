@@ -1427,7 +1427,21 @@ function prepareViews(
       string,
       { key: string; base: string; options: string[]; pointer: boolean }
     > = {};
-    const placeKinds = new Map<string, { base: string; role: KindRole }>();
+    const placeKinds = new Map<
+      string,
+      { base: string; role: KindRole; unboxed?: Readonly<Record<string, string>> }
+    >();
+    // A view of a record whose root arranges its parts is a card: one box, its fields drawn in it
+    // unboxed, as parts of one thing rather than things of their own.
+    const cards = new Set(
+      Object.entries(components)
+        .filter(
+          ([name, type]) =>
+            viewing.structures[type]?.kind === 'record' &&
+            unlaid.some(({ key, role }) => key === name && role === 'container')
+        )
+        .map(([name]) => name)
+    );
     const placeSlots = new Map<number, string>();
     const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
@@ -1473,7 +1487,17 @@ function prepareViews(
       for (const view of options)
         for (const kind of unlaid)
           if (kind.key === view || kind.key.startsWith(`${view}.`))
-            placeKinds.set(`${within}${kind.key}${at}`, { base: kind.key, role: kind.role });
+            placeKinds.set(`${within}${kind.key}${at}`, {
+              base: kind.key,
+              role: kind.role,
+              ...(kind.key !== view
+                ? {}
+                : site.inLink
+                  ? { unboxed: linkLabelPaint }
+                  : cards.has(site.within) && at.startsWith('@this.')
+                    ? { unboxed: cardFieldPaint }
+                    : {})
+            });
       // A label the root marks: its listing region's paint falls back to the mark's.
       if (asMark && label && !within)
         labelMarks.set(at.slice(1), {
@@ -2223,9 +2247,9 @@ function prepareViews(
         places: placeChoices,
         fallbacks: Object.fromEntries([
           ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
-          ...[...placeKinds].flatMap(([key, { base, role }]) =>
+          ...[...placeKinds].flatMap(([key, { base, role, unboxed }]) =>
             roleProps[role]
-              .filter((prop) => placeProps.has(prop))
+              .filter((prop) => placeProps.has(prop) && !(unboxed && prop in unboxed))
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
           ),
           // After the marks' places, which the regions' fall back to.
@@ -2266,6 +2290,20 @@ function prepareViews(
               layoutDesign
             ),
             ...regionStarter,
+            // A link's label, as a weight, and a card's fields start unboxed: a box would read as
+            // a node of its own. The card is the box.
+            ...Object.fromEntries(
+              [...placeKinds].flatMap(([key, { unboxed }]) =>
+                unboxed
+                  ? Object.entries(unboxed).map(([prop, value]) => [`${key}.${prop}`, value])
+                  : []
+              )
+            ),
+            ...Object.fromEntries(
+              [...cards].flatMap((card) =>
+                Object.entries(cardLook).map(([prop, value]) => [`${card}.${prop}`, value])
+              )
+            ),
             ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
             ...boundDesign(bindings).starter
           },
@@ -4118,6 +4156,25 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
 }
 
 /**
+ * The paint a value starts with, its own rather than its kind's, where it is a link's label: no
+ * border, and the stage's white behind it, so the line breaks round it rather than crossing it.
+ */
+const linkLabelPaint: Readonly<Record<string, string>> = { fill: 'white', stroke: 'none' };
+
+/** The paint a value starts with where it is a card's field: none, the card being its box. */
+const cardFieldPaint: Readonly<Record<string, string>> = { fill: 'none', stroke: 'none' };
+
+/** A card's starting look: the one box around its parts, which sit close together. */
+const cardLook: Readonly<Record<string, string | number>> = {
+  fill: 'white',
+  stroke: 'neutral-300',
+  strokeWidth: 1.5,
+  radius: 8,
+  padding: 0.375,
+  gap: 0.25
+};
+
+/**
  * Every {@render} tag: the name it calls, where it starts, whether it is inside a <Node>, and its
  * place (see Place): what its argument is written as after `@`, a label (`@swap.held`), a variable
  * (`@i`), or a field (`@g.a`), none for another expression or none at all; whether it is a label;
@@ -4136,6 +4193,8 @@ function renderSites(
   at?: string;
   label: boolean;
   within: string;
+  /** Whether it is a link's label, drawn over the link's line. */
+  inLink: boolean;
 }[] {
   type Part = Record<string, unknown> & {
     type?: string;
@@ -4148,14 +4207,21 @@ function renderSites(
   const chain = (node: Part | undefined): boolean =>
     node?.type === 'Identifier' ||
     (node?.type === 'MemberExpression' && !node.computed && chain(node.object as Part));
-  const walk = (node: unknown, inNode: boolean, within: string, inView: boolean): void => {
+  const walk = (
+    node: unknown,
+    inNode: boolean,
+    within: string,
+    inView: boolean,
+    inLink = false
+  ): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach((child) => walk(child, inNode, within, inView));
+    if (Array.isArray(node))
+      return node.forEach((child) => walk(child, inNode, within, inView, inLink));
     const part = node as Part;
     if (part.type === 'SnippetBlock') {
       const name = (part.expression as Part | undefined)?.name ?? '';
       const view = inView || views.has(name);
-      walk(part.children, false, view ? (paths.get(name) ?? name) : '', view);
+      walk(part.children, false, view ? (paths.get(name) ?? name) : '', view, inLink);
       return;
     }
     if (part.type === 'RenderTag') {
@@ -4177,14 +4243,16 @@ function renderSites(
           inNode,
           ...(written ? { at: written } : {}),
           label,
-          within
+          within,
+          inLink
         });
       }
       return;
     }
     const inside = inNode || (part.type === 'InlineComponent' && part.name === 'Node');
+    const link = inLink || (part.type === 'InlineComponent' && part.name === 'Link');
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent') walk(child, inside, within, inView);
+      if (key !== 'parent') walk(child, inside, within, inView, link);
   };
   walk(markup, false, '', false);
   return sites;

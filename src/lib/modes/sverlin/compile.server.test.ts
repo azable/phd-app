@@ -2844,3 +2844,64 @@ describe('tokens in captions', () => {
     );
   });
 });
+
+describe('starter looks of a graph', () => {
+  const graph = `<script domain>
+  const Name = type(['A', 'B', 'C']);
+  const State = type(['unseen', 'seen']);
+  const Vertex = record({ name: Name, state: State });
+  const Vertices = array(Vertex, { max: 3 });
+  const VertexRef = index(Vertices);
+  const Weight = type('integer', { min: 1, max: 9 });
+  const Edge = record({ from: VertexRef, to: VertexRef, weight: Weight });
+  const Edges = array(Edge, { max: 3 });
+</script>
+<script input>
+  const vertices = Vertices;
+  const edges = Edges;
+</script>
+<script algorithm>
+  @mark[vertices[0].state = 'seen';]
+</script>
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="State" name="StateText"><Node value={this} /></View>
+<View of="Weight" name="WeightText"><Node value={this} /></View>
+<View of="Vertex" name="VertexCard">
+  <Node layout="column">
+    <Node kind="VertexName">{this.name}</Node>
+    <Node kind="StateLabel">{this.state}</Node>
+  </Node>
+</View>
+<Layout name="Graph" of="vertices, edges">
+  <Node>
+    <Node layout="free">
+      {#each vertices as vertex}<Node>{vertex}</Node>{/each}
+      {#each edges as edge}<Link from={edge.from} to={edge.to}>{edge.weight}</Link>{/each}
+    </Node>
+  </Node>
+</Layout>
+<Case name="main" vertices={[{ name: 'A', state: 'unseen' }, { name: 'B', state: 'unseen' }, { name: 'C', state: 'unseen' }]}
+  edges={[{ from: 0, to: 1, weight: 2 }, { from: 1, to: 2, weight: 5 }]} />
+<Storyboard>
+  <Scene name="main" case="main" pause="@mark"><Graph vertices={vertices} edges={edges} /></Scene>
+</Storyboard>`;
+
+  it('starts a link label unboxed, the stage white behind it, so the line breaks round it', () => {
+    const { design } = prepareSvelteComponent(graph);
+    expect(design.starter['WeightText@edge.weight.fill']).toBe('white');
+    expect(design.starter['WeightText@edge.weight.stroke']).toBe('none');
+    // Its own paint, not its kind's: a weight drawn elsewhere keeps the cell's box.
+    expect(design.fallbacks['WeightText@edge.weight.fill']).toBeUndefined();
+    expect(design.starter['WeightText.stroke']).toBe('neutral-300');
+  });
+
+  it('starts a view of a record arranging its parts as one boxed card, its fields unboxed', () => {
+    const { design } = prepareSvelteComponent(graph);
+    expect(design.starter['VertexCard.fill']).toBe('white');
+    expect(design.starter['VertexCard.stroke']).toBe('neutral-300');
+    expect(design.starter['VertexCard.gap']).toBe(0.25);
+    expect(design.starter['VertexCard.NameText@this.name.fill']).toBe('none');
+    expect(design.starter['VertexCard.StateText@this.state.stroke']).toBe('none');
+    expect(design.fallbacks['VertexCard.NameText@this.name.fill']).toBeUndefined();
+  });
+});
