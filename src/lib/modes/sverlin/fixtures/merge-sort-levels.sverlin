@@ -39,7 +39,7 @@
 <View of="Index" name="Mark"><Pointed /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="@sort" name="CallFrame">
-  <Node layout="row">sort({this.lo}, {this.hi})</Node>
+  <Node>sort({this.lo}, {this.hi})</Node>
 </View>
 
 <Select name="levels" from="@sort" where="ended <= now" group="depth"
