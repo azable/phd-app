@@ -825,6 +825,14 @@ describe('pointers', () => {
   const view = (parts: string, renders = '') =>
     `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n${parts}\n<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
 
+  it('marks from the page root an element a layout drawn by tag draws', async () => {
+    // Benchmark run 4's Dijkstra drew {current} in its page's root while <Graph> drew the
+    // vertices; the guide has the mark drawn around the element wherever that is drawn.
+    const source = `<script domain>const Int = type("integer", { min: 0, max: 99 }); const Values = array(Int, { max: 7 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[2, 5, 7]} /><script algorithm>for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @scan{ @look[const v = values[i];] }</script><View of="Int" name="Cell"><Node value={this} /></View>\n<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Tag">i</Node></Node></View>\n<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>\n<Layout name="Main"><Node><Cells />{i}</Node></Layout>\n<Storyboard><Scene name="main" case="main" pause="@scan.look"><Main /></Scene></Storyboard>`;
+    const built = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    expect(built.layout.drawing).toContain('Mark.Pointed: 1 box');
+  });
+
   it('draws a view with a <Pointed> around the element its position points at', () => {
     const prepared = prepareSvelteComponent(
       view(
@@ -898,7 +906,7 @@ describe('pointers', () => {
       'a pointer rendered in a part of the page',
       '<View of="Position" name="Arrow"><Pointed /></View>\n<Layout name="Marks" of="i">{i}</Layout>',
       '{@render Marks()}',
-      /rendered at the top of the view, outside blocks other than \{#if\}, as/
+      /is in Marks, a layout another draws by its tag, where a position draws nothing: write it in the root of the page layout/
     ],
     [
       'a <Pointed> in a snippet inside its pointer view',

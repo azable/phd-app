@@ -798,6 +798,8 @@ export function pointerCalls(
   // The layout a pointer is rendered in, so a presentation showing another neither draws it nor
   // keeps room for it.
   let layout: string | undefined;
+  // The layout drawn by tag a pointer is written in, where a position draws nothing.
+  let drawnByTag: string | undefined;
   const visit = (
     node: unknown,
     where: 'top' | 'block' | 'component',
@@ -829,11 +831,14 @@ export function pointerCalls(
       const start = part.start ?? 0;
       if (where !== 'top' || inNode)
         problems.push({
-          message: `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if}, as {i} for a position i${
-            inNode && pointers.get(name)?.view
-              ? `; or, to show the position as a number here, add a view that draws it, as <View of="${name}" name="${name}Text"><Node value={this} /></View>`
-              : ''
-          }.`,
+          message:
+            drawnByTag && !inNode
+              ? `${text(argument ?? part)} is in ${drawnByTag}, a layout another draws by its tag, where a position draws nothing: write it in the root of the page layout a scene shows, outside nodes, as {i}, and it marks the element wherever ${drawnByTag} draws it.`
+              : `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if}, as {i} for a position i${
+                  inNode && pointers.get(name)?.view
+                    ? `; or, to show the position as a number here, add a view that draws it, as <View of="${name}" name="${name}Text"><Node value={this} /></View>`
+                    : ''
+                }.`,
           start
         });
       else if (!position)
@@ -880,6 +885,18 @@ export function pointerCalls(
       const test = `(${text(part.expression as Part)})`;
       visit(part.children, where, [...conditions, test], inNode);
       visit(part.else, where, [...conditions, `!${test}`], inNode);
+      return;
+    }
+    // A layout drawn by tag is a snippet with no parameters by now; a view's takes its value.
+    if (
+      part.type === 'SnippetBlock' &&
+      where === 'top' &&
+      !(part.parameters as unknown[] | undefined)?.length
+    ) {
+      drawnByTag = (part.expression as Part | undefined)?.name;
+      for (const [key, child] of Object.entries(part))
+        if (key !== 'parent' && key !== 'expression') visit(child, 'component', conditions, inNode);
+      drawnByTag = undefined;
       return;
     }
     const inner =
