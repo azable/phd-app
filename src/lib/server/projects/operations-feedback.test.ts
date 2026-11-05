@@ -58,6 +58,12 @@ vi.mock('$lib/server/chat-bots/registry', () => {
   };
 });
 
+// Whether a turn runs the view helpers reads the study from the database, which this test has not.
+vi.mock('./view-helpers-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./view-helpers-config')>()),
+  projectViewHelpers: async () => false
+}));
+
 const lock = { acquire: async () => ({ release: async () => undefined }) };
 
 beforeEach(() => {
