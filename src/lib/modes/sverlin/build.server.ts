@@ -9,6 +9,10 @@ import {
 } from './compile.server';
 import type { BuildRequest, ModeBuildResult } from '../server';
 
+/** Text cut to what a presentation stores, as presentations.ts bounds it, so a long warning never fails the turn. */
+const within = (most: number) => (text: string) =>
+  text.length > most ? `${text.slice(0, most - 1)}…` : text;
+
 export async function buildBatch(
   source: string,
   requests: readonly BuildRequest[],
@@ -52,13 +56,13 @@ export async function buildBatch(
           kinds: prepared.design.tags,
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
-          ...(bundle.warnings ? { warnings: bundle.warnings } : {}),
+          ...(bundle.warnings ? { warnings: bundle.warnings.slice(0, 200).map(within(1000)) } : {}),
           runs: prepared.pauses.runs,
           structures: prepared.design.structures,
           ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),
           ...(bundle.layout.readability ? { readability: bundle.layout.readability } : {}),
           ...(bundle.layout.arrangements ? { arrangements: bundle.layout.arrangements } : {}),
-          ...(bundle.layout.drawing ? { drawing: bundle.layout.drawing } : {})
+          ...(bundle.layout.drawing ? { drawing: within(1000)(bundle.layout.drawing) } : {})
         }
       });
     } catch (cause) {
