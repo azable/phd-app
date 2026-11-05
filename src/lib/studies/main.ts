@@ -37,12 +37,15 @@ export const mainStudy = defineStudy({
       // ProjectWorkspace.svelte).
       workspace: { view: 'participant', layout: 'comparison' },
       project: { templateId: 'blank' },
+      // Off: helpers would give the sverlin assistant extra model calls the html one lacks.
+      viewHelpers: false,
       durationSeconds: minutes(15)
     },
     html: {
       mode: 'html',
       workspace: { view: 'participant', layout: 'single' },
       project: { templateId: 'blank' },
+      viewHelpers: false,
       durationSeconds: minutes(15)
     }
   },
