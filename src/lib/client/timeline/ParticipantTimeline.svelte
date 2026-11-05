@@ -43,6 +43,7 @@
 
   import MessageContent from './MessageContent.svelte';
   import PresentationPill from './PresentationPill.svelte';
+  import TurnChart from './TurnChart.svelte';
   import { presentProjectEvent } from './event-presentation';
   import { agentOutcome, agentReasoning, agentTokens } from './agent-requests';
   import { loadReportLine } from './load-reports';
@@ -399,6 +400,8 @@
             })}
         />
       </article>
+    {:else if item.kind === 'chart'}
+      <TurnChart chart={item.value} />
     {:else if item.kind === 'request'}
       {@const request = item.value.request}
       {@const tokens = agentTokens(item.value)}

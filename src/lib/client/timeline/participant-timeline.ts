@@ -15,6 +15,7 @@ import {
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
 import { agentRequests, type AgentRequest } from './agent-requests';
+import { turnChart, type TurnChart } from './turn-chart';
 
 /** A side of an answered comparison: the participant's choice (both when either is fine) or not. */
 export type SideMark = 'chosen' | 'not-chosen';
@@ -92,6 +93,8 @@ export type ParticipantTimelineItem =
       /** The source whose build failed on its code, where one did: the assistant's or a save's. */
       failed?: { source: string; by: 'assistant' | 'save' };
     }
+  /** An operation's model calls and builds on one time axis, shown for audit in developer view. */
+  | { id: string; kind: 'chart'; value: TurnChart }
   /** A request to a model, shown for audit in developer view. */
   | { id: string; kind: 'request'; value: AgentRequest }
   /** How a presentation loaded in a viewer's browser, shown for audit in developer view. */
@@ -274,6 +277,8 @@ export function participantTimeline(
           items.push(userMessage(`preference-${event.id}`, answerSegments(event), event.id));
         }
       }
+      const chart = options.audit ? turnChart(related, events) : undefined;
+      if (chart) items.push({ id: `chart-${related[0].id}`, kind: 'chart', value: chart });
       if (options.audit)
         for (const value of agentRequests(related))
           items.push({ id: `request-${value.request.id}`, kind: 'request', value });
