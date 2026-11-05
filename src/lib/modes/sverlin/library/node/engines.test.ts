@@ -19,12 +19,6 @@ const diamond: Structure = {
     [3, [1, 2]]
   ])
 };
-const tree: Structure = {
-  kind: 'tree',
-  nodes: [0, 1, 2],
-  root: 0,
-  children: new Map([[0, [1, 2]]])
-};
 const input = (structure: Structure, form: EngineInput['form'] = 'layered'): EngineInput => ({
   structure,
   sizeOf: (node) => sizes[node],

@@ -68,6 +68,7 @@
   // Each line keyed by its link, so a line keeps its path element, and a move easing it, whatever
   // order the links come in; a second line of one link by its place among them.
   const keyed = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- counts within one derivation, not state
     const seen = new Map<string, number>();
     return lines.map((line) => {
       const link = line.id ?? line.link;
