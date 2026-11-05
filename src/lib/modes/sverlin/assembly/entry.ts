@@ -476,8 +476,9 @@ async function showScene(step: number) {
             if (window.parent !== window) window.parent.postMessage({ type: 'sverlin:ready' }, '*');
             ready = true;
           }
+          const settledToken = sceneToken;
           void document.fonts.ready.then(() => {
-            if (token === sceneToken) root.dataset.svSettled = String(asked ?? settledStep);
+            if (settledToken === sceneToken) root.dataset.svSettled = String(asked ?? settledStep);
           });
         }
       }

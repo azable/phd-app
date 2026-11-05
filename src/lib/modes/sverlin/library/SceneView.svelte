@@ -176,6 +176,22 @@
   aria-label="Visualization canvas: click to select nodes"
   onclick={choose}
 >
+  <!-- The frame's dashed edge, unscaled and just outside it, as Frame.svelte draws it. -->
+  <svg
+    class="sv-scene-edge"
+    width={frame.width * scale + 12}
+    height={frame.height * scale + 12}
+    aria-hidden="true"
+  >
+    <rect
+      x="0.5"
+      y="0.5"
+      width={frame.width * scale + 11}
+      height={frame.height * scale + 11}
+      rx="4"
+      stroke-dasharray="14 9"
+    />
+  </svg>
   <svg
     class="sv-scene"
     data-sv-scene="true"
@@ -278,5 +294,14 @@
   }
   .sv-scene {
     display: block;
+  }
+  .sv-scene-edge {
+    position: absolute;
+    pointer-events: none;
+  }
+  .sv-scene-edge rect {
+    fill: none;
+    stroke: var(--sv-muted);
+    stroke-opacity: 0.4;
   }
 </style>
