@@ -417,7 +417,13 @@ Sverlin step's moves start in two presentations stacked as the comparison view
 shows them
 ([`motion.browser.test.ts`](src/lib/modes/sverlin/motion.browser.test.ts));
 devenv provides the browser as `SVERLIN_TEST_BROWSER` on Linux; on macOS, set it
-to a local Chrome or Chromium executable.
+to a local Chrome or Chromium executable. It starts one browser for the run,
+gives each test a context of its own, and waits for a presentation's
+`data-sv-settled` marker at each step rather than for a fixed time
+([`testing/browser.ts`](src/lib/modes/sverlin/testing/browser.ts)); it runs two
+files at a time under a 20-minute limit and writes its outcome to
+`test-results/browser-summary.txt`. One file runs as
+`SVERLIN_RUN_BROWSER_TESTS=1 pnpm exec vitest run --configLoader native FILE`.
 `pnpm run export:data -- --scope projects --project PROJECT_ID` selects one
 project. Exports include complete Timelines, versioned study definitions, and
 interaction telemetry where available, and each `project.json` lists its
