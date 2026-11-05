@@ -35,7 +35,6 @@ vi.mock('$lib/server/chat-bots/registry', () => {
     assistantIntroduction: (assistantId: string) => ({ botId: assistantId, text: 'Hello.' }),
     getChatbot: () => chatbot,
     getCandidateChatbot: () => chatbot,
-    getSverlinChooser: () => undefined,
     getParticipantIntakeClassifier: () => chatbot
   };
 });

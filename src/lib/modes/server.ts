@@ -47,9 +47,9 @@ export type ModeBuildResult =
         leftOut?: string[];
         // Each step a scene leaves out, drawing what the step before it drew, for the assistant.
         warnings?: string[];
-        // Each label's runs, and how many change what the view draws, for the chooser.
+        // Each label's spans, and how many change what the view draws, for the assistant.
         runs?: Record<string, { runs: number; drawn: number }>;
-        // Each free layout kind's structure, as its data makes it, for the chooser.
+        // Each free layout kind's structure, as its data makes it, for the assistant.
         structures?: Record<string, string>;
         // What each step draws, laid out on the server, as a key alike for steps drawing the same
         // picture, so two presentations can be compared step by step; none where it was not.

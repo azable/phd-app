@@ -8,7 +8,6 @@
  */
 
 import * as v from 'valibot';
-import { chooserIds } from '$lib/shared/choosers';
 
 import type { AssistantId } from '$lib/shared/assistants';
 import {
@@ -98,8 +97,8 @@ export const projectCommandSchema = v.variant('type', [
     presentationCount: v.picklist([1, 2]),
     /** The candidate the participant is viewing, whose source is resampled. */
     from: v.optional(presentationIdSchema),
-    /** The chooser for this resample, in dev mode; the server ignores it from anyone else. */
-    chooser: v.optional(v.picklist(chooserIds))
+    /** No longer used: kept so that a client naming a chooser is still understood. */
+    chooser: v.optional(v.string())
   }),
   v.strictObject({
     ...commandBase,

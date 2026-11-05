@@ -1,8 +1,8 @@
 /**
  * A source's design space, generated from its markup and the library, and the variants built in it.
  * Every visual attribute is a variable: each kind of node's props, each type's view, and the page
- * frame's settings. A variant gives every one a value; the starter is the first, and choosers make
- * the rest from it.
+ * frame's settings. A variant gives every one a value; the starter is the first, and the others
+ * take the values the assistant gives, the rest drawn at random.
  */
 
 import { keyedRandom } from './algorithm/random.server';

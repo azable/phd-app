@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { resampledVariants } from '$lib/modes/sverlin/chooser-decisions.server';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
 // A resample of a linear search the Decisions API answered wanting to hide most of the picture:
@@ -11,7 +10,6 @@ import {
   allowedComparisonSide,
   guardedChoice,
   hiddenShare,
-  hides,
   mootComparison,
   pictureTree,
   settledValues
@@ -19,11 +17,6 @@ import {
 
 const tree = pictureTree(recorded.source);
 const context = { tree, base: recorded.variant, settled: {} };
-const asked = recorded.answers.map(({ name }) => ({
-  variable: name,
-  value: (recorded.variant as Record<string, string | number | boolean>)[name],
-  options: (recorded.options as Record<string, (string | number | boolean)[]>)[name]
-}));
 
 describe('pictureTree', () => {
   it('reads what the root draws and what each layout draws by its tag', () => {
@@ -88,7 +81,7 @@ describe('allowedComparisonSide', () => {
 <Layout name="Stacked"><Node><Title /><Board /></Node></Layout>`);
   const guard = { tree: page, base: {}, settled: {} };
 
-  it('lets the assistant compare a top-level title with and without, which a chooser may not hide', () => {
+  it('lets the assistant compare a top-level title with and without, which a random draw may not hide', () => {
     expect(allowedComparisonSide(guard, { 'Title.shown': false })).toBe(true);
     expect(allowedChange(guard, 'Title.shown', false)).toBe(false);
     expect(guardedChoice(guard, { chosen: { 'Title.shown': false } }).chosen).toEqual({});
@@ -118,25 +111,6 @@ describe('guardedChoice', () => {
       }
     });
     expect(chosen).toEqual({ 'listing.language': 'none', 'views.Int': 'IntTally' });
-  });
-});
-
-describe('the Decisions chooser on the recorded answers', () => {
-  it('changes visible choices without hiding more than one thing, or anything large', () => {
-    const { variants } = resampledVariants(asked, 1, recorded, recorded.seen, (variable, value) =>
-      allowedChange(context, variable, value)
-    );
-    const [values] = variants.map((variant) => variant.values);
-    expect(values.length).toBeGreaterThan(0);
-    expect(values.filter(({ variable, value }) => hides(variable, value)).length).toBeLessThan(2);
-    expect(values.map(({ variable }) => variable)).not.toContain('Board.shown');
-    expect(
-      hiddenShare(
-        tree,
-        recorded.variant,
-        values.map(({ variable, value }) => [variable, value])
-      )
-    ).toBeLessThan(0.5);
   });
 });
 

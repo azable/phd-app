@@ -7,8 +7,7 @@ import {
   chosenRequests,
   differences,
   randomChooser,
-  type ChooserRequest,
-  type VariantChooser
+  type ChooserRequest
 } from './choosers';
 
 const document = { schemaVersion: 1, projectId: 'p', events: [] } as unknown as ProjectDocument;
@@ -44,22 +43,8 @@ describe('randomChooser', () => {
 });
 
 describe('chooseVariants', () => {
-  it('uses the chooser’s choices', async () => {
-    const chooser: VariantChooser = {
-      id: 'model',
-      choose: async ({ document }) => ({
-        document,
-        choices: [{ chosen: { 'Cell.fill': 'blue-100' } }]
-      })
-    };
-    const chosen = await chooseVariants(chooser, request());
-    expect(chosen.chooser).toBe('model');
-    expect(chosen.choices).toEqual([{ chosen: { 'Cell.fill': 'blue-100' } }]);
-  });
-
-  it('falls back to the random draw when the chooser returns none', async () => {
-    const failing: VariantChooser = { id: 'model', choose: async ({ document }) => ({ document }) };
-    const chosen = await chooseVariants(failing, request());
+  it('draws one variant per request at random', async () => {
+    const chosen = await chooseVariants(randomChooser, request());
     expect(chosen.chooser).toBe('random');
     expect(chosen.choices).toHaveLength(2);
   });

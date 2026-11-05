@@ -14,7 +14,7 @@ describe('study workspace controls', () => {
 });
 
 describe('showsVariantControls', () => {
-  it('shows the chooser picker and New pair only in dev mode, for Sverlin, without a buffer', () => {
+  it('shows New pair only in dev mode, for Sverlin, without a buffer', () => {
     expect(showsVariantControls({ developerView: true, mode: 'sverlin', buffered: false })).toBe(
       true
     );

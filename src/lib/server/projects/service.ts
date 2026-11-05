@@ -247,7 +247,7 @@ export type VariantRequester = (options: {
   operationId: string;
 }) => Promise<{ document: ProjectDocument; requests: BuildRequest[] }>;
 
-/** New variants with no chooser: every one randomised, from the one it was made from. */
+/** New variants drawn at random, every one from the one it was made from. */
 export const randomVariantRequests: VariantRequester = async ({ document, seeds, from }) => ({
   document,
   requests: basedRequests(
@@ -316,7 +316,7 @@ export function buildProjectPresentations(
       );
       return commandResult(before, document);
     }
-    // New variants of the source as it is, as the project's chooser picks them.
+    // New variants of the source as it is, drawn at random.
     const chosen = await (options.requestVariants ?? randomVariantRequests)({
       document: based,
       seeds: freshPresentationSeeds(options.presentationCount),

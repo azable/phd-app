@@ -6,13 +6,12 @@ import type {
   WorkspaceView
 } from '$lib/shared/presentations';
 import type { StudyInteractionCapturePolicy } from './interactions';
-import { chooserIds, type ChooserId } from '$lib/shared/choosers';
 
 export type StudyCondition = {
   mode: VisualizationMode;
   presentationBufferTarget?: number;
-  /** Where its Sverlin variants come from; the server's default (the model) where unset. */
-  chooser?: ChooserId;
+  /** No longer used: kept so that stored definitions naming a chooser still read. */
+  chooser?: string;
   workspace: {
     view: WorkspaceView;
     layout: PresentationLayout;
@@ -109,9 +108,6 @@ export function defineStudy<const Definition extends StudyDefinition>(
       throw new Error(
         `Study condition ${id} needs a presentation buffer large enough for its workspace layout.`
       );
-    }
-    if (condition.chooser !== undefined && !chooserIds.includes(condition.chooser)) {
-      throw new Error(`Study condition ${id} names an unknown chooser.`);
     }
   }
   for (const armId of definition.assignment.tieBreakOrder) {

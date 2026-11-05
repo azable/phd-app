@@ -44,12 +44,6 @@ export function currentProjectOperationDeadline(): number | undefined {
   return operationContexts.getStore()?.deadlineAt;
 }
 
-/** Whether the current operation's study phase has ended, so nothing new may start. */
-export function currentProjectOperationPastDeadline(): boolean {
-  const deadline = currentProjectOperationDeadline();
-  return deadline !== undefined && Date.now() >= deadline;
-}
-
 /**
  * Fail immediately before publishing a result if cancellation or a phase deadline won the race; an
  * operation running at the deadline may still publish until its grace ends.

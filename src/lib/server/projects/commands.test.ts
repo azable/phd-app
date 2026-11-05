@@ -59,8 +59,6 @@ vi.mock('$lib/server/chat-bots/registry', () => ({
     generatePrepared: mocks.generatePrepared,
     requestTimeoutMs: () => 180_000
   }),
-  // No chooser unless a test gives one, so a turn shows its first build.
-  getSverlinChooser: () => undefined,
   getParticipantIntakeClassifier: () => ({
     config: {
       participantIntake: [{ id: 'algorithm', question: 'Test' }],
@@ -998,19 +996,8 @@ describe('submitProjectFeedback', () => {
     ).toHaveLength(1);
   });
 
-  it('asks no chooser for a new source: its first build stands, with the starter’s values for what is new', async () => {
+  it('shows a new source’s first build, with the starter’s values for what is new', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
-    const choose = vi.fn();
-    const chooserDependencies: ProjectCommandDependencies = {
-      ...commandDependencies,
-      chooserFor: async () => 'model',
-      getChooser: () =>
-        ({
-          preparePrompt: async () => ({}),
-          generatePrepared: choose,
-          requestTimeoutMs: () => 180_000
-        }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>
-    };
     const { createProject } = await import('./service');
     const { submitProjectFeedback } = await import('./commands');
     const created = await createProject({ title: 'Unchosen' }, serviceDependencies);
@@ -1024,15 +1011,9 @@ describe('submitProjectFeedback', () => {
         presentationCount: 2,
         operationId: '12345678-1234-4123-8123-123456789abc'
       },
-      chooserDependencies
+      commandDependencies
     );
 
-    expect(choose).not.toHaveBeenCalled();
-    expect(
-      result.appendedEvents.some(
-        (event) => event.type === 'ai.generation-requested' && event.payload.purpose === 'choosing'
-      )
-    ).toBe(false);
     expect(result.appendedEvents.filter((event) => event.type === 'build.requested')).toHaveLength(
       1
     );
@@ -1046,21 +1027,7 @@ describe('submitProjectFeedback', () => {
   });
 
   describe('Another variant', () => {
-    const chooserWith = (generatePrepared: ReturnType<typeof vi.fn>) =>
-      ({
-        preparePrompt: async (request: { project: unknown }) => ({
-          initialPrompt: 'Choose',
-          messages: [],
-          context: { project: request.project },
-          attempt: { number: 1, purpose: 'choosing' },
-          parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
-          responseFormat: { name: 'design_variants', schema: {} }
-        }),
-        generatePrepared,
-        requestTimeoutMs: () => 180_000
-      }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>;
-
-    /** A project whose source has been shown once, without a chooser. */
+    /** A project whose source has been shown once. */
     async function shownProject() {
       mocks.generatePrepared.mockReset().mockResolvedValue(generation('valid source', 'Ready'));
       const { createProject } = await import('./service');
@@ -1083,11 +1050,9 @@ describe('submitProjectFeedback', () => {
       return { document: result.document, from: presented.payload.presentation.presentationId };
     }
 
-    async function resample(
-      dependencies: ProjectCommandDependencies,
-      picked?: 'model' | 'decisions' | 'random'
-    ) {
+    it('draws the variants at random, asking no model', async () => {
       const { document, from } = await shownProject();
+      const calls = mocks.generatePrepared.mock.calls.length;
       const { buildProjectPresentations } = await import('./service');
       const { chosenVariantRequests } = await import('./commands');
       const result = await buildProjectPresentations(
@@ -1097,117 +1062,15 @@ describe('submitProjectFeedback', () => {
           operationId: '22345678-1234-4123-8123-123456789abc',
           presentationCount: 2,
           from,
-          requestVariants: chosenVariantRequests(dependencies, picked)
+          requestVariants: chosenVariantRequests()
         },
         serviceDependencies
       );
-      const shown = result.appendedEvents.flatMap((event) =>
-        event.type === 'visualization.presented' &&
-        event.payload.presentation.format === 'browser-bundle-v1'
-          ? [event.payload.presentation]
-          : []
-      );
-      return { result, shown };
-    }
-
-    it('asks the chooser, as a resample, and shows what it picks', async () => {
-      const choose = vi.fn(async (prompt: { context: { project: Record<string, unknown> } }) => ({
-        variants: [
-          { values: [{ variable: 'Shown.fill', value: 'amber-100' }], randomise: [] },
-          { values: [{ variable: 'Shown.fill', value: 'blue-100' }], randomise: [] }
-        ],
-        prompt,
-        generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
-      }));
-      const { shown } = await resample({
-        ...commandDependencies,
-        getChooser: () => chooserWith(choose),
-        chooserFor: async () => 'model'
-      });
-
-      expect(choose).toHaveBeenCalledOnce();
-      expect(shown.map(({ variant }) => variant?.['Shown.fill'])).toEqual([
-        'amber-100',
-        'blue-100'
-      ]);
-    });
-
-    it('draws at random when the chooser fails', async () => {
-      const { result, shown } = await resample({
-        ...commandDependencies,
-        getChooser: () => chooserWith(vi.fn().mockRejectedValue(new Error('Unavailable.'))),
-        chooserFor: async () => 'model'
-      });
-
-      expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(
-        true
-      );
-      expect(result.appendedEvents.some((event) => event.type === 'system.notified')).toBe(false);
-      expect(shown).toHaveLength(2);
-    });
-
-    it('draws at random when the chooser is past its time limit', async () => {
-      const hang = vi.fn(
-        (_prompt: unknown, options?: { signal?: AbortSignal }) =>
-          new Promise((_resolve, reject) =>
-            options?.signal?.addEventListener('abort', () => reject(options.signal?.reason))
-          )
-      );
-      const { result, shown } = await resample({
-        ...commandDependencies,
-        getChooser: () => chooserWith(hang),
-        chooserFor: async () => 'model',
-        resampleTimeLimitMs: 50
-      });
-
-      expect(result.appendedEvents.some((event) => event.type === 'ai.generation-failed')).toBe(
-        true
-      );
-      expect(shown).toHaveLength(2);
-    });
-
-    it('draws at random without asking the chooser in the grace after the phase deadline', async () => {
-      const choose = vi.fn();
-      const { shown } = await runWithProjectOperationSignal(
-        new AbortController().signal,
-        () =>
-          resample({
-            ...commandDependencies,
-            getChooser: () => chooserWith(choose),
-            chooserFor: async () => 'model'
-          }),
-        Date.now() - 1_000,
-        Date.now() + 60_000
+      const shown = result.appendedEvents.filter(
+        (event) => event.type === 'visualization.presented'
       );
 
-      expect(choose).not.toHaveBeenCalled();
-      expect(shown).toHaveLength(2);
-    });
-
-    it('uses the chooser picked in dev mode over the configured one', async () => {
-      const choose = vi.fn();
-      const { shown } = await resample(
-        {
-          ...commandDependencies,
-          getChooser: () => chooserWith(choose),
-          chooserFor: async () => 'model'
-        },
-        'random'
-      );
-
-      expect(choose).not.toHaveBeenCalled();
-      expect(shown).toHaveLength(2);
-    });
-
-    it('asks no bot when the random draw is configured', async () => {
-      const choose = vi.fn();
-      const { shown } = await resample({
-        ...commandDependencies,
-        getChooser: () => chooserWith(choose),
-        chooserFor: async () => 'random'
-      });
-
-      expect(choose).not.toHaveBeenCalled();
+      expect(mocks.generatePrepared.mock.calls.length).toBe(calls);
       expect(shown).toHaveLength(2);
     });
   });
@@ -2787,32 +2650,6 @@ describe('assistant edits', () => {
 });
 
 describe('several variants from chat', () => {
-  const chooser = (generatePrepared: ReturnType<typeof vi.fn>) =>
-    ({
-      preparePrompt: async (request: { project: unknown }) => ({
-        initialPrompt: 'Choose',
-        messages: [],
-        context: { project: request.project },
-        attempt: { number: 1, purpose: 'choosing' },
-        parameters: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
-        responseFormat: { name: 'design_variants', schema: {} }
-      }),
-      generatePrepared,
-      requestTimeoutMs: () => 180_000
-    }) as unknown as ReturnType<NonNullable<ProjectCommandDependencies['getChooser']>>;
-  const fills = ['amber-100', 'blue-100', 'amber-200', 'blue-200'];
-  const choosing = vi.fn(async (prompt: { context: { project: Record<string, unknown> } }) => ({
-    variants: fills.map((value) => ({
-      values: [
-        { variable: 'Highlight.Pointed.fill', value },
-        // The assistant fixed this; the chooser cannot change it.
-        { variable: 'views.Int', value: 'IntText' }
-      ],
-      randomise: []
-    })),
-    prompt,
-    generation: { botId: 'sverlin-chooser', adapterId: 'test-adapter', model: 'test-model' }
-  }));
   const presented = (events: readonly ProjectEvent[]) =>
     events.flatMap((event) =>
       event.type === 'visualization.presented' &&
@@ -2851,8 +2688,7 @@ describe('several variants from chat', () => {
     return { before: document, result };
   }
 
-  it('sends a count back to the assistant to design comparisons, never filling it through the chooser', async () => {
-    choosing.mockClear();
+  it('sends a count back to the assistant to design comparisons', async () => {
     const { result } = await decide(
       {
         action: 'vary',
@@ -2861,9 +2697,8 @@ describe('several variants from chat', () => {
         count: 4,
         summary: 'Tallies with four marks'
       },
-      { getChooser: () => chooser(choosing), chooserFor: async () => 'model' }
+      {}
     );
-    expect(choosing).not.toHaveBeenCalled();
     const rejected = result.appendedEvents.filter(({ type }) => type === 'revision.edits-rejected');
     expect(rejected.length).toBeGreaterThan(0);
     expect(JSON.stringify(rejected[0])).toContain('A count is not built');
@@ -2884,7 +2719,6 @@ describe('several variants from chat', () => {
   };
 
   it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
-    const choose = vi.fn();
     const tone = { attribute: 'tone', left: 'restrained', right: 'bold' };
     const { before, result } = await decide(
       {
@@ -2895,10 +2729,9 @@ describe('several variants from chat', () => {
         comparisons: [views('IntCell', 'IntTally'), { ...marks, brief: tone }],
         summary: 'Asks two questions'
       },
-      { getChooser: () => chooser(choose), chooserFor: async () => 'model' }
+      {}
     );
 
-    expect(choose).not.toHaveBeenCalled();
     const shown = presented(result.appendedEvents);
     expect(shown).toHaveLength(4);
     // With no presentation named, the turn builds on the newest (viewedPresentation).
@@ -2991,11 +2824,7 @@ describe('several variants from chat', () => {
         ...feedbackOptions(document, 'Show me a few.', '92345678-1234-4123-8123-123456789abe'),
         presentationCount: 1
       },
-      {
-        ...commandDependencies,
-        getChooser: () => chooser(vi.fn()),
-        chooserFor: async () => 'random'
-      }
+      commandDependencies
     );
     expect(result.appendedEvents.some(({ type }) => type === 'operation.failed')).toBe(false);
     const reply = result.appendedEvents.findLast(({ type }) => type === 'assistant.responded');
@@ -3419,7 +3248,6 @@ describe('several variants from chat', () => {
   });
 
   it('shows a changed source’s first comparison with the reply, before building the rest', async () => {
-    const choose = vi.fn();
     const { result } = await decide(
       {
         action: 'edit',
@@ -3427,10 +3255,9 @@ describe('several variants from chat', () => {
         comparisons: [views('IntCell', 'IntTally'), marks],
         summary: 'Adds a caption and asks two questions'
       },
-      { getChooser: () => chooser(choose), chooserFor: async () => 'model' }
+      {}
     );
 
-    expect(choose).not.toHaveBeenCalled();
     expect(result.appendedEvents).toContainEqual(
       expect.objectContaining({ type: 'artifact.version-created' })
     );

@@ -1,5 +1,5 @@
 /**
- * Limits on what any chooser may hide, enforced in code whatever the chooser says: never a
+ * Limits on what a variant may hide, enforced in code whatever drew it: never a
  * layout a page draws (what a page layout's root draws) or a node holding most of the picture, never what
  * the preference model settled (settledValues), at most one hide per variant, and
  * most of the picture still showing afterwards. A comparison the assistant designed is held only

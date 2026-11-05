@@ -8,7 +8,6 @@ import {
   requireProjectAccess,
   requireProjectMutationAccess
 } from '$lib/server/authorization';
-import { withDevChooser } from '$lib/server/projects/chooser-config';
 import {
   ProjectOperationCapacityError,
   projectOperationExecutor
@@ -33,10 +32,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     const inspection = await requireProjectMutationAccess(locals, params.projectId);
-    const command = withDevChooser(
-      parseProjectCommand(await request.json()),
-      inspection.principal.kind === 'admin'
-    );
+    const command = parseProjectCommand(await request.json());
     const accepted = await projectOperationExecutor.accept({
       projectId: params.projectId,
       operationId: command.operationId,

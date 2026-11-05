@@ -1,8 +1,7 @@
 <!--
 The Sverlin language guide. bot.server.ts sends this file to the assistant after
-the instructions in assistant.md, and chooser.server.ts sends its Design section
-to the chooser, with these HTML comments removed, so every other word here is
-model guidance. Comments are notes for maintainers. guide.server.test.ts builds
+the instructions in assistant.md, with these HTML comments removed, so every
+other word here is model guidance. Comments are notes for maintainers. guide.server.test.ts builds
 every complete example and checks the documented Node and Link props and their
 named values against the compiler. Update this guide in the same change as the
 language, the library props, or the design space's options. Say each rule once,
@@ -1285,10 +1284,10 @@ Every variant shows the same steps, those the scenes pause at. A presentation
 built after a change keeps the values of the one it was made from where nothing
 else sets them, and takes the starter's for anything new; the assistant sets
 values with `vary`, or with `edit` or `revise` for the source it changes, and
-asking for several variants, or Another variant (in dev mode), asks the chooser,
-which may change what is shown where the conversation leaves it open. A value
-for a variable the design does not have is left out, and the build warns, naming
-it; a value outside its variable's options is refused.
+asking for several variants, or Another variant (in dev mode), draws the values
+at random, keeping what the conversation settled. A value for a variable the
+design does not have is left out, and the build warns, naming it; a value
+outside its variable's options is refused.
 
 ### Declare what varies
 
@@ -1310,8 +1309,8 @@ variables:
 - Give a source a listing of the algorithm as taught (see Listing), and more
   than one view of a type where the request leaves open what it shows (see Views
   of types), as a position's number and its element's name; the design decides
-  whether a variant shows each, set by the assistant for a new or edited source
-  and by a chooser for more variants (as `listing.language` none).
+  whether a variant shows each, set by the assistant (as `listing.language`
+  none).
 - Never write a look into the markup: a look the participant asks for is the
   values of a kind.
 

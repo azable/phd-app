@@ -140,7 +140,9 @@ can also offer a comparison of it, or a proposed alternative. Now and then,
 offer a few whole designs that differ in several looks at once, each an
 attractive combination that holds together (colours, marks, kinds of node,
 arrangement), so the participant can pick a direction rather than one choice at
-a time.
+a time. Give every alternative its values yourself, guided by
+project.preferences and the brief: nothing else picks them, and a count only
+draws at random.
 
 Show before you ask: a participant judges a picture more easily than they
 describe one, so ask in words only what a picture cannot answer (who it is for,

@@ -1,5 +1,5 @@
 /**
- * Whether the dev-mode variant controls (the chooser picker and New pair or Another variant)
+ * Whether the dev-mode variant controls (New pair or Another variant)
  * show: only in dev mode, for a Sverlin source, and not where a buffer hands out the next pair.
  */
 export function showsVariantControls(options: {

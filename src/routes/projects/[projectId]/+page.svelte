@@ -31,7 +31,6 @@
     readOnly={data.readOnly}
     {at}
     {devMode}
-    configuredChooser={data.chooser}
     study={data.study}
     trial={data.trial}
   />

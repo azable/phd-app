@@ -258,7 +258,7 @@ export function caseCss(
 /** A link's dashes and gaps by its stroke style, in the units of a curve 1.5 wide, its dots round. */
 export const linkDashes = { dashed: [6, 4], dotted: [0, 4] } as const;
 
-/** A colour's shade and hue, for a chooser keeping a colour's lightness as it changes its hue. */
+/** A colour's shade and hue, to keep a colour's lightness as its hue changes. */
 export function colourParts(name: string): { hue: string; shade: number } | undefined {
   const match = /^([a-z]+)-(\d+)$/u.exec(name);
   return match ? { hue: match[1], shade: Number(match[2]) } : undefined;

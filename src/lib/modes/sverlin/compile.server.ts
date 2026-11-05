@@ -332,7 +332,7 @@ export type PreparedComponent = {
     fallbacks: Record<string, Fallback>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
-    /** Each free layout kind's structure, as its data makes it, for the chooser. */
+    /** Each free layout kind's structure, as its data makes it, for the assistant. */
     structures: Record<string, LayoutStructure>;
     /**
      * The page's layouts, the first shown where a variant names none: each its root's row or column
@@ -1667,7 +1667,7 @@ function prepareViews(
       operators: new Set(shown.keys()),
       during: new Set(Object.values(during))
     });
-    // Each free layout's look starts from the structure its data makes, which the chooser is told,
+    // Each free layout's look starts from the structure its data makes, which the assistant is told,
     // and each kind of link's head from whether its links are all two-way lines.
     const { structures, lines } = linkFacts({
       free: freeNodes,

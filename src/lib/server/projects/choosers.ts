@@ -1,7 +1,7 @@
 /**
- * Choosers pick the variants a Sverlin source's presentations are built with, from its design
- * space. Every place that needs variants asks one through this interface: the model chooser
- * (commands.ts), the random draw, and the Decisions API chooser are interchangeable.
+ * The variants a Sverlin source's further presentations are built with: the values the assistant
+ * gives, and the rest drawn at random, every choice held to the limits on what may be hidden
+ * (variant-guard.ts).
  */
 
 import type { AiDesign, SourceBuildFacts } from '$lib/server/chat-bots/project-context';
@@ -9,11 +9,7 @@ import type { BuildRequest } from '$lib/modes/server';
 import type { BrowserBundlePresentation, DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
-import type { ChooserId } from '$lib/shared/choosers';
-
 import { guardedChoice, pictureTree } from './variant-guard';
-
-export type { ChooserId };
 
 /**
  * Where a design space is read from: a build's bundle, or a presentation of the source with its
@@ -33,7 +29,7 @@ export type ChooserRequest = {
   design: DesignSource;
   /** Variants of this source already shown, newest first, each as the values it differs in. */
   seen: DesignValues[];
-  /** Values earlier preferences or the assistant's vary decisions settled, which no chooser changes. */
+  /** Values earlier preferences or the assistant's vary decisions settled, which no draw changes. */
   settled: DesignValues;
   operationId: string;
   attempt: number;
@@ -43,8 +39,8 @@ export type ChooserRequest = {
 export type VariantChoice = { chosen: DesignValues; randomise?: true | readonly string[] };
 
 export type VariantChooser = {
-  id: ChooserId;
-  /** One choice per requested variant; no choices when the chooser failed. */
+  id: 'random';
+  /** One choice per requested variant; no choices when choosing failed. */
   choose(
     request: ChooserRequest
   ): Promise<{ document: ProjectDocument; choices?: VariantChoice[] }>;
@@ -67,12 +63,12 @@ export const randomChooser: VariantChooser = {
 
 /**
  * Ask a chooser, falling back to the random draw when it fails, and hold every choice to the
- * limits on what may be hidden (variant-guard.ts), whichever chooser made it.
+ * limits on what may be hidden (variant-guard.ts).
  */
 export async function chooseVariants(
   chooser: VariantChooser,
   request: ChooserRequest
-): Promise<{ document: ProjectDocument; choices: VariantChoice[]; chooser: ChooserId }> {
+): Promise<{ document: ProjectDocument; choices: VariantChoice[]; chooser: 'random' }> {
   const result = await chooser.choose(request);
   const context = {
     tree: pictureTree(request.source),

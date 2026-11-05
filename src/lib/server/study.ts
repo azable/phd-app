@@ -16,7 +16,6 @@ import {
   type StudyCondition
 } from '$lib/shared/study/definition';
 import type { StudyInteractionCapturePolicy } from '$lib/shared/study/interactions';
-import type { ChooserId } from '$lib/shared/choosers';
 import {
   projectStudyFlow,
   type StudyFlow,
@@ -62,7 +61,6 @@ export type StudyProjectContext = {
   expired: boolean;
   deadlineAt?: string;
   presentationBufferTarget?: number;
-  chooser?: ChooserId;
   interactionCapture?: StudyInteractionCapturePolicy;
   layout?: string;
   view?: string;
@@ -327,9 +325,6 @@ export async function studyProjectContext(
     ...(row.deadlineAt ? { deadlineAt: row.deadlineAt.toISOString() } : {}),
     ...(phase?.kind === 'task' && phase.condition.presentationBufferTarget
       ? { presentationBufferTarget: phase.condition.presentationBufferTarget }
-      : {}),
-    ...(phase?.kind === 'task' && phase.condition.chooser
-      ? { chooser: phase.condition.chooser }
       : {}),
     ...(phase?.kind === 'task' && definition.interactionCapture
       ? { interactionCapture: definition.interactionCapture }

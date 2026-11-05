@@ -68,40 +68,33 @@ in it moves between steps. A build gives every variable a value: the starter's,
 a base variant's where it still fits, randomised (keeping the base's equal
 values equal, colours' shades, and what is shown), or chosen (an option the
 space lacks, or a variable it does not have, is an error). On Another variant or
-New pair (dev mode only, in the top bar beside the Dev switch, with a picker of
-the chooser for that press), and for the presentations an assistant's `vary` or
-`resample` with a `count` makes, a chooser picks each presentation's values from
-the design space, starting from the viewed variant, given the variants of that
-source already shown. The choosers are interchangeable
-([`choosers.ts`](src/lib/server/projects/choosers.ts)): the model
-([`chooser.server.ts`](src/lib/modes/sverlin/chooser.server.ts), a second,
-smaller model call), OpenAI's Decisions API
-([`chooser-decisions.server.ts`](src/lib/modes/sverlin/chooser-decisions.server.ts)),
-or a random draw. A study condition names one (`chooser`), else
-`SVERLIN_CHOOSER`, else the model (a resample's own chooser is honoured only
-from an administrator); a chooser that fails, or keeps Another variant waiting
-over 20 seconds, gives way to the random draw. The assistant is the one author
-of a turn: its change to the source, or a `vary` without a `count` (which sets
-values without changing the source), shows as one version, its first build, with
-the viewed variant's values where they still fit and the starter's for anything
-new, and no chooser call; an `edit` or `revise` may give `values` of its own
-over those, which unlike a `vary`'s settle nothing; after a manual change the
-first presentation keeps the viewed variant's values and the second is
-randomised; refills of the presentation buffer stay random, as most are never
-shown ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With
-a `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,
-the chooser filling each around the values the `vary` sets, and queues them in
-the presentation buffer: what it held is consumed, the first pair shows, and
-each Next pair, or New pair in dev mode, consumes the shown pair to show the
-next (`queueBuiltPresentations`, `waitingBehind` in
+New pair (dev mode only, in the top bar beside the Dev switch), and for the
+presentations an assistant's `vary` or `resample` with a `count` makes, each
+presentation's values are drawn at random from the design space, starting from
+the viewed variant and keeping what preferences and the assistant's `vary`
+decisions settled ([`choosers.ts`](src/lib/server/projects/choosers.ts)). The
+assistant gives alternatives it wants shown as `comparisons` with explicit
+values. The assistant is the one author of a turn: its change to the source, or
+a `vary` without a `count` (which sets values without changing the source),
+shows as one version, its first build, with the viewed variant's values where
+they still fit and the starter's for anything new; an `edit` or `revise` may
+give `values` of its own over those, which unlike a `vary`'s settle nothing;
+after a manual change the first presentation keeps the viewed variant's values
+and the second is randomised; refills of the presentation buffer stay random, as
+most are never shown ([`service.ts`](src/lib/server/projects/service.ts)
+`basedRequests`). With a `count` (at most 8, in whole pairs), a `vary` or
+`resample` makes that many, each drawn at random around the values the `vary`
+sets, and queues them in the presentation buffer: what it held is consumed, the
+first pair shows, and each Next pair, or New pair in dev mode, consumes the
+shown pair to show the next (`queueBuiltPresentations`, `waitingBehind` in
 [`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
 `vary`, `edit` or `revise` may instead give `comparisons` the assistant designs,
 each a question and its two sides, each a short label in the participant's words
 and the values it sets: each is built as one pair, both from the viewed variant
-(with the `vary`'s values), differing only as its sides do, with no chooser or
-random draw. The first pair is built alone and shown at once, in place of the
-decision's one version, and the rest are built after it, one pair at a time,
-each queued as soon as it is built (`presentRemainingComparisons` in
+(with the `vary`'s values), differing only as its sides do, with no random draw.
+The first pair is built alone and shown at once, in place of the decision's one
+version, and the rest are built after it, one pair at a time, each queued as
+soon as it is built (`presentRemainingComparisons` in
 [`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
 the pair's `visualization.presented` events, each with its side's `label`, and
 shown above it on the stage and as a card in the chat, each side by its label;
@@ -129,9 +122,9 @@ settled hides (`mootComparison` in
 that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
 Bayesian Bradley–Terry model with Davidson ties over every choice's options,
-fitted from the events on each call, decides what is settled for every chooser:
-a choice one option of which is at least 0.9 likely best over two answers, a
-`vary` decision's value until an answer goes against it, or, where Either is
+fitted from the events on each call, decides what is settled for every random
+draw: a choice one option of which is at least 0.9 likely best over two answers,
+a `vary` decision's value until an answer goes against it, or, where Either is
 fine was its latest answer, the value showing; skips are no evidence. Its
 summary
 ([`preference-summary.ts`](src/lib/server/chat-bots/preference-summary.ts)),
@@ -173,8 +166,8 @@ card ([`questions.ts`](src/lib/shared/projects/questions.ts)). A comparison with
 an option its variable lacks (in the changed source, for `edit` and `revise`),
 sides alike, or a side hiding the layout itself or most of the picture
 (`allowedComparisonSide` in
-[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a
-chooser, the assistant may hide a top-level part such as a title) is recorded as
+[`variant-guard.ts`](src/lib/server/projects/variant-guard.ts); unlike a random
+draw, the assistant may hide a top-level part such as a title) is recorded as
 rejected (`revision.edits-rejected` with `rejected: "comparisons"`) and repaired
 as edits that did not apply are, the repair told to keep unchanged the
 comparisons that could be built; on the last attempt those are built without the
@@ -212,17 +205,17 @@ each free layout kind the structure its data makes
 ([`structure.server.ts`](src/lib/modes/sverlin/structure.server.ts)): it reads
 statically which data the layout's links are drawn from and follows it through
 the trace, without running the view, so the form's options and starter fit it
-and the chooser is told it. Arrows are `<Link>` components: the compiler stamps
-them like nodes, and each drawn link is selectable and referencable by its id.
-Every arrangement draws its choices from a seed of its own, derived from its
-kind's `layoutSeed` and its place, so the presentation seed decides no layout
-and a layout changes only with those variant values; selections report each
-element's surrounding free layouts (arranging node, kind, layout seed, form,
-curve) in its `element-ref`, so the assistant can keep a layout the participant
-liked by varying those values. Every step is laid out before any is shown,
-mounting none of them: each step's markup is drawn with Svelte's string renderer
-and laid out on a layout model of its own, from the library's style sheets and
-measured text
+and the assistant is told it. Arrows are `<Link>` components: the compiler
+stamps them like nodes, and each drawn link is selectable and referencable by
+its id. Every arrangement draws its choices from a seed of its own, derived from
+its kind's `layoutSeed` and its place, so the presentation seed decides no
+layout and a layout changes only with those variant values; selections report
+each element's surrounding free layouts (arranging node, kind, layout seed,
+form, curve) in its `element-ref`, so the assistant can keep a layout the
+participant liked by varying those values. Every step is laid out before any is
+shown, mounting none of them: each step's markup is drawn with Svelte's string
+renderer and laid out on a layout model of its own, from the library's style
+sheets and measured text
 ([`library/model/reserve.ts`](src/lib/modes/sverlin/library/model/reserve.ts)).
 The server does this as it builds each presentation
 ([`layout.server.ts`](src/lib/modes/sverlin/layout.server.ts)), running the
@@ -461,9 +454,9 @@ Svelte-backed `sverlin` in a two-candidate workspace with script-free, per-frame
 `html` in a single-candidate workspace, the only two modes. A project outside a
 study, as an administrator trying one, works under the condition for its mode in
 the first study open to enrollment (`trialCondition` in the registry, applied by
-`projectTrialCondition` in [`study.ts`](src/lib/server/study.ts)): its layout,
-presentation buffer and chooser. The `sverlin` condition keeps no buffer, so
-nothing builds pairs in the background: its stage shows the one version under
+`projectTrialCondition` in [`study.ts`](src/lib/server/study.ts)): its layout
+and presentation buffer. The `sverlin` condition keeps no buffer, so nothing
+builds pairs in the background: its stage shows the one version under
 discussion, and a pair, with its question, only while one of the assistant's
 comparisons is current (`questionPairs` in
 [`ProjectWorkspace.svelte`](src/lib/client/projects/ProjectWorkspace.svelte)).

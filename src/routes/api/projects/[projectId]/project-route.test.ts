@@ -141,26 +141,18 @@ describe('project JSON API', () => {
     expect(mocks.accept).not.toHaveBeenCalled();
   });
 
-  it('honours a resample’s chooser only from an administrator', async () => {
+  it('accepts a resample from an older client that names a chooser, which nothing reads', async () => {
     const { POST } = await import('./+server');
-    const resample = {
-      type: 'resample',
-      operationId,
-      expectedHead: 4,
-      presentationCount: 2,
-      chooser: 'random'
-    };
-
-    await POST(request('POST', resample));
-    expect(mocks.accept.mock.calls[0][0].command).not.toHaveProperty('chooser');
-
-    mocks.requireMutation.mockResolvedValueOnce({ principal: { kind: 'admin' } });
-    await POST(request('POST', resample));
-    expect(mocks.accept.mock.calls[1][0].command).toMatchObject({ chooser: 'random' });
-
-    mocks.requireMutation.mockResolvedValueOnce({ principal: { kind: 'admin' } });
-    const unknown = await POST(request('POST', { ...resample, chooser: 'oracle' }));
-    expect(unknown.status).toBe(400);
+    const response = await POST(
+      request('POST', {
+        type: 'resample',
+        operationId,
+        expectedHead: 4,
+        presentationCount: 2,
+        chooser: 'model'
+      })
+    );
+    expect(response.status).toBe(202);
   });
 
   it('accepts a request for fresh variants of the unchanged Sverlin source', async () => {

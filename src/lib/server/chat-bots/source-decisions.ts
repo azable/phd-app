@@ -32,7 +32,7 @@ const summary = v.pipe(
 export const maximumVariants = 8;
 
 /**
- * How many presentations to make, filled by the project's chooser; the first set shows and the rest
+ * How many presentations to make, each drawn at random; the first set shows and the rest
  * wait for Next pair. Optional (null in the strict response): a vary then shows one version, a
  * resample the next set.
  */
@@ -44,7 +44,7 @@ const count = v.optional(
       v.minValue(2),
       v.maxValue(maximumVariants),
       v.description(
-        'Null: design alternatives as comparisons instead. A number only on the participant’s explicit request for many new views of the unchanged source, which the chooser fills; null for one version (a resample: the next pair).'
+        'Null: design alternatives as comparisons instead. A number only on the participant’s explicit request for many new views of the unchanged source, each drawn at random; null for one version (a resample: the next pair).'
       )
     )
   )
@@ -218,14 +218,14 @@ export const sourceDecisions = {
 
   /**
    * New presentations of the source as it is: the next pair, every value randomised, or with a
-   * count, that many the chooser fills.
+   * count, that many drawn at random.
    */
   resample: v.strictObject({ action: v.literal('resample'), count }),
 
   /**
    * A new presentation of the source as it is, with values for some of its variables: the rest keep
    * the viewed variant's values, except those to randomise; with a count, that many presentations,
-   * each taking the values, the chooser filling the rest; with comparisons, each a pair differing
+   * each taking the values, the rest drawn at random; with comparisons, each a pair differing
    * only in what its sides set.
    */
   vary: v.pipe(

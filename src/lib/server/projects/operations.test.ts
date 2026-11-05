@@ -14,8 +14,7 @@ import {
 import { MemoryProjectRepository } from './memory-repository.test-support';
 import {
   assertCurrentProjectOperationActive,
-  currentProjectOperationDeadline,
-  currentProjectOperationPastDeadline
+  currentProjectOperationDeadline
 } from './operation-context';
 import { ProjectOperationExecutor } from './operations';
 import { assertNoActiveProjectOperations, ProjectNotFoundError } from './repository';
@@ -606,7 +605,8 @@ describe('ProjectOperationExecutor', () => {
           new Promise((resolve) => (release = resolve)),
           () => {
             observedDeadline = currentProjectOperationDeadline();
-            pastDeadline = currentProjectOperationPastDeadline();
+            const deadline = currentProjectOperationDeadline();
+            pastDeadline = deadline !== undefined && Date.now() >= deadline;
             assertCurrentProjectOperationActive();
           }
         );

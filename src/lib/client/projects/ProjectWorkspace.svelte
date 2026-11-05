@@ -54,7 +54,6 @@
 
   import NewProjectDialog from './NewProjectDialog.svelte';
   import VariantControls from './VariantControls.svelte';
-  import type { ChooserId } from '$lib/shared/choosers';
   import AgentRequestAudit from './AgentRequestAudit.svelte';
   import ProjectArtifactPanel, {
     type ProjectArtifactEditMode
@@ -102,8 +101,6 @@
     isAdmin?: boolean;
     at?: EventId;
     devMode?: boolean;
-    /** The chooser a resample uses unless dev mode picks another. */
-    configuredChooser?: ChooserId;
     readOnly?: boolean;
     study?: StudyTask;
     /** Outside a study, the settings of the study condition for the project's mode. */
@@ -117,7 +114,6 @@
     isAdmin = false,
     at,
     devMode = false,
-    configuredChooser,
     readOnly = false,
     study,
     trial
@@ -733,7 +729,6 @@
                     {session}
                     {layout}
                     from={chosen?.presentationId ?? baseCandidate(visiblePresentations)}
-                    {configuredChooser}
                     disabled={mutationsDisabled}
                     onMade={() => {
                       chosenOf = undefined;

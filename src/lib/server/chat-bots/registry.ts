@@ -5,13 +5,6 @@ import { InvalidChatbotResponseError, type ChatAdapter } from '$lib/server/chat-
 import { assistantMode, type AssistantId } from '$lib/shared/assistants';
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
 import { modeCatalog } from '$lib/modes/catalog';
-import sverlinChooser, {
-  type ChooserOutput,
-  type ChooserProject
-} from '$lib/modes/sverlin/chooser.server';
-import sverlinDecisionsChooser, {
-  decisionsChooserAdapter
-} from '$lib/modes/sverlin/chooser-decisions.server';
 
 import {
   participantIntakeClassifier,
@@ -93,18 +86,6 @@ const modeChatbots = Object.fromEntries(
 ) as Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>>;
 
 const intakeClassifier = createChatbot(participantIntakeClassifier, openAIAdapter);
-const choosers = {
-  model: createChatbot(sverlinChooser, openAIAdapter),
-  decisions: createChatbot(sverlinDecisionsChooser, decisionsChooserAdapter)
-};
-
-/** Return the bot that chooses the variants a Sverlin source's presentations are built with. */
-export function getSverlinChooser(
-  id: keyof typeof choosers = 'model'
-): Chatbot<ChooserProject, ChooserOutput> {
-  return choosers[id];
-}
-
 /** Return the source-authoring bot recorded by a Sverlin project. */
 export function getChatbot(
   assistantId: AssistantId
