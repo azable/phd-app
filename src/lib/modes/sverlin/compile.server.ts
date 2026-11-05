@@ -150,6 +150,7 @@ import {
   layoutFailureMessage,
   type ServerScenes
 } from './layout.server';
+import type { Geometry } from './library/geometry';
 import {
   boundDesign,
   boundDomain,
@@ -283,6 +284,8 @@ export type SvelteBundle = {
     /** Every step's scene, drawn on the server (see layout.server.ts). */
     scenes?: ServerScenes;
   };
+  /** Every step's layout as the server worked it out, which its scenes are drawn from. */
+  geometry: Geometry;
   /**
    * The code laying every step out, for drawing scenes again, of a part or with other design
    * values, without building again (see scenesOnServer).
@@ -2728,7 +2731,7 @@ export async function bundlePresentation(
   const listing = shownListing(prepared, values, lit);
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
-    prepared.component,
+    JSON.stringify({ stepCount: labels.length }),
     prepared.serverComponent,
     trace,
     JSON.stringify(prepared.atoms),
@@ -2740,43 +2743,40 @@ export async function bundlePresentation(
     })
   );
   const output = result.outputFiles.find(({ path }) => path.endsWith('entry.js')) as OutputFile;
-  if (output.contents.byteLength > maximumBundleBytes) {
-    const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-    throw new InvalidSvelteSourceError(
-      `The compiled presentation is ${megabytes(output.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; scenes pausing at fewer labels give fewer steps.`
-    );
-  }
-  // Every step laid out on the server, which the page draws with as given: one the server cannot
-  // lay out, or whose layout would take the bundle over its limit, cannot be shown.
+  // Every step laid out on the server, which the page draws the scenes of: a layout bundle, which
+  // holds every step's values, over its limit, or one the server cannot lay out, cannot be shown.
   const layoutBundle = result.outputFiles.find(({ path }) =>
     path.endsWith('layout.js')
   ) as OutputFile;
-  const { geometries, size, failure, drawing, ...laid } = await layOutOnServer(layoutBundle.text);
-  // The page reads the layout before its own code runs.
-  const javascript =
-    geometries && `window.__sverlinGeometry=${JSON.stringify(geometries)};\n${output.text}`;
-  const unfit =
-    failure ??
-    (javascript && Buffer.byteLength(javascript) > maximumBundleBytes
-      ? 'its layout would take the bundle over the limit'
-      : undefined);
-  if (!javascript || unfit) {
+  if (layoutBundle.contents.byteLength > maximumBundleBytes) {
+    const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    throw new InvalidSvelteSourceError(
+      `The compiled presentation is ${megabytes(layoutBundle.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; scenes pausing at fewer labels give fewer steps.`
+    );
+  }
+  const { geometry, size, failure, drawing, ...laid } = await layOutOnServer(layoutBundle.text);
+  if (!geometry || failure) {
     const errors = laid.errors.length ? `; the view failed at ${laid.errors.join('; ')}` : '';
-    console.warn(`[sverlin] seed ${seed} not laid out on the server: ${unfit}${errors}`);
-    throw new InvalidSvelteSourceError(layoutFailureMessage(unfit, laid.errors), {
+    console.warn(`[sverlin] seed ${seed} not laid out on the server: ${failure}${errors}`);
+    throw new InvalidSvelteSourceError(layoutFailureMessage(failure, laid.errors), {
       code: 'layout_failed'
     });
   }
   // A step the view fails to draw shows nothing of it, and every such step would seem alike.
   if (laid.errors.length)
     throw new InvalidSvelteSourceError(drawFailureMessage(laid.errors), { code: 'draw_failed' });
+  // The page draws only the scenes, so one the model cannot draw cannot be shown.
+  if (!laid.scenes)
+    throw new InvalidSvelteSourceError(layoutFailureMessage('its steps could not be drawn', []), {
+      code: 'layout_failed'
+    });
   const arrangements =
-    options.arrange && size && geometries
+    options.arrange && size && geometry
       ? await measuredArrangements(
           layoutBundle.text,
           design.space,
           values,
-          { size, geometry: geometries[0] },
+          { size, geometry },
           frame.ratio,
           options.arrangeSteps,
           options.arrangeBudgetMs
@@ -2795,8 +2795,9 @@ export async function bundlePresentation(
     ...(arrangements ? { arrangements } : {})
   };
   return {
-    javascript,
+    javascript: output.text,
     layout,
+    geometry,
     layoutCode: layoutBundle.text,
     labels,
     steps: prepared.steps,
@@ -4198,18 +4199,18 @@ function checkComponents(
 }
 
 async function bundle(
-  component: string,
+  steps: string,
   serverComponent: string,
   states: string,
   atoms: string,
   components: string
 ) {
   try {
-    return await bundleComponent(component, serverComponent, states, atoms, components);
+    return await bundleComponent(steps, serverComponent, states, atoms, components);
   } catch (cause) {
     // Failures located in the authored component, such as a blocked require(), are source errors.
     const authored = (cause as Partial<BuildFailure>).errors?.find((error) =>
-      /^component(?:-server)?:Main\.svelte$/u.test(error.location?.file ?? '')
+      /^component-server:Main\.svelte$/u.test(error.location?.file ?? '')
     );
     if (authored) throw new InvalidSvelteSourceError(authored.text);
     throw cause;
@@ -4221,15 +4222,8 @@ const runtime = (path: string) => /^svelte(?:\/[\w-]+)*$/u.test(path);
 
 /** Modules each sandbox namespace may reach; packages inside node_modules resolve normally. */
 const allowedImports: Record<string, (path: string) => boolean> = {
-  entry: (path) =>
-    runtime(path) ||
-    [
-      'virtual:component',
-      'virtual:trace',
-      'virtual:atoms',
-      'virtual:components',
-      'sverlin'
-    ].includes(path),
+  // The page's entry, which draws scenes and runs no authored code (see assembly/entry.ts).
+  entry: (path) => runtime(path) || ['virtual:steps', 'sverlin/scenes'].includes(path),
   // The server's entry, laying every step out in an isolate (see layout.server.ts).
   layout: (path) =>
     runtime(path) ||
@@ -4241,13 +4235,12 @@ const allowedImports: Record<string, (path: string) => boolean> = {
       'sverlin',
       'sverlin/layered'
     ].includes(path),
-  component: (path) => runtime(path) || path === 'sverlin',
+  // The authored component, compiled to render strings.
+  'component-server': (path) => runtime(path) || path === 'sverlin',
   // The constraint layout engine and the grid router wires take (see library/node/wires.ts), by
   // their own modules, which need none of WebCola's d3 adaptor.
   library: (path) => runtime(path) || /^\.\.?\//u.test(path) || webcolaModules.includes(path)
 };
-// The same, compiled to render strings.
-allowedImports['component-server'] = allowedImports.component;
 // The server's library also takes dagre, the layered form's engine (library/node/layered-engine.ts),
 // plain JavaScript with no host access; it never reaches the page's bundle.
 allowedImports['library-server'] = (path) =>
@@ -4266,7 +4259,7 @@ const webcolaModules = [
 ];
 
 function sandboxModules(
-  component: string,
+  steps: string,
   serverComponent: string,
   states: string,
   atoms: string,
@@ -4280,8 +4273,7 @@ function sandboxModules(
         if (!allowed) return undefined;
         if (!allowed(args.path))
           return { errors: [{ text: `Presentations cannot load module "${args.path}".` }] };
-        if (args.path === 'virtual:component')
-          return { path: 'Main.svelte', namespace: 'component' };
+        if (args.path === 'virtual:steps') return { path: 'steps.json', namespace: 'steps' };
         if (args.path === 'virtual:component-server')
           return { path: 'Main.svelte', namespace: 'component-server' };
         const server = args.namespace.endsWith('-server') || args.namespace === 'layout';
@@ -4295,6 +4287,7 @@ function sandboxModules(
         if (args.path === 'virtual:components')
           return { path: 'components.json', namespace: 'components' };
         if (args.path === 'sverlin') return { path: 'index.ts', namespace: 'library' };
+        if (args.path === 'sverlin/scenes') return { path: 'scenes.ts', namespace: 'library' };
         if (
           (args.namespace === 'library' || args.namespace === 'library-server') &&
           !runtime(args.path) &&
@@ -4331,10 +4324,9 @@ function sandboxModules(
         loader: 'ts',
         resolveDir: process.cwd()
       }));
-      plugin.onLoad({ filter: /.*/, namespace: 'component' }, () => ({
-        contents: component,
-        loader: 'js',
-        resolveDir: process.cwd()
+      plugin.onLoad({ filter: /.*/, namespace: 'steps' }, () => ({
+        contents: steps,
+        loader: 'json'
       }));
       plugin.onLoad({ filter: /.*/, namespace: 'component-server' }, () => ({
         contents: serverComponent,
@@ -4366,11 +4358,11 @@ function sandboxModules(
 }
 
 /**
- * The page's bundle, and the server's, which lays every step out (see layout.server.ts): the same
- * steps, view and library, compiled to render strings.
+ * The page's bundle, which draws the scenes the server sends it, knowing only how many steps there
+ * are, and the server's, which lays every step out and draws its scenes (see layout.server.ts).
  */
 function bundleComponent(
-  component: string,
+  steps: string,
   serverComponent: string,
   states: string,
   atoms: string,
@@ -4380,7 +4372,7 @@ function bundleComponent(
     entryPoints: ['virtual:entry', 'virtual:layout'],
     outdir: 'out',
     entryNames: '[name]',
-    plugins: [sandboxModules(component, serverComponent, states, atoms, components)],
+    plugins: [sandboxModules(steps, serverComponent, states, atoms, components)],
     bundle: true,
     write: false,
     platform: 'browser',

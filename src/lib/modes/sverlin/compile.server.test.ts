@@ -122,9 +122,9 @@ describe('single-component Svelte compilation', () => {
     expect(new Set(bundles.map(({ variant }) => variant['views.Int']))).toEqual(
       new Set(['IntCell', 'IntTally'])
     );
-    expect(bundles[0].javascript).toContain('[3,8,5,2,7]');
+    expect(bundles[0].layoutCode).toContain('[3,8,5,2,7]');
     // The algorithm runs when the source is built, not in the page.
-    expect(bundles[0].javascript).not.toContain('values[i] === target');
+    expect(bundles[0].layoutCode).not.toContain('values[i] === target');
     const again = await bundlePresentation(prepared, 1, { randomise: true });
     expect(again.variant).toEqual(bundles[0].variant);
     expect((await bundlePresentation(prepared, 1)).variant).toEqual(prepared.design.starter);
@@ -254,14 +254,14 @@ describe('single-component Svelte compilation', () => {
 
   it('injects the sverlin library components without authored imports', async () => {
     const result = await compileSvelteComponent(linearSearchSource);
-    expect(result.javascript).toContain('sv-node');
-    expect(result.javascript).toContain('sv-node');
+    expect(result.layoutCode).toContain('sv-node');
+    expect(result.layoutCode).toContain('sv-node');
     const withoutModuleScript = await compileSvelteComponent(
       '<script algorithm></script><Layout name="X"><Node>x</Node></Layout><Layout name="Main"><Node><X /></Node></Layout>'
     );
     // Its one scene reads no state, so it is one frame, named by the scene.
     expect(withoutModuleScript.labels).toEqual(['main']);
-    expect(withoutModuleScript.javascript).toContain('sv-node');
+    expect(withoutModuleScript.layoutCode).toContain('sv-node');
   });
 
   it('puts every recorded value in scope for a script-free view', async () => {
@@ -569,7 +569,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     const { lit } = prepared.paced(new Set(prepared.pauses.labels));
     expect(lit.code).toHaveLength(9);
     expect(lit.code[0]).toEqual({ current: [], earlier: [] });
-    const { javascript } = await bundlePresentation(prepared, 1);
+    const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('for i = 1 to n step 1');
     // Without a <Listing />, the design has no listing variables.
     expect(prepareSvelteComponent(linearSearchSource).design.space).not.toHaveProperty(
@@ -631,7 +631,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
         '<Layout name="Rows" of="grid"><Node layout="column">{#each grid as row}<Node>{#each row as v}{v}{/each}</Node>{/each}</Node></Layout><Layout name="Main" of="grid"><Node><Rows grid={grid} /></Node></Layout>'
       )
     );
-    expect(result.javascript).toContain('sv-node');
+    expect(result.layoutCode).toContain('sv-node');
     await expect(
       compileSvelteComponent(
         source(
@@ -721,7 +721,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     );
     expect(prepared.design.starter['Main.ratio']).toBe('fit');
     const built = await bundlePresentation(prepared, 1, { chosen: { 'Main.ratio': '4:3' } });
-    expect(built.javascript).toMatch(/"?ratio"?:"4:3"/u);
+    expect(built.layoutCode).toMatch(/"?ratio"?:"4:3"/u);
     await expect(
       bundlePresentation(prepared, 1, { chosen: { 'Main.ratio': '5:4' } })
     ).rejects.toThrow('Main.ratio cannot be "5:4"');
@@ -967,7 +967,7 @@ describe('typed view components', () => {
     );
     expect(new Set(drawn)).toEqual(new Set(['IntText', 'IntPair']));
     const none = await bundlePresentation(prepared, 1, { chosen: { 'views.Int': 'none' } });
-    expect(none.javascript).toContain('"views.Int":"none"');
+    expect(none.layoutCode).toContain('"views.Int":"none"');
   });
 
   it('orders components after those they render', () => {
@@ -1189,7 +1189,7 @@ describe('scope', () => {
         '<Layout name="Main" of="key"><Node>{key}</Node></Layout><Storyboard><Scene name="main" case="main" pause="@key, @done"><Main key={key} /></Scene></Storyboard>'
       )
     );
-    const { javascript } = await bundlePresentation(prepared, 1);
+    const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
     // After the loop, i and key are out of scope: they stand in from the step that had them, and are
     // listed absent (values, the same at every step, is kept once; see library/trace-pack.ts).
     expect(javascript).toContain('i:1,key:2');
@@ -1368,7 +1368,7 @@ describe('views of what a step computed', () => {
 
   it('give a step’s after its one application, and stand one in hidden elsewhere', async () => {
     const prepared = prepareSvelteComponent(bubble);
-    const { javascript } = await bundlePresentation(prepared, 1);
+    const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toMatch(/__applied_(?:ℓ|\\u2113)sweep/u);
   });
 
@@ -1690,7 +1690,7 @@ describe('pauses at labels', () => {
         'insert.swap.from',
         'insert.swap.to'
       ]);
-      const { javascript } = await bundlePresentation(prepared, 1);
+      const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
       expect(javascript).toMatch(/"?label"?:"insert\.compare\.left"/);
     });
   });
@@ -1986,7 +1986,7 @@ describe('the view reaching the code only through labels', () => {
       'insert.swap.from',
       'insert.swap.to'
     ]);
-    const { javascript } = await bundlePresentation(prepared, 1);
+    const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
     expect(javascript).toContain('__reads');
   });
 
@@ -2974,12 +2974,8 @@ describe('starter looks of a graph', () => {
 
 describe('views of a union', () => {
   /** The geometry the page is given, with each component's box. */
-  const unionGeometry = (javascript: string) =>
-    (
-      JSON.parse(
-        javascript.slice('window.__sverlinGeometry='.length, javascript.indexOf(';\n'))
-      ) as { components: [string, { width: number }][] }[]
-    )[0];
+  const unionGeometry = (built: { geometry: unknown }) =>
+    built.geometry as { components: [string, { width: number }][] };
 
   it('gives the views of a union’s members one box, so a cell holding the narrower member is as wide as the rest', async () => {
     const source = `<script domain>
@@ -3007,8 +3003,8 @@ describe('views of a union', () => {
     expect(probe('InfinityCell')?.unions).toEqual(['Dist']);
     const order = prepared.components.map(({ name }) => name);
     expect(order.indexOf('Cells')).toBeGreaterThan(order.indexOf('InfinityCell'));
-    const { javascript } = await bundlePresentation(prepared, 1, {});
-    const boxes = new Map(unionGeometry(javascript).components);
+    const built = await bundlePresentation(prepared, 1, {});
+    const boxes = new Map(unionGeometry(built).components);
     expect(boxes.get('InfinityCell|Dist')?.width).toBe(boxes.get('DistanceCell|Dist')?.width);
   });
 
@@ -3033,8 +3029,8 @@ describe('views of a union', () => {
 <Layout name="Main" of="lo, result"><Node layout="row">{lo}{result}</Node></Layout>
 <Case name="main" values={[1, 2, 3]} />
 <Storyboard><Scene name="main" case="main" pause="@look"><Main lo={lo} result={result} /></Scene></Storyboard>`;
-    const { javascript } = await bundlePresentation(prepareSvelteComponent(source), 1, {});
-    const boxes = new Map(unionGeometry(javascript).components);
+    const built = await bundlePresentation(prepareSvelteComponent(source), 1, {});
+    const boxes = new Map(unionGeometry(built).components);
     expect(boxes.get('IndexNumber|Result')?.width).toBe(boxes.get('StatusWord|Result')?.width);
     expect(boxes.get('IndexNumber')!.width).toBeLessThan(boxes.get('StatusWord')!.width);
   });
