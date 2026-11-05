@@ -183,7 +183,7 @@ describe('variants', () => {
         .filter(([key]) => key.endsWith('.color') && starter[key] === starter['IntCell.color'])
         .map(([, value]) => value);
       expect(new Set(colours).size).toBe(1);
-      expect(String(colours[0])).toMatch(/-900$/u);
+      expect(colours[0]).toBe('black');
       expect(values['Row.Under.shown']).toBe(true);
       expect(values['Row.fill']).toBe('none');
       expect(values['views.Int']).not.toBe('none');
