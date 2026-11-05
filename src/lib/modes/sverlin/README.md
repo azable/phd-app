@@ -1228,7 +1228,9 @@ built after a change keeps the values of the one it was made from where nothing
 else sets them, and takes the starter's for anything new; the assistant sets
 values with `vary`, or with `edit` or `revise` for the source it changes, and
 asking for several variants, or Another variant (in dev mode), asks the chooser,
-which may change what is shown where the conversation leaves it open.
+which may change what is shown where the conversation leaves it open. A value
+for a variable the design does not have is left out, and the build warns, naming
+it; a value outside its variable's options is refused.
 
 ### Declare what varies
 

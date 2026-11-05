@@ -709,9 +709,8 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       code: 'design_value',
       message: expect.stringContaining('One.radius cannot be 3')
     });
-    await expect(bundlePresentation(prepared, 3, { chosen: { 'One.depth': 2 } })).rejects.toThrow(
-      'One has no prop depth'
-    );
+    const { warnings } = await bundlePresentation(prepared, 3, { chosen: { 'One.depth': 2 } });
+    expect(warnings).toContainEqual(expect.stringContaining('One has no prop depth'));
   });
 
   it('takes the page frame from the layout’s values in the variant', async () => {
@@ -1577,11 +1576,14 @@ describe('pauses at labels', () => {
       .map(({ current }) => current.map(([start, end]) => text.slice(start, end)));
     expect(lit).toEqual([['j - 1'], ['j'], ['A[j - 1] > A[j]']]);
   });
-  it('refuses a pause chosen as a variable, as the scenes say where the steps pause', async () => {
+  it('leaves out a pause chosen as a variable, warning that the scenes say where the steps pause', async () => {
     const prepared = prepareSvelteComponent(insertion);
-    await expect(
-      bundlePresentation(prepared, 1, { chosen: { 'pause@insert.swap': 'on' } })
-    ).rejects.toThrow('the steps a scene shows are its pause');
+    const { warnings } = await bundlePresentation(prepared, 1, {
+      chosen: { 'pause@insert.swap': 'on' }
+    });
+    expect(warnings).toContainEqual(
+      expect.stringContaining('the steps a scene shows are its pause')
+    );
   });
 
   describe('listing regions as places', () => {
@@ -1763,7 +1765,7 @@ describe('pauses inside a run', () => {
     expect(space['Highlight.Pointed@insert.compare.left.fill']).toBeDefined();
     expect(space['Highlight.Pointed@left.fill']).toBeUndefined();
     const chosen = { 'Highlight.Pointed@left.fill': 'sky-100' };
-    expect(() => buildVariant(space, starter, { chosen }, 1)).toThrow();
+    expect(buildVariant(space, starter, { chosen }, 1).dropped).toHaveLength(1);
   });
 });
 
@@ -2632,16 +2634,17 @@ describe('slots and boxes', () => {
     expect(collections('@grow[values.push(Int(2));]')['Main.Fixed.justify']).toBe('start');
   });
 
-  it('has no variable for an axis the view sizes by its value, and says why when one is chosen', async () => {
+  it('has no variable for an axis the view sizes by its value, and warns why when one is chosen', async () => {
     const prepared = prepareSvelteComponent(
       source('<View of="Wide" name="Bar"><Node height={this} /></View>', '{wide}')
     );
     expect(prepared.design.space['Bar.height']).toBeUndefined();
     expect(prepared.design.starter['Bar.yAnchor']).toBe('end');
-    await expect(
-      bundlePresentation(prepared, 1, { chosen: { 'Bar.height': 'varying' } })
-    ).rejects.toThrow(
-      "Bar's height is bound to its value in the view, height={…}, so it has no height variable; Bar.yAnchor places it."
+    const { warnings } = await bundlePresentation(prepared, 1, {
+      chosen: { 'Bar.height': 'varying' }
+    });
+    expect(warnings).toContain(
+      "Bar's height is bound to its value in the view, height={…}, so it has no height variable; Bar.yAnchor places it. The value is left out."
     );
   }, 60_000);
 

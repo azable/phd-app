@@ -365,8 +365,9 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
 
 /**
  * The complete variant a build takes, and where each value came from: the starter, then the base's
- * values that still fit, then any randomising, then the chosen values. A chosen value the space
- * has no place for is an error naming it. A place's variable (`fallbacks`, by key, the variable it
+ * values that still fit, then any randomising, then the chosen values. A chosen value outside its
+ * variable's options is an error naming them; one for a variable the design has not is left out,
+ * and `dropped` says why, for the build to warn of. A place's variable (`fallbacks`, by key, the variable it
  * falls back to) then takes the value of its own unless it is chosen, drawn by name, or set apart
  * in the base, so a place looks as its type and kinds do until a variant sets it.
  */
@@ -376,16 +377,25 @@ export function buildVariant(
   request: VariantRequest,
   seed: number,
   fallbacks: Readonly<Record<string, Fallback>> = {}
-): { values: Record<string, DesignValue>; origins: Record<string, DesignOrigin> } {
-  const chosen = Object.entries(request.chosen ?? {});
+): {
+  values: Record<string, DesignValue>;
+  origins: Record<string, DesignOrigin>;
+  dropped: string[];
+} {
+  const given = Object.entries(request.chosen ?? {});
+  const chosen = given.filter(([key]) => Object.hasOwn(space, key));
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
     .map(([key, value]) => unfit(space, key, value));
-  const named = request.randomise === true ? [] : (request.randomise ?? []);
-  problems.push(
-    ...named.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
-  );
   if (problems.length) throw new DesignValueError(problems.join(' '));
+  const asked = request.randomise === true ? [] : (request.randomise ?? []);
+  const named = asked.filter((key) => Object.hasOwn(space, key));
+  const dropped = [
+    ...given
+      .filter(([key]) => !Object.hasOwn(space, key))
+      .map(([key, value]) => unfit(space, key, value)),
+    ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
+  ].map((why) => `${why} The value is left out.`);
   const values: Record<string, DesignValue> = { ...starter };
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
@@ -422,7 +432,7 @@ export function buildVariant(
     values[key] = values[fallback];
     origins[key] = origins[fallback];
   }
-  return { values, origins };
+  return { values, origins, dropped };
 }
 
 /**

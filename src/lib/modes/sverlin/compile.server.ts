@@ -2275,7 +2275,7 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
-  const warnings: string[] = [...(prepared.listingWarnings ?? [])];
+  const warnings: string[] = [...(prepared.listingWarnings ?? []), ...variant.dropped];
   const entries = scenes.flatMap((scene, sceneIndex) => {
     const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case);
     const view = {

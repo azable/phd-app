@@ -97,30 +97,35 @@ describe('variants', () => {
     expect(values).not.toHaveProperty('gone');
   });
 
-  it('rejects a chosen value outside its options, or for no variable', () => {
+  it('rejects a chosen value outside its options, and leaves out one for no variable, saying why', () => {
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.radius': 3 } }, 1)).toThrow(
       DesignValueError
     );
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.radius': 3 } }, 1)).toThrow(
       'IntCell.radius cannot be 3'
     );
-    expect(() => buildVariant(space, starter, { chosen: { 'IntCell.depth': 1 } }, 1)).toThrow(
-      'IntCell has no prop depth'
-    );
+    const depth = buildVariant(space, starter, { chosen: { 'IntCell.depth': 1 } }, 1);
+    expect(depth.values).not.toHaveProperty('IntCell.depth');
+    expect(depth.dropped).toEqual([expect.stringContaining('IntCell has no prop depth')]);
     // A view choice for a place the source has not is no variable, not a prop of "pointers".
-    expect(() =>
-      buildVariant(space, starter, { chosen: { 'pointers.Index@found': 'Arrow' } }, 1)
-    ).toThrow('The design has no variable pointers.Index@found; its view choices are views.Int');
+    expect(
+      buildVariant(space, starter, { chosen: { 'pointers.Index@found': 'Arrow' } }, 1).dropped
+    ).toEqual([
+      expect.stringContaining(
+        'The design has no variable pointers.Index@found; its view choices are views.Int'
+      )
+    ]);
   });
 
-  it('refuses a place setting what takes room, which holds for its kind at every step', () => {
+  it('leaves out a place setting what takes room, which holds for its kind at every step', () => {
     expect(space).not.toHaveProperty('Highlight.Pointed@found.padding');
     expect(space).toHaveProperty('Highlight.Pointed.padding');
-    expect(() =>
+    expect(
       buildVariant(space, starter, { chosen: { 'Highlight.Pointed@found.padding': 0.5 } }, 1)
-    ).toThrow(
-      'A place sets only its paint (fill, stroke, color) and whether it is shown, never how much room anything takes: padding holds for every Highlight.Pointed at every step, as Highlight.Pointed.padding.'
-    );
+        .dropped
+    ).toEqual([
+      'A place sets only its paint (fill, stroke, color) and whether it is shown, never how much room anything takes: padding holds for every Highlight.Pointed at every step, as Highlight.Pointed.padding. The value is left out.'
+    ]);
     expect(
       Object.keys(space)
         // A view chosen per place holds at every step, as a type's does; the rest are a place's looks.
