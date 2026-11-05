@@ -132,6 +132,11 @@ export type AiPresentationSummary = {
   readability?: string;
   /** Each step a scene leaves out, drawing what the step before it drew (see sceneSteps). */
   warnings?: string[];
+  /**
+   * What it actually draws, from the server's layout of its fullest step: each kind of node, by
+   * the shape its paint gives it and its size, and its links, those drawn and those drawing nothing.
+   */
+  drawing?: string;
 };
 
 /** Full details resolved for an event explicitly selected by the user. */
@@ -895,7 +900,8 @@ function differencesText(asked: PresentedQuestion | undefined): string | undefin
     : `the two draw differently only at step${several ? 's' : ''} ${new Intl.ListFormat('en', { type: 'conjunction' }).format(runs)}, alike at every other step`;
 }
 
-function presentationSummary(
+/** A shown presentation, as the assistant is told of it. */
+export function presentationSummary(
   event: ProjectEventOf<'visualization.presented'>
 ): AiPresentationSummary {
   const presentation = event.payload.presentation;
@@ -909,7 +915,8 @@ function presentationSummary(
     ...(scripted && presentation.readability
       ? { readability: readabilityText(presentation.readability) }
       : {}),
-    ...(scripted && presentation.warnings?.length ? { warnings: presentation.warnings } : {})
+    ...(scripted && presentation.warnings?.length ? { warnings: presentation.warnings } : {}),
+    ...(scripted && presentation.drawing ? { drawing: presentation.drawing } : {})
   };
 }
 

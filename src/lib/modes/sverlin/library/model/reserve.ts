@@ -693,7 +693,15 @@ export function* elementsUnder(element: ModelElement): Generator<ModelElement> {
  * Ids, which tell nothing about the picture, are left out too, so two presentations drawing the
  * same picture describe it alike (see drawnText).
  */
-export function describeDrawn(markup: ModelElement, options: ReserveOptions): string | undefined {
+/** An element seen in a drawing, with the size it is drawn at (see describeDrawn). */
+export type SeenBox = { element: ModelElement; width: number; height: number; kind?: string };
+
+export function describeDrawn(
+  markup: ModelElement,
+  options: ReserveOptions,
+  /** Told of each element seen, as it is drawn, for a summary of the picture (see drawing.ts). */
+  collect?: (seen: SeenBox) => void
+): string | undefined {
   const shown = seenOnly(markup);
   const seen = [...elementsUnder(shown)].filter((element) => seenBox(element, ownText(element)));
   const kept = (attribute: string) =>
@@ -728,7 +736,8 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
     boxIn: (inner: ModelElement) => Box,
     x: number,
     y: number,
-    hiddenAbove = false
+    hiddenAbove = false,
+    kindAbove?: string
   ) => {
     const { attributes } = element;
     if (attributes['data-sv-link'] !== undefined || attributes['data-sv-link-label'] !== undefined)
@@ -739,10 +748,13 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
     const hiddenAs = attributes['data-sv-hidden'] ?? element.style.visibility;
     const hidden =
       hiddenAs === 'true' || hiddenAs === 'hidden' || (hiddenAbove && !isShown(hiddenAs));
+    const kind = attributes['data-sv-kind'] ?? kindAbove;
     const box = boxIn(element);
     const left = box.x + x;
     const top = box.y + y;
     const text = ownText(element);
+    if (!hidden && collect && seenBox(element, text))
+      collect({ element, width: box.width, height: box.height, ...(kind ? { kind } : {}) });
     if (!hidden) {
       const [tag, ...rest] = [
         element.tag,
@@ -768,14 +780,15 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
           (inner) => model.layoutReader(at, laid).boxIn(inner, label),
           left + middle.x,
           top + middle.y,
-          hidden
+          hidden,
+          kind
         );
     }
     const host = classesOf(element).includes('sv-arranged')
       ? elementsOf(element).find((child) => classesOf(child).includes('placed'))
       : undefined;
     if (!host) {
-      for (const child of elementsOf(element)) walk(child, boxIn, x, y, hidden);
+      for (const child of elementsOf(element)) walk(child, boxIn, x, y, hidden, kind);
       return;
     }
     // Placed as the page places them (see Arranged.svelte), each child laid out on its own.
@@ -795,7 +808,8 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
         (inner) => read.boxIn(inner, child),
         hostLeft + placedX,
         hostTop + placedY,
-        hidden
+        hidden,
+        kind
       );
     });
     for (const edge of arranged.edges) {
@@ -806,7 +820,8 @@ export function describeDrawn(markup: ModelElement, options: ReserveOptions): st
           (inner) => read.boxIn(inner, label),
           hostLeft + edge.middle.x,
           hostTop + edge.middle.y,
-          hidden
+          hidden,
+          kind
         );
     }
   };
@@ -827,7 +842,7 @@ function ownText(element: ModelElement): string {
  * block or span, as an svg; one with text of its own; or one that paints a box, as Node does in
  * its inline style: a fill, a stroke or a shadow. Any other only holds what is inside it.
  */
-function seenBox(element: ModelElement, text: string): boolean {
+export function seenBox(element: ModelElement, text: string): boolean {
   if (element.tag !== 'div' && element.tag !== 'span') return true;
   if (text.trim() || element.attributes['data-sv-framed'] !== undefined) return true;
   const { style } = element;
@@ -878,7 +893,7 @@ function withoutKeptRoom(style: ModelElement['style']): ModelElement['style'] {
     : Object.fromEntries(kept);
 }
 
-function hiddenHere(element: ModelElement): boolean {
+export function hiddenHere(element: ModelElement): boolean {
   const hiddenAs = element.attributes['data-sv-hidden'] ?? element.style.visibility;
   return hiddenAs === 'true' || hiddenAs === 'hidden';
 }

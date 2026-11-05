@@ -35,6 +35,7 @@ const scope = globalThis as unknown as {
   __sverlinHost: Host;
   __sverlinLayOut?: (devicePixelRatio: number) => Promise<string>;
   __sverlinDrawn?: string;
+  __sverlinDrawing?: string;
   __sverlinSize?: string;
   window?: unknown;
 };
@@ -85,6 +86,9 @@ scope.__sverlinLayOut = async (devicePixelRatio) => {
     borders,
     ancestors: pageAncestors,
     drawn,
+    drawing: (drawing) => {
+      if (drawn) scope.__sverlinDrawing = JSON.stringify(drawing);
+    },
     report: (cause, step) =>
       host.report((cause instanceof Error ? cause.message : String(cause)).slice(0, 500), step)
   });

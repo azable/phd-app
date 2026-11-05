@@ -54,7 +54,8 @@ export async function buildBatch(
           runs: prepared.pauses.runs,
           structures: prepared.design.structures,
           ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),
-          ...(bundle.layout.readability ? { readability: bundle.layout.readability } : {})
+          ...(bundle.layout.readability ? { readability: bundle.layout.readability } : {}),
+          ...(bundle.layout.drawing ? { drawing: bundle.layout.drawing } : {})
         }
       });
     } catch (cause) {

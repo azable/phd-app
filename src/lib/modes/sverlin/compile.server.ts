@@ -155,6 +155,7 @@ import {
 import { bindableProps, lengthProps, valueOnlyProps } from './library/node/bound';
 import { iconNames } from './library/fonts';
 import { readabilityOf } from './readability.server';
+import { drawingText, drawingWarnings } from './library/drawing';
 import type { Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
@@ -264,6 +265,8 @@ export type SvelteBundle = {
     drawn?: string[];
     /** How large it draws on a typical stage (see readability.server.ts). */
     readability?: Readability;
+    /** What it draws, in kinds and links, for the assistant (see library/drawing.ts). */
+    drawing?: string;
   };
 };
 
@@ -2641,7 +2644,7 @@ export async function bundlePresentation(
   const layoutBundle = result.outputFiles.find(({ path }) =>
     path.endsWith('layout.js')
   ) as OutputFile;
-  const { geometries, size, failure, ...laid } = await layOutOnServer(layoutBundle.text);
+  const { geometries, size, failure, drawing, ...laid } = await layOutOnServer(layoutBundle.text);
   // The page reads the layout before its own code runs.
   const javascript =
     geometries && `window.__sverlinGeometry=${JSON.stringify(geometries)};\n${output.text}`;
@@ -2659,8 +2662,10 @@ export async function bundlePresentation(
   }
   const layout: SvelteBundle['layout'] = {
     ...laid,
-    ...(size ? { readability: readabilityOf(size, frame.ratio) } : {})
+    ...(size ? { readability: readabilityOf(size, frame.ratio) } : {}),
+    ...(drawing ? { drawing: drawingText(drawing) } : {})
   };
+  if (drawing) warnings.push(...drawingWarnings(drawing));
   return {
     javascript,
     layout,

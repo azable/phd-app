@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import ivm from 'isolated-vm';
 
 import { fontsVersion, serverMeasure } from './fonts/measure.server';
+import type { DrawnSummary } from './library/drawing';
 import type { Geometry } from './library/geometry';
 import { snappedBorder } from './library/model/look';
 
@@ -25,6 +26,8 @@ export type ServerLayout = {
    * none where the server could not lay the presentation out.
    */
   drawn?: string[];
+  /** What the step drawing the most draws, for the assistant (see library/drawing.ts). */
+  drawing?: DrawnSummary;
   /** How large it draws (see readability.server.ts); none where the server could not lay it out. */
   size?: DrawnSize;
   /** Why it could not. */
@@ -138,6 +141,9 @@ async function layOutIsolated(
     const geometries = [await at(1)];
     const drawnJson = await global.get('__sverlinDrawn', { copy: true });
     const drawn = typeof drawnJson === 'string' ? (JSON.parse(drawnJson) as string[]) : undefined;
+    const drawingJson = await global.get('__sverlinDrawing', { copy: true });
+    const drawing =
+      typeof drawingJson === 'string' ? (JSON.parse(drawingJson) as DrawnSummary) : undefined;
     const sizeJson = await global.get('__sverlinSize', { copy: true });
     const size = typeof sizeJson === 'string' ? (JSON.parse(sizeJson) as DrawnSize) : undefined;
     // Most screens draw at 1 or 2 device pixels a CSS pixel; at 2 a border of half a pixel, or one
@@ -149,7 +155,13 @@ async function layOutIsolated(
         errors,
         failure: `no embedded font has ${[...measure.missing].slice(0, 10).join(' ')}`
       };
-    return { geometries, ...(drawn ? { drawn } : {}), ...(size ? { size } : {}), errors };
+    return {
+      geometries,
+      ...(drawn ? { drawn } : {}),
+      ...(drawing ? { drawing } : {}),
+      ...(size ? { size } : {}),
+      errors
+    };
   } catch (cause) {
     return { errors, failure: cause instanceof Error ? cause.message : String(cause) };
   } finally {

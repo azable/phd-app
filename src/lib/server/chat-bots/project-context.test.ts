@@ -10,6 +10,7 @@ import type { ProjectDocument } from '$lib/shared/projects/model';
 
 import {
   designVariables,
+  presentationSummary,
   projectAiContext,
   projectAiTimelineEntry,
   projectConversationMessages
@@ -700,5 +701,27 @@ describe('comparisons in the conversation', () => {
     expect(context.brief.avoid).toEqual(['colours: it must print in grey']);
     // The fill, a colour, is no longer offered as unexplored.
     expect(context.preferences?.unexplored.map(({ family }) => family)).not.toContain('colour');
+  });
+});
+
+describe('a presentation as the assistant is told of it', () => {
+  it('carries what the server drew, so the assistant need not guess the picture', () => {
+    const drawing =
+      'State: 3 white circle with no outline, unseen on the white page. links: 2 drawn.';
+    const event = {
+      id: 7,
+      type: 'visualization.presented',
+      payload: {
+        presentation: {
+          format: 'browser-bundle-v1',
+          presentationId: 'p1',
+          seed: 1,
+          source: { sha256 },
+          javascript: { sha256 },
+          drawing
+        }
+      }
+    } as unknown as Parameters<typeof presentationSummary>[0];
+    expect(presentationSummary(event).drawing).toBe(drawing);
   });
 });

@@ -5,6 +5,7 @@
  * ../assembly/layout.ts), with the same steps, markup, style sheets and font files.
  */
 
+import { drawingOf, type DrawnSummary } from './drawing';
 import { linePairs } from './node/lines';
 import { parseSheet, type Rule } from './model/css';
 import type { TextMeasure } from './model/layout';
@@ -18,7 +19,8 @@ import {
   withLines,
   type Drawing,
   type Reservation,
-  type ReserveOptions
+  type ReserveOptions,
+  type SeenBox
 } from './model/reserve';
 import type { ModelElement } from './model/tree';
 import { withValue, type Layouts, type StepDrawing, type Steps, type StepState } from './steps';
@@ -63,6 +65,8 @@ export type RecordOptions = {
    * presentation or two, have the same key where they draw the same picture.
    */
   drawn?: string[];
+  /** Told what the step drawing the most draws, in kinds and links, for the assistant (drawing.ts). */
+  drawing?: (drawing: DrawnSummary) => void;
   /** Gives the page back for a moment between the parts of the work. */
   pause?: () => Promise<void>;
   /** Called as each part ends. */
@@ -248,16 +252,21 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
 function drawnKeys(options: RecordOptions, reserve: ReserveOptions): string[] {
   const { steps, layouts } = options;
   const described = new Map<number, string>();
+  // The state seeing the most is the one described to the assistant.
+  let fullest: { markup: ModelElement; seen: SeenBox[] } | undefined;
   for (const state of steps.distinct) {
     try {
       const { body } = options.render(steps.drawingOf(state, 'showing', layouts));
       const markup = withLines(readMarkup(body, layer), layouts.lines);
-      described.set(state, describeDrawn(markup, reserve) ?? '');
+      const seen: SeenBox[] = [];
+      described.set(state, describeDrawn(markup, reserve, (box) => seen.push(box)) ?? '');
+      if (!fullest || seen.length > fullest.seen.length) fullest = { markup, seen };
     } catch {
       // A state the view fails to draw is reported as it is measured.
       described.set(state, 'failed');
     }
   }
+  if (fullest) options.drawing?.(drawingOf(fullest.markup, fullest.seen));
   return Array.from({ length: steps.stepCount }, (_, step) =>
     hashed(
       [2 * step, 2 * step + 1]

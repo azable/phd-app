@@ -136,6 +136,8 @@ export const browserBundlePresentationSchema = v.strictObject({
   readability: v.optional(readabilitySchema),
   /** Each step a scene leaves out, drawing what the step before it drew, for the assistant. */
   warnings: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(200))),
+  /** What it draws, in kinds and links, from the server's layout (modes/sverlin/library/drawing.ts). */
+  drawing: v.optional(v.pipe(v.string(), v.maxLength(1000))),
   generationEventId: v.optional(positiveSchema)
 });
 
