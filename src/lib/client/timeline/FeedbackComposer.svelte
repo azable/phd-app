@@ -67,6 +67,8 @@
   let editor = $state<HTMLDivElement>();
   let savedRange: Range | undefined;
   let hasContent = $state(false);
+  // Enter pressed on a note while a pair is open: the note waits for an answer, so say so.
+  let enterWithPair = $state(false);
   let hasExplicitReferences = $state(false);
   let editorRevision = $state(0);
   let focused = $state(false);
@@ -94,6 +96,7 @@
   export function clear(): void {
     editorRevision += 1;
     hasContent = false;
+    enterWithPair = false;
     hasExplicitReferences = false;
     savedRange = undefined;
     session.focusedEvents = [];
@@ -130,7 +133,10 @@
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();
     // With a pair open, the draft goes with its answer, never on its own.
-    if (pair) return;
+    if (pair) {
+      enterWithPair = hasContent;
+      return;
+    }
     editor?.closest('form')?.requestSubmit();
   }
 
@@ -307,15 +313,6 @@
       <div
         class="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring"
       >
-        {#if pair && session.atHead}
-          <div
-            class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-            data-testid="feedback-pair"
-          >
-            About the pair on the stage{pair.question ? `: “${pair.question}”` : ''}. Write a note
-            if you like, then pick your answer: the note goes with it.
-          </div>
-        {/if}
         {#if selected.length > 0 && !hasExplicitReferences}
           <div
             class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
@@ -334,7 +331,7 @@
             aria-label="Project feedback"
             aria-multiline="true"
             data-placeholder={pair
-              ? 'Add a note to your choice (optional): a change you want, or what you like…'
+              ? 'Add a note to your answer (optional): a change you want, or what you like…'
               : 'Comment on the project or reference a visualization…'}
             oninput={updateContentState}
             onkeyup={rememberSelection}
@@ -368,6 +365,11 @@
               </Button>
             {/each}
           </div>
+          {#if enterWithPair && hasContent && !pair.waiting}
+            <p class="border-t px-3 py-1.5 text-sm text-muted-foreground" role="status">
+              Pick an answer to send your note with it.
+            </p>
+          {/if}
           {#if pair.waiting}
             <p class="border-t px-3 py-1.5 text-sm text-muted-foreground" role="status">
               Answer once the assistant has replied.
