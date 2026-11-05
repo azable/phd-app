@@ -1,26 +1,33 @@
 import type { ChatBotAttemptProfile } from './types';
 
 /**
- * One bounded Sol attempt ladder shared by visualization modes: a first call, two repairs at
- * rising effort, and a simpler fallback that explains what it reduced, four calls at most. On
- * 2026-11-05, across six projects, ten of thirteen repairs ran at medium and most fixed the first
- * version; the xhigh repair ran once and took 91 s, and in project 7464186f the fallback succeeded
- * at once where two repairs had failed. So the xhigh repair was dropped and the fallback runs at
- * high: the worst case falls from about five minutes to about two, in a 15-minute session. With the
- * 180-second request ceiling (chat-adapters/openai.ts) and provider retries off, a turn can never
- * outlast the 15-minute study phase, and each condition's turns stay bounded and comparable. A
- * first attempt thinks least, a first source too: on 5 November's benchmark of 12 first requests,
- * Sol built 15 of 24 at low effort against 17 of 24 at medium (noise is about two in twelve), in a
- * median 33 s rather than 61 s and for $0.09 rather than $0.13 a request, so even with the extra
- * repairs a working first version came sooner and cheaper; every repair keeps the ladder's effort.
- * Where a study condition, or an administrator's dev-mode switch, turns the view
- * helpers on (projects/view-helpers.ts), a turn adds one round of Luna calls at low effort after its
- * reply has shown, all at once, each time-boxed to 30 seconds: five views of a type or eight
- * arrangements of a layout by default (study/definition.ts), and a retry for at most three that did
- * not build or read. Each call sends its extract of the guide and the source, about 11k input
- * tokens for a view and 10k for a layout, the extract alike across a round's calls, so a round is
- * some 55k–80k input tokens and 5k–10k output, but never delays the reply, and none counts against
- * the ladder's four.
+ * One bounded attempt ladder shared by visualization modes: a first call, two repairs at rising
+ * effort, and a simpler fallback that explains what it reduced, four calls at most. On 2026-11-05,
+ * across six projects, ten of thirteen repairs ran at medium and most fixed the first version; the
+ * xhigh repair ran once and took 91 s, and in project 7464186f the fallback succeeded at once where
+ * two repairs had failed. So the xhigh repair was dropped and the fallback runs at high: the worst
+ * case falls from about five minutes to about two, in a 15-minute session. With the 180-second
+ * request ceiling (chat-adapters/openai.ts) and provider retries off, a turn can never outlast the
+ * 15-minute study phase, and each condition's turns stay bounded and comparable.
+ *
+ * The first call is GPT-6.1 Terra at low effort, the repairs and fallback GPT-6.1 Sol. On
+ * 2026-11-05's benchmark of 12 first requests (twice each), Terra at low built 21 of 24 first time
+ * in a median 14 s for $0.010 a request, GPT-6.1 Sol at low 19 of 24 in 19 s for $0.023, and
+ * GPT-5.6 Sol at low 15 of 24 in 28 s for $0.075; repairing 20 failed first sources at medium,
+ * 6.1 Sol fixed 17 and 5.6 Sol 16. This whole ladder made a working first version of all 24 in a
+ * mean 20 s for $0.021, where the 5.6 Sol ladder took 36 s for $0.125 (12 of 12). Replaying 24 real
+ * feedback turns, Terra's first call answered all 24 usably in a median 16 s for $0.031 a turn
+ * against 5.6 Sol's 24 s and $0.169, though in 3 it explained where Sol had changed the source.
+ * Prices: https://developers.openai.com/api/docs/models/gpt-6.1-terra and
+ * https://developers.openai.com/api/docs/models/gpt-6.1-sol (read 2026-11-05).
+ *
+ * Where a study condition, or an administrator's dev-mode switch, turns the view helpers on
+ * (projects/view-helpers.ts), a turn adds one round of Luna calls at low effort after its reply has
+ * shown, all at once, each time-boxed to 30 seconds: five views of a type or eight arrangements of
+ * a layout by default (study/definition.ts), and a retry for at most three that did not build or
+ * read. Each call sends its extract of the guide and the source, about 11k input tokens for a view
+ * and 10k for a layout, the extract alike across a round's calls, so a round is some 55k–80k input
+ * tokens and 5k–10k output, but never delays the reply, and none counts against the ladder's four.
  */
 
 export function visualizationAttemptProfiles(
@@ -29,19 +36,19 @@ export function visualizationAttemptProfiles(
   return [
     {
       purpose: 'initial',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'low', maxOutputTokens }
+      parameters: { model: 'gpt-6.1-terra', reasoningEffort: 'low', maxOutputTokens }
     },
     {
       purpose: 'repair',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'medium', maxOutputTokens }
+      parameters: { model: 'gpt-6.1-sol', reasoningEffort: 'medium', maxOutputTokens }
     },
     {
       purpose: 'repair',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'high', maxOutputTokens }
+      parameters: { model: 'gpt-6.1-sol', reasoningEffort: 'high', maxOutputTokens }
     },
     {
       purpose: 'fallback',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'high', maxOutputTokens }
+      parameters: { model: 'gpt-6.1-sol', reasoningEffort: 'high', maxOutputTokens }
     }
   ];
 }

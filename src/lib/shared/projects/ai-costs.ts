@@ -13,12 +13,16 @@ export type ModelPrice = { input: number; cachedInput: number; output: number };
  * Prices by model name, matched by the start of the name a response reports (a dated name, as
  * gpt-5.6-sol-2026-10-01, takes its model's). From the model pages, read 2026-11-05:
  * https://developers.openai.com/api/docs/models/gpt-5.6-sol (Sol's promotional price, until
- * 2026-11-30) and https://developers.openai.com/api/docs/models/gpt-5.6-luna. Prompts over 272,000
- * input tokens cost 2× input and 1.5× output; ours stay far under. Update here when prices change.
+ * 2026-11-30), https://developers.openai.com/api/docs/models/gpt-5.6-luna,
+ * https://developers.openai.com/api/docs/models/gpt-6.1-sol and
+ * https://developers.openai.com/api/docs/models/gpt-6.1-terra. Prompts over 272,000 input tokens
+ * cost 2× input and 1.5× output; ours stay far under. Update here when prices change.
  */
 export const modelPrices: Readonly<Record<string, ModelPrice>> = {
   'gpt-5.6-sol': { input: 4, cachedInput: 0.4, output: 20 },
-  'gpt-5.6-luna': { input: 0.2, cachedInput: 0.02, output: 1.2 }
+  'gpt-5.6-luna': { input: 0.2, cachedInput: 0.02, output: 1.2 },
+  'gpt-6.1-sol': { input: 2, cachedInput: 0.1, output: 10 },
+  'gpt-6.1-terra': { input: 1, cachedInput: 0.05, output: 5 }
 };
 
 /**

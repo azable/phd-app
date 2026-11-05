@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { visualizationAttemptProfiles } from './attempt-profiles';
 
 describe('visualization attempt profiles', () => {
-  it('keeps the shared four-stage Sol ladder bounded, the first attempt thinking least', () => {
+  it('keeps the shared four-stage ladder bounded: a quick Terra first call, then Sol repairs', () => {
     expect(visualizationAttemptProfiles(12_000)).toEqual([
       {
         purpose: 'initial',
         parameters: {
-          model: 'gpt-5.6-sol',
+          model: 'gpt-6.1-terra',
           reasoningEffort: 'low',
           maxOutputTokens: 12_000
         }
@@ -16,7 +16,7 @@ describe('visualization attempt profiles', () => {
       {
         purpose: 'repair',
         parameters: {
-          model: 'gpt-5.6-sol',
+          model: 'gpt-6.1-sol',
           reasoningEffort: 'medium',
           maxOutputTokens: 12_000
         }
@@ -24,7 +24,7 @@ describe('visualization attempt profiles', () => {
       {
         purpose: 'repair',
         parameters: {
-          model: 'gpt-5.6-sol',
+          model: 'gpt-6.1-sol',
           reasoningEffort: 'high',
           maxOutputTokens: 12_000
         }
@@ -32,7 +32,7 @@ describe('visualization attempt profiles', () => {
       {
         purpose: 'fallback',
         parameters: {
-          model: 'gpt-5.6-sol',
+          model: 'gpt-6.1-sol',
           reasoningEffort: 'high',
           maxOutputTokens: 12_000
         }
