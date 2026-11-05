@@ -11,7 +11,9 @@ export function sandboxDocument(
   view?: CanvasView,
   selection?: readonly string[],
   /** Markup for the head, after its own, such as the fonts a mode embeds. */
-  head = ''
+  head = '',
+  /** Draw each step as SVG from its scene data, not the mounted view (see SceneView.svelte). */
+  options: { scenes?: boolean } = {}
 ): string {
   const policy = [
     "default-src 'none'",
@@ -27,7 +29,7 @@ export function sandboxDocument(
     "form-action 'none'"
   ].join('; ');
   const script =
-    `window.__sverlinStep=${JSON.stringify(step)};window.__sverlinSeed=${JSON.stringify(seed)};${view ? `window.__sverlinView=${JSON.stringify({ zoom: Number(view.zoom), panX: Number(view.panX), panY: Number(view.panY) })};` : ''}${selection?.length ? `window.__sverlinSelection=${JSON.stringify(selection.map(String))};` : ''}\n${javascript}`.replace(
+    `window.__sverlinStep=${JSON.stringify(step)};window.__sverlinSeed=${JSON.stringify(seed)};${view ? `window.__sverlinView=${JSON.stringify({ zoom: Number(view.zoom), panX: Number(view.panX), panY: Number(view.panY) })};` : ''}${selection?.length ? `window.__sverlinSelection=${JSON.stringify(selection.map(String))};` : ''}${options.scenes ? 'window.__sverlinScenes=true;' : ''}\n${javascript}`.replace(
       /<\/script/giu,
       '<\\/script'
     );

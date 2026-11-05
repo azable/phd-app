@@ -43,6 +43,12 @@
     onLoadTiming?: (timing: PresentationLoadTiming) => void;
   } = $props();
 
+  // Drawing each step as SVG from its scene data (see library/SceneView.svelte) is a prototype,
+  // off unless the page's address asks for it with ?scenes=1.
+  const scenesWanted =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('scenes') === '1';
+
   let iframe = $state<HTMLIFrameElement>();
   // The iframe fills its pane exactly, however short: the canvas inside fits itself to the iframe, so
   // an iframe taller than its pane would be clipped, cutting off the canvas.
@@ -57,7 +63,8 @@
       presentation.seed,
       undefined,
       untrack(() => selection),
-      embeddedFontsHead
+      embeddedFontsHead,
+      { scenes: scenesWanted }
     );
   });
   // Whether the page has loaded and listens for steps; a new document starts unloaded.

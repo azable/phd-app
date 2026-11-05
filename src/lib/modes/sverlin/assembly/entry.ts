@@ -19,6 +19,7 @@ import {
   stepsOf,
   Frame,
   pageCss,
+  SceneView,
   unpackStates,
   type Geometry,
   type LayoutCheck,
@@ -50,6 +51,8 @@ const playback = window as typeof window & {
    * differently at, which the bundle sets before this runs.
    */
   __sverlinGeometry?: Geometry[];
+  /** Draw every step as SVG from its scene data (see library/SceneView.svelte), not the view. */
+  __sverlinScenes?: boolean;
 };
 // Step k is states 2k and 2k + 1 (see library/steps.ts); the page rests on a step's after.
 const clampStep = (step: number) => Math.min(Math.max(step, 0), stepCount - 1);
@@ -407,6 +410,84 @@ async function describeSteps(
   return { frame, steps, ...(check ? { checks } : {}) };
 }
 
+/**
+ * Steps drawn from their scene data (see library/SceneView.svelte), as the app asks with
+ * `__sverlinScenes`: each step's scene is described from the view mounted in a hidden layer, one
+ * at a time and once, the steps either side of the one shown prefetched, and drawn as SVG.
+ */
+const scenes = playback.__sverlinScenes === true;
+type ScenePlayer = {
+  show(step: number, scene: SceneStep): void;
+  select(ids: readonly string[]): void;
+};
+let player: ScenePlayer | undefined;
+let sceneFrame: SceneFrame | undefined;
+const sceneCache = new Map<number, Promise<SceneStep>>();
+let describing: Promise<unknown> = Promise.resolve();
+let sceneToken = 0;
+
+function sceneOf(step: number): Promise<SceneStep> {
+  const cached = sceneCache.get(step);
+  if (cached) return cached;
+  const scene = describing.then(
+    () =>
+      new Promise<SceneStep>((done) => {
+        mountStep(afterOf(step), (shown) => {
+          sceneFrame ??= describeFrame(shown.layer);
+          done(describeStep(shown.layer));
+          remove(shown);
+        });
+      })
+  );
+  describing = scene.catch(() => undefined);
+  sceneCache.set(step, scene);
+  return scene;
+}
+
+async function showScene(step: number) {
+  const token = ++sceneToken;
+  await whenShown();
+  const scene = await sceneOf(step);
+  if (token !== sceneToken) return;
+  if (!player) {
+    const holder = document.createElement('div');
+    holder.className = 'sv-layer';
+    root.append(holder);
+    player = mount(SceneView, {
+      target: holder,
+      props: {
+        frame: sceneFrame ?? { width: 1200, height: 675, background: '#fff' },
+        selection: Array.isArray(playback.__sverlinSelection)
+          ? playback.__sverlinSelection.map(String)
+          : [],
+        onselection: (elements: { id: string; label: string }[]) => {
+          if (window.parent !== window)
+            window.parent.postMessage(
+              {
+                type: 'sverlin:selection',
+                elements: elements.map((element) => ({ ...element, layouts: [] }))
+              },
+              '*'
+            );
+        },
+        onsettled: (settledStep: number) => {
+          if (!ready) {
+            reportTiming({ phase: 'ready', ms: Math.round(performance.now() - pageStarted) });
+            if (window.parent !== window) window.parent.postMessage({ type: 'sverlin:ready' }, '*');
+            ready = true;
+          }
+          void document.fonts.ready.then(() => {
+            if (token === sceneToken) root.dataset.svSettled = String(asked ?? settledStep);
+          });
+        }
+      }
+    }) as unknown as ScenePlayer;
+  }
+  player.show(step, scene);
+  for (const near of [step + 1, step - 1])
+    if (near >= 0 && near < stepCount) void sceneOf(near).catch(() => undefined);
+}
+
 let ready = false;
 let requested = clampStep(playback.__sverlinStep ?? 0);
 let recorded = false;
@@ -436,6 +517,11 @@ addEventListener('message', (event: MessageEvent) => {
       );
     return;
   }
+  if (scenes && data?.type === 'sverlin:select') {
+    const ids = (data as { ids?: unknown }).ids;
+    player?.select(Array.isArray(ids) ? ids.map(String) : []);
+    return;
+  }
   if (data?.type !== 'sverlin:step' || typeof data.step !== 'number') return;
   const step = clampStep(data.step);
   playback.__sverlinSelection = Array.isArray(data.selection) ? data.selection : [];
@@ -445,6 +531,10 @@ addEventListener('message', (event: MessageEvent) => {
   asked = data.step;
   settling++;
   delete root.dataset.svSettled;
+  if (scenes) {
+    if (recorded) void showScene(step);
+    return;
+  }
   if (recorded && afterOf(step) !== (pending ?? current)?.step) showStep(step);
   else if (recorded && !pending) settleAt(step);
 });
@@ -456,7 +546,8 @@ if (window.parent !== window) window.parent.postMessage({ type: 'sverlin:loaded'
 recording.then(
   () => {
     recorded = true;
-    showStep(requested);
+    if (scenes) void showScene(requested);
+    else showStep(requested);
   },
   (cause: unknown) => {
     reportError(cause);
