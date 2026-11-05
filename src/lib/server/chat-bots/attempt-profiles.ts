@@ -1,8 +1,10 @@
 import type { ChatBotAttemptProfile } from './types';
 
 /**
- * One bounded attempt ladder shared by visualization modes: a first call, two repairs at rising
- * effort, and a simpler fallback that explains what it reduced, four calls at most. On 2026-11-05,
+ * One bounded attempt ladder shared by visualization modes: a first call, quick retries for a
+ * source refused as written (see writtenRetries), two repairs at rising effort, and a simpler
+ * fallback that explains what it reduced: six calls at most, and four where no source is refused
+ * as written. On 2026-11-05,
  * across six projects, ten of thirteen repairs ran at medium and most fixed the first version; the
  * xhigh repair ran once and took 91 s, and in project 7464186f the fallback succeeded at once where
  * two repairs had failed. So the xhigh repair was dropped and the fallback runs at high: the worst
@@ -30,6 +32,20 @@ import type { ChatBotAttemptProfile } from './types';
  * tokens and 5k–10k output, but never delays the reply, and none counts against the ladder's four.
  */
 
+/**
+ * Quick retries on the first call's model for a source the build refused as written (a label on a
+ * block, a statement in no label, a view or layout in the wrong place, a label that does not
+ * exist), taken one after another before the Sol repairs; any other failure goes to them at once.
+ * On 2026-11-05's repair benchmark (20 failed first sources, each repaired once), Terra at low fixed
+ * 17, as many as 6.1 Sol at medium, in a median call of about 6 s against 15 s, for about $0.010 a
+ * call against $0.025 at the prices above; written-source problems were about three in four of
+ * those the benchmark's builds found. A second Terra retry was not measured: it costs about one
+ * Sol repair's time at under half its price, and reads the first retry's cached prompt. They add at
+ * most two calls to a turn, about 15–35 s at the benchmark's slowest Terra repairs (16–18 s); the
+ * request ceiling and the study deadline still bound the turn.
+ */
+export const writtenRetries = 2;
+
 export function visualizationAttemptProfiles(
   maxOutputTokens: number
 ): readonly [ChatBotAttemptProfile, ...ChatBotAttemptProfile[]] {
@@ -38,6 +54,11 @@ export function visualizationAttemptProfiles(
       purpose: 'initial',
       parameters: { model: 'gpt-6.1-terra', reasoningEffort: 'low', maxOutputTokens }
     },
+    ...Array.from({ length: writtenRetries }, () => ({
+      purpose: 'repair' as const,
+      writtenRetry: true as const,
+      parameters: { model: 'gpt-6.1-terra', reasoningEffort: 'low' as const, maxOutputTokens }
+    })),
     {
       purpose: 'repair',
       parameters: { model: 'gpt-6.1-sol', reasoningEffort: 'medium', maxOutputTokens }

@@ -3,22 +3,25 @@ import { describe, expect, it } from 'vitest';
 import aiAssistant from './bot.server';
 
 describe('single-component Svelte assistant', () => {
-  it('uses the four-call ladder, Terra first and Sol after, with a bounded fallback', () => {
+  it('uses the shared ladder, Terra first and for quick retries, Sol after, with a bounded fallback', () => {
     expect(
-      aiAssistant.attemptProfiles.map(({ purpose, parameters }) => [
+      aiAssistant.attemptProfiles.map(({ purpose, parameters, writtenRetry }) => [
         purpose,
         parameters.model,
-        parameters.reasoningEffort
+        parameters.reasoningEffort,
+        writtenRetry ?? false
       ])
     ).toEqual([
-      ['initial', 'gpt-6.1-terra', 'low'],
-      ['repair', 'gpt-6.1-sol', 'medium'],
-      ['repair', 'gpt-6.1-sol', 'high'],
-      ['fallback', 'gpt-6.1-sol', 'high']
+      ['initial', 'gpt-6.1-terra', 'low', false],
+      ['repair', 'gpt-6.1-terra', 'low', true],
+      ['repair', 'gpt-6.1-terra', 'low', true],
+      ['repair', 'gpt-6.1-sol', 'medium', false],
+      ['repair', 'gpt-6.1-sol', 'high', false],
+      ['fallback', 'gpt-6.1-sol', 'high', false]
     ]);
-    expect(aiAssistant.attemptProfiles.map(({ parameters }) => parameters.maxOutputTokens)).toEqual(
-      [12_000, 12_000, 12_000, 12_000]
-    );
+    expect(
+      new Set(aiAssistant.attemptProfiles.map(({ parameters }) => parameters.maxOutputTokens))
+    ).toEqual(new Set([12_000]));
   });
 
   it('specifies the complete source and isolated step contract', () => {

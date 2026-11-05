@@ -527,10 +527,14 @@ few questions first or start with a first version (the algorithm's `opening` in
 [`brief.ts`](src/lib/shared/projects/brief.ts), shown in every mode); every
 mode's assistant, asked for questions first, asks who it is for and what
 students should be able to do before building, and otherwise builds a first
-version. The assistants use a bounded five-call ladder: one initial call, up to
-three repairs, and a simpler fallback that explains what it reduced. A Sverlin
-ladder whose repairs keep failing with new problems stops early, keeping the
-current version and saying so (`runAttemptLadder`). Provider retries are
+version. The assistants use a bounded ladder of at most six calls: one initial
+call, up to two quick retries on the same fast model where the build refuses the
+source as written (`refusedAsWritten`), two repairs at rising effort, and a
+simpler fallback that explains what it reduced; any other failure goes to the
+repairs at once. A picture that builds goes back for its warnings or its
+readability only to a repair, never to the fallback (`softReturnLeft`). A
+Sverlin ladder whose repairs keep failing with new problems stops early, keeping
+the current version and saying so (`runAttemptLadder`). Provider retries are
 disabled. The default 180-second request ceiling and study deadline bound each
 attempt; see
 [`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts),

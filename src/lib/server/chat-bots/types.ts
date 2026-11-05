@@ -164,6 +164,12 @@ export type ChatBotParameters = {
 /** One explicitly bounded model/reasoning stage owned by an agent definition. */
 export type ChatBotAttemptProfile = {
   purpose: ChatAttemptPurpose;
+  /**
+   * Taken only straight after an attempt whose source the build refused as written (see
+   * refusedAsWritten in projects/commands.ts), and skipped otherwise: a quick retry for a slip in
+   * the source, before the ladder's slower repairs.
+   */
+  writtenRetry?: true;
   parameters: ChatBotParameters;
   /** What a feedback turn changes in the parameters (see ChatTurn). */
   feedbackParameters?: Partial<ChatBotParameters>;

@@ -133,6 +133,7 @@ import { choiceStates, preferenceEvidence } from './preference-model';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
+import type { ChatBotAttemptProfile } from '$lib/server/chat-bots/types';
 
 import { logModelCall } from './ai-cost-log';
 import { runProjectCommand } from './command-lock';
@@ -1220,13 +1221,15 @@ async function runSverlinAssistantTurn(
         if (pairs?.[0] === asked) break;
       }
       // A picture whose text would be too small to read on a typical stage, or one built with
-      // warnings, goes back once a turn, with an attempt left to show less at once or to settle the
+      // warnings, goes back once a turn, with a repair left to show less at once or to settle the
       // warnings; after that it shows as built. Readability goes first, as it stops the picture
-      // being read at all.
+      // being read at all. It never takes the fallback, which simplifies what was asked and says
+      // so: in project a60d96ec a working merge sort sent back for repeated steps at the third of
+      // four attempts lost its return pauses, and its reply began with a difficulty.
       const returnable =
         candidate !== undefined &&
         !softReturned &&
-        attempt < chatbot.config.attemptProfiles.length &&
+        softReturnLeft(chatbot.config.attemptProfiles, attempt) &&
         batchSucceeded(built.recorded);
       const bundles = returnable
         ? built.recorded.builds.flatMap(({ result }) => (result.ok ? [result.bundle] : []))
@@ -3367,6 +3370,41 @@ const buildStage = (code: string | undefined): number | undefined =>
     ? undefined
     : (buildStages[code] ?? (code.startsWith('view_') ? 0 : undefined));
 
+/** A scene or listing naming a label: checked only once the run has given its labels. */
+const labelReferenceCodes = new Set(['listing_label', 'view_storyboard']);
+
+/**
+ * Whether the build refused a failed attempt's source as written: every problem from its first
+ * stage (the source's blocks, labels, and views), or a scene or listing naming a label that does
+ * not exist. Such a slip gets the ladder's quick retries (writtenRetries in
+ * chat-bots/attempt-profiles.ts); a failure of the run or the layout, a problem with no code, or an
+ * attempt set aside for another reason goes to the slower repairs.
+ */
+export function refusedAsWritten(failure: AttemptFailure | undefined): boolean {
+  return (
+    !!failure?.diagnostics.length &&
+    failure.diagnostics.every(
+      ({ code }) => buildStage(code) === 0 || (code !== undefined && labelReferenceCodes.has(code))
+    )
+  );
+}
+
+/**
+ * The attempt after `attempt`: a quick retry only after a source refused as written, else the next
+ * attempt that is not one, so the quick retries run one after another straight after the first
+ * call and never come back later. Past the ladder's end, its length plus one.
+ */
+export function nextAttempt(
+  profiles: readonly ChatBotAttemptProfile[],
+  attempt: number,
+  failure?: AttemptFailure
+): number {
+  const written = refusedAsWritten(failure);
+  let next = attempt + 1;
+  while (next <= profiles.length && profiles[next - 1].writtenRetry && !written) next += 1;
+  return next;
+}
+
 /**
  * Whether a failed repair wandered from the attempt it repaired rather than converging: none of
  * that attempt's problems recur, and new ones appear from the same stage of the build or an earlier
@@ -3397,14 +3435,33 @@ function stableMessage(message: string): string {
 }
 
 /**
+ * Whether a picture that built can go back for its warnings or its readability after `attempt`:
+ * only to a repair, as the attempt after it, never to the fallback.
+ */
+export function softReturnLeft(
+  profiles: readonly ChatBotAttemptProfile[],
+  attempt: number
+): boolean {
+  const after = profiles[nextAttempt(profiles, attempt) - 1];
+  return after !== undefined && after.purpose !== 'fallback';
+}
+
+/**
  * The warnings a build sends back once a turn. A first source has no design to read names from,
  * so a design value it names that the design lacks is left out without sending it back: in
  * benchmark run 4 such guessed names, as Cells.Eliminated.opacity, sent back two of Sol's first
- * sources that built. The warning stays with the version, for the next turn to read.
+ * sources that built. Nor does a first source go back for steps that draw the picture before them
+ * (repeatedStepWarnings in modes/sverlin/storyboard.server.ts): nothing the participant asked sets its
+ * pauses yet, and some repeat rightly, as a merge sort's calls on one value return showing
+ * nothing new (project a60d96ec). The warning stays with the version, for the next turn to read.
  */
 export function returnedWarnings(warnings: readonly string[], firstSource: boolean): string[] {
   return firstSource
-    ? warnings.filter((warning) => !warning.endsWith('The value is left out.'))
+    ? warnings.filter(
+        (warning) =>
+          !warning.endsWith('The value is left out.') &&
+          !warning.includes('draw the same picture as the step before them')
+      )
     : [...warnings];
 }
 
@@ -3448,7 +3505,7 @@ async function runAttemptLadder(
   document: ProjectDocument,
   operationId: string,
   chatbot: {
-    config: { attemptProfiles: readonly unknown[] };
+    config: { attemptProfiles: readonly ChatBotAttemptProfile[] };
     requestTimeoutMs(): number;
   },
   dependencies: ProjectCommandDependencies,
@@ -3457,25 +3514,28 @@ async function runAttemptLadder(
     attempt: number
   ) => Promise<{ document: ProjectDocument; done: boolean; failure?: AttemptFailure }>
 ): Promise<ProjectDocument> {
+  const profiles = chatbot.config.attemptProfiles;
+  const fallback = profiles.length;
   let previous: AttemptFailure | undefined;
   let wandered = 0;
-  for (let attempt = 1; attempt <= chatbot.config.attemptProfiles.length; attempt += 1) {
+  for (let attempt = 1; attempt <= fallback; ) {
     if (attempt > 1 && !hasTimeForAnotherAttempt(chatbot)) {
       return appendAttemptDeadlineFailure(document, operationId, dependencies);
     }
     const result = await runAttempt(document, attempt);
     document = result.document;
     if (result.done) return document;
+    let next = nextAttempt(profiles, attempt, result.failure);
     if (previous && result.failure && repairWandered(previous, result.failure)) {
       wandered += 1;
       if (wandered >= 2 || sourceRewritten(previous.source, result.failure.source) > 0.5) {
-        const fallback = chatbot.config.attemptProfiles.length;
         if (hasWorkingVersion(document) || attempt >= fallback)
           return appendWanderingRepairFailure(document, operationId, dependencies);
-        attempt = fallback - 1;
+        next = fallback;
       }
     }
     previous = result.failure;
+    attempt = next;
   }
   throw new Error('The configured attempt ladder ended without a terminal result.');
 }
