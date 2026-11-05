@@ -126,8 +126,12 @@ describe('queries', () => {
 
   it('steps over the levels of merge sort, one group of calls by depth a step', async () => {
     const prepared = prepareSvelteComponent(levelsFixture);
-    const { labels } = await bundlePresentation(prepared, 1);
+    const { labels, leftOut, layout } = await bundlePresentation(prepared, 1);
     expect(labels).toEqual(['level#1', 'level#2', 'level#3', 'level#4']);
+    // A view of a span reads its fields through this, never the algorithm's variables of those
+    // names, out of scope as the case ends: nothing is left out, and each level draws its own.
+    expect(leftOut).toEqual([]);
+    expect(new Set(layout.drawn).size).toBe(4);
     // Each level's calls, by where they start: the whole, the halves, the quarters, the pairs.
     const { steps } = prepared.paced(new Set(), undefined, 'eight', {
       list: 'levels',

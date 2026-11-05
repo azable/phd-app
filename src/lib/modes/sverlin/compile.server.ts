@@ -1894,8 +1894,9 @@ function prepareViews(
     );
     // Variables out of scope at some step, however paced: what the view draws from one is hidden
     // there.
+    // A query's result, and the row a scene over a list is at, are given at every step they show.
     const scoped = new Set([
-      ...stateNames.filter((name) => everyStep.some(({ state }) => !(name in state))),
+      ...variableNames.filter((name) => everyStep.some(({ state }) => !(name in state))),
       ...Object.keys(labelled).filter(isLabelKey)
     ]);
     // What the root reads besides the state: labels' values, their values so far, and operators'

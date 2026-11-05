@@ -239,7 +239,7 @@ export function stateReadsOf(
     if (node.type === 'Identifier' && typeof node.name === 'string' && !member && !property)
       read.add(node.name);
     for (const [childKey, child] of Object.entries(node))
-      if (childKey !== 'parent' && childKey !== 'loc') walk(child);
+      if (childKey !== 'parent' && childKey !== 'loc') walk(child, node, childKey);
   };
   walk(expression);
   return [...read].filter((name) => stateNames.has(name) && !locals.has(name));
