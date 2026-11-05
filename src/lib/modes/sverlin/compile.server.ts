@@ -93,7 +93,13 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
-import { selectsOf, withSelectRows, withSelectTypes } from './selects.server';
+import {
+  overSteps,
+  selectsOf,
+  withOverItems,
+  withSelectRows,
+  withSelectTypes
+} from './selects.server';
 import {
   buildVariant,
   DesignValueError,
@@ -286,7 +292,12 @@ export type PreparedComponent = {
    * their types, as each names a step of its own, and what each step lights in each listing. Made
    * once per way of pausing and case shown, `shown` by name.
    */
-  paced: (pauses: Pauses, edges?: Edges, shown?: string) => PacedSteps;
+  paced: (
+    pauses: Pauses,
+    edges?: Edges,
+    shown?: string,
+    over?: { list: string; item: string }
+  ) => PacedSteps;
   /** The scenes the presentation plays, in order (see storyboard.server.ts). */
   storyboard: Storyboard;
   /**
@@ -550,7 +561,8 @@ const unlitWarning = (full: string, name: string): string =>
 function earlyTyping(
   source: string,
   blocks: Partial<Record<BlockKind | 'design', Block>>,
-  cases: ReturnType<typeof writtenCases>
+  cases: ReturnType<typeof writtenCases>,
+  overs: readonly { list: string; item: string }[] = []
 ):
   | (ViewTyping & { labelOperators: Record<string, OperatorType> })
   | { failure: unknown }
@@ -578,7 +590,8 @@ function earlyTyping(
       input,
       domain,
       {},
-      { labels: kept, applications: kept }
+      { labels: kept, applications: kept },
+      overs
     ).steps;
     return {
       domain,
@@ -678,7 +691,9 @@ function paced(
   input: TypedState,
   domain: DomainRegistry,
   pacing: Pacing = {},
-  keep: Parameters<typeof traceAlgorithm>[4] = {}
+  keep: Parameters<typeof traceAlgorithm>[4] = {},
+  /** The lists scenes step over, each row typed through its name at the last step. */
+  overs: readonly { list: string; item: string }[] = []
 ): ReturnType<typeof traceAlgorithm> {
   // Each query's rows are a variable at every step, from the records of its label's spans.
   const { selects } = selectsOf(source);
@@ -686,7 +701,8 @@ function paced(
   const run = interpretBlock(source, algorithm, (body) =>
     traceAlgorithm(body, input, domain, pacing, { ...keep, records }, true)
   );
-  return { ...run, steps: withSelectRows([run.opening, ...run.steps], run.records, selects) };
+  const steps = withSelectRows([run.opening, ...run.steps], run.records, selects);
+  return { ...run, steps: withOverItems(steps, overs) };
 }
 
 /** How a source pauses, as a key, for the steps paced so (see PreparedComponent.paced). */
@@ -940,7 +956,12 @@ function prepareViews(
       );
     // A value in braces draws its type's view, as a render of that type, and a union's value its
     // member's, through a view added after the authored ones (see implicit-renders.server.ts).
-    const typed = earlyTyping(source, blocks, extracted.cases);
+    const typed = earlyTyping(
+      source,
+      blocks,
+      extracted.cases,
+      scenes.flatMap(({ over }) => (over ? [over] : []))
+    );
     const early = typed && !('failure' in typed) ? typed : undefined;
     // Only the labels a view is typed by draw through a view (see withLabelOperators).
     const typedBy = new Set(
@@ -1204,8 +1225,13 @@ function prepareViews(
     const variableNames = [
       ...new Set([...declared(blocks.input, 'input'), ...declared(blocks.algorithm, 'algorithm')])
     ];
-    // A query's result is state too, a variable at every step (see selects.server.ts).
-    const queryNames = selectsOf(source).selects.map(({ name }) => name);
+    // A query's result is state too, a variable at every step, and so is the row a scene stepping
+    // over a list is at (see selects.server.ts).
+    const overs = scenes.flatMap(({ over }) => (over ? [over] : []));
+    const queryNames = [
+      ...selectsOf(source).selects.map(({ name }) => name),
+      ...overs.map(({ item }) => item)
+    ];
     const clash = queryNames.find((name) => variableNames.includes(name));
     if (clash)
       throw new InvalidSvelteSourceError(
@@ -1295,8 +1321,19 @@ function prepareViews(
       for (const name of endTypes) rendered.push({ name, start: linked[0], inNode: true });
     const writtenSelects = selectsOf(source).selects;
     const appliedRenders = operatorRendersOf(ast.html, operators, {
-      lists: new Set(writtenSelects.map(({ name }) => name)),
-      grouped: new Set(writtenSelects.flatMap(({ name, group }) => (group ? [name] : [])))
+      // A scene over a list of groups is at one group's rows, a list of records too.
+      lists: new Set([
+        ...writtenSelects.map(({ name }) => name),
+        ...overs.flatMap(({ list, item }) =>
+          writtenSelects.some((each) => each.name === list && each.group) ? [item] : []
+        )
+      ]),
+      grouped: new Set(writtenSelects.flatMap(({ name, group }) => (group ? [name] : []))),
+      rows: new Set(
+        overs.flatMap(({ list, item }) =>
+          writtenSelects.some((each) => each.name === list && !each.group) ? [item] : []
+        )
+      )
     });
     const wrongRender = appliedRenders.find(({ argued, inView }) => argued || inView);
     if (wrongRender)
@@ -1608,9 +1645,10 @@ function prepareViews(
     // Each case traced pausing at every label; what holds for every step holds over all of them.
     const tracedCases = caseInputsOf.map(({ name, input }) => ({
       name,
-      traced: paced(source, algorithm, input, domain, pacing, keep)
+      traced: paced(source, algorithm, input, domain, pacing, keep, overs)
     }));
-    const traced = tracedCases[0]?.traced ?? paced(source, algorithm, input, domain, pacing, keep);
+    const traced =
+      tracedCases[0]?.traced ?? paced(source, algorithm, input, domain, pacing, keep, overs);
     const master = tracedCases.length
       ? tracedCases.flatMap(({ traced }) => traced.steps)
       : traced.steps;
@@ -1706,13 +1744,19 @@ function prepareViews(
     // bounded only as the source's (algorithmLimits); a scene pausing so is held to what one
     // presentation shows, by tracing it as a scene.
     const tracedBy = new Map<string, MasterStep[]>();
-    const tracedSteps = (pauses: Pauses, edges?: Edges, shown?: string): MasterStep[] => {
-      const key = `${shown ?? ''}|${pausesKey(pauses, edges)}`;
+    const tracedSteps = (
+      pauses: Pauses,
+      edges?: Edges,
+      shown?: string,
+      over?: { list: string; item: string }
+    ): MasterStep[] => {
+      const key = `${shown ?? ''}|${pausesKey(pauses, edges)}|${over ? `${over.list}:${over.item}` : ''}`;
       const made = tracedBy.get(key);
       if (made) return made;
-      const steps =
-        pausesKey(pauses, edges) === pausesKey(new Set(labelNames)) &&
-        masterOf(shown).length <= algorithmLimits.maximumSteps + 1
+      const steps = over
+        ? overSteps(masterOf(shown), over.list, over.item)
+        : pausesKey(pauses, edges) === pausesKey(new Set(labelNames)) &&
+            masterOf(shown).length <= algorithmLimits.maximumSteps + 1
           ? masterOf(shown)
           : paced(source, algorithm, inputOf(shown), domain, { ...pacing, pauses, edges }, keep)
               .steps;
@@ -1724,7 +1768,7 @@ function prepareViews(
       scenes,
       (scene) => masterOf(scene.case),
       labelNames,
-      (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene), scene.case),
+      (scene) => tracedSteps(scenePauses(scene), sceneEdges(scene), scene.case, scene.over),
       sceneView
     );
     // Reported once the view's own problems are cleared, which may be why nothing is shown.
@@ -2107,11 +2151,16 @@ function prepareViews(
     );
     // The steps each way of pausing makes, with what follows from them, made once each.
     const pacedBy = new Map<string, PacedSteps>();
-    const pacedSteps = (pauses: Pauses, edges?: Edges, shown?: string): PacedSteps => {
-      const key = `${shown ?? ''}|${pausesKey(pauses, edges)}`;
+    const pacedSteps = (
+      pauses: Pauses,
+      edges?: Edges,
+      shown?: string,
+      over?: { list: string; item: string }
+    ): PacedSteps => {
+      const key = `${shown ?? ''}|${pausesKey(pauses, edges)}|${over ? `${over.list}:${over.item}` : ''}`;
       const made = pacedBy.get(key);
       if (made) return made;
-      const steps = tracedSteps(pauses, edges, shown);
+      const steps = tracedSteps(pauses, edges, shown, over);
       const result: PacedSteps = {
         steps,
         // By the page's states, each step's before and after (see phasesOf).
@@ -2326,7 +2375,7 @@ export async function bundlePresentation(
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
   const warnings: string[] = [...(prepared.listingWarnings ?? []), ...variant.dropped];
   const entries = scenes.flatMap((scene, sceneIndex) => {
-    const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case);
+    const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case, scene.over);
     const view = {
       listed: Boolean(prepared.listings),
       whens: Object.values(prepared.during ?? {}),
@@ -4471,7 +4520,13 @@ function operatorRendersOf(
   markup: unknown,
   operators: ReadonlySet<string>,
   /** The queries, whose rows a label's view draws, and those of them in groups of rows. */
-  queries: { lists: ReadonlySet<string>; grouped: ReadonlySet<string> } = {
+  queries: {
+    lists: ReadonlySet<string>;
+    grouped: ReadonlySet<string>;
+    /** The names scenes stepping over a list give its rows, and those of lists of groups. */
+    rows?: ReadonlySet<string>;
+    groups?: ReadonlySet<string>;
+  } = {
     lists: new Set(),
     grouped: new Set()
   }
@@ -4556,7 +4611,7 @@ function operatorRendersOf(
     for (const [key, child] of Object.entries(part))
       if (key !== 'parent') walk(child, within, inner, innerGroups);
   };
-  walk(markup, false, new Set());
+  walk(markup, false, new Set(queries.rows), new Set(queries.groups));
   return found;
 }
 

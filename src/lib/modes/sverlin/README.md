@@ -148,6 +148,8 @@ scene at least.
 </Storyboard>
 ```
 
+- A scene can also step through a query's result with `over` and `as` (see
+  Queries).
 - A scene is a stepping scene if it passes state, and a single frame otherwise,
   as a title card or a note between cases: its layout reads no state, and
   `case`, `pause`, `within`, or `at` on a scene whose layout reads none is
@@ -980,6 +982,22 @@ beside the layouts:
 - The result is state: a layout declares it, as
   `<Layout name="Stack" of="stack">`, and a scene passes it, as
   `<Stack stack={stack} />`.
+
+A scene can step through a query's result, one row a step, in the result's
+order:
+
+```svelte
+<Select name="levels" from="@sort" where="ended <= now" group="depth" order="depth, lo" max="8" />
+<Scene name="levels" case="main" over={levels} as="level"><Level level={level} /></Scene>
+```
+
+- The query is read as the case ends. Each step holds one row as `level`, or,
+  for a query in groups, one group's rows. For example, the levels of merge
+  sort: the whole array, then the halves, then the quarters, then the pairs.
+- Such a step is no moment of the case, so its layout reads only the list and
+  its row: no other variable and no label.
+- A scene steps over a list, or through the case's spans with `pause`, `within`
+  and `at`, never both.
 
 ## Design
 

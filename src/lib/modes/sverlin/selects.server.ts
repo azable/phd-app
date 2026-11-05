@@ -351,7 +351,9 @@ export function withSelectRows(
     const state = { ...step.state } as Record<string, unknown>;
     const types = { ...step.types } as Record<string, string>;
     for (const select of selects) {
-      const rows = rowsAt(select, records, now).slice(0, select.max);
+      // The bound holds for the list: its rows, or its groups and each group's rows.
+      const all = rowsAt(select, records, now);
+      const rows = select.group === undefined ? all.slice(0, select.max) : all;
       const element = (row: Row, path: string) => {
         types[path] = recordType(select.from);
         for (const [field, type] of Object.entries(row.types)) types[`${path}.${field}`] = type;
@@ -375,10 +377,71 @@ export function withSelectRows(
         types[`${at}.rows`] = rowsType(select.name);
         return {
           key: group.key,
-          rows: group.rows.map((row, k) => element(row, `${at}.rows[${k}]`))
+          rows: group.rows.slice(0, select.max).map((row, k) => element(row, `${at}.rows[${k}]`))
         };
       });
     }
     return { ...step, state: state as MasterStep['state'], types: types as MasterStep['types'] };
   });
+}
+
+/** The lists scenes step over, and the name each calls its rows, as written in a whole source. */
+export function oversOf(source: string): { list: string; item: string }[] {
+  const overs: { list: string; item: string }[] = [];
+  for (const [tag] of source.matchAll(/<Scene\b(?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*>/gu)) {
+    const list = /\bover\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/u.exec(tag)?.[1];
+    const item = /\bas\s*=\s*"([A-Za-z_$][\w$]*)"/u.exec(tag)?.[1];
+    if (list && item) overs.push({ list, item });
+  }
+  return overs;
+}
+
+/**
+ * A step's state and types with `item` holding row `k` of `list`, its types copied to it; for a list
+ * of groups, the group's rows.
+ */
+function withItem(step: MasterStep, list: string, item: string, k: number): MasterStep {
+  const listed = step.state[list] as unknown[] | undefined;
+  const grouped = step.types[`${list}[${k}].rows`] !== undefined;
+  const rows = grouped ? listed?.map((group) => (group as { rows: unknown[] }).rows) : listed;
+  const types = { ...step.types } as Record<string, string>;
+  const from = grouped ? `${list}[${k}].rows` : `${list}[${k}]`;
+  for (const [path, type] of Object.entries(step.types))
+    if (path === from || path.startsWith(`${from}.`) || path.startsWith(`${from}[`))
+      types[item + path.slice(from.length)] = type;
+  return {
+    ...step,
+    state: { ...step.state, [item]: rows?.[k] ?? null } as MasterStep['state'],
+    types: types as MasterStep['types']
+  };
+}
+
+/**
+ * The steps of a scene over a list: one for each of its rows or groups, as the case ends, each
+ * holding the row as `item`. They are no moments of the case, so they show only the list.
+ */
+export function overSteps(steps: readonly MasterStep[], list: string, item: string): MasterStep[] {
+  const last = steps.at(-1);
+  const rows = (last?.state[list] as unknown[] | undefined) ?? [];
+  if (!last || !rows.length) return last ? [withItem(last, list, item, 0)] : [];
+  return rows.map((_, k) => ({
+    ...withItem(last, list, item, k),
+    name: `${item}#${k + 1}`,
+    edge: undefined,
+    applied: undefined,
+    labelled: undefined,
+    held: undefined,
+    trail: []
+  }));
+}
+
+/** The steps with each list a scene steps over typed through its rows, at the last step. */
+export function withOverItems(
+  steps: readonly MasterStep[],
+  overs: readonly { list: string; item: string }[]
+): MasterStep[] {
+  if (!overs.length || !steps.length) return [...steps];
+  let last = steps.at(-1)!;
+  for (const { list, item } of overs) last = withItem(last, list, item, 0);
+  return [...steps.slice(0, -1), last];
 }

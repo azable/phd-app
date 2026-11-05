@@ -31,6 +31,8 @@ export type Scene = {
   at?: Stop;
   /** Shown beside its name in the controls. */
   title?: string;
+  /** A query's result it steps through, one row or group a step, each as `item` (see Queries). */
+  over?: { list: string; item: string };
   /** Passing no state and choosing no moments: one frame. */
   frame: boolean;
   start: number;
@@ -46,7 +48,7 @@ const sceneName = /^[A-Za-z][\w-]*$/u;
 const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
-const sceneProps = new Set(['name', 'case', 'pause', 'within', 'at', 'title']);
+const sceneProps = new Set(['name', 'case', 'pause', 'within', 'at', 'title', 'over', 'as']);
 
 /** How a storyboard is written, for messages. */
 const storyboardAdvice =
@@ -199,8 +201,13 @@ function sceneOf(
       );
     if (!sceneProps.has(found[1]))
       return fail(
-        `A <Scene> takes name, case, pause, within, at, and title: ${found[1]} is no prop of a scene.`
+        `A <Scene> takes name, case, pause, within, at, title, over and as: ${found[1]} is no prop of a scene.`
       );
+    if (found[1] === 'over' && found[4] !== undefined) {
+      given.set('over', found[4].slice(1, -1).trim());
+      rest = rest.slice(found[0].length);
+      continue;
+    }
     if (found[4] !== undefined)
       return fail(
         `A <Scene>'s ${found[1]} is written as it is, not computed, as pause="@sort.merge.take": every scene's steps are known before the algorithm runs.`
@@ -242,6 +249,21 @@ function sceneOf(
     return fail(
       `at="${written}" is one edge of ${name}: at=":before", the first of its steps, or at=":after", its last.`
     );
+  let over: Scene['over'];
+  if (given.has('over') || given.has('as')) {
+    const list = given.get('over') ?? '';
+    const item = given.get('as') ?? '';
+    if (!/^[A-Za-z_$][\w$]*$/u.test(list) || !/^[A-Za-z_$][\w$]*$/u.test(item))
+      return fail(
+        `A scene steps over a query's result with over and as, as <Scene name="${name}" case="main" over={levels} as="level">: one step for each row, each as level.`
+      );
+    const mixed = ['pause', 'within', 'at'].filter((key) => given.has(key));
+    if (mixed.length)
+      return fail(
+        `The scene ${name} steps over ${list}, one step for each of its rows, so it takes no ${mixed.join(' or ')}: a scene steps through the case's spans or through a list, never both.`
+      );
+    over = { list, item };
+  }
   const title = given.get('title');
   if (title !== undefined && (!title || /[():]/u.test(title)))
     return fail(
@@ -285,6 +307,12 @@ function sceneOf(
         `${input}={${value}} passes ${input} another value: a scene passes the state of the input's own name, as ${input}={${input}}.`
       );
   }
+  const live =
+    over && [...passed.keys()].find((input) => input !== over.list && input !== over.item);
+  if (over && (live !== undefined || inputs.labels.length))
+    return fail(
+      `The scene ${name} steps over ${over.list}, whose steps are no moments of the case, so ${layout} reads only ${over.list} and ${over.item}: ${live ?? `@${inputs.labels[0]}`} has no value at such a step.`
+    );
   const missing = inputs.variables.find((input) => !passed.has(input));
   if (missing !== undefined)
     return fail(
@@ -305,6 +333,7 @@ function sceneOf(
       within,
       at,
       title,
+      ...(over ? { over } : {}),
       frame: !reads,
       start
     },
@@ -339,6 +368,8 @@ export function sceneSteps(
   leftOut?: LeftOutStep[]
 ): number[] {
   let chosen = steps.map((_, index) => index);
+  // A scene over a list shows every row, one a step (see overSteps in compile.server.ts).
+  if (scene.over) return chosen;
   if (scene.within) {
     const { label, run } = scene.within;
     const ofRun = (step: MasterStep) =>

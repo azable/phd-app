@@ -413,7 +413,9 @@ value that means nothing, such as -1 for no position, or a workaround where the
 language has a direct way, such as a flag added solely to make something show or
 hide, or a cast to reach another view, where a label, `<When of="@label">`, a
 view chosen per place, or a pointer at a label does it (see Views of what a step
-computed).
+computed). To show what a label's spans have done so far, such as the call
+stack, the calls made, or the levels of a recursion, write a query over its
+spans (see Queries) rather than keeping copies in the algorithm.
 
 An interaction of kind runtime-failure was reported by the participant’s
 browser, not written by the participant: revise the view so that every step

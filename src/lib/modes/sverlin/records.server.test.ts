@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import levelsFixture from './fixtures/merge-sort-levels.sverlin?raw';
 import stackFixture from './fixtures/merge-sort-stack.sverlin?raw';
 
 /** Merge sort, its calls drawn by a view of the function's label, and a layout. */
@@ -121,6 +122,39 @@ describe('queries', () => {
       .filter(({ name }) => name?.startsWith('@sort.merge#'))
       .map(({ state }) => (state.stack as unknown[]).length);
     expect(Math.max(...depths)).toBe(3);
+  });
+
+  it('steps over the levels of merge sort, one group of calls by depth a step', async () => {
+    const prepared = prepareSvelteComponent(levelsFixture);
+    const { labels } = await bundlePresentation(prepared, 1);
+    expect(labels).toEqual(['level#1', 'level#2', 'level#3', 'level#4']);
+    // Each level's calls, by where they start: the whole, the halves, the quarters, the pairs.
+    const { steps } = prepared.paced(new Set(), undefined, 'eight', {
+      list: 'levels',
+      item: 'level'
+    });
+    expect(
+      steps.map(({ state }) => (state.level as { lo: number }[]).map(({ lo }) => lo).join(' '))
+    ).toEqual(['0', '0 4', '0 2 4 6', '0 1 2 3 4 5 6 7']);
+  });
+
+  it('refuses a scene over a list that also pauses, or passes a live variable', () => {
+    expect(
+      problemOf(
+        levelsFixture.replace('over={levels} as="level"', 'over={levels} as="level" pause="@sort"')
+      )
+    ).toContain('steps through the case');
+    expect(
+      problemOf(
+        levelsFixture
+          .replace('<Layout name="Level" of="level">', '<Layout name="Level" of="level, values">')
+          .replace(
+            '{#each level as call}{call}{/each}',
+            '{#each level as call}{call}{/each}{values}'
+          )
+          .replace('<Level level={level} />', '<Level level={level} values={values} />')
+      )
+    ).toContain('reads only levels and level');
   });
 
   it.each([

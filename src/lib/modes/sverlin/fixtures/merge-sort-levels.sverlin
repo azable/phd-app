@@ -1,0 +1,59 @@
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Index = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+  const from = Values;
+</script>
+
+<script algorithm>
+  function sort(a, b, lo, hi) @sort{
+    if (@base[hi - lo < 2]) @single[return;]
+    @split[const mid = Index(a, Math.floor((lo + hi) / 2));]
+    @halves[sort(a, b, lo, mid); sort(a, b, mid, hi);]
+    @merge[
+      for (@copyStart[let c = lo]; @copyMore[c < hi]; @copyNext[c++]) @copy{
+        b[c] = a[c];
+      }
+      @ends[let i = Index(b, lo); let j = Index(b, mid);]
+      for (@start[let k = lo]; @more[k < hi]; @next[k++]) @take{
+        if (@left[i < mid && (j >= hi || b[i] <= b[j])]) {
+          a[k] = b[i];
+          i++;
+        } else {
+          a[k] = b[j];
+          j++;
+        }
+      }
+    ]
+  }
+
+  @run[sort(values, from, Index(values, 0), values.length);]
+</script>
+
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="IndexText"><Node value={this} /></View>
+<View of="@sort" name="CallFrame">
+  <Node layout="row">sort({this.lo}, {this.hi})</Node>
+</View>
+
+<Select name="levels" from="@sort" where="ended <= now" group="depth"
+        order="depth, lo" max="8" />
+
+<Layout name="Level" of="level">
+  <Node layout="row">{#each level as call}{call}{/each}</Node>
+</Layout>
+
+<Case name="eight" values={[7, 3, 8, 2, 6, 1, 5, 4]}
+      from={[0, 0, 0, 0, 0, 0, 0, 0]} />
+
+<Storyboard>
+  <Scene name="levels" case="eight" over={levels} as="level">
+    <Level level={level} />
+  </Scene>
+</Storyboard>
