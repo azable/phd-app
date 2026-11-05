@@ -1172,10 +1172,14 @@ function prepareViews(
           )
       );
     // Where the algorithm fails to run, no value has a type, so each {value} would read as text
-    // outside a node: only the algorithm's own problem is told.
+    // outside a node and each bound prop as unknown before the run: only the algorithm's own
+    // problem is told (bound props were the commonest first-try error on 5 November, every one of
+    // them beside an algorithm that had failed).
     const untyped = (problem: InvalidSvelteSourceError) =>
-      problem.code === 'view_text' &&
-      source.split('\n')[(problem.line ?? 0) - 1]?.[(problem.column ?? 0) - 1] === '{';
+      (problem.code === 'view_text' &&
+        source.split('\n')[(problem.line ?? 0) - 1]?.[(problem.column ?? 0) - 1] === '{') ||
+      (problem.code === 'bound_prop' &&
+        problem.message.includes('cannot be known before the algorithm runs'));
     viewProblems = [
       ...viewProblems,
       ...(typed && 'failure' in typed ? problems.filter((problem) => !untyped(problem)) : problems),

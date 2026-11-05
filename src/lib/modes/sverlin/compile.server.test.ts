@@ -3116,6 +3116,45 @@ describe('cases', () => {
     expect(messages).toContain('in none of the labels beside it');
     expect(messages).not.toContain('Text outside a <Node>');
   });
+
+  it('tells an algorithm that fails to run alone, not each bound prop as unknown before the run', () => {
+    // Project 763e0a02: fill={this.state} on an enumeration was refused beside the failing
+    // algorithm, as was every bound prop, burying the one real problem.
+    const source = `<script domain>
+  const State = type(['seen', 'unseen']);
+  const Name = type(['A', 'B']);
+  const Vertex = record({ name: Name, state: State });
+  const Vertices = array(Vertex, { max: 3 });
+  const Index = index(Vertices);
+</script>
+<script input>
+  const vertices = Vertices;
+</script>
+<script algorithm>
+  for (@first[let i = Index(vertices, 0)]; @more[i < vertices.length]; @next[i++]) @visit{
+    let junk = 1;
+    @mark[vertices[i].state = 'seen';]
+  }
+</script>
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="State" name="StateText"><Node value={this} /></View>
+<View of="Vertex" name="Card"><Node fill={this.state}>{this.name}</Node></View>
+<View of="Vertices" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<Layout name="Main"><Node>{vertices}</Node></Layout>
+<Case name="main" vertices={[{ name: 'A', state: 'unseen' }, { name: 'B', state: 'unseen' }]} />
+<Storyboard><Scene name="s" case="main" pause="@visit.mark"><Main /></Scene></Storyboard>`;
+    let messages = '';
+    try {
+      prepareCurrent(source);
+    } catch (cause) {
+      const error = cause as Error & { others?: Error[] };
+      messages = [error, ...(error.others ?? [])].map(({ message }) => message).join('\n');
+    }
+    expect(messages).toContain('plain number 1');
+    expect(messages).not.toContain('cannot be known before the algorithm runs');
+    // With the algorithm fixed, the same bound prop builds.
+    expect(() => prepareCurrent(source.replace('let junk = 1;\n', ''))).not.toThrow();
+  });
 });
 
 describe('case inputs', () => {
