@@ -88,11 +88,12 @@ it.skipIf(!enabled)(
       )
     );
     for (const size of [
-      { width: 1180, height: 330 },
-      { width: 700, height: 260 }
+      { width: 1180, height: 330, deviceScaleFactor: 1 },
+      { width: 700, height: 260, deviceScaleFactor: 2 }
     ]) {
       const page = await openPage({
-        viewport: { width: size.width, height: size.height * 2 }
+        viewport: { width: size.width, height: size.height * 2 },
+        deviceScaleFactor: size.deviceScaleFactor
       });
       const escaped = (javascript: string) =>
         sandboxDocument('', javascript, 0, 1).replace(/&/gu, '&amp;').replace(/"/gu, '&quot;');
@@ -115,7 +116,7 @@ it.skipIf(!enabled)(
       for (const step of [7, 8, 9, 10, 11]) await showAll(page, step);
       for (const frame of frames) await settled(frame, 11);
       const jumps = await Promise.all(frames.map(jumpsOf));
-      expect(jumps, `${size.width}×${size.height}`).toEqual([[], []]);
+      expect(jumps, `${size.width}×${size.height} at ${size.deviceScaleFactor}×`).toEqual([[], []]);
     }
   }
 );
