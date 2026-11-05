@@ -9,9 +9,11 @@ import type { ChatBotAttemptProfile } from './types';
  * high: the worst case falls from about five minutes to about two, in a 15-minute session. With the
  * 180-second request ceiling (chat-adapters/openai.ts) and provider retries off, a turn can never
  * outlast the 15-minute study phase, and each condition's turns stay bounded and comparable. A
- * feedback turn's first attempt thinks less, as it mostly edits, varies, compares, or replies, and
- * waiting on it is most of the participant's wait; a first source, and every repair, keep the
- * ladder's effort. Where a study condition, or an administrator's dev-mode switch, turns the view
+ * first attempt thinks least, a first source too: on 5 November's benchmark of 12 first requests,
+ * Sol built 15 of 24 at low effort against 17 of 24 at medium (noise is about two in twelve), in a
+ * median 33 s rather than 61 s and for $0.09 rather than $0.13 a request, so even with the extra
+ * repairs a working first version came sooner and cheaper; every repair keeps the ladder's effort.
+ * Where a study condition, or an administrator's dev-mode switch, turns the view
  * helpers on (projects/view-helpers.ts), a turn adds one round of Luna calls at low effort after its
  * reply has shown, all at once, each time-boxed to 30 seconds: five views of a type or eight
  * arrangements of a layout by default (study/definition.ts), and a retry for at most three that did
@@ -27,8 +29,7 @@ export function visualizationAttemptProfiles(
   return [
     {
       purpose: 'initial',
-      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'medium', maxOutputTokens },
-      feedbackParameters: { reasoningEffort: 'low' }
+      parameters: { model: 'gpt-5.6-sol', reasoningEffort: 'low', maxOutputTokens }
     },
     {
       purpose: 'repair',

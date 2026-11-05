@@ -3,16 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { visualizationAttemptProfiles } from './attempt-profiles';
 
 describe('visualization attempt profiles', () => {
-  it('keeps the shared four-stage Sol ladder bounded, a feedback turn first thinking less', () => {
+  it('keeps the shared four-stage Sol ladder bounded, the first attempt thinking least', () => {
     expect(visualizationAttemptProfiles(12_000)).toEqual([
       {
         purpose: 'initial',
         parameters: {
           model: 'gpt-5.6-sol',
-          reasoningEffort: 'medium',
+          reasoningEffort: 'low',
           maxOutputTokens: 12_000
-        },
-        feedbackParameters: { reasoningEffort: 'low' }
+        }
       },
       {
         purpose: 'repair',
