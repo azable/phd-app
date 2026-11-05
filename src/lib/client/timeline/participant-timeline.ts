@@ -20,7 +20,12 @@ import { agentRequests, type AgentRequest } from './agent-requests';
 export type SideMark = 'chosen' | 'not-chosen';
 
 /** A comparison's question with its latest answer, once given: each side's mark by slot, or unsure. */
-export type MarkedComparison = { question: ProjectQuestion; answer?: SideMark[] | 'unsure' };
+export type MarkedComparison = {
+  question: ProjectQuestion;
+  answer?: SideMark[] | 'unsure';
+  /** The note written with the latest answer. */
+  comment?: MessageContent;
+};
 
 /** A presentation as a pill in an assistant's message: what it shows, and its source. */
 export type VersionPill = {
@@ -126,9 +131,17 @@ export function participantTimeline(
     const { summary, parentHash } = versionOf(sourceHash);
     return { value, summary, sourceHash, ...(parentHash ? { parentHash } : {}) };
   };
+  const answerComments = new Map(
+    events.flatMap((event) =>
+      event.type === 'visualization.preference-recorded' && event.payload.comment
+        ? [[event.id, event.payload.comment] as const]
+        : []
+    )
+  );
   const marked = (question: ProjectQuestion): MarkedComparison => {
     const answer = sideMarks(question);
-    return { question, ...(answer ? { answer } : {}) };
+    const comment = answerComments.get(question.answerEventIds?.at(-1) ?? -1);
+    return { question, ...(answer ? { answer } : {}), ...(comment ? { comment } : {}) };
   };
   const questions = projectQuestions(events);
   const asked = new Map(questions.map((question) => [question.eventId, question]));
@@ -240,8 +253,13 @@ export function participantTimeline(
       for (const event of related) {
         if (event.type === 'feedback.submitted') {
           items.push(userMessage(`user-${event.id}`, event.payload.content, event.id));
-        } else if (event.type === 'visualization.preference-recorded' && event.payload.comment) {
-          // A comment written with an answer shows as the participant's message, after the choice.
+        } else if (
+          event.type === 'visualization.preference-recorded' &&
+          event.payload.comment &&
+          !answeredPairs.has(event.id)
+        ) {
+          // A note written with an answer to a pair no comparison asked shows as the participant's
+          // message after the choice; a comparison's shows on its card.
           items.push(
             userMessage(
               `preference-${event.id}`,

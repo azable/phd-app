@@ -95,7 +95,7 @@ export const interfaceParts: readonly InterfacePart[] = [
     name: 'Answer buttons',
     descriptions: {
       sverlin:
-        'When the assistant shows two versions, top and bottom, these buttons take the place of Submit under the message box: say which you prefer, Top, Bottom, Either, or Unsure if you would rather not decide. Choose again to change your answer. Anything written in the message box goes with your choice, such as a change you want.'
+        'When the assistant shows two versions, top and bottom, these buttons take the place of Submit under the message box: say which you prefer, Top, Bottom, Either, or Unsure if you would rather not decide. Choose again to change your answer. Anything written in the message box is added to the comparison as a note, such as a change you want; Write a message instead sends it to the chat.'
     },
     locator: { selector: '[role="group"][aria-label="Your answer"]' }
   },
@@ -138,7 +138,7 @@ export const interfaceParts: readonly InterfacePart[] = [
     name: 'Message box',
     descriptions: {
       sverlin:
-        'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Elements and versions you reference appear in your message. While two versions are shown, the answer buttons replace Submit: write a note if you like, then pick your answer to send it with your choice, for example to ask for a change or to say what you like.',
+        'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Elements and versions you reference appear in your message. While two versions are shown, the answer buttons replace Submit: write a note if you like, then pick your answer to add it to the comparison, for example to ask for a change or to say what you like, or choose Write a message instead to ask something else.',
       ...singleVersionSystems(
         'Write to the assistant here: Enter sends, Shift+Enter starts a new line. Versions you add appear in your message.'
       )

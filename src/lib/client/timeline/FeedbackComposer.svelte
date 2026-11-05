@@ -334,7 +334,7 @@
             aria-label="Project feedback"
             aria-multiline="true"
             data-placeholder={pair
-              ? 'Add a note to your answer (optional): a change you want, or what you like…'
+              ? 'Add a note to this comparison (optional): a change you want, or what you like…'
               : 'Comment on the project or reference a visualization…'}
             oninput={updateContentState}
             onkeyup={rememberSelection}
@@ -370,19 +370,19 @@
             <Button
               size="sm"
               variant="ghost"
-              title="Write a message about something else; the pair stays open"
+              title="Send a message to the chat instead; the comparison stays open"
               onclick={() => {
                 writingInstead = pair?.key;
                 enterWithPair = false;
               }}
               disabled={session.readOnly}
             >
-              Write instead
+              Write a message instead
             </Button>
           </div>
           {#if enterWithPair && hasContent && !pair.waiting}
             <p class="border-t px-3 py-1.5 text-sm text-muted-foreground" role="status">
-              Pick an answer to send your note with it.
+              Pick an answer to add your note to the comparison.
             </p>
           {/if}
           {#if pair.waiting}

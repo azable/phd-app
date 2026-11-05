@@ -317,7 +317,7 @@
             </p>
           {/if}
         {/if}
-        {#each item.comparisons as { question, answer } (question.eventId)}
+        {#each item.comparisons as { question, answer, comment } (question.eventId)}
           {@const open = openPair !== undefined && openPair === question.displaySetId}
           <!-- A comparison: a card whose question shows its pair, each side by its label, marked
             by the latest answer; outlined while the stage shows its pair. The question's button
@@ -368,6 +368,12 @@
                     >{/if}
                 {/each}
               </div>
+              {#if comment}
+                <div class="mt-1 border-l-2 pl-2 text-muted-foreground">
+                  <span class="sr-only">Your note:</span>
+                  <MessageContent content={comment} />
+                </div>
+              {/if}
             </div>
           </div>
         {/each}
