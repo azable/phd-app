@@ -435,6 +435,22 @@ export function animateStep(
       easing
     });
 
+  // A link drawn anew, or along another route, is drawn where its ends will be once the moves end,
+  // so while a pointer's caption or a node is still moving it would hang in empty space: it waits
+  // for the moves, then fades in.
+  const routes = (layer: HTMLElement) =>
+    [...layer.querySelectorAll<SVGPathElement>('path[data-sv-edge]')].map((path) => ({
+      path,
+      key: path.dataset.svEdgeId ?? path.dataset.svEdge ?? '',
+      route: path.getAttribute('d') ?? ''
+    }));
+  const redrawn = rerouted(routes(before), routes(after));
+  for (const { path } of redrawn)
+    path.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], {
+      duration: motionDuration,
+      easing
+    });
+
   // Gone too: a value drawn in a place before that no place now pairs with.
   const gone = [...old].flatMap(([identity, placed]) =>
     now.has(identity)
@@ -443,6 +459,15 @@ export function animateStep(
   );
   for (const element of gone) element.dataset.svGone = '';
   return { gone };
+}
+
+/** The links of the step shown now that the one before drew elsewhere, or not at all, by key. */
+export function rerouted<T extends { key: string; route: string }>(
+  before: readonly { key: string; route: string }[],
+  after: readonly T[]
+): T[] {
+  const was = new Map(before.map(({ key, route }) => [key, route]));
+  return after.filter(({ key, route }) => was.get(key) !== route);
 }
 
 /**

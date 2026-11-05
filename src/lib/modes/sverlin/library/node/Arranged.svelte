@@ -126,6 +126,14 @@
       styles: laid.styles
     };
     if (resized) parent?.changed();
+    // Boxes are read where they are on screen, so one laid out while a step's moves run, as when a
+    // child's size animates, places links at boxes still moving: lay out again once they end, as
+    // panning or zooming used to be the only thing that did.
+    const moving = placed
+      .getAnimations({ subtree: true })
+      .filter(({ playState }) => playState === 'running');
+    if (moving.length)
+      void Promise.allSettled(moving.map(({ finished }) => finished)).then(() => revision++);
   });
 </script>
 
