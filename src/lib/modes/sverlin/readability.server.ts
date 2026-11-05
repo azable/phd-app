@@ -34,6 +34,10 @@ export function readabilityOf(size: DrawnSize, ratio: FrameRatio): Readability {
     row: size.row,
     scale,
     text: size.text.typical * scale,
-    smallest: size.text.smallest * scale
+    smallest: size.text.smallest * scale,
+    fill: Math.min(
+      1,
+      (size.content.width * fit * size.content.height * fit) / (frame.width * frame.height)
+    )
   };
 }

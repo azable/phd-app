@@ -105,6 +105,9 @@ describe('laying out on the server', () => {
     expect(readability?.scale).toBeGreaterThan(0.5);
     expect(readability?.text).toBeGreaterThanOrEqual(smallestReadableText);
     expect(readability?.smallest).toBeLessThanOrEqual(readability?.text ?? 0);
+    // The content as drawn covers part of the frame, its padding the rest.
+    expect(readability?.fill).toBeGreaterThan(0);
+    expect(readability?.fill).toBeLessThanOrEqual(1);
   }, 60_000);
 
   it('describes what each step draws, alike where a value changes nothing seen', async () => {
