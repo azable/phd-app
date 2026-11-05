@@ -69,7 +69,7 @@ describe('the preference summary', () => {
       later: 0,
       choices: [
         {
-          variable: 'views.Int',
+          variable: '{Int}',
           likeliest: 'IntTally',
           state: 'open',
           answers: 1,
@@ -83,7 +83,7 @@ describe('the preference summary', () => {
     expect(summary.askNext.map(({ variables }) => variables)).toEqual([
       ['Graph.form'],
       ['Note.shown'],
-      ['views.Int'],
+      ['{Int}'],
       ['Cell.font'],
       ['Cell.fill', 'Mark.fill']
     ]);
@@ -126,7 +126,7 @@ describe('the preference summary', () => {
     // Once its arrangement was compared, even by its seed alone, the choice of views comes next.
     const seeds = duel({ 'Graph.layoutSeed': 1 }, { 'Graph.layoutSeed': 2 }, 0);
     expect(preferenceSummary(seeds, design)!.showFirst).toEqual({
-      variables: ['views.Int'],
+      variables: ['{Int}'],
       family: 'views'
     });
     // Once that was compared too, nothing is left to show first: fonts and colours never are.

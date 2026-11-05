@@ -42,6 +42,19 @@ describe('variant diff', () => {
     ]);
   });
 
+  it('writes its keys with their marks: a type view in braces, a place after :, a value after =', () => {
+    const kept = {
+      'views.Int': 'IntCell',
+      'IntCell@k.fill': 'red-500',
+      'Card.fill@true': 'blue-100'
+    };
+    expect(JSON.parse(variantDocument(kept))).toEqual({
+      '{Int}': 'IntCell',
+      'IntCell:k.fill': 'red-500',
+      'Card=true.fill': 'blue-100'
+    });
+  });
+
   it('lines up rows of values set in different orders, marking only those that differ', () => {
     expect(changedKeys(variantDocument(top), variantDocument(bottom))).toEqual({
       a: ['Here.shown', 'Label.size'],

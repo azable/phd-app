@@ -8,6 +8,7 @@
  */
 
 import { isToken, tokenProps } from '$lib/modes/sverlin/library/node/design';
+import { writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
 import type { ChoiceFamily } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import {
@@ -247,6 +248,9 @@ export function preferenceSummary(
   const standing = standings(events, design);
   const { evidence, choices } = standing;
   if (!choices.length) return undefined;
+  // The variables as the assistant writes them (see design-keys.ts), as {Int} for views.Int.
+  const known = new Set(design.variables.map(({ variable }) => variable));
+  const written = (variable: string) => writtenKey(variable, (key) => known.has(key));
   const showFirst = riskiest(standing, design, steering);
   const answered = new Set(
     evidence.duels.filter(({ weight }) => weight === 1).map(({ eventId }) => eventId)
@@ -307,9 +311,12 @@ export function preferenceSummary(
   return {
     answered: answered.size,
     later: evidence.skipped,
-    choices: listed.map(({ impact: _impact, ...choice }) => choice),
+    choices: listed.map(({ impact: _impact, ...choice }) => ({
+      ...choice,
+      variable: written(choice.variable)
+    })),
     ...(touched.length > listed.length ? { moreChoices: touched.length - listed.length } : {}),
-    askNext: asked,
+    askNext: asked.map((entry) => ({ ...entry, variables: entry.variables.map(written) })),
     unexplored: [...unexplored.entries()]
       .map(([family, variables]) => ({
         family,
@@ -317,11 +324,13 @@ export function preferenceSummary(
         examples: variables
           .toSorted((a, b) => b.impact - a.impact)
           .slice(0, examplesPerFamily)
-          .map(({ variable }) => variable),
+          .map(({ variable }) => written(variable)),
         impact: Math.max(...variables.map(({ impact }) => impact))
       }))
       .toSorted((a, b) => b.impact - a.impact)
       .map(({ impact: _impact, ...family }) => family),
-    ...(showFirst ? { showFirst } : {})
+    ...(showFirst
+      ? { showFirst: { ...showFirst, variables: showFirst.variables.map(written) } }
+      : {})
   };
 }

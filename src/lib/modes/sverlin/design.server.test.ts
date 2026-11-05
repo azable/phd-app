@@ -121,7 +121,7 @@ describe('variants', () => {
       buildVariant(space, starter, { chosen: { 'pointers.Index@found': 'Arrow' } }, 1).dropped
     ).toEqual([
       expect.stringContaining(
-        'The design has no variable pointers.Index@found; its view choices are views.Int'
+        'The design has no variable {Index}:found; its view choices are {Int}'
       )
     ]);
     // Where no position draws as a mark, it says where one does (project 97eba2f1 set three).

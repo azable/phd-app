@@ -22,7 +22,6 @@ import {
   groupOf,
   groupOptions,
   groupProps,
-  listingAlias,
   propOptions,
   roleLooks,
   roleProps,
@@ -38,6 +37,7 @@ import {
   type DesignValues,
   type KindRole
 } from './library/node/design';
+import { keptKey, keptValues, writtenText } from './library/node/design-keys';
 
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
@@ -513,28 +513,27 @@ export function buildVariant(
   origins: Record<string, DesignOrigin>;
   dropped: string[];
 } {
-  // The listing's group, <Listing>, names its settings: <Listing>.syntax is listing.syntax.
-  const aliased = (entries: Record<string, unknown> | undefined) =>
-    Object.fromEntries(
-      Object.entries(entries ?? {}).map(([key, value]) => [listingAlias(key), value])
-    );
+  // Keys come written or as kept (see design-keys.ts): `{Int}`, `IntCell:target.stroke` and
+  // <Listing>.syntax are views.Int, IntCell@target.stroke and listing.syntax here.
+  const has = (key: string) => Object.hasOwn(space, key);
+  const aliased = (entries: Record<string, unknown> | undefined) => keptValues(entries ?? {}, has);
   const given = Object.entries(aliased(request.chosen));
   const chosen = given.filter(([key]) => Object.hasOwn(space, key));
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
     .map(([key, value]) => groupUnfit(space, roles, key, value) ?? unfit(space, key, value));
-  if (problems.length) throw new DesignValueError(problems.join(' '));
+  if (problems.length) throw new DesignValueError(writtenText(problems.join(' '), has));
   const isLevel = (key: string) => isToken(key) || groupOf(key) !== undefined;
   const following = Object.keys(starter).filter((key) => levelOf(roles, key));
   const asked =
-    request.randomise === true ? [] : (request.randomise ?? []).map((key) => listingAlias(key));
+    request.randomise === true ? [] : (request.randomise ?? []).map((key) => keptKey(key, has));
   const named = asked.filter((key) => Object.hasOwn(space, key));
   const dropped = [
     ...given
       .filter(([key]) => !Object.hasOwn(space, key))
       .map(([key, value]) => unfit(space, key, value)),
     ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
-  ].map((why) => `${why} The value is left out.`);
+  ].map((why) => writtenText(`${why} The value is left out.`, has));
   const values: Record<string, DesignValue> = { ...starter };
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
@@ -568,7 +567,7 @@ export function buildVariant(
       values[key] = value;
       origins[key] = (from ? origins[from] : undefined) ?? 'starter';
     }
-    if (unfits.length) throw new DesignValueError(unfits.join(' '));
+    if (unfits.length) throw new DesignValueError(writtenText(unfits.join(' '), has));
   };
   const drawn =
     request.randomise === true

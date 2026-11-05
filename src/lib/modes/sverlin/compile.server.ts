@@ -895,7 +895,7 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
         places: laid.captions.map(({ place }) => place),
         unrendered: (place, rendered) =>
           new InvalidSvelteSourceError(
-            `The token $${place.slice(1)}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.join(', ')}` : ''}.`,
+            `The token :${place.slice(1)}[…] names :${place.slice(1)}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.map((each) => `:${each.slice(1)}`).join(', ')}` : ''}.`,
             {
               code: 'view_markup',
               start: sourcePosition(

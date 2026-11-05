@@ -20,7 +20,7 @@ import {
   preferredPresentation
 } from '$lib/shared/projects/events/visualization-presented';
 import { seededRandom } from '$lib/modes/sverlin/algorithm/random.server';
-import { listingAlias } from '$lib/modes/sverlin/library/node/design';
+import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
 
 type DesignValue = string | number | boolean;
 
@@ -179,7 +179,7 @@ export function varyValues(response: string): { variable: string; value: DesignV
         | undefined;
       if (vary?.action === 'vary' && Array.isArray(vary.values))
         return vary.values.map(({ variable, value }) => ({
-          variable: listingAlias(variable),
+          variable: keptKey(variable),
           value
         }));
     }

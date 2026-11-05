@@ -116,13 +116,19 @@ describe('tokens naming places in a listing', () => {
     expect(around.regions.map(({ label }) => label)).toEqual(['left']);
   });
 
+  it('reads :x[…] as a token, as $x[…] was, but never a : after a name or before a space or =', () => {
+    const written = readRegions('  :lo[lo] = 0, $hi[hi] = n; x := y; a : b; {key:values[0]}');
+    expect(written.tokens.map(({ place }) => place)).toEqual(['@lo', '@hi']);
+    expect(written.text).toBe('lo = 0, hi = n; x := y; a : b; {key:values[0]}');
+  });
+
   it.each([
-    ['a token inside a token', '$lo[$hi[hi]]', 'The token $hi[ is inside the token $lo[…]'],
-    ['an unclosed token', '$lo[lo', 'The token $lo[ is never closed with ].'],
+    ['a token inside a token', ':lo[:hi[hi]]', 'The token :hi[ is inside the token :lo[…]'],
+    ['an unclosed token', ':lo[lo', 'The token :lo[ is never closed with ].'],
     [
       'a token naming a place nothing renders',
       '$k[k]',
-      'names @k, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as $mid[…] for {mid}, and the places it renders are @hi, @lo, @mid, @target, @v.'
+      'names :k, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}, and the places it renders are :hi, :lo, :mid, :target, :v.'
     ]
   ])('refuse %s', (_, token, message) => {
     const listing = tokened.replace('lo = 0', `${token} = 0`);

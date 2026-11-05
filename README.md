@@ -59,7 +59,9 @@ the step signature. A presentation is a variant of its source's design space,
 which the compiler generates from the markup and the library
 ([`design.server.ts`](src/lib/modes/sverlin/design.server.ts), options in
 [`library/node/design.ts`](src/lib/modes/sverlin/library/node/design.ts)): each
-type rendered by name chooses among its views and none (`views.Int`), the page
+type rendered by name chooses among its views and none (`views.Int`, which the
+assistant, the guide and the Choices panel write `{Int}`: see
+[`design-keys.ts`](src/lib/modes/sverlin/library/node/design-keys.ts)), the page
 frame has its values (`Stacked.ratio`, …), and every kind of node, a view and
 the tags a node has (`Here[current]`), has a variable per prop, each with a
 finite set of options. A kind a node takes only at some steps, by a tag the

@@ -26,6 +26,7 @@ import {
   preferredPresentation
 } from '$lib/shared/projects/events/visualization-presented';
 import { locateElement, type ElementLocation } from '$lib/modes/sverlin/element-ref';
+import { writtenKey, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
 import type { ProjectDocument, ProjectSnapshot } from '$lib/shared/projects/model';
 import type {
   BrowserBundlePresentation,
@@ -170,7 +171,8 @@ function patternOf(set: readonly DesignValue[]): string | undefined {
   return `${others.length ? `${others.join(', ')}, or ` : ''}a hue-shade, as ${hues[1] ?? hues[0]}-${shades[Math.floor(shades.length / 2)]}: hues ${hues.join(', ')}; shades ${shades.join(', ')}`;
 }
 
-export function designContext({ options, variables }: AiDesign): AiDesignContext {
+export function designContext(design: AiDesign): AiDesignContext {
+  const { options, variables } = writtenDesign(design);
   const values: Record<string, Record<string, DesignValue>> = {};
   const levels: Record<string, DesignValue | Record<string, DesignValue>> = {};
   const followers = new Map<string, Set<string>>();
@@ -223,6 +225,26 @@ export function designContext({ options, variables }: AiDesign): AiDesignContext
     variables: full,
     values: told,
     ...(Object.keys(levels).length ? { levels } : {})
+  };
+}
+
+/**
+ * The design with its keys as the assistant reads and writes them (see design-keys.ts): `{Int}`,
+ * `IntCell:target.stroke`, `Card=true.stroke`; the app keeps the other form, and converts back what
+ * the assistant sends.
+ */
+function writtenDesign({ options, variables }: AiDesign): AiDesign {
+  const known = new Set(variables.map(({ variable }) => variable));
+  const has = (key: string) => known.has(key);
+  const written = (key: string) => writtenKey(key, has);
+  return {
+    options: Object.fromEntries(Object.entries(options).map(([name, set]) => [written(name), set])),
+    variables: variables.map((variable) => ({
+      ...variable,
+      variable: written(variable.variable),
+      ...(typeof variable.options === 'string' ? { options: written(variable.options) } : {}),
+      ...(variable.follows ? { follows: written(variable.follows) } : {})
+    }))
   };
 }
 
@@ -513,7 +535,7 @@ const timelineCases = {
   },
   'visualization.runtime-failed': (event) => runtimeFailureText(event),
   'visualization.variant-reverted': (event) =>
-    `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(event.payload.values)}, though its source draws without them; shown instead with ${JSON.stringify(event.payload.shown)} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
+    `Presentation ${event.payload.presentationId} failed with its variant's values ${JSON.stringify(writtenValues(event.payload.values))}, though its source draws without them; shown instead with ${JSON.stringify(writtenValues(event.payload.shown))} as ${event.payload.replacements.join(', ')}. Nothing in the source needs fixing.`,
   // Left out of the index (projectAiContext).
   'visualization.loaded': (event) => `Presentation ${event.payload.presentationId} loaded.`,
   'assistant.responded': () => 'Assistant responded to the user.',
@@ -674,7 +696,7 @@ export function variantDifferences(
     .filter((variable) => preferred[variable] !== other[variable])
     .sort()
     .map((variable) => ({
-      variable,
+      variable: writtenKey(variable, (key) => key in preferred || key in other),
       ...(variable in preferred ? { preferred: preferred[variable] } : {}),
       ...(variable in other ? { other: other[variable] } : {})
     }));
@@ -922,7 +944,7 @@ function selectedPresentation(
         displaySetId: event.payload.displaySetId,
         format: presentation.format,
         steps: presentationStepLabels(presentation).map((label) => ({ label })),
-        ...(differs && Object.keys(differs).length ? { differs } : {})
+        ...(differs && Object.keys(differs).length ? { differs: writtenValues(differs) } : {})
       };
     }
   }
