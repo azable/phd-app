@@ -1564,9 +1564,9 @@ A node's props say what it is and how its children are arranged; its look is its
 kind's (see Design). Props starting with `__` are reserved for the library.
 
 - `value`: the number, string, or boolean a value node shows.
-- `layout`: `'row'`, `'column'`, `'grid'` (placed by coordinates; see Grid), or
-  `'free'` (placed by layout; see Free layout and links); arranges a node's
-  children.
+- `layout`: `'row'`, `'column'`, `'grid'` (placed by coordinates; see Grid),
+  `'free'` (placed by layout; see Free layout and links), or `'stack'` (one over
+  the other; see Stack); arranges a node's children.
 - `row` and `col`: in a grid, the cell a child is placed in, whole numbers from
   0, as `row={i} col={j}`; only a grid's children take them, and each takes
   both.
@@ -1579,6 +1579,22 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `width` and `height`, inside a view, as an expression of its value, as
   `height={this}`: a length, the value times its kind's unit (see Props bound to
   a view's value); nowhere else.
+
+## Stack
+
+`layout="stack"` puts a node's children in one place, one over the other, the
+later ones on top. The stack is as large as its largest child, and each child
+with no size of its own fills it, so a lower child's fill shows behind a later
+child's text. A hidden child keeps its room, so nothing moves when it comes and
+goes. For example, a cell with a highlight behind its value, shown only at the
+steps of `@next`:
+
+```svelte
+<Node layout="stack"><When of="@next"><Node kind="Mark"></Node></When>{v}</Node>
+```
+
+The design gives `Mark` its fill. Give the value's own view no fill, or it
+covers the layer.
 
 ## Grid
 

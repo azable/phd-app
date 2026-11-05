@@ -4,7 +4,7 @@
 export type Primitive = string | number | boolean | null;
 
 /** How a node arranges its items or children. */
-export type Layout = 'row' | 'column' | 'grid' | 'free';
+export type Layout = 'row' | 'column' | 'grid' | 'free' | 'stack';
 
 /** How arranged items line up across the layout direction. */
 export type Align = 'start' | 'center' | 'end';

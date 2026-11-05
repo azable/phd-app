@@ -797,6 +797,11 @@
           <LinkOverlay axis="grid" />
         {/if}
       </div>
+    {:else if arrangement === 'stack'}
+      <!-- A stack holds its children in one place, later ones on top, each as large as the largest. -->
+      <div class="sv-stack">
+        {@render contents()}
+      </div>
     {:else if arrangement}
       <!-- data-sv-collection marks the items of one collection, so the page gives them all the
              largest size any of them reaches (see model/reserve.ts) and they line up;
@@ -972,6 +977,19 @@
   }
   .sv-cell {
     display: flex;
+  }
+  /*
+    A stack is one cell every child is placed in, as large as its largest child in each direction;
+    each child stretches to fill it, so a lower child's fill shows behind a later one's text.
+  */
+  .sv-stack {
+    display: grid;
+    grid-auto-columns: max-content;
+    grid-auto-rows: max-content;
+  }
+  .sv-stack > :global(*) {
+    grid-row-start: 1;
+    grid-column-start: 1;
   }
   /*
     A collection's items sit on equal tracks, each as large as the largest item, so the items of a

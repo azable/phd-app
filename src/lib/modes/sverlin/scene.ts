@@ -43,7 +43,7 @@ const sceneNodeSchema = v.strictObject({
   parent: v.optional(text),
   type: v.optional(text),
   kind: v.optional(text),
-  layout: v.optional(v.picklist(['row', 'column', 'grid', 'free'])),
+  layout: v.optional(v.picklist(['row', 'column', 'grid', 'free', 'stack'])),
   collection: v.optional(v.literal(true)),
   value: v.optional(text),
   unit: v.optional(text),

@@ -176,6 +176,23 @@ describe('layout', () => {
     expect(boxes.get(items[1])).toEqual({ x: 34, y: 0, width: 30, height: 20 });
   });
 
+  it('stacks children in one cell as large as the largest, each stretched to fill it, a hidden one keeping its room', () => {
+    // Node.svelte's stack: every child placed at line 1 of a grid of max-content tracks.
+    const sheet =
+      '.stack { display: grid; grid-auto-columns: max-content; grid-auto-rows: max-content }' +
+      ' .stack > * { grid-row-start: 1; grid-column-start: 1 }';
+    const layer = div({});
+    const value = div({ width: '30px', height: '20px' });
+    const hidden = div({ width: '40px', height: '10px', visibility: 'hidden' });
+    const root = element('div', { class: 'stack' }, {}, layer, value, hidden);
+    const { boxes, problems } = lay(root, sheet);
+    expect(problems).toEqual([]);
+    expect(boxes.get(root)).toMatchObject({ width: 40, height: 20 });
+    expect(boxes.get(layer)).toEqual({ x: 0, y: 0, width: 40, height: 20 });
+    expect(boxes.get(value)).toEqual({ x: 0, y: 0, width: 30, height: 20 });
+    expect(boxes.get(hidden)).toEqual({ x: 0, y: 0, width: 40, height: 10 });
+  });
+
   it('places grid items by line, each track its largest item or its template', () => {
     const at = (row: number, column: number, width: number, height: number) =>
       div({

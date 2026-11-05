@@ -2966,7 +2966,7 @@ type Attribute = {
   value?: true | { type?: string; data?: string; expression?: Expression }[];
 };
 
-const layouts = ['row', 'column', 'grid', 'free'];
+const layouts = ['row', 'column', 'grid', 'free', 'stack'];
 const named = (scale: object, numeric = true) => ({ names: Object.keys(scale), numeric });
 type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
 

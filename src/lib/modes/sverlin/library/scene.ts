@@ -120,7 +120,7 @@ function broken(css: string | undefined): { strokeStyle?: 'dashed' | 'dotted' } 
   const strokeStyle = strokeStyleCss(css);
   return strokeStyle ? { strokeStyle } : {};
 }
-const layouts: readonly string[] = ['row', 'column', 'grid', 'free'] satisfies Layout[];
+const layouts: readonly string[] = ['row', 'column', 'grid', 'free', 'stack'] satisfies Layout[];
 const nodeSelector = 'div[data-sv-node]';
 
 /** The frame a layer shows, at its logical size. */
