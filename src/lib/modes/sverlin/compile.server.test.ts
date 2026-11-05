@@ -2985,3 +2985,43 @@ describe('views of a union', () => {
     expect(boxes.get('IndexNumber')!.width).toBeLessThan(boxes.get('StatusWord')!.width);
   });
 });
+
+describe('cases', () => {
+  it('types a variable the first case never reaches by the cases that do', () => {
+    // With one value the loop never runs, so j is declared only in the second case.
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 4 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  for (@first[let i = Index(values, 1)]; @more[i < values.length]; @next[i++]) @pass{
+    @init[let j = i;]
+    while (@test[j > 0 && values[j - 1] > values[j]]) @shift{
+      const held = values[j];
+      values[j] = values[j - 1];
+      values[j - 1] = held;
+      j--;
+    }
+  }
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="Index" name="Mark"><Pointed /></View>
+<Layout name="Board" of="values, j">
+  <Node>
+    <Node>{#each values as v}{v}{/each}</Node>
+    {j}
+  </Node>
+</Layout>
+<Case name="one" values={[4]} />
+<Case name="many" values={[3, 1, 2]} />
+<Storyboard>
+  <Scene name="one" case="one" pause="@pass.shift"><Board values={values} j={j} /></Scene>
+  <Scene name="many" case="many" pause="@pass.shift"><Board values={values} j={j} /></Scene>
+</Storyboard>`;
+    expect(() => prepareCurrent(source)).not.toThrow();
+  });
+});

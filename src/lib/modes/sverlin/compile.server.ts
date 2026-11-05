@@ -593,7 +593,9 @@ function earlyTyping(
           withSelectTypes(interpretDomain(body), selectsOf(source).selects)
         )
       : noDomain;
-    const input = firstInput(source, blocks, cases, domain);
+    // Every case, so a variable one case never reaches, as a loop's that never runs, is typed by
+    // the cases that do.
+    const inputs = caseInputs(source, blocks, cases, domain).map(({ input }) => input);
     // Every label's values are kept, so a label read in the markup has its type.
     const algorithm = blocks.algorithm;
     const labels = interpretBlock(
@@ -603,15 +605,11 @@ function earlyTyping(
     );
     const kept = new Set(labels.map(({ full }) => full));
     // Every labelled expression's operands and result too, so a view typed by a label has its fields.
-    const steps = paced(
-      source,
-      algorithm,
-      input,
-      domain,
-      {},
-      { labels: kept, applications: kept },
-      overs
-    ).steps;
+    const steps = (inputs.length ? inputs : [firstInput(source, blocks, cases, domain)]).flatMap(
+      (input) =>
+        paced(source, algorithm, input, domain, {}, { labels: kept, applications: kept }, overs)
+          .steps
+    );
     return {
       domain,
       labelOperators: withLabelOperators(noDomain, steps).operators ?? {},
