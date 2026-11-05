@@ -191,6 +191,8 @@ const showStep = (step: number) => show(afterOf(step));
  * waits for it rather than for a fixed time; looping animations never hold it back.
  */
 let settling = 0;
+/** The step last asked for, as asked, which a page past its last step shows as its last. */
+let asked: number | undefined;
 function settleAt(step: number) {
   const token = ++settling;
   delete root.dataset.svSettled;
@@ -203,7 +205,12 @@ function settleAt(step: number) {
           animation.playState !== 'idle' &&
           animation.effect?.getTiming().iterations !== Infinity
       );
-  const frame = () => new Promise((resume) => requestAnimationFrame(() => resume(undefined)));
+  // A frame, or a tenth of a second where frames are held back, as for a frame out of view.
+  const frame = () =>
+    new Promise((resume) => {
+      requestAnimationFrame(() => resume(undefined));
+      setTimeout(resume, 100);
+    });
   void (async () => {
     await document.fonts.ready;
     for (let rounds = 0; rounds < 20; rounds++) {
@@ -216,7 +223,7 @@ function settleAt(step: number) {
         new Promise((resume) => setTimeout(resume, 250))
       ]);
     }
-    if (token === settling && !pending) root.dataset.svSettled = String(step);
+    if (token === settling && !pending) root.dataset.svSettled = String(asked ?? step);
   })();
 }
 
@@ -433,7 +440,9 @@ addEventListener('message', (event: MessageEvent) => {
   const step = clampStep(data.step);
   playback.__sverlinSelection = Array.isArray(data.selection) ? data.selection : [];
   requested = step;
-  // No longer settled at the step before: a test waits for this one.
+  // No longer settled at the step before: a test waits for this one, under the number it asked
+  // for, though a step past the last shows the last.
+  asked = data.step;
   settling++;
   delete root.dataset.svSettled;
   if (recorded && afterOf(step) !== (pending ?? current)?.step) showStep(step);
