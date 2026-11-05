@@ -154,15 +154,7 @@ attempt navigation.
   cross-cutting assistant/mode mapping. Keep project intake, operations,
   attempts, persistence, and workspace controls mode-neutral; only mode-specific
   build, source, bot, and playback behavior belong in the mode folder.
-- AI-generated source is validated/built before activation. Each operation has
-  at most five explicit model calls: one initial Sol call (medium for a first
-  source or a view that failed to draw, low for feedback on a drawn one), three
-  Sol repairs (medium, high, xhigh), then one Sol/xhigh simpler fallback that
-  explains the difficulty and reduction. Repairs reuse initial seeds; a batch
-  activates atomically (the assistant's comparisons, one pair at a time).
-  Provider retries and open-ended loops are disabled. The default 180-second
-  request ceiling fits inside the 15-minute study phase, and a repair starts
-  only if its full timeout remains before the deadline. Timelines retain
+- AI-generated source is validated/built before activation. Timelines retain
   prompts, responses, diagnostics, source, accepted artifacts, and
   presentations.
 - Generated JavaScript must not execute in the server's own context or the
