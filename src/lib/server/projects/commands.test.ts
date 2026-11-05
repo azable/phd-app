@@ -1447,6 +1447,15 @@ describe('submitProjectFeedback', () => {
       expect(repairWandered(missing('Cell'), other)).toBe(true);
     });
 
+    it('leaves out a design value a first source names that the design lacks, without sending it back', async () => {
+      const { returnedWarnings } = await import('./commands');
+      const guessed =
+        'The design has no variable Cells.Eliminated.opacity; its kinds of node are IntCell. The value is left out.';
+      const steps = 'Two paused steps draw the same picture.';
+      expect(returnedWarnings([guessed, steps], true)).toEqual([steps]);
+      expect(returnedWarnings([guessed, steps], false)).toEqual([guessed, steps]);
+    });
+
     it('takes problems a later stage of the build finds as progress, not wandering', async () => {
       const { repairWandered } = await import('./commands');
       const failed = (...codes: string[]) => ({

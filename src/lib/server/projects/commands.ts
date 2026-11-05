@@ -1223,7 +1223,10 @@ async function runSverlinAssistantTurn(
         softReturned = true;
         return reject('picture', [unreadable], candidate);
       }
-      const warnings = [...new Set(bundles.flatMap(({ warnings = [] }) => warnings))];
+      const warnings = returnedWarnings(
+        [...new Set(bundles.flatMap(({ warnings = [] }) => warnings))],
+        !hasWorkingVersion(current)
+      );
       if (warnings.length && candidate !== undefined) {
         softReturned = true;
         return reject('warnings', warnings, candidate);
@@ -3165,6 +3168,18 @@ export function repairWandered(previous: AttemptFailure, repair: AttemptFailure)
  */
 function stableMessage(message: string): string {
   return message.replace(/;\s+its\b[^;]*?\bare\b[\s\S]*$/, '').replace(/\{[^{}]*\}/gu, '{…}');
+}
+
+/**
+ * The warnings a build sends back once a turn. A first source has no design to read names from,
+ * so a design value it names that the design lacks is left out without sending it back: in
+ * benchmark run 4 such guessed names, as Cells.Eliminated.opacity, sent back two of Sol's first
+ * sources that built. The warning stays with the version, for the next turn to read.
+ */
+export function returnedWarnings(warnings: readonly string[], firstSource: boolean): string[] {
+  return firstSource
+    ? warnings.filter((warning) => !warning.endsWith('The value is left out.'))
+    : [...warnings];
 }
 
 /** Whether the project has a version of its own, rather than its mode's starter. */
