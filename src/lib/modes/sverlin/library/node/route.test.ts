@@ -283,4 +283,15 @@ describe('straight links', () => {
     const slope = routeCurve(field, corner, [], [0]).curve;
     expect(slope[0].y).not.toBe(slope[3].y);
   });
+
+  it('join vertices overlapping only at a corner centre to centre, not along the sliver', () => {
+    // Project 9c06eb82: BFS vertices a layer apart share 5 px of height, so each arrow ran along
+    // that sliver, from one corner to the other.
+    const a: Box = { left: 20, top: 188, right: 165, bottom: 297 };
+    const b: Box = { left: 218, top: 84, right: 361, bottom: 193 };
+    const [start, , , end] = routeCurve(a, b, [], [0]).curve;
+    expect(start.y).toBeLessThan(a.bottom - 20);
+    expect(start.y).toBeGreaterThan(b.bottom);
+    expect(end.y).toBeLessThan(b.bottom);
+  });
 });

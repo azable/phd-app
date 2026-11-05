@@ -231,9 +231,12 @@ export function routeCurve(
   const centre = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 });
   const [p, q] = [centre(from), centre(to)];
   // Boxes side by side, or one above the other, are joined level, in the middle of the span they
-  // share, as a node's next field to the node beside it, not centre to centre up a slope.
+  // share, as a node's next field to the node beside it, not centre to centre up a slope. Only
+  // where they share at least half the smaller's span: boxes overlapping at a corner, as vertices
+  // a layer apart in a graph (project 9c06eb82), would otherwise be joined along that sliver,
+  // each arrow hugging the corners.
   const shared = (low1: number, high1: number, low2: number, high2: number) =>
-    Math.min(high1, high2) - Math.max(low1, low2) > 0
+    Math.min(high1, high2) - Math.max(low1, low2) >= Math.min(high1 - low1, high2 - low2) / 2
       ? (Math.max(low1, low2) + Math.min(high1, high2)) / 2
       : undefined;
   const apart = (low1: number, high1: number, low2: number, high2: number) =>
