@@ -307,9 +307,18 @@
   function onPointerOver(event: PointerEvent) {
     const over =
       frame.places && event.target instanceof Element
-        ? event.target.closest('[data-sv-place]')
+        ? event.target.closest('[data-sv-place], [data-sv-node]')
         : undefined;
-    hovered = over?.getAttribute('data-sv-place')?.split(' ') ?? [];
+    const own = over?.getAttribute('data-sv-place');
+    hovered = own ? own.split(' ') : placesAround(over?.getAttribute('data-sv-node'));
+  }
+  // Nodes are drawn side by side, not inside their parents, so a pointer's arrow or label finds
+  // the place its pointer view refers to by walking up the scene's parents.
+  function placesAround(id: string | null | undefined): string[] {
+    const byId = new Map(drawn.nodes.map((node) => [node.id, node]));
+    for (let node = id ? byId.get(id) : undefined; node; node = byId.get(node.parent ?? ''))
+      if (node.places?.length) return node.places;
+    return [];
   }
   /** Every reference to a hovered place, on the canvas, in the first shared place's line colour. */
   const hoverOutlines = $derived.by(() => {

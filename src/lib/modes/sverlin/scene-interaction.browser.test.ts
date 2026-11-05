@@ -179,3 +179,29 @@ it.skipIf(!enabled)(
     expect(new Set(colours)).toEqual(new Set([colourCss('amber-600')]));
   }
 );
+
+it.skipIf(!enabled)(
+  "outlines a pointer's place when its label is hovered, drawn beside the pointer view's node",
+  { timeout: 300_000 },
+  async () => {
+    const labelled = search.replace(
+      '<View of="Index" name="Arrow"><Pointed /></View>',
+      '<View of="Index" name="Arrow"><Node layout="column"><Pointed /><Node kind="Caption">at</Node></Node></View>'
+    );
+    expect(labelled).not.toBe(search);
+    const { page, frame } = await hostedAt(pausingAt(labelled, '@probe.low'), 1, {
+      'listing.places': 'fill'
+    });
+    const label = await frame.evaluate(() => {
+      const box = document
+        .querySelector('svg[data-sv-scene] g[data-sv-kind="Arrow.Caption"] text')
+        ?.getBoundingClientRect();
+      return box && { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    });
+    expect(label).toBeDefined();
+    await page.mouse.move(label!.x, label!.y);
+    expect(
+      await frame.evaluate(() => document.querySelectorAll('.sv-scene-hovered').length)
+    ).toBeGreaterThan(0);
+  }
+);
