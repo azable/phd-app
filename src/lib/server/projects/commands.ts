@@ -1238,7 +1238,8 @@ async function runSverlinAssistantTurn(
         bundles[0]
           ? unofferedAlternatives(
               bundles[0],
-              new Set(choiceStates(preferenceEvidence(current.events)).keys())
+              new Set(choiceStates(preferenceEvidence(current.events)).keys()),
+              shownForms(current)
             )
           : undefined;
       if (
@@ -1947,17 +1948,23 @@ export function unofferedAlternatives(
     pointers?: Record<string, string[]>;
     variant?: Record<string, unknown>;
   },
-  answered: ReadonlySet<string> = new Set()
+  answered: ReadonlySet<string> = new Set(),
+  shown: { views?: Record<string, string[]>; pointers?: Record<string, string[]> } = {}
 ): string | undefined {
+  // Only forms new in this version: one the shown version already offered was the assistant's to
+  // compare then, and asking again on every later change cost a model call a turn (9c06eb82).
+  const same = (before: string[] | undefined, now: string[]) => before?.join() === now.join();
   const forms = [
     ...Object.entries(bundle.views ?? {})
+      .filter(([type, views]) => !same(shown.views?.[type], views))
       .filter(([type, views]) => views.length > 1 && !answered.has(`views.${type}`))
       .map(([type, views]) => `${type} as ${views.join(' or ')} (views.${type})`),
     ...Object.entries(bundle.pointers ?? {})
+      .filter(([type, views]) => !same(shown.pointers?.[type], views))
       .filter(([type, views]) => views.length > 1 && !answered.has(`pointers.${type}`))
       .map(([type, views]) => `the ${type} pointer as ${views.join(' or ')} (pointers.${type})`),
     ...Object.keys(bundle.variant ?? {})
-      .filter((key) => key.endsWith('.layoutSeed'))
+      .filter((key) => key.endsWith('.layoutSeed') && shown.views === undefined)
       .map((key) => key.slice(0, -'.layoutSeed'.length))
       .filter((kind) => !answered.has(`${kind}.direction`) && !answered.has(`${kind}.layoutSeed`))
       .map((kind) => `the arrangement of ${kind} (${kind}.direction, ${kind}.layoutSeed)`)
@@ -1965,6 +1972,18 @@ export function unofferedAlternatives(
   return forms.length
     ? `This version is shown alone, but its source offers other forms: ${forms.join('; ')}. Offer a comparison of the one most worth choosing, or send the source again if one form is clearly right.`
     : undefined;
+}
+
+/** The view and pointer choices the version shown offers, none before a first version. */
+function shownForms(document: ProjectDocument): {
+  views?: Record<string, string[]>;
+  pointers?: Record<string, string[]>;
+} {
+  const shown =
+    projectSnapshotAt(document).activePresentationSet?.presentations[0]?.payload.presentation;
+  return shown?.format === 'browser-bundle-v1'
+    ? { views: shown.views ?? {}, pointers: shown.pointers ?? {} }
+    : {};
 }
 
 /** Whether the participant directs: they would rather say what they want than choose. */

@@ -3395,6 +3395,16 @@ describe('several variants from chat', () => {
     expect(unofferedAlternatives(bundle, new Set(['views.Int', 'Tree.direction']))).toBeUndefined();
   });
 
+  it('asks only about forms the shown version did not already offer', async () => {
+    const { unofferedAlternatives } = await import('./commands');
+    const bundle = { views: { Int: ['IntCell', 'IntBar'], Seen: ['Word', 'Icon'] } };
+    const shown = { views: { Int: ['IntCell', 'IntBar'] }, pointers: {} };
+    const asked = unofferedAlternatives(bundle, new Set(), shown);
+    expect(asked).toContain('views.Seen');
+    expect(asked).not.toContain('views.Int');
+    expect(unofferedAlternatives(bundle, new Set(), { views: bundle.views, pointers: {} })).toBeUndefined();
+  });
+
   it('shows a version whose source offers no other form at once', async () => {
     const result = await attempts(
       () => revised(twoViews('<View of="Int" name="Cell"><Node value={this} /></View>')),
