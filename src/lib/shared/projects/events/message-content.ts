@@ -69,6 +69,30 @@ export const elementReferenceSegmentSchema = v.strictObject({
   element: selectedElementSchema
 });
 
+/** A point in a presentation's frame, in its own coordinates, as a scene's boxes are. */
+export const framePointSchema = v.strictObject({
+  x: v.pipe(v.number(), v.minValue(-100_000), v.maxValue(100_000)),
+  y: v.pipe(v.number(), v.minValue(-100_000), v.maxValue(100_000))
+});
+
+/** The most an annotation says: a short note on one part, as a sentence or two. */
+export const annotationTextMaxLength = 280;
+
+/**
+ * A short comment a participant pinned in a presentation at a step, sent with a message or a
+ * comparison's answer: on the element selected where it was pinned, at the point clicked, or both,
+ * so it is feedback on that one design, drawn there as a numbered pin when it is viewed again.
+ */
+export const annotationSegmentSchema = v.strictObject({
+  type: v.literal('annotation'),
+  presentationId: presentationIdSchema,
+  step: v.pipe(naturalSchema, v.maxValue(100_000)),
+  stepName: v.optional(stepNameSchema),
+  element: v.optional(selectedElementSchema),
+  point: v.optional(framePointSchema),
+  text: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(annotationTextMaxLength))
+});
+
 /**
  * A part of the workspace an assistant's reply points at (shared/interface-parts.ts), shown as a
  * pill with the part's name that highlights it.
@@ -86,6 +110,7 @@ export const messageContentSegmentSchema = v.variant('type', [
   markdownMessageSegmentSchema,
   presentationReferenceSegmentSchema,
   elementReferenceSegmentSchema,
+  annotationSegmentSchema,
   interfaceReferenceSegmentSchema
 ]);
 
@@ -96,6 +121,8 @@ export type MessageContentSegment = v.InferOutput<typeof messageContentSegmentSc
 export type MessageContent = MessageContentSegment[];
 export type ElementLayout = v.InferOutput<typeof elementLayoutSchema>;
 export type ElementReference = Extract<MessageContentSegment, { type: 'element-ref' }>;
+export type Annotation = Extract<MessageContentSegment, { type: 'annotation' }>;
+export type FramePoint = v.InferOutput<typeof framePointSchema>;
 
 /** Construct the canonical representation of a text-only Markdown message. */
 export function markdownMessage(text: string): MessageContent {
@@ -147,6 +174,7 @@ export function plainMessageText(content: MessageContent): string {
       if (segment.type === 'markdown') return [segment.text];
       if (segment.type === 'interface-ref')
         return [`[Interface part ${segment.part}: ${interfacePart(segment.part).name}]`];
+      if (segment.type === 'annotation') return [annotationText(segment)];
       if (segment.type === 'element-ref')
         return [
           `[Element "${segment.element.label}" (${segment.element.id}) at ${stepText(segment.step, segment.stepName)} of presentation ${segment.presentationId}]`
@@ -159,6 +187,17 @@ export function plainMessageText(content: MessageContent): string {
     })
     .join(' ')
     .trim();
+}
+
+/** An annotation as a model reads it: where it is pinned, then what it says. */
+function annotationText({ presentationId, step, stepName, element, point, text }: Annotation) {
+  const on = [
+    element ? `element "${element.label}" (${element.id})` : undefined,
+    point ? `point (${Math.round(point.x)}, ${Math.round(point.y)}) of the frame` : undefined
+  ]
+    .filter(Boolean)
+    .join(' at ');
+  return `[Comment pinned to ${on || 'the picture'} at ${stepText(step, stepName)} of presentation ${presentationId}: "${text}"]`;
 }
 
 /** A step as a message names it: by its name, with the number the participant saw. */

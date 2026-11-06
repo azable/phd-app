@@ -23,10 +23,12 @@ export function referenceChipLabel(reference: ReferenceSegment): string {
   return detail ? `${presentation} · ${detail}` : presentation;
 }
 
-/** What a chip adds to its presentation: the step, and for an element, its label. */
+/** What a chip adds to its presentation: the step, and an element's label or a comment's words. */
 export function referenceChipDetail(reference: ReferenceSegment): string | undefined {
   if (reference.type === 'presentation-ref')
     return reference.step === undefined ? undefined : `Step ${reference.step + 1}`;
+  if (reference.type === 'annotation')
+    return `Step ${reference.step + 1} · 💬 ${shortLabel(reference.text)}`;
   return `Step ${reference.step + 1} · ${shortLabel(reference.element.label)}`;
 }
 
@@ -35,9 +37,10 @@ export function referenceChipTitle(reference: ReferenceSegment): string {
   const presentation = presentationDisplayId(reference.presentationId);
   if (reference.step === undefined) return presentation;
   const step = `step ${reference.step + 1}${reference.stepName ? `, ${reference.stepName}` : ''}`;
-  return reference.type === 'presentation-ref'
-    ? `${presentation} · ${step}`
-    : `${presentation} · ${step} · ${reference.element.label}`;
+  if (reference.type === 'presentation-ref') return `${presentation} · ${step}`;
+  if (reference.type === 'annotation')
+    return `${presentation} · ${step}${reference.element ? ` · ${reference.element.label}` : ''}: ${reference.text}`;
+  return `${presentation} · ${step} · ${reference.element.label}`;
 }
 
 /** A label cut at a word boundary near the chip length, with an ellipsis if cut. */
