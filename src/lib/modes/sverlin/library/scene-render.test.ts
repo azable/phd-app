@@ -194,6 +194,33 @@ describe('scenes drawn as SVG', () => {
     expect(sceneBetween(from, to, 0.5).nodes.find(({ key }) => key === 'hiTip#5')?.box.x).toBe(200);
   });
 
+  it("keeps a nested pointer's arrow its own as the outer pointer leaves the element", () => {
+    // i and j at one cell, i's mark inside j's; then j moves left and i stays.
+    const mark = (id: string, x: number, pointer: string, parent?: string) =>
+      node(id, x, { identity: `pointer:${pointer}`, kind: 'Mark', ...(parent ? { parent } : {}) });
+    const tip = (id: string, x: number, parent: string) =>
+      node(id, x, { parent, kind: 'Mark.Tip' });
+    const from = drawnScene(
+      step([
+        mark('j#4', 100, '1'),
+        mark('i#4', 100, '0', 'j#4'),
+        tip('iTip#4', 100, 'i#4'),
+        tip('jTip#4', 100, 'j#4')
+      ])
+    );
+    const to = drawnScene(
+      step([
+        mark('j#3', 0, '1'),
+        tip('jTip#3', 0, 'j#3'),
+        mark('i#4', 100, '0'),
+        tip('iTip#4', 100, 'i#4')
+      ])
+    );
+    const pairs = pairNodes(from, to);
+    expect(pairs.get('jTip#3')?.id).toBe('jTip#4');
+    expect(pairs.get('iTip#4')?.id).toBe('iTip#4');
+  });
+
   it('starts a copy from its source when the source stays drawn, not from what it overwrites', () => {
     // values[j] = values[j - 1]: 29 stays at j - 1, and 31, its copy, replaces 5 at j.
     const from = drawnScene(

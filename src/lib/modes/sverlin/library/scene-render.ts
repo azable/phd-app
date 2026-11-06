@@ -400,8 +400,12 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
   // each kind, so a pointer's arrow and label still move with it when the element it points at
   // nests in another pointer that has come to the same element, and leaves its list. A copy's
   // parts start from its source's, as the copy does, though the source keeps them where it stays.
+  // Only its own parts: not those of a value or pointer mark nested inside it, as where two
+  // pointers meet at one element.
   const inside = (scene: DrawnScene, node: DrawnNode) =>
-    scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
+    scene.nodes.filter(
+      (other) => !other.leaving && ancestors(scene, other).find(({ identity }) => identity) === node
+    );
   for (const now of to.nodes) {
     const was = pairs.get(now.key);
     if (!was || was.id === now.id || !now.identity) continue;
