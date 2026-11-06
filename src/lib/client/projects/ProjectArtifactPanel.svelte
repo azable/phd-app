@@ -124,8 +124,8 @@
   // The candidate a draft was started from, and what the participant says the edit changes.
   let draftFrom = $state<string | undefined>();
   let draftSummary = $state('');
-  // In developer view, the choices of the candidate a draft starts from, and their document as
-  // edited: saving builds with only what the edit changes (see choiceEdits).
+  // The choices of the candidate a draft starts from, and their nested document as edited: saving
+  // builds with only what the edit changes (see choiceEdits).
   let choicesBase = $state<DesignValues | undefined>();
   let choicesDraft = $state('');
   let choicesError = $state('');

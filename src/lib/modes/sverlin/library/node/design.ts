@@ -855,6 +855,57 @@ export const roleLooks: Record<
   ])
 ) as Record<KindRole, Record<string, string | number | boolean>>;
 
+/**
+ * A style, written with `$` as a token is but holding a group of props, as `$cell` with
+ * `$cell.stroke` and `$cell.padding`, which kinds inherit (see levelFor). A token's name is never a
+ * style's.
+ */
+export const isStyle = (name: unknown): name is `$${string}` =>
+  typeof name === 'string' && /^\$[A-Za-z]\w*$/u.test(name) && !isToken(name);
+
+/** A style's prop, as `$cell` and padding for `$cell.padding`. */
+export function styleOf(key: string): { style: `$${string}`; prop: string } | undefined {
+  const match = /^(\$[A-Za-z]\w*)\.([a-z]\w*)$/u.exec(key);
+  return match && isStyle(match[1])
+    ? { style: match[1] as `$${string}`, prop: match[2] }
+    : undefined;
+}
+
+/** The variable naming what a kind inherits: a style, a kind of its role, or none. */
+export const inheritKey = (kind: string): string => `${kind}.inherit`;
+
+/**
+ * What a kind's prop follows, and the variable its value comes from: what the kind inherits where
+ * that sets the prop (a style's prop, naming a token or a value, or a kind of its role's own value),
+ * else its group's value where the variant sets it, else its role's look, through tokens. Undefined
+ * for a variable that is no kind's prop a group could set (a place's, a frame's, a view choice).
+ * Shared by the build and the assistant's design, so both tell what follows what alike.
+ */
+export function levelFor(
+  values: Readonly<Record<string, string | number | boolean>>,
+  roles: Readonly<Record<string, KindRole>>,
+  key: string
+): { value: string | number | boolean | undefined; from?: string } | undefined {
+  const dot = key.lastIndexOf('.');
+  const kind = key.slice(0, Math.max(0, dot));
+  const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
+  const prop = key.slice(dot + 1) as DesignProp;
+  if (!role || !groupProps(role).includes(prop)) return undefined;
+  const source = values[inheritKey(kind)];
+  if (typeof source === 'string' && source !== 'none') {
+    const from = `${source}.${prop}`;
+    if (Object.hasOwn(values, from)) {
+      const value = values[from];
+      return isToken(value) ? { value: values[value], from: value } : { value, from };
+    }
+  }
+  const group = groupKey(tagOf(role), prop);
+  const set = Object.hasOwn(values, group);
+  const level = set ? values[group] : roleLooks[role][prop];
+  if (isToken(level)) return { value: values[level], from: level };
+  return set ? { value: level, from: group } : { value: level };
+}
+
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {
   ratio: 'fit',
   justify: 'center',

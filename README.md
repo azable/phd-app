@@ -60,7 +60,8 @@ which the compiler generates from the markup and the library
 ([`design.server.ts`](src/lib/modes/sverlin/design.server.ts), options in
 [`library/node/design.ts`](src/lib/modes/sverlin/library/node/design.ts)): each
 type rendered by name chooses among its views and none (`views.Int`, which the
-assistant, the guide and the Choices panel write `{Int}`: see
+assistant, the guide and the Choices panel write `{Int}`, and people read
+nested, one object per style, group and kind: see
 [`design-keys.ts`](src/lib/modes/sverlin/library/node/design-keys.ts)), the page
 frame has its values (`Stacked.ratio`, …), and every kind of node, a view and
 the tags a node has (`Here[current]`), has a variable per prop, each with a
@@ -84,16 +85,16 @@ they still fit and the starter's for anything new; an `edit` or `revise` may
 give `values` of its own over those, which unlike a `vary`'s settle nothing;
 after a manual change the first presentation keeps the viewed variant's values
 and the second is randomised; a manual change can also edit the viewed variant's
-choices as JSON (the Choices tab while editing): the values it changes or adds
-are built as chosen and those it removes are no longer kept, so the rest still
-follow their tokens and groups (`choiceEdits`); refills of the presentation
-buffer stay random, as most are never shown
-([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
-`count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,
-each drawn at random around the values the `vary` sets, and queues them in the
-presentation buffer: what it held is consumed, the first pair shows, and each
-Next pair, or New pair in dev mode, consumes the shown pair to show the next
-(`queueBuiltPresentations`, `waitingBehind` in
+choices as nested JSON (the Choices tab while editing): the values it changes or
+adds are built as chosen and those it removes or sets to null are no longer
+kept, so the rest still follow what they inherit, their groups and tokens
+(`choiceEdits`); refills of the presentation buffer stay random, as most are
+never shown ([`service.ts`](src/lib/server/projects/service.ts)
+`basedRequests`). With a `count` (at most 8, in whole pairs), a `vary` or
+`resample` makes that many, each drawn at random around the values the `vary`
+sets, and queues them in the presentation buffer: what it held is consumed, the
+first pair shows, and each Next pair, or New pair in dev mode, consumes the
+shown pair to show the next (`queueBuiltPresentations`, `waitingBehind` in
 [`presentation-buffer.ts`](src/lib/shared/projects/presentation-buffer.ts)). A
 `vary`, `edit` or `revise` may instead give `comparisons` the assistant designs,
 each a question and its two sides, each a short label in the participant's words

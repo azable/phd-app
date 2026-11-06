@@ -6,6 +6,7 @@ import bst from './fixtures/bst.sverlin?raw';
 import pseudocode from './fixtures/listing-pseudocode.sverlin?raw';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
+import dijkstraFields from './fixtures/dijkstra-fields.sverlin?raw';
 import { forms } from './library/node/forms';
 import {
   buildVariant,
@@ -75,10 +76,10 @@ describe('design space', () => {
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
-    // A group, as <Node>.padding, is set only where a variant sets it.
+    // A group, as <Node>.padding, and what a kind inherits are set only where a variant sets them.
     expect(Object.keys(starter).sort()).toEqual(
       Object.keys(space)
-        .filter((key) => !key.startsWith('<'))
+        .filter((key) => !key.startsWith('<') && !key.endsWith('.inherit'))
         .sort()
     );
     expect(starter['views.Int']).toBe('IntCell');
@@ -466,5 +467,77 @@ describe('design tokens and tag groups', () => {
     const chosen = { '<Listing>.syntax': 'colour' };
     const values = buildVariant(design.space, design.starter, { chosen }, 1).values;
     expect(values['listing.syntax']).toBe('colour');
+  });
+
+  it('gives a kind what it inherits from a style, over its group and token, under its own', () => {
+    const styled = build({
+      chosen: {
+        $spacing: 0.25,
+        '<Node>.padding': 0.5,
+        '$cell.padding': 0.125,
+        '$cell.radius': 2,
+        'IntCell.inherit': '$cell',
+        'IntDot.inherit': '$cell',
+        'IntDot.radius': 999
+      }
+    });
+    expect([styled['IntCell.padding'], styled['IntDot.padding']]).toEqual([0.125, 0.125]);
+    // Its own value wins; a prop the style does not set comes from the group.
+    expect([styled['IntCell.radius'], styled['IntDot.radius']]).toEqual([2, 999]);
+    expect(styled['Note.padding']).toBe(0.5);
+    // A style's value can name a token, which it then follows.
+    const tokened = build({
+      chosen: { '$cell.fill': '$highlight', 'IntCell.inherit': '$cell' }
+    });
+    expect(tokened['IntCell.fill']).toBe('amber-100');
+    expect(levelled.starter['IntCell.inherit']).toBeUndefined();
+  });
+
+  it('gives a kind what it inherits from a kind of its role, after that kind settles', () => {
+    const values = build({
+      chosen: { 'IntDot.inherit': 'IntCell', 'IntCell.fill': 'sky-100', 'IntCell.radius': 999 }
+    });
+    expect([values['IntDot.fill'], values['IntDot.radius']]).toEqual(['sky-100', 999]);
+    // Kept in the base, a later change to the source reaches it.
+    const later = build({ base: values, chosen: { 'IntCell.fill': 'rose-100' } });
+    expect(later['IntDot.fill']).toBe('rose-100');
+    // Only a kind of the same role.
+    expect(() => build({ chosen: { 'IntDot.inherit': 'Note' } })).toThrow(
+      /IntDot\.inherit cannot be "Note"/u
+    );
+  });
+
+  it('lets a kind chosen to inherit follow it where only its starter look set it apart', () => {
+    // Dijkstra's weights are drawn only on links, so WeightText starts unboxed, its radius 0.
+    const { design } = prepareSvelteComponent(dijkstraFields);
+    expect(design.starter['WeightText.radius']).toBe(0);
+    const chosen = { '$cell.radius': 4, 'WeightText.inherit': '$cell' };
+    const run = (request: Parameters<typeof buildVariant>[2]) =>
+      buildVariant(design.space, design.starter, request, 1, design.fallbacks, design.roles).values;
+    expect(run({ chosen })['WeightText.radius']).toBe(4);
+    // A value of its own, chosen before, stays.
+    const base = run({ chosen: { 'WeightText.radius': 2 } });
+    expect(run({ base, chosen })['WeightText.radius']).toBe(2);
+  });
+
+  it('refuses a kind inheriting what inherits it back, naming the round', () => {
+    expect(() =>
+      build({ chosen: { 'IntDot.inherit': 'IntCell', 'IntCell.inherit': 'IntDot' } })
+    ).toThrow(/IntCell inherits IntDot inherits IntCell: a kind cannot inherit what inherits it/u);
+  });
+
+  it("refuses a style's value its heirs cannot take, naming them", () => {
+    expect(() =>
+      build({
+        chosen: { '$cell.radius': 5, 'IntCell.inherit': '$cell', 'IntDot.inherit': '$cell' }
+      })
+    ).toThrow(/\$cell\.radius cannot be 5: IntCell, IntDot inherit \$cell, and its options are/u);
+  });
+
+  it('draws a style with the kinds, but never what a kind inherits', () => {
+    const base = build({ chosen: { '$cell.radius': 4, 'IntCell.inherit': '$cell' } });
+    const drawn = build({ base, randomise: true });
+    expect(drawn['IntCell.inherit']).toBe('$cell');
+    expect(drawn['IntCell.radius']).toBe(drawn['$cell.radius']);
   });
 });

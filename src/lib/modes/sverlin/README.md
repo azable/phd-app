@@ -1389,11 +1389,36 @@ no mark one kind. `@` names only a part of the run, a label, as in the source.
   value is one of the prop's options or a token, as
   `{"<Node>.fill": "$highlight"}`. A group is set only where a variant sets it,
   and never sets `shown`.
-- A kind's own value overrides its group, and its group the token: with
+- A style is a `$` name holding a group of props, as a CSS class does:
+  `$cell.stroke`, `$cell.padding`. A kind inherits one style, or one kind of its
+  role, and takes each prop it sets: `IntCell.inherit: "$cell"`, or
+  `Goal.inherit: "VertexCard"`. A style's prop is one of its prop's options or a
+  token, as `"$cell.fill": "$surface"`, and fits every kind inheriting it. A
+  kind cannot inherit a kind that inherits it back, and inherits nothing by
+  default (`none`).
+- A kind's own value overrides what it inherits, that its group, and its group
+  the token: with
   `{"$spacing": 0.25, "<Node>.padding": 0.5, "IntCell.padding": 0}`, pointers
   take 0.25, every node's kind 0.5, and IntCell none. A kind set apart once
-  stays apart when its token or group changes later, and a place, as
+  stays apart when what it follows changes later, and a place, as
   `IntCell:v.fill`, overrides its kind as before.
+- The design reads nested, one object for each style, group and kind, as
+  project.design's levels and values and the Choices file show it: `"..."` is
+  what a kind inherits, a nested kind sits inside its view's object, and a place
+  or a value is a key inside its kind's:
+
+  ```json
+  {
+    "$cell": { "stroke": "neutral-500", "padding": 0.25, "radius": 4 },
+    "<Node>": { "padding": 0 },
+    "IntCell": { "...": "$cell", ":target": { "stroke": "violet-500" } },
+    "VertexCard": { "...": "$cell", "radius": 999 }
+  }
+  ```
+
+  Each value the assistant sets is still one variable, by its written key:
+  `{"variable": "$cell.radius", "value": 4}`,
+  `{"variable": "IntCell.inherit", "value": "$cell"}`.
 
 ### Variants
 

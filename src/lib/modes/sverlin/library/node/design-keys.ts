@@ -19,9 +19,11 @@
  * | `Bar.height@from` (`@hue`, …)        | `Bar.height.from` (`.hue`, …)         |
  * | `listing.syntax`                     | `listing.syntax` (or `<Listing>.syntax`) |
  *
- * `$` tokens, `<…>` groups, `listing.lit@label.…` (a label, so `@`) and frame keys are alike in
- * both. A place's view and pointer share `{Type}:place`, as a place is drawn one way or the other;
- * where a design has both, the pointer's is written `{Type}.pointer:place`.
+ * `$` tokens, `$` styles' props (`$cell.stroke`), what a kind inherits (`IntCell.inherit`), `<…>`
+ * groups, `listing.lit@label.…` (a label, so `@`) and frame keys are alike in both. A place's view
+ * and pointer share `{Type}:place`, as a place is drawn one way or the other; where a design has
+ * both, the pointer's is written `{Type}.pointer:place`. People read the written keys nested (see
+ * nestedDesign).
  */
 
 import { listingAlias } from './design';
@@ -167,4 +169,152 @@ export function keptValues<T>(
   return Object.fromEntries(
     Object.entries(values).map(([key, value]) => [keptKey(key, has), value])
   );
+}
+
+/**
+ * A design as people and the assistant read it: nested, one object for each token style, group,
+ * kind and listing, as the language guide's Shared values shows. Each written key's path:
+ *
+ * | Written                        | Nested                                        |
+ * | ------------------------------ | --------------------------------------------- |
+ * | `$text`                        | `"$text": …`                                  |
+ * | `$cell.stroke`                 | `"$cell": { "stroke": … }`                    |
+ * | `<Node>.padding`               | `"<Node>": { "padding": … }`                  |
+ * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
+ * | `listing.lit.fill`             | `"listing": { "lit": { "fill": … } }`         |
+ * | `listing.lit@insert.key.fill`  | `… "lit": { "@insert.key": { "fill": … } }`   |
+ * | `Here.Pointed.fill`            | `"Here": { "Pointed": { "fill": … } }`        |
+ * | `IntCell:target.stroke`        | `"IntCell": { ":target": { "stroke": … } }`   |
+ * | `Card=true.stroke`             | `"Card": { "=true": { "stroke": … } }`        |
+ * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |
+ * | `Bar.height.from`              | `"Bar": { "height.from": … }`                 |
+ * | `IntCell.inherit`              | `"IntCell": { "...": … }`                     |
+ *
+ * A view choice stays one key, as it holds a view's name rather than props. Props start with a
+ * lowercase letter, kinds with a capital, a place with `:`, a value with `=` and a label with `@`,
+ * so every path reads back to one key (see flatDesign).
+ */
+export function nestedDesign<T>(values: Readonly<Record<string, T>>): NestedDesign<T> {
+  const nested: NestedDesign<T> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const path = pathOf(key);
+    let at = nested;
+    for (const segment of path.slice(0, -1)) {
+      const next = at[segment];
+      at = (next && typeof next === 'object' ? next : (at[segment] = {})) as NestedDesign<T>;
+    }
+    at[path.at(-1)!] = value;
+  }
+  return sortedDesign(nested);
+}
+
+/** A nested design: each key's value, or an object of the keys under it. */
+export type NestedDesign<T> = { [key: string]: T | NestedDesign<T> };
+
+/** A written key's path in the nested form (see nestedDesign). */
+function pathOf(key: string): string[] {
+  if (key.startsWith('{')) return [key];
+  const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
+  if (prefixed) return [prefixed[1], prefixed[2]];
+  if (key.startsWith('listing.')) {
+    const rest = key.slice('listing.'.length);
+    const at = rest.indexOf('@');
+    if (at < 0) return ['listing', ...rest.split('.')];
+    const label = rest.slice(at + 1, rest.lastIndexOf('.'));
+    return [
+      'listing',
+      ...rest.slice(0, at).split('.'),
+      `@${label}`,
+      rest.slice(rest.lastIndexOf('.') + 1)
+    ];
+  }
+  const kind =
+    /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(:[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
+      key
+    );
+  if (!kind) return [key];
+  const [, name, place, value, prop] = kind;
+  return [
+    ...name.split('.'),
+    ...(place ? [place] : []),
+    ...(value ? [value] : []),
+    prop === 'inherit' ? '...' : prop
+  ];
+}
+
+/** The order a nested object's keys are shown in: inherited, tokens, groups, views, the listing, props, places, values, kinds. */
+function rank(key: string): number {
+  if (key === '...') return 0;
+  if (key.startsWith('$')) return 1;
+  if (key.startsWith('<')) return 2;
+  if (key.startsWith('{')) return 3;
+  if (key === 'listing') return 4;
+  if (/^[a-z]/u.test(key)) return 5;
+  if (key.startsWith(':')) return 6;
+  if (key.startsWith('=')) return 7;
+  if (key.startsWith('@')) return 8;
+  return 9;
+}
+
+function sortedDesign<T>(design: NestedDesign<T>): NestedDesign<T> {
+  return Object.fromEntries(
+    Object.entries(design)
+      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+      .map(([key, value]) => [
+        key,
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? sortedDesign(value as NestedDesign<T>)
+          : value
+      ])
+  );
+}
+
+/**
+ * A nested design's written keys, each with its value: the path joined back into a key (see
+ * nestedDesign), `"..."` as the kind's `inherit`. A key already written flat at any level, as an
+ * older `"IntCell.fill": "white"`, is joined as it is, so either form reads. A `null`, as a JSON
+ * Merge Patch writes it to remove a value, is kept under the key or the start of keys it removes.
+ */
+export function flatDesign(design: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  const walk = (prefix: string | undefined, object: Readonly<Record<string, unknown>>) => {
+    for (const [segment, value] of Object.entries(object)) {
+      const key = prefix === undefined ? segment : joined(prefix, segment);
+      if (value && typeof value === 'object' && !Array.isArray(value))
+        walk(key, value as Record<string, unknown>);
+      else flat[key] = value;
+    }
+  };
+  walk(undefined, design);
+  return flat;
+}
+
+function joined(prefix: string, segment: string): string {
+  if (segment === '...') return `${prefix}.inherit`;
+  return /^[:=@]/u.test(segment) ? `${prefix}${segment}` : `${prefix}.${segment}`;
+}
+
+/**
+ * A JSON Merge Patch (RFC 7396, https://www.rfc-editor.org/rfc/rfc7396) applied to a nested
+ * design: an object merges into the one it patches, `null` removes a key, and any other value
+ * replaces it; so a whole design sent by mistake removes nothing.
+ */
+export function mergePatch(
+  target: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...target };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) delete merged[key];
+    else if (typeof value === 'object' && !Array.isArray(value)) {
+      const under = merged[key];
+      merged[key] = mergePatch(
+        under && typeof under === 'object' && !Array.isArray(under)
+          ? (under as Record<string, unknown>)
+          : {},
+        value as Record<string, unknown>
+      );
+    } else merged[key] = value;
+  }
+  return merged;
 }
