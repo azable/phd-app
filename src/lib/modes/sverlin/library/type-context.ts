@@ -206,6 +206,12 @@ export type LayoutMemory = {
    */
   reserved: Map<string, { width: number; height: number }>;
   /**
+   * The largest room each row, column or grid holding links keeps for what they draw past its
+   * children, by its node's id, over every step: room worked out at one step alone moves the
+   * children inside a box that keeps its size as the links change.
+   */
+  rooms?: Map<string, { top: number; right: number; bottom: number; left: number }>;
+  /**
    * Each grid's tracks, by its node's id, or for a grid in a typed view by its site, shared by every
    * copy of the view and its probed values: every column as wide as the widest cell it holds at any
    * step and every row as tall as the tallest, as many as the largest coordinate any step uses, so a

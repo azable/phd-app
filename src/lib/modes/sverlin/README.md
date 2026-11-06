@@ -2234,9 +2234,11 @@ which runs as the array. Only a free layout places its children by their links;
 in a row, column or grid links are drawn over the children, which stay where
 they would be without them: in a row or column each arcs over ends side by side
 or beside ends one above the other, clear of the boxes, and in a grid each runs
-straight from cell to cell, as a heap's edges (see Grid). Each link is
-selectable, as a node is, and its look, how it runs and its heads, is its kind's
-(see Design), never a prop, as `Arrow.Link` for a link in `Arrow`.
+straight from cell to cell, as a heap's edges (see Grid). The row, column or
+grid keeps room round its children for the largest arc its links draw at any
+step, so its children stay put as links come and go. Each link is selectable, as
+a node is, and its look, how it runs and its heads, is its kind's (see Design),
+never a prop, as `Arrow.Link` for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the

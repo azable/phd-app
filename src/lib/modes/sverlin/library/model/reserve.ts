@@ -78,6 +78,13 @@ type Read = {
 
 const elementsOf = (element: ModelElement) => element.children.filter(isElement);
 
+const widest = (a: Sides, b: Sides): Sides => ({
+  top: Math.max(a.top, b.top),
+  right: Math.max(a.right, b.right),
+  bottom: Math.max(a.bottom, b.bottom),
+  left: Math.max(a.left, b.left)
+});
+
 function find(element: ModelElement, name: string): ModelElement | undefined {
   if (classesOf(element).includes(name)) return element;
   for (const child of elementsOf(element)) {
@@ -240,10 +247,40 @@ function sizer(options: ReserveOptions) {
   }
 
   // A row, column or grid holding links keeps room for what they draw past its children in its padding
-  // (see node/overlay.ts), worked out once for all alike; while it is, it is laid out without it.
+  // (see node/overlay.ts): the largest it needs at any step (memory.rooms), so its children stay put
+  // as the links change, and before that is known the room this step needs.
+  function roomOf(at: Read, host: ModelElement): Sides | undefined {
+    if (rooming.has(host)) return undefined;
+    const here = stepRoomOf(at, host);
+    const id = roomId(at, host);
+    const kept = id === undefined ? undefined : memory.rooms?.get(id);
+    return here && kept ? widest(here, kept) : (here ?? kept);
+  }
+  /** The node a host of links draws for, by whose id its room is kept. */
+  function roomId(at: Read, host: ModelElement): string | undefined {
+    if (host.attributes['data-sv-overlaid'] === undefined) return undefined;
+    for (let up: ModelElement | undefined = host; up; up = at.parents.get(up)) {
+      const id = up.attributes['data-sv-node'];
+      if (id !== undefined) return id;
+    }
+    return undefined;
+  }
+  /** Keep, for each host of links inside `element`, the largest room it needs at this step. */
+  function keepRooms(at: Read, element: ModelElement) {
+    if (!memory.rooms) return;
+    for (const host of elementsUnder(element)) {
+      const id = roomId(at, host);
+      const here = id === undefined ? undefined : stepRoomOf(at, host);
+      if (!id || !here) continue;
+      const kept = memory.rooms.get(id);
+      memory.rooms.set(id, kept ? widest(here, kept) : here);
+    }
+  }
+  // The room one step needs, worked out once for all alike; while it is, the host is laid out
+  // without it.
   const rooms = new Map<string, Sides>();
   const rooming = new Set<ModelElement>();
-  function roomOf(at: Read, host: ModelElement): Sides | undefined {
+  function stepRoomOf(at: Read, host: ModelElement): Sides | undefined {
     if (host.attributes['data-sv-overlaid'] === undefined || rooming.has(host)) return undefined;
     const key = wholeSignature(at, host);
     let room = rooms.get(key);
@@ -542,6 +579,7 @@ function sizer(options: ReserveOptions) {
     extentAlone,
     sizeAlone,
     widenTracks,
+    keepRooms,
     layouts: () => layouts
   };
 }
@@ -676,7 +714,10 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
     // A grid in a typed view starts from the tracks its probed values reached (see probeComponent).
     for (const key of keys.filter((each) => each.startsWith('g:')))
       model.widenTracks(key.slice(2), instances.get(key) ?? []);
-    // Then the nodes, each keeping the largest size it reaches.
+    // Then the nodes, each keeping the largest size it reaches, after the largest room the links
+    // inside them need at any step, which they are sized with.
+    for (const key of keys.filter((each) => each.startsWith('n:')))
+      for (const { at, element } of instances.get(key) ?? []) model.keepRooms(at, element);
     for (const key of keys.filter((each) => each.startsWith('n:'))) {
       const id = key.slice(2);
       for (const { at, element } of instances.get(key) ?? []) {

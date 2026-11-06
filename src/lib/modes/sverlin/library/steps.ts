@@ -71,6 +71,7 @@ export function emptyLayouts(): Layouts {
     scopes: new Map(),
     fits: new Map(),
     reserved: new Map(),
+    rooms: new Map(),
     tracks: new Map(),
     components: new Map(),
     lines: new Set()
