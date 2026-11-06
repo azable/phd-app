@@ -524,9 +524,9 @@ how long the reply waits are set in one place,
 [`helper-pipeline.ts`](src/lib/server/ai/bots/helper-pipeline.ts):
 `helpers: false` turns all of it off whatever a condition says, and
 `scoring.enabled` or `choosing.enabled` false skips that stage. The pictures
-come from the server PDF through poppler's `pdftoppm`, which devenv provides;
-where it is missing, as on the Render host today, the round skips scoring and
-ranks by the app's measures.
+come from the server PDF, drawn by `pdfjs-dist` on `@napi-rs/canvas` (npm
+packages, no system package), so the Render host makes them too; if making them
+fails, the round skips scoring and ranks by the app's measures.
 
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):

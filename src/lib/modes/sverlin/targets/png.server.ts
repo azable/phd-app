@@ -1,29 +1,17 @@
 /**
- * Pictures of scenes as PNG data URLs, made on the server with no browser: the server PDF
- * (pdf.server.ts), a page per step, turned into PNGs by poppler's `pdftoppm`, which devenv.nix
- * provides. Only this file knows how; swapping in another rasteriser (resvg, say) changes nothing
- * else. Where `pdftoppm` is missing, as on a host without poppler, it throws
- * PicturesUnavailableError and the caller goes on without pictures.
+ * Pictures of scenes as PNG data URLs, made on the server with no browser and no system package:
+ * the server PDF (pdf.server.ts), a page per step, drawn by pdf.js (`pdfjs-dist`) on the canvas it
+ * uses in Node (`@napi-rs/canvas`, which ships its own binaries), so any host with Node, Render
+ * included, makes them. Only this file knows how; swapping in another rasteriser (resvg, say)
+ * changes nothing else.
  */
 
-import { execFile } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 import type { SceneFrame, SceneStep } from '../library';
 import { serverPdf, serverScene } from './pdf.server';
 
-const run = promisify(execFile);
-
-export class PicturesUnavailableError extends Error {}
-
-/**
- * How long one conversion may take. A three-page PDF converted in about 0.2 s on a laptop on
- * 2026-11-06; ten seconds leaves room for a busy server and never holds a turn up for long.
- */
-const conversionTimeoutMs = 10_000;
+type NodeCanvas = { toBuffer(mime: 'image/png'): Buffer };
 
 /**
  * A PNG of each step of `scenes`, `width` pixels wide (as the step shows on the stage), as data
@@ -36,38 +24,26 @@ export async function scenePictures(
   const pdf = await serverPdf(
     serverScene(scenes, { presentationId: 'pictures', seed: 0, labels: [] })
   );
-  const folder = await mkdtemp(join(tmpdir(), 'sverlin-pictures-'));
+  const loading = getDocument({
+    data: new Uint8Array(await pdf.arrayBuffer()),
+    isEvalSupported: false
+  });
+  const document = await loading.promise;
   try {
-    const file = join(folder, 'scenes.pdf');
-    await writeFile(file, Buffer.from(await pdf.arrayBuffer()));
-    try {
-      await run(
-        'pdftoppm',
-        [
-          '-png',
-          '-scale-to-x',
-          String(Math.round(width)),
-          '-scale-to-y',
-          '-1',
-          file,
-          join(folder, 'step')
-        ],
-        { timeout: conversionTimeoutMs }
-      );
-    } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === 'ENOENT')
-        throw new PicturesUnavailableError('pdftoppm (poppler) is not installed.');
-      throw cause;
+    const pictures: string[] = [];
+    for (let number = 1; number <= document.numPages; number++) {
+      const page = await document.getPage(number);
+      const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
+      const { canvas } = document.canvasFactory.create(
+        Math.round(viewport.width),
+        Math.round(viewport.height)
+      ) as { canvas: HTMLCanvasElement & NodeCanvas };
+      await page.render({ canvas, viewport }).promise;
+      pictures.push(`data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`);
+      page.cleanup();
     }
-    // pdftoppm numbers its pages with as many digits as the last needs, so a name sort keeps order.
-    const pages = (await readdir(folder)).filter((name) => name.endsWith('.png')).sort();
-    return Promise.all(
-      pages.map(
-        async (page) =>
-          `data:image/png;base64,${(await readFile(join(folder, page))).toString('base64')}`
-      )
-    );
+    return pictures;
   } finally {
-    await rm(folder, { recursive: true, force: true });
+    await loading.destroy();
   }
 }
