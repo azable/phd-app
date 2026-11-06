@@ -113,6 +113,7 @@ function takeScenes(data: { frame?: unknown; steps?: unknown; failure?: unknown 
 type ScenePlayer = {
   show(step: number, scene: SceneStep): void;
   select(ids: readonly string[]): void;
+  annotate(pins: readonly unknown[]): void;
 };
 let player: ScenePlayer | undefined;
 let ready = false;
@@ -139,6 +140,15 @@ async function showStep(step: number) {
     if (near >= 0 && near < stepCount) void sceneOf(near).catch(() => undefined);
 }
 
+// The comment pins the app last sent, shown once the player mounts.
+type Pin = { n: number; element?: string; point?: { x: number; y: number }; text: string };
+let pins: Pin[] = [];
+const isPin = (pin: unknown): pin is Pin =>
+  typeof pin === 'object' &&
+  pin !== null &&
+  typeof (pin as Pin).n === 'number' &&
+  typeof (pin as Pin).text === 'string';
+
 function mountPlayer(): ScenePlayer {
   return mount(SceneView, {
     target: root,
@@ -148,7 +158,9 @@ function mountPlayer(): ScenePlayer {
         ? playback.__sverlinSelection.map(String)
         : [],
       view: playback.__sverlinView,
+      pins,
       onselection: (elements: unknown[]) => post({ type: 'sverlin:selection', elements }),
+      onpoint: (point: { x: number; y: number }) => post({ type: 'sverlin:point', ...point }),
       onview: (view: { zoom: number; panX: number; panY: number }) => {
         playback.__sverlinView = view;
         post({ type: 'sverlin:view', ...view });
@@ -176,7 +188,17 @@ function mountPlayer(): ScenePlayer {
 // and selections to show, as when a participant opens a reference.
 addEventListener('message', (event: MessageEvent) => {
   if (event.source !== window.parent) return;
-  const data = event.data as { type?: unknown; step?: unknown; selection?: unknown; ids?: unknown };
+  const data = event.data as {
+    type?: unknown;
+    step?: unknown;
+    selection?: unknown;
+    ids?: unknown;
+    pins?: unknown;
+  };
+  if (data?.type === 'sverlin:pins') {
+    pins = Array.isArray(data.pins) ? data.pins.filter(isPin) : [];
+    return player?.annotate(pins);
+  }
   if (data?.type === 'sverlin:scenes') return takeScenes(data as Parameters<typeof takeScenes>[0]);
   if (data?.type === 'sverlin:select')
     return player?.select(Array.isArray(data.ids) ? data.ids.map(String) : []);

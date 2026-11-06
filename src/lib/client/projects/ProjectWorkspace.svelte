@@ -40,6 +40,7 @@
     timelinePresentations
   } from '$lib/client/visualization/presentation-history';
   import { VisualSelections } from '$lib/client/visualization/visual-selection.svelte';
+  import { VisualAnnotations } from '$lib/client/visualization/visual-annotations.svelte';
   import type { PresentationLayout } from '$lib/shared/presentations';
   import type { ProjectTemplateSummary } from '$lib/shared/projects/creation';
   import type { EventId } from '$lib/shared/projects/events';
@@ -159,6 +160,8 @@
   const presentationPlayback = new PresentationPlayback();
   // Elements selected in the visible presentations, to reference in feedback.
   const visualSelections = new VisualSelections();
+  // Comments pinned in presentations, drafts until the next message or answer on them sends them.
+  const visualAnnotations = new VisualAnnotations();
 
   // Each selection with the source its presentation was built from, for the source panel.
   const selectedSources = $derived(
@@ -741,6 +744,13 @@
                 onReferenceRequest={(presentation) =>
                   feedbackComposer?.referencePresentation(presentation)}
                 onElementReference={showElementReference}
+                onStepReference={(_presentationId, step) =>
+                  presentationPlayback.seek(
+                    presentationPlaybackContext(
+                      presentationSelection.selected(session.events, layout)
+                    ),
+                    step
+                  )}
                 onQuestionElements={showQuestionElements}
                 chosenSource={chosenOf?.sourceHash}
                 onChooseSource={(source) => {
@@ -779,6 +789,7 @@
                   steps={viewedSteps}
                   pair={pairOnStage}
                   visualSelections={visualSelections.current}
+                  annotations={visualAnnotations}
                   onSubmitted={() => {
                     chosenOf = undefined;
                     chosenFailure = undefined;
@@ -867,6 +878,7 @@
             playback={presentationPlayback}
             {layout}
             {visualSelections}
+            {visualAnnotations}
             onReferenceSelection={(selected) => feedbackComposer?.referenceSelection(selected)}
             takeComment={() => feedbackComposer?.takeComment()}
             onCommentSent={() => feedbackComposer?.clear()}

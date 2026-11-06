@@ -57,6 +57,8 @@
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
     onElementReference?: (reference: ElementReference) => void;
+    /** Show a presentation at a step, as for a comment pinned at a point there. */
+    onStepReference?: (presentationId: string, step: number) => void;
     /** Highlight the elements a question about a presentation names, once it is shown. */
     onQuestionElements?: (presentationId: string, elements: readonly string[]) => void;
     /** The source chosen on its own, by a pill's code button, if any. */
@@ -83,6 +85,7 @@
     onPresentationChange = () => {},
     onReferenceRequest = () => {},
     onElementReference = () => {},
+    onStepReference = () => {},
     onQuestionElements = () => {},
     chosenSource,
     onChooseSource = () => {},
@@ -202,6 +205,19 @@
     onPresentationChange();
     selection.activate(presentation, session.events, layout, extend);
     if (reference.type === 'element-ref') onElementReference(reference);
+    // A comment opens its presentation at its step, its element selected where it has one.
+    if (reference.type === 'annotation') {
+      const { presentationId, step, stepName, element } = reference;
+      if (element)
+        onElementReference({
+          type: 'element-ref',
+          presentationId,
+          step,
+          ...(stepName ? { stepName } : {}),
+          element
+        });
+      else onStepReference(presentationId, step);
+    }
   }
 
   /** A reply with the pills of what it presented but did not name at its end. */

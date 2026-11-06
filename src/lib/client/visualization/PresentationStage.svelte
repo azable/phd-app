@@ -12,6 +12,7 @@
   import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import DownloadIcon from '@lucide/svelte/icons/download';
   import EqualIcon from '@lucide/svelte/icons/equal';
+  import MessageSquarePlusIcon from '@lucide/svelte/icons/message-square-plus';
   import { prefersReducedMotion } from 'svelte/motion';
   import { fade, fly } from 'svelte/transition';
 
@@ -22,11 +23,16 @@
   import type { ProjectSession } from '$lib/client/projects/project-session.svelte';
   import type { ProjectOperationKind } from '$lib/shared/projects/events';
   import type { ProjectCommandInput } from '$lib/shared/projects/model';
-  import type { MessageContent as Message } from '$lib/shared/projects/events/message-content';
+  import {
+    annotationTextMaxLength,
+    type FramePoint,
+    type MessageContent as Message
+  } from '$lib/shared/projects/events/message-content';
   import * as DropdownMenu from '$lib/client/components/ui/dropdown-menu';
   import {
     isStepName,
     isSverlinPresentation,
+    presentationStepName,
     sceneOfLabel,
     type PresentationLayout
   } from '$lib/shared/presentations';
@@ -45,6 +51,11 @@
   import PresentationViewport from './PresentationViewport.svelte';
   import { assistantTurnAfter, blankStarter, stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
+  import {
+    annotationPins,
+    sentAnnotations,
+    type VisualAnnotations
+  } from './visual-annotations.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
   import type { PairAnswers } from './pair-answers';
 
@@ -57,6 +68,8 @@
     layout: PresentationLayout;
     /** Elements selected in the visible presentations, to reference in feedback. */
     visualSelections: VisualSelections;
+    /** Comments pinned in the visible presentations, drafts until a message or answer sends them. */
+    visualAnnotations: VisualAnnotations;
     onReferenceSelection?: (selection: VisualSelection) => void;
     onViewChange?: (presentationId: string, view: CanvasView) => void;
     disabled?: boolean;
@@ -76,6 +89,7 @@
     playback,
     layout,
     visualSelections,
+    visualAnnotations,
     onReferenceSelection = () => {},
     onViewChange = () => {},
     disabled = false,
@@ -386,6 +400,36 @@
     return problems || failed.payload.error || 'Its source no longer builds.';
   }
 
+  // Where the last click fell in each presentation, at the step it showed, to pin a comment there.
+  let points = $state<Record<string, { step: number; point: FramePoint }>>({});
+  // The presentation a comment is being written for, and its words so far.
+  let commenting = $state<string>();
+  let commentText = $state('');
+  const sent = $derived(sentAnnotations(session.events));
+
+  /** Keep the words written as a draft pinned where the participant clicked and selected. */
+  function pinComment(entry: (typeof visible)[number]) {
+    const text = commentText.trim();
+    if (!text) return;
+    const { presentation } = entry;
+    const at = localStep(entry);
+    const selected = visualSelections.for(presentation.presentationId, step);
+    const element = selected?.elements.length === 1 ? selected.elements[0] : undefined;
+    const clicked = points[presentation.presentationId];
+    const stepName = presentationStepName(presentation, at);
+    visualAnnotations.add({
+      type: 'annotation',
+      presentationId: presentation.presentationId,
+      step: at,
+      ...(stepName ? { stepName } : {}),
+      ...(element ? { element } : {}),
+      ...(clicked?.step === at ? { point: clicked.point } : {}),
+      text: text.slice(0, annotationTextMaxLength)
+    });
+    commentText = '';
+    commenting = undefined;
+  }
+
   function localStep(entry: (typeof visible)[number]) {
     return localPresentationStep(playbackContext, entry.presentation.presentationId, step);
   }
@@ -641,17 +685,58 @@
               {@render loader('Making a first version…')}
             </div>
           {/if}
-          {#if selected && !session.readOnly}
-            <Button
-              size="xs"
-              variant="secondary"
-              class="absolute bottom-2 left-2 z-10 max-w-[70%] truncate shadow-sm"
-              onclick={() => onReferenceSelection(selected)}
-            >
-              Reference {selected.elements.length === 1
-                ? selected.elements[0].label
-                : `${selected.elements.length} elements`}
-            </Button>
+          {#if !session.readOnly && isSverlinPresentation(entry.presentation)}
+            <div class="absolute bottom-2 left-2 z-10 flex max-w-[85%] items-center gap-1">
+              {#if commenting === presentationId}
+                <form
+                  class="flex items-center gap-1 rounded-md bg-background p-1 shadow-sm"
+                  onsubmit={(event) => {
+                    event.preventDefault();
+                    pinComment(entry);
+                  }}
+                >
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    class="h-6 w-64 max-w-full rounded border px-2 text-xs"
+                    maxlength={annotationTextMaxLength}
+                    placeholder="Comment on this spot…"
+                    aria-label="Comment pinned here"
+                    autofocus
+                    bind:value={commentText}
+                    onkeydown={(event) => {
+                      if (event.key === 'Escape') commenting = undefined;
+                    }}
+                  />
+                  <Button size="xs" type="submit" disabled={!commentText.trim()}>Pin</Button>
+                </form>
+              {:else}
+                {#if selected}
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    class="max-w-[60%] truncate shadow-sm"
+                    onclick={() => onReferenceSelection(selected)}
+                  >
+                    Reference {selected.elements.length === 1
+                      ? selected.elements[0].label
+                      : `${selected.elements.length} elements`}
+                  </Button>
+                {/if}
+                {#if selected || points[presentationId]?.step === localStep(entry)}
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    class="shadow-sm"
+                    onclick={() => {
+                      commentText = '';
+                      commenting = presentationId;
+                    }}
+                  >
+                    <MessageSquarePlusIcon data-icon="inline-start" /> Comment
+                  </Button>
+                {/if}
+              {/if}
+            </div>
           {/if}
           {#if targets.length}
             <div class="absolute top-2 left-2 z-10 flex max-w-[70%] flex-col items-start gap-1">
@@ -710,6 +795,13 @@
               label={`Visualization ${index + 1}`}
               selection={selected?.elements.map(({ id }) => id) ?? []}
               onSelectionChange={(elements) => visualSelections.set(presentationId, step, elements)}
+              pins={annotationPins(
+                presentationId,
+                localStep(entry),
+                sent,
+                visualAnnotations.drafts
+              )}
+              onPoint={(point) => (points[presentationId] = { step: localStep(entry), point })}
               onViewChange={(view) => onViewChange(presentationId, view)}
               onRuntimeError={(failure) =>
                 session.reportRuntimeFailure({ presentationId, ...failure })}

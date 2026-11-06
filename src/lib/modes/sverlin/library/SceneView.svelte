@@ -6,6 +6,8 @@
   pointer, or, on the frame's empty space, the page, Shift, Ctrl or Cmd adding or removing one, and
   dragging draws a box; the wheel zooms, dragging with the middle button or with Space held pans,
   and a double click on empty space resets; hovering a reference to a place outlines every other.
+  The app's comment pins are drawn over the frame, each at its point, or else at its element's top
+  right corner, numbered, its words on hover; a click reports where it fell in the frame.
 -->
 <script lang="ts">
   import { motionDuration } from './motion';
@@ -30,17 +32,25 @@
 
   type CanvasView = { zoom: number; panX: number; panY: number };
   type Selected = { id: string; label: string; layouts: ArrangementLayout[]; place?: string };
+  /** A comment pinned at this step: its number, where, and what it says; draft until sent. */
+  type Pin = { n: number; element?: string; point?: Point; text: string; draft?: boolean };
 
   let {
     frame,
     selection = [],
+    pins: startPins = [],
     view,
     onselection,
+    onpoint,
     onview,
     onsettled
   }: {
     frame: SceneFrame;
     selection?: readonly string[];
+    /** The comments pinned at the step shown. */
+    pins?: readonly Pin[];
+    /** Told where a click fell, in the frame's coordinates. */
+    onpoint?: (point: Point) => void;
     /** The zoom and pan to start from, as the app restores them. */
     view?: Partial<CanvasView>;
     /** Told the nodes selected, with what a selection names each by and the layouts round each. */
@@ -96,6 +106,13 @@
   /** Show these nodes selected, as when the app opens a reference. */
   export function select(ids: readonly string[]): void {
     selected = ids.slice(0, maxSelected);
+  }
+
+  // svelte-ignore state_referenced_locally
+  let pins = $state.raw<readonly Pin[]>(startPins);
+  /** Show these comment pins, as the app sends them for the step shown. */
+  export function annotate(next: readonly Pin[]): void {
+    pins = next;
   }
 
   // The canvas fills the page, and the frame fits inside it with a margin, as Frame.svelte fits it.
@@ -297,6 +314,8 @@
     gesture = undefined;
     if (ended.kind === 'pan') return reportView();
     if (event.type === 'pointercancel') return;
+    if (!within)
+      onpoint?.({ x: (ended.at.x - corner.x) / shown, y: (ended.at.y - corner.y) / shown });
     if (within) {
       const ids = partsInside(within);
       setSelection(ended.additive ? [...selected, ...ids] : ids);
@@ -375,6 +394,21 @@
       const node = drawn.byId.get(id);
       const box = node?.box ?? selectable.get(id)?.box;
       return box ? [{ id, ...onCanvas(box) }] : [];
+    })
+  );
+
+  // Each pin on the canvas: at its point, else at its element's top right corner, else not drawn.
+  const pinMarks = $derived(
+    pins.flatMap((pin) => {
+      const box = pin.element
+        ? (drawn.byId.get(pin.element)?.box ?? selectable.get(pin.element)?.box)
+        : undefined;
+      const at = pin.point
+        ? onCanvas({ x: pin.point.x, y: pin.point.y, width: 0, height: 0 })
+        : box
+          ? onCanvas({ x: box.x + box.width, y: box.y, width: 0, height: 0 })
+          : undefined;
+      return at ? [{ ...pin, left: at.left, top: at.top }] : [];
     })
   );
 
@@ -687,6 +721,18 @@
       style:height="{outline.height}px"
     ></div>
   {/each}
+  {#each pinMarks as pin (pin.n)}
+    <div
+      class={['sv-scene-pin', pin.draft && 'draft']}
+      style:left="{pin.left}px"
+      style:top="{pin.top}px"
+      title={pin.text}
+      role="note"
+      aria-label="Comment {pin.n}: {pin.text}"
+    >
+      {pin.n}
+    </div>
+  {/each}
   {#if area}
     <div
       class="sv-scene-box"
@@ -755,5 +801,29 @@
   .sv-scene-box {
     border: 1px solid var(--sv-select);
     background: color-mix(in srgb, var(--sv-select) 10%, transparent);
+  }
+  /* A comment pin: a numbered drop whose tip is its point; a draft, not yet sent, is outlined. */
+  .sv-scene-pin {
+    position: absolute;
+    box-sizing: border-box;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    transform: translate(-2px, -100%);
+    border-radius: 11px 11px 11px 2px;
+    background: var(--sv-select);
+    color: white;
+    font:
+      600 12px/22px system-ui,
+      sans-serif;
+    text-align: center;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+    cursor: default;
+  }
+  .sv-scene-pin.draft {
+    background: white;
+    color: var(--sv-select);
+    border: 2px dashed var(--sv-select);
+    line-height: 18px;
   }
 </style>

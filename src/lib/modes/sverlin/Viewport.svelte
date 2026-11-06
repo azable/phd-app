@@ -15,7 +15,12 @@
     type FontWidths,
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
-  import { selectedElementSchema } from '$lib/shared/projects/events/message-content';
+  import {
+    framePointSchema,
+    selectedElementSchema,
+    type FramePoint
+  } from '$lib/shared/projects/events/message-content';
+  import type { AnnotationPin } from '$lib/client/visualization/visual-annotations.svelte';
   import { fetchExport, fetchScenes, StaleScenesError } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
@@ -26,7 +31,9 @@
     step,
     label,
     selection = [],
+    pins = [],
     onSelectionChange = () => {},
+    onPoint = () => {},
     onViewChange = () => {},
     onRuntimeError = () => {},
     onLoadTiming = () => {},
@@ -40,6 +47,10 @@
     /** Ids of the elements to show selected. */
     selection?: readonly string[];
     onSelectionChange?: (elements: SelectedElement[]) => void;
+    /** The comments pinned at the step shown, drawn over the picture. */
+    pins?: readonly AnnotationPin[];
+    /** Where a click fell, in the frame's coordinates. */
+    onPoint?: (point: FramePoint) => void;
     /** The canvas zoom and pan the participant left the presentation at. */
     onViewChange?: (view: CanvasView) => void;
     /** The view's own code failed as it drew a step (or, without a step, at some other moment). */
@@ -327,6 +338,12 @@
         }
         return;
       }
+      if (data?.type === 'sverlin:point') {
+        const { x, y } = data as { x?: unknown; y?: unknown };
+        const parsed = v.safeParse(framePointSchema, { x, y });
+        if (parsed.success) onPoint(parsed.output);
+        return;
+      }
       if (data?.type === 'sverlin:selection') {
         const parsed = v.safeParse(selectionMessage, data);
         if (parsed.success) onSelectionChange(parsed.output.elements);
@@ -338,6 +355,12 @@
     };
     addEventListener('message', receive);
     return () => removeEventListener('message', receive);
+  });
+
+  // The comment pins, sent once the page can take them and whenever they change.
+  $effect(() => {
+    const shown = pins.map((pin) => ({ ...pin }));
+    if (loaded) iframe?.contentWindow?.postMessage({ type: 'sverlin:pins', pins: shown }, '*');
   });
 
   // Show a selection the app sets, such as from a reference in the timeline, without reloading.

@@ -3,6 +3,8 @@
   import { Skeleton } from '$lib/client/components/ui/skeleton';
   import { modeCatalog } from '$lib/modes/catalog';
   import type { SelectedElement } from './visual-selection.svelte';
+  import type { AnnotationPin } from './visual-annotations.svelte';
+  import type { FramePoint } from '$lib/shared/projects/events/message-content';
   import type { CanvasView } from '$lib/modes/sandbox';
   import type { RenderedFile, RenderTarget } from '$lib/modes/render-targets';
   import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
@@ -21,6 +23,10 @@
     /** Ids of the elements to show selected, in modes that support selection. */
     selection?: readonly string[];
     onSelectionChange?: (elements: SelectedElement[]) => void;
+    /** The comments pinned at the step shown, in modes that support selection. */
+    pins?: readonly AnnotationPin[];
+    /** Where a click fell in the frame, in modes that support selection. */
+    onPoint?: (point: FramePoint) => void;
     onViewChange?: (view: CanvasView) => void;
     /** The presentation's own code failed as it drew, in modes that run authored code. */
     onRuntimeError?: (failure: { step?: number; message: string }) => void;
@@ -40,6 +46,8 @@
     label,
     selection,
     onSelectionChange,
+    pins,
+    onPoint,
     onViewChange,
     onRuntimeError,
     onLoadTiming,
@@ -86,6 +94,8 @@
       {label}
       {selection}
       {onSelectionChange}
+      {pins}
+      {onPoint}
       {onViewChange}
       {onRuntimeError}
       {onLoadTiming}

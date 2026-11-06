@@ -2,6 +2,7 @@
 
 import type { EventId } from '$lib/shared/projects/events';
 import {
+  type Annotation,
   type ElementReference,
   type MessageContent
 } from '$lib/shared/projects/events/message-content';
@@ -457,11 +458,21 @@ async function validateMessageContent(
       throw new Error(`Unknown referenced presentation ${segment.presentationId}.`);
     }
     if (segment.type === 'element-ref') validateElementReference(document, segment);
+    else if (segment.type === 'annotation' && segment.element)
+      validateElementReference(document, annotatedElement(segment)!);
     else if (segment.step !== undefined)
       validateReferencedStep(document, segment.presentationId, segment.step);
   }
   return content.flatMap((segment): MessageContent => {
     if (segment.type === 'markdown' || segment.type === 'interface-ref') return [segment];
+    // A comment on an element its source does not show keeps its words and its point.
+    if (segment.type === 'annotation') {
+      const element = annotatedElement(segment);
+      if (!element || elementLocated(document, element)) return [named(document, segment)];
+      const kept = { ...segment };
+      delete kept.element;
+      return [named(document, kept)];
+    }
     if (segment.type !== 'element-ref' || elementLocated(document, segment))
       return [named(document, segment)];
     // An element its source does not show where its id says, as one an older compiler named,
@@ -568,9 +579,23 @@ function elementLocated(document: ProjectDocument, reference: ElementReference):
   );
 }
 
-/** Element references in a message. */
+/** Element references in a message, the elements its comments are pinned to among them. */
 export function referencedElements(content: MessageContent): ElementReference[] {
-  return content.filter((segment): segment is ElementReference => segment.type === 'element-ref');
+  return content.flatMap((segment) =>
+    segment.type === 'element-ref'
+      ? [segment]
+      : segment.type === 'annotation'
+        ? (annotatedElement(segment) ?? [])
+        : []
+  );
+}
+
+/** The element a comment is pinned to, as a reference to it at the comment's step. */
+function annotatedElement(annotation: Annotation): ElementReference | undefined {
+  const { presentationId, step, stepName, element } = annotation;
+  return element
+    ? { type: 'element-ref', presentationId, step, ...(stepName ? { stepName } : {}), element }
+    : undefined;
 }
 
 export function referencedPresentations(content: MessageContent): string[] {

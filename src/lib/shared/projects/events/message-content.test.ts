@@ -134,3 +134,34 @@ describe('known presentation references', () => {
     ]);
   });
 });
+
+describe('annotations', () => {
+  const pinned = {
+    type: 'annotation',
+    presentationId,
+    step: 1,
+    element: { id: '12:5#2', label: 'the queue' },
+    point: { x: 140.4, y: 62.6 },
+    text: 'Make the front of the queue stand out'
+  } as const;
+
+  it('are message parts a participant sends, with the element, the point, or neither', () => {
+    const { type, step, text } = pinned;
+    expect(v.is(messageContentSegmentSchema, pinned)).toBe(true);
+    expect(
+      v.is(messageContentSegmentSchema, { type, presentationId, step, point: pinned.point, text })
+    ).toBe(true);
+    expect(v.is(messageContentSegmentSchema, { type, presentationId, step, text })).toBe(true);
+  });
+
+  it('say a sentence or two, never nothing', () => {
+    expect(v.is(messageContentSegmentSchema, { ...pinned, text: ' ' })).toBe(false);
+    expect(v.is(messageContentSegmentSchema, { ...pinned, text: 'x'.repeat(281) })).toBe(false);
+  });
+
+  it('read as where they are pinned and what they say', () => {
+    expect(plainMessageText([pinned])).toBe(
+      `[Comment pinned to element "the queue" (12:5#2) at point (140, 63) of the frame at step 2 of presentation ${presentationId}: "Make the front of the queue stand out"]`
+    );
+  });
+});
