@@ -243,10 +243,15 @@ export function recordedQuestion(
         ? question.presentation
         : undefined;
   const elements = (question.elements ?? []).filter((id) => v.is(elementIdSchema, id));
+  const options = (question.options ?? []).map(({ label, task }) => ({
+    label,
+    ...(task ? { task } : {})
+  }));
   return {
     text: question.text,
     ...(presentationId ? { presentationId } : {}),
-    ...(presentationId && elements.length ? { elements } : {})
+    ...(presentationId && elements.length ? { elements } : {}),
+    ...(options.length ? { options } : {})
   };
 }
 

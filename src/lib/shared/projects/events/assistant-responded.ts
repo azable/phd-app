@@ -15,7 +15,23 @@ export const maximumQuestionText = 400;
 const questionSchema = v.object({
   text: v.pipe(v.string(), v.minLength(1), v.maxLength(maximumQuestionText)),
   presentationId: v.optional(presentationIdSchema),
-  elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8)))
+  elements: v.optional(v.pipe(v.array(elementIdSchema), v.maxLength(8))),
+  /**
+   * Short answers shown as buttons, each sent as the participant's answer when pressed, with what
+   * the view helpers prepare for it in the background, where they do
+   * (ai/decisions/source-decisions.ts).
+   */
+  options: v.optional(
+    v.pipe(
+      v.array(
+        v.object({
+          label: v.pipe(v.string(), v.minLength(1), v.maxLength(60)),
+          task: v.optional(v.pipe(v.string(), v.maxLength(300)))
+        })
+      ),
+      v.maxLength(3)
+    )
+  )
 });
 
 /** Runtime schema for an assistant's user-facing response. */

@@ -26,6 +26,8 @@ export type ProjectQuestion = {
   presentationIds: string[];
   /** Element ids in its presentation it is about. */
   elements?: string[];
+  /** Short answers offered as buttons, each with what the helpers prepare for it, where given. */
+  options?: { label: string; task?: string }[];
   /** What the participant would call each side of a pair, in slot order. */
   labels?: string[];
   displaySetId?: string;
@@ -42,13 +44,14 @@ export function projectQuestions(events: readonly ProjectEvent[]): ProjectQuesti
   const pairs = new Map<string, ProjectQuestion>();
   for (const event of events) {
     if (event.type === 'assistant.responded' && event.payload.question) {
-      const { text, presentationId, elements } = event.payload.question;
+      const { text, presentationId, elements, options } = event.payload.question;
       const question: ProjectQuestion = {
         kind: presentationId ? 'presentation' : 'text',
         eventId: event.id,
         text,
         presentationIds: presentationId ? [presentationId] : [],
-        ...(elements?.length ? { elements } : {})
+        ...(elements?.length ? { elements } : {}),
+        ...(options?.length ? { options } : {})
       };
       asked.set(event.id, question);
       questions.push(question);

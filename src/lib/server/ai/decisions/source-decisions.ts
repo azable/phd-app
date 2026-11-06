@@ -168,6 +168,13 @@ const comparisons = v.optional(
 export const maximumQuestionElements = 8;
 
 /**
+ * The most answers a question offers as buttons, and the most characters of each: a few short
+ * answers, as a pair's side labels are, so each fits on one button.
+ */
+export const maximumQuestionOptions = 3;
+export const maximumOptionLabel = 60;
+
+/**
  * A question for the participant to answer in the chat, in words or about a presentation: one
  * already shown, or the first this decision makes, as an example illustrating the question, with
  * elements in it to highlight. Optional (null in the strict response); a pair is asked with
@@ -195,6 +202,35 @@ const question = v.optional(
         v.nullable(v.pipe(v.array(v.string()), v.maxLength(maximumQuestionElements))),
         v.description(
           'Element ids in that presentation the question is about, highlighted when the participant opens it: each the line:column of its <Node> or <Link> tag in that presentation’s source, as 12:5, as selected.elements name them; or null.'
+        )
+      ),
+      options: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.array(
+                v.strictObject({
+                  label: v.pipe(
+                    v.string(),
+                    v.trim(),
+                    v.minLength(1),
+                    v.maxLength(maximumOptionLabel),
+                    v.description('The answer as the participant would give it, a few words.')
+                  ),
+                  task: v.pipe(
+                    v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(300))),
+                    v.description(
+                      'Where the view helpers are on, one short sentence telling them what to prepare in the background for this answer, as "make the comparisons the focus: each step\u2019s two values side by side", so its pictures are ready when it is chosen; or null.'
+                    )
+                  )
+                })
+              ),
+              v.maxLength(maximumQuestionOptions)
+            )
+          ),
+          v.description(
+            'Up to three short answers shown as buttons under a question in words, each sent as the participant\u2019s answer when pressed (they can still write their own); or null.'
+          )
         )
       )
     })
