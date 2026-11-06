@@ -2324,7 +2324,8 @@ loops, so the nodes round it stay clear of them.
 
 In a free layout with links, a node directly among its children starts as a
 circle, as a graph's vertex or a machine's state, so links meet its edge; a node
-drawn by a view, or one with a layout of its own, keeps its own look.
+drawn by a view, or one with a layout of its own, keeps its own look, as does a
+variable's label (see Link).
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
