@@ -18,6 +18,7 @@
  *   under 1 px, from the block's rounding.
  * - replay/ucs-ten: a union's members start with one look, so ∞ (UnknownCost) starts boxed like the
  *   costs it stands beside (CostValue).
+ * - links/*: their words are centred as above, once both changes were merged.
  */
 
 import { createHash } from 'node:crypto';
