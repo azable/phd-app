@@ -1,7 +1,6 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
 
-  import BotIcon from '@lucide/svelte/icons/bot';
   import CheckIcon from '@lucide/svelte/icons/check';
   import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
   import CopyIcon from '@lucide/svelte/icons/copy';
@@ -45,7 +44,6 @@
   import PresentationPill from './PresentationPill.svelte';
   import TurnChart from './TurnChart.svelte';
   import { presentProjectEvent } from './event-presentation';
-  import { agentOutcome, agentReasoning, agentTokens } from './agent-requests';
   import { loadReportLine } from './load-reports';
   import { participantTimeline, type VersionPill } from './participant-timeline';
 
@@ -444,49 +442,12 @@
         />
       </article>
     {:else if item.kind === 'chart'}
-      <TurnChart chart={item.value} />
-    {:else if item.kind === 'request'}
-      {@const request = item.value.request}
-      {@const tokens = agentTokens(item.value)}
-      {@const outcome = item.value.outcome}
-      {@const chosen = chosenRequest === request.id}
-      {@const reasoning = agentReasoning(item.value).summary}
-      <!-- A request to a model, for audit: one compact line; choosing it shows its details, and
-        its reasoning summary, where recorded, opens beneath it. -->
-      <div class="ml-6 flex w-[calc(100%-1.5rem)] min-w-0 flex-col gap-0.5">
-        <button
-          type="button"
-          class={[
-            'flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-dashed px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-            chosen && 'border-solid border-primary bg-muted text-foreground'
-          ]}
-          aria-label={`Agent request ${request.id}: ${agentOutcome(item.value)}`}
-          aria-pressed={chosen}
-          onclick={() => onChooseRequest(chosen ? undefined : request.id)}
-        >
-          <BotIcon class="size-3.5 shrink-0" />
-          <span class="shrink-0">{request.payload.attempt} · {request.payload.purpose}</span>
-          <span class="truncate text-foreground">{agentOutcome(item.value)}</span>
-          <span class="ml-auto shrink-0 font-mono">
-            {outcome ? `${(outcome.payload.durationMs / 1000).toFixed(1)} s` : '…'}{tokens.read !==
-            undefined
-              ? ` · ${tokens.read.toLocaleString()}→${tokens.written?.toLocaleString() ?? '?'}`
-              : ''}
-          </span>
-        </button>
-        {#if reasoning.length}
-          <details class="px-2 text-xs text-muted-foreground open:text-foreground">
-            <summary class="cursor-pointer hover:text-foreground">Reasoning</summary>
-            <div class="mt-1 flex flex-col gap-1 whitespace-pre-wrap">
-              {#each reasoning as paragraph, index (index)}<p>{paragraph}</p>{/each}
-            </div>
-          </details>
-        {/if}
-      </div>
-    {:else if item.kind === 'load'}
-      {@const report = item.event.payload}
-      {@const json = JSON.stringify(report, null, 2)}
-      <!-- How a presentation loaded, for audit: one compact line; opening it shows the report. -->
+      <TurnChart chart={item.value} {chosenRequest} {onChooseRequest} />
+    {:else if item.kind === 'loads'}
+      {@const reports = item.events.map(({ payload }) => payload)}
+      {@const stalled = reports.filter(({ outcome }) => outcome !== 'ready').length}
+      <!-- How presentations loaded, for audit: one compact line for a run of them; opening it lists
+        each report, each opening to the whole. -->
       <details
         class="ml-6 w-[calc(100%-1.5rem)] min-w-0 rounded-lg border border-dashed px-2 py-1 text-xs text-muted-foreground open:border-solid open:bg-muted open:text-foreground"
       >
@@ -495,23 +456,39 @@
         >
           <GaugeIcon class="size-3.5 shrink-0" />
           <span class="shrink-0">
-            {report.outcome === 'ready' ? 'Loaded' : 'Stalled'}
-            {presentationDisplayId(report.presentationId)}
+            {reports.length === 1 ? 'Loaded' : `Loaded ×${reports.length}`}{stalled
+              ? ` · ${stalled} stalled`
+              : ''}
           </span>
-          <span class="truncate font-mono">{loadReportLine(report)}</span>
+          <span class="truncate font-mono">{loadReportLine(reports.at(-1)!)}</span>
         </summary>
-        <div class="relative mt-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="absolute top-0 right-0"
-            aria-label="Copy the load report"
-            title="Copy the load report"
-            onclick={() => void navigator.clipboard.writeText(json)}
-          >
-            <CopyIcon />
-          </Button>
-          <pre class="max-h-80 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{json}</pre>
+        <div class="mt-1 flex flex-col gap-1">
+          {#each reports as report, index (index)}
+            {@const json = JSON.stringify(report, null, 2)}
+            <details class="rounded border border-border/60 px-1.5 py-0.5">
+              <summary class="flex cursor-pointer items-center gap-1.5">
+                <span class="shrink-0">
+                  {report.outcome === 'ready' ? 'Loaded' : 'Stalled'}
+                  {presentationDisplayId(report.presentationId)}
+                </span>
+                <span class="truncate font-mono">{loadReportLine(report)}</span>
+              </summary>
+              <div class="relative mt-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute top-0 right-0"
+                  aria-label="Copy the load report"
+                  title="Copy the load report"
+                  onclick={() => void navigator.clipboard.writeText(json)}
+                >
+                  <CopyIcon />
+                </Button>
+                <pre
+                  class="max-h-80 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{json}</pre>
+              </div>
+            </details>
+          {/each}
         </div>
       </details>
     {:else if item.failed}

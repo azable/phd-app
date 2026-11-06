@@ -399,10 +399,16 @@ describe('participant Timeline projection', () => {
       }
     };
     expect(participantTimeline([...before, loaded])).toEqual(participantTimeline(before));
-    expect(participantTimeline([...before, loaded], { audit: true }).at(-1)).toEqual({
+    // A run of reports, each its own operation, is one item.
+    const again: ProjectEvent = {
+      ...loaded,
+      id: loaded.id + 1,
+      operationId: '12345678-1234-4123-8123-123456789ac0'
+    };
+    expect(participantTimeline([...before, loaded, again], { audit: true }).at(-1)).toEqual({
       id: `load-${loaded.id}`,
-      kind: 'load',
-      event: loaded
+      kind: 'loads',
+      events: [loaded, again]
     });
     expect(loadReportLine(loaded.payload)).toBe('server layout · 84 ms · Chrome/macOS · 2×');
   });

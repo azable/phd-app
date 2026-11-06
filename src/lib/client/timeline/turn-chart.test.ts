@@ -97,6 +97,36 @@ describe('a turn chart', () => {
     expect(chart.followUp).toBe(false);
   });
 
+  it('names its operation, its agents by their part, each call’s request, timing and cost', () => {
+    const scoring = {
+      ...call(1, 'scoring', ''),
+      requestedModel: 'gpt-6-luna',
+      parameters: { model: 'gpt-6-luna' }
+    };
+    const chart = turnChart(
+      events([
+        [0, 'operation.accepted', { kind: 'prepare-answers' }],
+        [10, 'ai.generation-requested', scoring],
+        [10, 'ai.generation-succeeded', { ...done(1, 2000), requestedModel: 'gpt-6-luna' }],
+        [11, 'ai.generation-requested', { ...scoring, attempt: 2 }],
+        [
+          11,
+          'ai.generation-failed',
+          { attempt: 2, durationMs: 1000, failureKind: 'provider', message: '503' }
+        ]
+      ])
+    )!;
+    expect(chart).toMatchObject({ operation: 'prepare-answers', background: true });
+    expect(chart.cost).toMatch(/^2 calls · /u);
+    expect(chart.bars.map(({ kind, requestId, outcome }) => [kind, requestId, outcome])).toEqual([
+      ['scoring', 2, 'ok'],
+      ['scoring', 4, 'incomplete']
+    ]);
+    expect(chart.bars[0].detail).toContain('at 0.0 s for 2.0 s');
+    expect(chart.bars[1].label).toBe('scoring luna 1 s → provider');
+    expect(chart.bars[1].detail).toContain('503');
+  });
+
   it('draws nothing for an operation that called no model and built nothing', () => {
     expect(turnChart(events([[0, 'feedback.submitted', { content: [] }]]))).toBeUndefined();
   });
