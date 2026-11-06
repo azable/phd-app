@@ -83,6 +83,7 @@ import {
   positionReads,
   readsOf,
   freeReads,
+  constValues,
   unknownReadOf,
   rootPlacements,
   scopedReadsOf,
@@ -3797,6 +3798,8 @@ function withNodeRefs(
   const localKinds: { name: string; start: number }[] = [];
   // Each node whose kind is an expression, by its tag's start: the kind around it, the expression
   // as written, and every name it can give, each a kind of its own (see kind-expressions.server.ts).
+  // What each {@const} name holds, so a kind reading one is chosen again where what it holds is absent.
+  const constsHold = constValues(ast.html);
   const chosenKinds = new Map<
     number,
     { base: string; written: string; names: string[]; reads: string[] }
@@ -4370,7 +4373,7 @@ function withNodeRefs(
     const chosen = chosenKinds.get(start);
     return {
       at: start + name.length + 1,
-      text: `${chosen ? kindChoice(chosen.base, chosen.written, chosen.reads) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: `${chosen ? kindChoice(chosen.base, chosen.written, chosen.reads, constsHold) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   // A kind arranging no children has no gap, align, or justify to bind.

@@ -39,12 +39,19 @@ export function kindResults(expression: Expression): (string | undefined)[] | un
  * The hidden props giving a node its kind at each step, from the kind around it (`base`) and the
  * expression as written: a name gives base.Name, anything else the base. `__kindOf` evaluates the
  * expression again with each variable it `reads` that is absent at a step as undefined, not as the
- * value standing in for it, so its own tests choose, as k === j being false where j is absent.
+ * value standing in for it, so its own tests choose, as k === j being false where j is absent. A
+ * {@const} name it reads is absent where a variable its value reads (`held`) is.
  */
-export function kindChoice(base: string, written: string, reads: string[]): string {
+export function kindChoice(
+  base: string,
+  written: string,
+  reads: string[],
+  held: ReadonlyMap<string, string[]> = new Map()
+): string {
   const named = (name: unknown) =>
     `(typeof (${name}) === 'string' && (${name}) ? ${JSON.stringify(`${base}.`)} + (${name}) : ${JSON.stringify(base)})`;
   const variables = reads.filter((name) => /^[A-Za-z_$][\w$]*$/u.test(name));
+  const standsFor = variables.map((name) => held.get(name) ?? [name]);
   const choose = `(${variables.join(', ')}) => ${named(`(${written})`)}`;
-  return ` __view={${named(`(${written})`)}} __kindOf={{ reads: ${JSON.stringify(variables)}, values: [${variables.join(', ')}], choose: ${choose} }}`;
+  return ` __view={${named(`(${written})`)}} __kindOf={{ reads: ${JSON.stringify(standsFor)}, values: [${variables.join(', ')}], choose: ${choose} }}`;
 }
