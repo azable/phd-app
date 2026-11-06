@@ -26,9 +26,10 @@ import { placeRanges } from './source-references';
 export type SourceHighlight = { line: number; column: number } | { from: number; to: number };
 
 /**
- * What a selected element highlights in its source: its tag; for a listing's line, also that line
- * in its block and the algorithm code of the innermost label round it, or, where a token on it was
- * clicked, every place the token's place is declared and drawn.
+ * What a selected element highlights in its source, what it is first, which the editor scrolls to:
+ * its tag; for a listing's line, that line in its block, then its tag, and the algorithm code of
+ * the innermost label round it, or, where a token on it was clicked, every place the token's place
+ * is declared and drawn.
  */
 export function elementHighlights(
   source: string,
@@ -45,12 +46,12 @@ export function elementHighlights(
   const lines: SourceHighlight[] = listing
     ? [{ from: starts[listing.lines.first - 1], to: starts[listing.lines.last] - 1 }]
     : [];
-  if (element.place) return [tag, ...lines, ...placeRanges(source, element.place)];
+  if (element.place) return [...lines, tag, ...placeRanges(source, element.place)];
   const code = listing?.labels.length ? labelCode(source, listing.labels.at(-1)!) : undefined;
-  return [tag, ...lines, ...(code ? [{ from: code.from, to: code.end }] : [])];
+  return [...lines, tag, ...(code ? [{ from: code.from, to: code.end }] : [])];
 }
 
-/** Replace the highlighted tags; the editor scrolls to the first. */
+/** Replace the highlighted tags; the editor scrolls to the first given that the source holds. */
 export const setSourceHighlights = StateEffect.define<readonly SourceHighlight[]>();
 
 const selectedLine = Decoration.line({ class: 'cm-selected-node-line' });
@@ -131,12 +132,17 @@ const highlightTheme = EditorView.baseTheme({
 /** The extensions that let an editor show source highlights. */
 export const sourceHighlights = [highlightField, highlightTheme];
 
-/** A transaction spec that shows these highlights and scrolls the first into view. */
+/**
+ * A transaction spec that shows these highlights and scrolls the first given into view: the
+ * selected thing itself, as a listing's line, which can come after its label's code in the source.
+ */
 export function showSourceHighlights(
   state: EditorState,
   highlights: readonly SourceHighlight[]
 ): TransactionSpec {
-  const first = highlightRanges(state, highlights)[0];
+  const first = highlights
+    .map((highlight) => highlightRanges(state, [highlight])[0])
+    .find((range) => range !== undefined);
   return {
     effects: [
       setSourceHighlights.of(highlights),
