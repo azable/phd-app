@@ -212,7 +212,11 @@
     "strokeStyle": "solid",
     "route": "layout",
     "head": "arrow",
-    "headSize": 9
+    "headSize": 9,
+    "targetFill": "amber-100",
+    "targetStroke": "amber-500",
+    "targetStrokeWidth": 1.5,
+    "targetColor": "none"
   },
   "$second": {
     "fill": "sky-100",

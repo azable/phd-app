@@ -282,7 +282,8 @@ const basisSteps = [-1, -0.5, 0, 0.5, 1];
  * the slot; whether a row or column places its children in their slots or packs them; how a pointer
  * scales, spreads and moves what it is at; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
  * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
- * how a link runs, as its layout's arrows or its own way, and the heads at its ends.
+ * how a link runs, as its layout's arrows or its own way, and the heads at its ends; and how a link
+ * from a variable paints the element it reaches, none leaving it as it is.
  */
 export const propOptions = {
   shown: [true, false],
@@ -323,6 +324,10 @@ export const propOptions = {
   route: ['layout', 'straight', 'curved', 'wire'],
   head: headShapes,
   headSize: headSizes,
+  targetFill: ['none', ...colours],
+  targetStroke: ['none', ...colours],
+  targetStrokeWidth: [0, 0.5, 1, 1.5, 2, 3, 4],
+  targetColor: ['none', ...colours],
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
   icon: iconNames,
   colX: basisSteps,
@@ -367,6 +372,25 @@ const listingLitOptions = {
  * paintProps), so a place never changes how much room anything takes.
  */
 export const placePaint = ['fill', 'stroke', 'color'] as const;
+
+/**
+ * How a link from a variable (see Link.svelte) paints the element it reaches while it is drawn,
+ * none leaving that paint as it is: paint only, as a <Pointed>'s, so no box changes size.
+ */
+export const targetProps = [
+  'targetFill',
+  'targetStroke',
+  'targetStrokeWidth',
+  'targetColor'
+] as const satisfies readonly DesignProp[];
+
+/** The props whose values are colours, a palette's among them (see baseOptions). */
+export const colourProps: readonly string[] = [
+  ...placePaint,
+  'targetFill',
+  'targetStroke',
+  'targetColor'
+];
 
 /** The props a region of a listing sets for itself, as `listing.lit@insert.compare.left.fill`. */
 export const listingRegionProps = placePaint;
@@ -479,7 +503,17 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
     'expand',
     ...transformProps
   ],
-  link: ['shown', 'stroke', 'strokeWidth', 'opacity', 'strokeStyle', 'route', 'head', 'headSize']
+  link: [
+    'shown',
+    'stroke',
+    'strokeWidth',
+    'opacity',
+    'strokeStyle',
+    'route',
+    'head',
+    'headSize',
+    ...targetProps
+  ]
 };
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
@@ -505,7 +539,8 @@ export const starterFreeLayout: Record<string, string | number> = {
  * only paint; every other prop is its kind's in every slot and at every step, so slots keep one
  * size. A pointer's paint shows only where it is, its other props in every slot it can point at.
  * `expand` is paint, taking room only in a packed row, which keeps room for it; a pointer's
- * transforms (transformProps) are paint, drawn over the room kept for their reach.
+ * transforms (transformProps) are paint, drawn over the room kept for their reach; a link's target
+ * paint (targetProps) is paint on the element it reaches, its width drawn inside that box.
  */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
@@ -518,15 +553,22 @@ export const paintProps: ReadonlySet<string> = new Set([
   'shadow',
   'glow',
   'fillStyle',
-  'decoration'
+  'decoration',
+  ...targetProps
 ]);
 
 /**
  * The props a place sets for the kinds of the view it draws, those that tell one render apart: its
- * paint, and whether it is shown at all, which holds at every step, a render left out keeping no
- * room throughout.
+ * paint, a link's target paint, and whether it is shown at all, which holds at every step, a render
+ * left out keeping no room throughout.
  */
-export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint]);
+export const placeProps: ReadonlySet<string> = new Set([
+  'shown',
+  ...placePaint,
+  'targetFill',
+  'targetStroke',
+  'targetColor'
+]);
 
 /**
  * A render at a place: `:` and what is written there (`:left`, `:g.a`, or a label, `:@scan.next`),
@@ -767,7 +809,12 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     strokeStyle: 'solid',
     route: 'layout',
     head: 'arrow',
-    headSize: 9
+    headSize: 9,
+    // A link from a variable paints what it reaches as a pointer's <Pointed> starts.
+    targetFill: 'amber-100',
+    targetStroke: 'amber-500',
+    targetStrokeWidth: 1.5,
+    targetColor: 'none'
   }
 };
 
@@ -911,7 +958,7 @@ export const scaleProps = {
   spacing: ['padding', 'gap'],
   radius: ['radius'],
   type: ['textSize'],
-  line: ['strokeWidth'],
+  line: ['strokeWidth', 'targetStrokeWidth'],
   opacity: ['opacity']
 } as const satisfies Record<string, readonly DesignProp[]>;
 
@@ -984,7 +1031,7 @@ export function baseOptions(
         ...options.filter((option) => typeof option !== 'number')
       ]
     : options;
-  if (!['fill', 'stroke', 'color'].includes(prop)) return scaled;
+  if (!colourProps.includes(prop)) return scaled;
   const palette = Object.entries(values).flatMap(([key, value]) =>
     paletteKey.test(key) && typeof value === 'string' && exactColour.test(value) ? [value] : []
   );

@@ -218,7 +218,11 @@
     "strokeStyle": "solid",
     "route": "layout",
     "head": "arrow",
-    "headSize": 9
+    "headSize": 9,
+    "targetFill": "#E6E6E6",
+    "targetStroke": "#000000",
+    "targetStrokeWidth": 2,
+    "targetColor": "none"
   },
   "$second": {
     "fill": "#FFFFFF",

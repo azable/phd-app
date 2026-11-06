@@ -99,11 +99,18 @@
     const type = path === undefined ? undefined : types?.typeAt(path);
     return type === undefined ? undefined : endsContext()?.[type]?.();
   });
+  // A link from a variable: to={this}, with no from, in a view of a reference or position drawn at a
+  // variable, a label or a {@const}, as {cur} in a panel or {i} in a grid's lane, no element of the
+  // state round it. It starts at the node drawing that value and reaches the element wherever that
+  // is drawn, and is routed by the page across layouts (see linksFromVariables in
+  // model/scene-of.ts), unless a free layout holding both its ends lays it out as one of its own.
+  const drawn = drawnContext();
+  const reach = untrack(() => from === undefined && __toInherit && !drawn && !!enclosing);
   // An end given a position names the node drawing the element it points at.
   const ends = untrack(() => ({
     from:
       from === undefined
-        ? (drawnContext() ?? '')
+        ? (drawn ?? (reach ? enclosing : undefined) ?? '')
         : linkEnd(types, from, { path: fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
     to: linkEnd(types, to, { path: toPath, of: __toOf, at: __toAt, in: __toIn })
   }));
@@ -171,6 +178,13 @@
     () => !!joined.pair && (layoutMemoryContext()?.lines.has(joined.pair) ?? false)
   );
   const unseen = untrack(() => hidden || look('shown', false) === false);
+  // The paint a link from a variable gives the element it reaches, as `name|css`, so the scene keeps
+  // the colour's name as a <Pointed>'s does; none where its kind leaves the element as it is.
+  const target = (prop: string) => {
+    const name = look(prop, false);
+    const css = typeof name === 'string' && name !== 'none' ? colourCss(name) : undefined;
+    return css ? `${name}|${css}` : undefined;
+  };
   // An end computed from an {#each} index, as to={2 * k + 1}, past its collection's ends at this
   // step names no element there, so the link is not drawn at this step.
   const beyond = untrack(() =>
@@ -211,6 +225,11 @@
     data-route={route === 'layout' ? undefined : route}
     data-head={head}
     data-head-size={headSize}
+    data-sv-reach={reach ? 'true' : undefined}
+    data-target-fill={reach ? target('targetFill') : undefined}
+    data-target-stroke={reach ? target('targetStroke') : undefined}
+    data-target-color={reach ? target('targetColor') : undefined}
+    data-target-stroke-width={reach ? look('targetStrokeWidth', false) : undefined}
   ></span>
   {#if children}<LinkLabel link={id ?? ''} hidden={unseen}>{@render children()}</LinkLabel>{/if}
 {/if}

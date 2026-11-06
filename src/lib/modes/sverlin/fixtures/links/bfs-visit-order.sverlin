@@ -1,0 +1,163 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D', 'E', 'F']);
+  const Seen = type('boolean');
+  const Vertex = record({ name: Name, seen: Seen });
+  const Vertices = array(Vertex, { max: 6 });
+  const VertexRef = index(Vertices);
+  const Neighbours = array(VertexRef, { max: 2 });
+  const Slot = index(Neighbours);
+  const Adjacency = array(Neighbours, { max: 6 });
+  const Queue = array(VertexRef, { max: 3 });
+  const VisitOrder = array(VertexRef, { max: 6 });
+
+</script>
+
+<script input>
+  const vertices = Vertices;
+  const adjacency = Adjacency;
+</script>
+
+<script algorithm>
+  @init[let queue = Queue([0]);
+  let order = VisitOrder([]);]
+  while (@more[queue.length > 0]) @visit{
+    @take[const current = queue[0];
+    queue.shift();
+    order.push(current);
+    const around = adjacency[current];]
+    for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
+      const neighbour = around[slot];
+      if (@check[!vertices[@neighbour[neighbour]].seen]) @add{
+        vertices[neighbour].seen = true;
+        queue.push(neighbour);
+      }
+    }
+  }
+</script>
+
+<script listing="textbook">
+BFS(start)
+  @init[queue = [start]]
+  while @more[queue is not empty]
+    @visit[@take[current = remove front of queue
+    record current as visited]
+    @first[slot = the first neighbour of current]
+    while @another[slot is a neighbour]
+      @look[neighbour = neighbour slot
+      if @check[@neighbour[neighbour] has not been seen]
+        @add[mark neighbour as seen
+        add neighbour to the queue]]
+      @step[slot = the next neighbour]]
+</script>
+
+<View of="Name" name="NameText"><Node value={this} /></View>
+<View of="Seen" name="SeenWord"><Node>{this ? 'seen' : 'unseen'}</Node></View>
+<View of="VertexRef" name="RefArrow">
+  <Node layout="column">
+    <Node kind="Caption">{place()}</Node>
+    <Link to={this} />
+  </Node>
+</View>
+
+<View of="Vertex" name="VertexCard">
+  <Node layout="column">
+    {this.name}
+    {this.seen}
+  </Node>
+</View>
+
+<View of="Queue" name="QueueItems">
+  <Node>{#each this as item}<Node kind="Entry">{at(item).name}</Node>{/each}</Node>
+</View>
+
+<View of="VisitOrder" name="OrderItems">
+  <Node>{#each this as item}<Node kind="Entry">{at(item).name}</Node>{/each}</Node>
+</View>
+
+<Layout name="Title">
+  <Node>Breadth-first search from A</Node>
+</Layout>
+
+<Layout name="Graph" of="vertices, adjacency, current, @visit.look.check.neighbour">
+  <Node layout="free">
+    {#each vertices as vertex, k}
+      <Node layout="column">
+        {vertex}
+        <Node kind="IndexLabel">{k}</Node>
+      </Node>
+      {#each adjacency[k] as neighbour}
+        <Link from={k} to={neighbour} />
+      {/each}
+    {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{@visit.look.check.neighbour}</Node>
+  </Node>
+</Layout>
+
+<Layout name="QueueLine" of="queue">
+  <Node layout="row">
+    <Node>queue</Node>
+    {queue}
+  </Node>
+</Layout>
+
+<Layout name="OrderLine" of="order">
+  <Node layout="row">
+    <Node>visit order</Node>
+    {order}
+  </Node>
+</Layout>
+
+<Layout name="CurrentInfo" of="current">
+  <Node>removing vertex {at(current).name} and exploring its neighbours</Node>
+</Layout>
+
+<Layout name="NeighbourInfo" of="neighbour">
+  <Node>checking neighbour {at(neighbour).name}</Node>
+</Layout>
+
+<Layout name="StatePanel" of="queue, order, current, neighbour">
+  <Node layout="column">
+    <QueueLine queue={queue} />
+    <OrderLine order={order} />
+    <CurrentInfo current={current} />
+    <NeighbourInfo />
+  </Node>
+</Layout>
+
+<Layout name="Lesson" of="vertices, adjacency, queue, order, current, neighbour, @visit.look.check.neighbour">
+  <Node layout="row">
+    <Listing />
+    <Node layout="column">
+      <Graph vertices={vertices} adjacency={adjacency} current={current} />
+      <StatePanel queue={queue} order={order} current={current} />
+    </Node>
+  </Node>
+</Layout>
+
+<Layout name="Main" of="current, neighbour, vertices, adjacency, queue, order, @visit.look.check.neighbour">
+  <Node>
+    <Title />
+    <Lesson vertices={vertices} adjacency={adjacency} queue={queue} order={order} current={current} />
+  </Node>
+</Layout>
+
+<Case name="main" vertices={[
+    { name: 'A', seen: true },
+    { name: 'B', seen: false },
+    { name: 'C', seen: false },
+    { name: 'D', seen: false },
+    { name: 'E', seen: false },
+    { name: 'F', seen: false }
+  ]} adjacency={[
+    [1, 2],
+    [3, 4],
+    [4],
+    [5],
+    [5],
+    []
+  ]} />
+
+<Storyboard>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.neighbour, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
+</Storyboard>

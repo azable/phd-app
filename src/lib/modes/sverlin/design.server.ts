@@ -21,6 +21,7 @@ import {
   scaleSteps,
   type ScaleName,
   frameOptions,
+  colourProps as colourPropList,
   freeLayoutProps,
   gridProps,
   isToken,
@@ -886,7 +887,7 @@ const kept = new Set<string>([
   'overflow',
   'decoration'
 ]);
-const colourProps = new Set<string>(['fill', 'stroke', 'color']);
+const colourProps = new Set<string>(colourPropList);
 const lengthProps = new Set<string>(['strokeWidth', 'textSize', 'padding', 'radius', 'gap']);
 /** How a box sits in its slot, and how a row spaces its children: drawn afresh for each kind. */
 const slotProps = new Set<string>(['width', 'height', 'xAnchor', 'yAnchor', 'spacing']);

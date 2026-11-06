@@ -1,0 +1,142 @@
+<script domain>
+  const Name = type(['A', 'B', 'C', 'D']);
+  const End = type(['end']);
+  const ListNode = record({ name: Name, next: Next });
+  const ListNodes = pool(ListNode, { max: 4 });
+  const NodeRef = ref(ListNode);
+  const Next = union(NodeRef, End);
+
+</script>
+
+<script input>
+  const nodes = ListNodes;
+  const head = NodeRef;
+</script>
+
+<script algorithm>
+  @begin[let prev = Next(End('end'));
+  let cur = Next(head);]
+  while (@more[cur !== 'end']) @rewire{
+    @save[const after = cur.next;]
+    @reverse[cur.next = prev;]
+    @advance[prev = cur;
+    cur = after;]
+  }
+  @finish[const result = prev;]
+</script>
+
+<script listing="textbook">
+REVERSE(head)
+@begin[prev = ∅
+cur = head]
+while @more[cur ≠ ∅]
+    @rewire[@save[next = cur.next]
+    @reverse[cur.next = prev]
+    @advance[prev = cur
+    cur = next]]
+@finish[return prev]
+</script>
+
+<View of="Name" name="NameCell">
+  <Node value={this} />
+</View>
+
+<View of="End" name="EndMark">
+  <Node>∅</Node>
+</View>
+
+<View of="ListNode" name="NodeBox">
+  <Node layout="row">
+    {this.name}
+    <Node kind="NextField"><Link to={this.next} /></Node>
+  </Node>
+</View>
+
+<View of="NodeRef" name="RefArrow">
+  <Link to={this} />
+</View>
+
+<Layout name="Title">
+  <Node>Reverse a singly linked list</Node>
+</Layout>
+
+<Layout name="Nodes" of="nodes, prev, cur, after">
+  <Node layout="free">
+    {#each nodes as node}
+      {node}
+    {/each}
+    <Node kind="Var" layout="column">{prev}<Node kind="Caption">prev</Node></Node>
+    <Node kind="Var" layout="column">{cur}<Node kind="Caption">cur</Node></Node>
+    <Node kind="Var" layout="column">{after}<Node kind="Caption">next</Node></Node>
+  </Node>
+</Layout>
+
+<Layout name="StartNote">
+  <Node>Start with prev at ∅ and cur at the head.</Node>
+</Layout>
+
+<Layout name="SaveNote">
+  <Node>Save the next node before changing the link.</Node>
+</Layout>
+
+<Layout name="ReverseNote">
+  <Node>Reverse cur’s link so it points to the finished prefix.</Node>
+</Layout>
+
+<Layout name="AdvanceNote">
+  <Node>Move prev and cur one node forward.</Node>
+</Layout>
+
+<Layout name="FinishNote">
+  <Node>prev is now the head of the reversed list.</Node>
+</Layout>
+
+<Layout name="StepNote" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
+  <Node>
+    <OneOf><When of="@rewire.save">
+      <SaveNote />
+    </When><When of="@rewire.reverse">
+      <ReverseNote />
+    </When><When of="@rewire.advance">
+      <AdvanceNote />
+    </When><When of="@finish">
+      <FinishNote />
+    </When></OneOf>
+    <When of=":before">
+      <StartNote />
+    </When>
+  </Node>
+</Layout>
+
+<Layout name="Diagram" of="nodes, prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+  <Node layout="column">
+    <Nodes nodes={nodes} prev={prev} cur={cur} after={after} />
+    <StepNote />
+  </Node>
+</Layout>
+
+<Layout name="Board" of="nodes, prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+  <Node layout="row">
+    <Listing />
+    <Diagram nodes={nodes} prev={prev} cur={cur} after={after} />
+  </Node>
+</Layout>
+
+<Layout name="Main" of="nodes, prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+  <Node>
+    <Title />
+    <Board nodes={nodes} prev={prev} cur={cur} after={after} />
+  </Node>
+</Layout>
+
+<Case name="main" head={nodes.add(ListNode({ name: 'A', next:
+    nodes.add(ListNode({ name: 'B', next:
+      nodes.add(ListNode({ name: 'C', next:
+        nodes.add(ListNode({ name: 'D', next: End('end') }))
+      }))
+    }))
+  }))} />
+
+<Storyboard>
+  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
+</Storyboard>

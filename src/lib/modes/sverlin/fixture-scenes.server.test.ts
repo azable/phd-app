@@ -10,6 +10,8 @@
  *   any step, so its row of cells no longer moves up and down as the swap's link comes and goes.
  * - search-places, replay/linear-search: a place in the scene data is named :lo, not @lo, as `@`
  *   names only a moment of the run (the boxes are as they were).
+ * - links/*: added, each a fixture above with its pointers drawn as links from variables (see
+ *   pointer-links.server.test.ts); no other fixture's scenes changed.
  */
 
 import { createHash } from 'node:crypto';
@@ -103,7 +105,8 @@ test(
  * The rows, columns, grids and stacks that move in the node holding them between steps of one scene
  * (a step's scene is its label's prefix, as `stacked: `, where a source has several): each keeps the
  * largest size it reaches, so its place in its parent is one place at every step. A pointer's own
- * nodes, drawn where the pointer is, are left out.
+ * nodes, drawn where the pointer is, and a variable's node following what its link reaches in a free
+ * layout (`follows`), are left out.
  */
 function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): string[] {
   const sceneOf = (index: number) => /^([^:@]+): /u.exec(labels[index] ?? '')?.[1] ?? '';
@@ -115,7 +118,8 @@ function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): 
   steps.forEach((step, index) => {
     const boxes = new Map(step.nodes.map((node) => [node.id, node.box]));
     for (const node of step.nodes) {
-      if (!node.layout || node.layout === 'free' || node.id.includes('@pointer')) continue;
+      if (!node.layout || node.layout === 'free' || node.id.includes('@pointer') || node.follows)
+        continue;
       const parent = node.parent && boxes.get(node.parent);
       if (!parent) continue;
       const key = `${sceneOf(index)}|${node.id}`;

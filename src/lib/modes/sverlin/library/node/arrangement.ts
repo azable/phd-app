@@ -43,6 +43,8 @@ export type ArrangementProps = {
 /** A free layout laid out: where its children go, its size, and the links and labels it draws. */
 export type Arrangement<E> = {
   elements: readonly E[];
+  /** Children placed under the element their variable reaches (see ArrangementInput). */
+  followers: readonly E[];
   placements: readonly { x: number; y: number }[];
   width: number;
   height: number;
@@ -57,6 +59,8 @@ export type Arrangement<E> = {
 export type ArrangementInput<E> = {
   input: SpanInput;
   elements: E[];
+  /** The children drawing a variable whose link reaches an element, placed under it each step. */
+  followers: E[];
   labels: Map<string, E>;
   styles: Record<string, LineStyle>;
   anchors: Record<string, Anchor>;
@@ -83,6 +87,20 @@ export function arrangementInput<E>(
   const hoisted = (element: E) => attribute(element, 'data-sv-hoist') !== undefined;
   // Link components sit among the children as hidden markers: they are links, not boxes. One a
   // view of an element draws from that element, with no from, is laid out here, from inside it.
+  // A child drawing a variable whose link reaches an element (see Link.svelte's data-sv-reach), as
+  // <Node kind="Var">{cur}</Node>, follows what it reaches: it is not placed by the layout, which
+  // could put it near one element only, but under the element its variable reaches at each step,
+  // as a pointer's label is (see followersOf in model/scene-of.ts).
+  const followers = read
+    .children(host)
+    .filter(
+      (child) =>
+        !isMarker(child) &&
+        [...descendants(read, child)].some(
+          (inner) => isMarker(inner) && attribute(inner, 'data-sv-reach') === 'true'
+        )
+    );
+  const following = (element: E) => followers.some((follower) => contains(read, follower, element));
   const markers = [
     ...read.children(host).filter(isMarker),
     ...[...descendants(read, host)].filter(
@@ -90,12 +108,18 @@ export function arrangementInput<E>(
         isMarker(marker) &&
         hoisted(marker) &&
         read.parent(marker) !== host &&
+        !following(marker) &&
         closest(read, marker, (at) => hasClass(read, at, 'placed')) === host
     )
   ];
   const elements = read
     .children(host)
-    .filter((child) => !isMarker(child) && attribute(child, 'data-sv-link-label') === undefined);
+    .filter(
+      (child) =>
+        !isMarker(child) &&
+        attribute(child, 'data-sv-link-label') === undefined &&
+        !followers.includes(child)
+    );
   // Each link's label, measured so the link leaves room for it, then placed on its middle or near it.
   const labels = labelsIn(read, host);
   // A link with no from starts at the node it sits in, as a node's next field, not its whole box.
@@ -249,6 +273,21 @@ export function arrangementInput<E>(
     }
   });
   for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
+  // A child a follower reaches at this step keeps room under the element for it, the layout's gap
+  // below the element; each child keeping its largest size over the steps (see solveSpan), every
+  // child a follower ever reaches keeps that room at every step, so nothing moves as it comes and
+  // goes, as a pointer's label keeps its slot.
+  for (const follower of followers) {
+    const marker = [...descendants(read, follower)].find(
+      (inner) => isMarker(inner) && attribute(inner, 'data-sv-reach') === 'true'
+    );
+    const reached = marker && anchors[attribute(marker, 'data-to') ?? ''];
+    if (!reached) continue;
+    const { width, height } = read.size(follower);
+    const box = boxes[reached.box];
+    box.height = Math.max(box.height, read.size(elements[reached.box]).height + space + height + 1);
+    box.width = Math.max(box.width, width + 1);
+  }
   const options = { links: specs, flow, form, direction, curve, gap: space };
   const keyed = (anchor: Anchor) => ({ ...anchor, box: boxes[anchor.box].key });
   return {
@@ -260,6 +299,7 @@ export function arrangementInput<E>(
       options
     },
     elements,
+    followers,
     labels,
     styles,
     anchors,
@@ -279,7 +319,7 @@ export function arrangeChildren<E>(
   props: ArrangementProps,
   memory: LayoutMemory | undefined
 ): Arrangement<E> {
-  const { input, elements, labels, styles, anchors, parts, visible } = arrangementInput(
+  const { input, elements, followers, labels, styles, anchors, parts, visible } = arrangementInput(
     read,
     host,
     props
@@ -343,6 +383,7 @@ export function arrangeChildren<E>(
     const placements = boxes.map(({ key }) => span.positions[key]);
     return {
       elements,
+      followers,
       placements,
       width: span.width,
       height: span.height,
@@ -356,6 +397,7 @@ export function arrangeChildren<E>(
   const solved = arrangeOnce(seed, boxes, { ...options, anchors, parts });
   return {
     elements,
+    followers,
     placements: solved.placements,
     width: solved.width,
     height: solved.height,

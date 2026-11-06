@@ -74,6 +74,11 @@ export type SceneNode = {
   identity?: string;
   /** The free layout it arranges its children by, as a selection names it. */
   arrangement?: Omit<ArrangementLayout, 'node'>;
+  /**
+   * The element it is drawn under at this step, as nodes[2], where it draws a variable whose link
+   * reaches that element in a free layout: it moves with the variable, as a pointer's label does.
+   */
+  follows?: string;
 };
 
 /** One line of one piece of text, as the page laid it out, with its own style. */

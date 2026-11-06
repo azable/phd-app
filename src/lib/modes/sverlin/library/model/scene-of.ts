@@ -10,8 +10,9 @@
 import { arrangeChildren, type ArrangementProps } from '../node/arrangement';
 import { lineColour } from '../listing/places';
 import { shadows, type Shadow } from '../node/design';
-import { headDrawing } from '../node/heads';
+import { headDrawing, headTrim } from '../node/heads';
 import type { Line, LineStyle } from '../node/LinkLines.svelte';
+import { markerLook } from '../node/markers';
 import { routeOverlay } from '../node/overlay';
 import type { Layout } from '../node/props';
 import {
@@ -46,6 +47,12 @@ const transparent = (colour: string | undefined) =>
 
 /** A node round what is walked; described, unless it is hidden. */
 type Open = { element: ModelElement; node?: SceneNode };
+
+/** Where an element is placed, in the root's pixels before the frame's fit. */
+type PlacedBox = { left: number; top: number; width: number; height: number };
+
+/** A link from a variable (data-sv-reach), with the box of the node it starts at. */
+type Reaching = { marker: ModelElement; from: PlacedBox; hidden: boolean };
 
 /** Where a walk is: the layout its boxes come from and that layout's root, in the root's pixels. */
 type Place = { layout: ModelLayout; x: number; y: number };
@@ -178,6 +185,14 @@ export function sceneOf(
   const nodes: SceneNode[] = [];
   const links: SceneLink[] = [];
   const frameRef = at.frame.attributes['data-sv-node'];
+  // For links from variables (see linksFromVariables): where each element is placed, the
+  // outermost node drawing each element of the state, the node each element is described as, the
+  // links from variables met on the way, and those a free layout laid out as its own.
+  const placedBoxes = new Map<ModelElement, PlacedBox>();
+  const slotted = new Map<string, PlacedBox & { element: ModelElement }>();
+  const described = new Map<ModelElement, SceneNode>();
+  const reaching: Reaching[] = [];
+  const laidOut = new Set<string>();
 
   const linkOf = (
     line: Line,
@@ -227,7 +242,13 @@ export function sceneOf(
 
   function walk(element: ModelElement, context: Context, placedLabel = false) {
     const { attributes } = element;
-    if (attributes['data-sv-link'] !== undefined) return;
+    if (attributes['data-sv-link'] !== undefined) {
+      const source = context.open.at(-1)?.element;
+      const from = source && placedBoxes.get(source);
+      if (attributes['data-sv-reach'] === 'true' && from && context.inPart)
+        reaching.push({ marker: element, from, hidden: context.hidden });
+      return;
+    }
     if (attributes['data-sv-link-label'] !== undefined && !placedLabel) return;
     const styled = styledOf(element);
     if (!styled || styled.look.display === 'none') return;
@@ -239,6 +260,10 @@ export function sceneOf(
         ? context.hidden
         : attributes['data-sv-hidden'] === 'true';
     const owner = context.open.at(-1);
+    const placed: PlacedBox = { left, top, width: box.width, height: box.height };
+    placedBoxes.set(element, placed);
+    const slot = attributes['data-sv-slot'];
+    if (slot && !hidden && !slotted.has(slot)) slotted.set(slot, { element, ...placed });
     if (element.tag === 'svg') {
       if (owner?.node && !hidden) {
         const shapes = svgShapes(
@@ -262,6 +287,7 @@ export function sceneOf(
           : describeNode(element, styled, sceneBox(left, top, box.width, box.height), open);
       if (node) {
         if (inPart) nodes.push(node);
+        described.set(element, node);
         const text = readingText(ownPieces(element, element, context.hidden));
         if (text) node.text = text;
       }
@@ -344,7 +370,34 @@ export function sceneOf(
       const { x, y } = arranged.placements[index];
       walk(child, { ...next, layout, x: left + x - own.x, y: top + y - own.y });
     });
+    // A child drawing a variable whose link reaches an element of this layout goes under that
+    // element, centred on it and the layout's gap below it (see followers in arrangement.ts).
+    const gap = (props.gap ?? 0) * (styledOf(host)?.look.fontSize || 16);
+    for (const follower of arranged.followers) {
+      const marker = [...descendants(follower)].find(
+        (inner) => inner.attributes['data-sv-reach'] === 'true'
+      );
+      const target = slotted.get(marker?.attributes['data-to'] ?? '');
+      if (!target) continue;
+      // Under the whole child the element is in, as a vertex with its caption, in the room the
+      // layout kept there.
+      const child = arranged.elements.find(
+        (each) => each === target.element || [...descendants(each)].includes(target.element)
+      );
+      const below = child && placedBoxes.get(child);
+      const layout = model.layOutAlone(at, follower, true);
+      const own = layout.boxes.get(follower) ?? { x: 0, y: 0, width: 0, height: 0 };
+      walk(follower, {
+        ...next,
+        layout,
+        x: target.left + target.width / 2 - own.width / 2 - own.x,
+        y: (below ? below.top + below.height : target.top + target.height) + gap - own.y
+      });
+      const drawnAs = described.get(follower);
+      if (drawnAs) drawnAs.follows = marker?.attributes['data-to'];
+    }
     for (const edge of arranged.edges) {
+      if (edge.id !== undefined) laidOut.add(edge.id);
       if (drawsLinks)
         linkOf(
           edge,
@@ -511,6 +564,168 @@ export function sceneOf(
     };
   }
 
+  /**
+   * The links from variables, each painting the element it reaches in its target paint while it is
+   * drawn, links written later painting over earlier ones; those no free layout laid out as its own
+   * are drawn by the page over everything, whatever layouts their ends are in: a straight line from
+   * the node drawing the variable to the element, met at the edges of both boxes. A position past
+   * its collection's last element (or before its first) reaches a ghost: an empty dashed box one
+   * step on from the element at that end, so the link and its paint visibly move off the edge.
+   */
+  function linksFromVariables() {
+    const centre = (box: PlacedBox) => ({
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2
+    });
+    // Where a line from a box's centre towards a point leaves the box.
+    const edgeOf = (box: PlacedBox, towards: { x: number; y: number }) => {
+      const c = centre(box);
+      const dx = towards.x - c.x;
+      const dy = towards.y - c.y;
+      const scale = Math.min(
+        dx ? box.width / 2 / Math.abs(dx) : Infinity,
+        dy ? box.height / 2 / Math.abs(dy) : Infinity,
+        1
+      );
+      return { x: c.x + dx * scale, y: c.y + dy * scale };
+    };
+    for (const { marker, from, hidden } of reaching) {
+      const attribute = (name: string) => marker.attributes[name];
+      const id = attribute('data-sv-link');
+      const { head, style } = markerLook(attribute);
+      if (hidden || style.shown === false) continue;
+      const to = attribute('data-to') ?? '';
+      if (id && laidOut.has(id)) {
+        paintTarget(described.get(slotted.get(to)?.element as ModelElement), attribute);
+        continue;
+      }
+      const reached = slotted.get(to) ?? ghostOf(to, attribute);
+      if (!reached) continue;
+      paintTarget(described.get(reached.element), attribute);
+      const start = edgeOf(from, centre(reached));
+      const stop = edgeOf(reached, centre(from));
+      const length = Math.hypot(stop.x - start.x, stop.y - start.y);
+      if (length < 1) continue;
+      const trim = Math.min(length - 1, headTrim(head?.shape, head?.size ?? 0));
+      const end = {
+        x: stop.x - ((stop.x - start.x) * trim) / length,
+        y: stop.y - ((stop.y - start.y) * trim) / length
+      };
+      const third = (k: number) =>
+        `${start.x + ((end.x - start.x) * k) / 3},${start.y + ((end.y - start.y) * k) / 3}`;
+      linkOf(
+        {
+          path: `M ${start.x},${start.y} C ${third(1)} ${third(2)} ${end.x},${end.y}`,
+          link: `${attribute('data-from') ?? ''} -> ${to}`,
+          ...(id ? { id } : {}),
+          heads: { start: false, end: true },
+          ...(head ? { head } : {}),
+          style
+        },
+        style,
+        at.frame,
+        0,
+        0
+      );
+    }
+  }
+
+  /** A link's target paint on the node it reaches: fill, stroke and text colour (see targetProps). */
+  function paintTarget(
+    node: SceneNode | undefined,
+    attribute: (name: string) => string | undefined
+  ) {
+    if (!node) return;
+    const paint = (name: string) => {
+      const value = attribute(`data-target-${name}`);
+      const split = value?.indexOf('|') ?? -1;
+      if (!value || split < 0) return undefined;
+      const css = substitutedOrNone(value.slice(split + 1), styledOf(at.frame).inherited.custom);
+      return css ? { name: value.slice(0, split), css } : undefined;
+    };
+    const fill = paint('fill');
+    const stroke = paint('stroke');
+    const color = paint('color');
+    if (fill) {
+      node.look.fill = fill.css;
+      node.colours = { ...node.colours, fill: fill.name };
+    }
+    if (stroke) {
+      const width = Number(attribute('data-target-stroke-width'));
+      node.look.stroke = stroke.css;
+      node.look.strokeWidth = round((width > 0 ? width : 1.5) * fit);
+      delete node.look.strokeStyle;
+      node.colours = { ...node.colours, stroke: stroke.name };
+    }
+    if (color) {
+      // The node's own text and that of the nodes inside it, as a <Pointed>'s colour reaches them.
+      const inside = new Set([node.id]);
+      for (const each of nodes)
+        if (each === node || (each.parent !== undefined && inside.has(each.parent))) {
+          inside.add(each.id);
+          each.look.color = color.css;
+          for (const run of each.runs ?? []) run.color = color.css;
+        }
+      node.colours = { ...node.colours, color: color.name };
+    }
+  }
+
+  /**
+   * The ghost a position one past either end of its collection reaches: a dashed empty box one step
+   * on from the element at that end, the step being how far the two elements there are apart (or
+   * the element's width and a quarter, where it is alone), described as a node of its own.
+   */
+  function ghostOf(
+    to: string,
+    attribute: (name: string) => string | undefined
+  ): (PlacedBox & { element: ModelElement }) | undefined {
+    const match = /^(.*)\[(-?\d+)\]$/u.exec(to);
+    if (!match) return undefined;
+    const collection = match[1];
+    const index = Number(match[2]);
+    if (index < -1) return undefined;
+    const near = slotted.get(`${collection}[${index < 0 ? 0 : index - 1}]`);
+    if (!near) return undefined;
+    const beyond = slotted.get(`${collection}[${index < 0 ? 1 : index - 2}]`);
+    const step = beyond
+      ? { x: near.left - beyond.left, y: near.top - beyond.top }
+      : { x: near.width * 1.25, y: 0 };
+    const ghost: PlacedBox = {
+      left: near.left + step.x,
+      top: near.top + step.y,
+      width: near.width,
+      height: near.height
+    };
+    const like = described.get(near.element);
+    const paint = attribute('data-target-stroke') ?? attribute('data-target-fill');
+    const css =
+      (paint &&
+        substitutedOrNone(
+          paint.slice(paint.indexOf('|') + 1),
+          styledOf(at.frame).inherited.custom
+        )) ||
+      like?.look.stroke ||
+      '#737373';
+    const element: ModelElement = { tag: 'div', attributes: {}, style: {}, children: [] };
+    const node: SceneNode = {
+      id: `${attribute('data-sv-link') ?? to}:ghost`,
+      ...(like?.parent ? { parent: like.parent } : {}),
+      box: sceneBox(ghost.left, ghost.top, ghost.width, ghost.height),
+      look: {
+        stroke: css,
+        strokeWidth: round(1.5 * fit),
+        strokeStyle: 'dashed',
+        ...(like?.look.radius ? { radius: like.look.radius } : {}),
+        color: like?.look.color ?? '#000000',
+        font: like?.look.font ?? 'sans-serif',
+        fontSize: like?.look.fontSize ?? round(16 * fit),
+        fontWeight: 400
+      }
+    };
+    nodes.push(node);
+    return { element, ...ghost };
+  }
+
   walk(at.flow, {
     layout: model.layOutAlone(at, at.flow, true),
     x: 0,
@@ -520,6 +735,7 @@ export function sceneOf(
     inPart: !part,
     label: false
   });
+  linksFromVariables();
   const background = at.styled.get(at.frame)?.paint.background;
   const label = at.frame.attributes['data-sv-label'];
   return {
