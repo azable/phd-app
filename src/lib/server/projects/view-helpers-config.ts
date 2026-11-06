@@ -1,8 +1,8 @@
 /**
  * Whether a project's turns run the view helpers: never where the pipeline's `helpers` is off
- * (ai/bots/helper-pipeline.ts), else an administrator's dev-mode switch on the project, else on
- * where the pipeline's `everyProject` is on, else its study condition's `viewHelpers`, else off. Each turn records the answer on its
- * assistant.turn-started event, which the turn then follows.
+ * (ai/bots/helper-pipeline.ts), else an administrator's dev-mode switch on the project, else its
+ * study or trial condition's `viewHelpers`, else on (the developer, 7 November 2026). Each turn
+ * records the answer on its assistant.turn-started event, which the turn then follows.
  */
 
 import type { ProjectDocument } from '$lib/shared/projects/model';
@@ -12,14 +12,10 @@ import { projectTrialCondition, studyProjectContext } from '$lib/server/study';
 import { helperPipeline } from '$lib/server/ai/bots/helper-pipeline';
 
 /** The study condition's setting for a project, or its trial condition's outside a study. */
-export async function conditionViewHelpers(
-  projectId: string,
-  pipeline = helperPipeline
-): Promise<boolean> {
-  if (pipeline.everyProject) return true;
+export async function conditionViewHelpers(projectId: string): Promise<boolean> {
   const study = await studyProjectContext(projectId);
-  if (study) return study.viewHelpers ?? false;
-  return (await projectTrialCondition(projectId, study))?.viewHelpers ?? false;
+  if (study) return study.viewHelpers ?? true;
+  return (await projectTrialCondition(projectId, study))?.viewHelpers ?? true;
 }
 
 /** Whether the next turn of this project runs the view helpers. */
@@ -28,9 +24,7 @@ export async function projectViewHelpers(
   pipeline = helperPipeline
 ): Promise<boolean> {
   if (!pipeline.helpers) return false;
-  return (
-    viewHelpersSwitch(document.events) ?? (await conditionViewHelpers(document.projectId, pipeline))
-  );
+  return viewHelpersSwitch(document.events) ?? (await conditionViewHelpers(document.projectId));
 }
 
 /** How many helpers a round runs for a project: its study or trial condition's, else the defaults. */

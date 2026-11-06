@@ -62,7 +62,7 @@ export type StudyProjectContext = {
   expired: boolean;
   deadlineAt?: string;
   presentationBufferTarget?: number;
-  /** Whether the task's condition runs the view helpers; off when absent. */
+  /** Whether the task's condition runs the view helpers; on when absent. */
   viewHelpers?: boolean;
   /** How many helpers its rounds run, where the condition says. */
   helperCounts?: HelperCounts;
