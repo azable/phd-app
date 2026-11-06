@@ -153,7 +153,7 @@ describe('single-component Svelte assistant', () => {
       { count: 4, comparisons: [comparison] },
       { comparisons: [] },
       { comparisons: Array(11).fill(comparison) },
-      // A side's values are one JSON string, never the older list (see design-patch.ts).
+      // A side's values are one JSON string, never the older list (see design-patch.server.ts).
       right({ ...comparison.right, values: [{ variable: 'views.Int', value: 'IntTally' }] }),
       right({ values: comparison.right.values }),
       right({ ...comparison.right, label: '  ' }),

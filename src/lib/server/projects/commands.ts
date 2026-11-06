@@ -138,7 +138,7 @@ import {
   readDesignPatch,
   withoutRemoved,
   type DesignPatch
-} from '$lib/server/chat-bots/design-patch';
+} from '$lib/modes/sverlin/assistant/design-patch.server';
 import { applySourceEdits } from '$lib/server/ai/decisions/source-edits';
 import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
 
@@ -2237,7 +2237,7 @@ function comparisonBriefProblem({ brief }: Comparisons[number]): string | undefi
   return undefined;
 }
 
-/** The values a decision's patch sets, as kept (see design-patch.ts), as a build chooses them. */
+/** The values a decision's patch sets, as kept (see design-patch.server.ts), as a build chooses them. */
 function designValues(values: unknown) {
   // Keys as written or kept, kept (see design-keys.ts): {Int} is views.Int, <Listing>.syntax
   // listing.syntax; the build sends a place's view to its pointer where only that is in the design.

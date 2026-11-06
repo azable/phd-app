@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { keptKey, writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
-import { readDesignPatch, withoutRemoved } from '$lib/server/chat-bots/design-patch';
+import { readDesignPatch, withoutRemoved } from '$lib/modes/sverlin/assistant/design-patch.server';
 
 describe('design values written as one JSON string', () => {
   it('reads every key shape of a nested design as written keys, each value set', () => {

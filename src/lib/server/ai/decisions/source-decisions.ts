@@ -53,7 +53,7 @@ const count = v.optional(
 
 /**
  * Design values as one JSON object written as a string, in the nested form project.design shows,
- * applied as a JSON Merge Patch (see design-patch.ts): strict structured output cannot describe a
+ * applied as a JSON Merge Patch (see design-patch.server.ts): strict structured output cannot describe a
  * nested design's free keys.
  */
 const designPatch = v.pipe(

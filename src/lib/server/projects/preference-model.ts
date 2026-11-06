@@ -21,7 +21,7 @@ import {
 } from '$lib/shared/projects/events/visualization-presented';
 import { seededRandom } from '$lib/modes/sverlin/algorithm/random.server';
 import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
-import { readDesignPatch } from '$lib/server/chat-bots/design-patch';
+import { readDesignPatch } from '$lib/modes/sverlin/assistant/design-patch.server';
 
 type DesignValue = string | number | boolean;
 
