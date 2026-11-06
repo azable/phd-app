@@ -18,7 +18,7 @@ export { pageAncestors, pageCss } from './page';
 export type { Align, FrameRatio, FrameSettings, Justify, Layout, Primitive } from './node/props';
 export { colourCss, kindKey, type DesignValues } from './node/design';
 export type { FrameExtent, LayoutMemory } from './type-context';
-export { provideEnds, providePointers } from './type-context';
+export { provideEnds, providePointers, sverlinPlace } from './type-context';
 export { linePairs } from './node/lines';
 export { widestInteger } from './widest-number';
 export { unpackStates, type PackedStates } from './trace-pack';

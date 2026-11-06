@@ -132,6 +132,7 @@ import {
 import {
   freeLayoutProps,
   kindKey,
+  placeLabelKey,
   placeProps,
   listingPlacesOptions,
   roleProps,
@@ -160,6 +161,7 @@ import {
   countCalls,
   gridExtents,
   memberTestRead,
+  placeCalls,
   typeOfPath,
   type Binding,
   type Scope
@@ -1512,6 +1514,23 @@ function prepareViews(
         )
         .map(([name]) => name)
     );
+    // place() in a pointer view names the place its pointer is rendered at (see sverlinPlace), or
+    // the design's label for it; the views calling it, whose places each get a label variable.
+    const placeNames = placeCalls(ast.html, new Set(found.pointers.keys()));
+    const misplaced = placeNames.filter(({ problem }) => problem);
+    if (misplaced.length)
+      throw InvalidSvelteSourceError.combine(
+        misplaced.map(
+          ({ problem, start }) =>
+            new InvalidSvelteSourceError(problem!, {
+              code: 'view_name',
+              start: sourcePosition(source, start)
+            })
+        )
+      );
+    const namingViews = new Set(placeNames.flatMap(({ view }) => (view ? [view] : [])));
+    const labelledPlaces = new Set<string>();
+    const placeWarnings: string[] = [];
     const placeSlots = new Map<number, string>();
     const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
@@ -1530,9 +1549,22 @@ function prepareViews(
     );
     for (const site of sites) {
       const { name, start, inNode, at, label } = site;
+      // A pointer rendered with no name, as {lo + 1}, has no place for place() to name.
+      const unnamed = !at && pointerChosen[name] && !site.within ? optionsOf(name) : undefined;
+      if (
+        unnamed &&
+        (!inNode || !unnamed.plain.length) &&
+        unnamed.marks.some((view) => namingViews.has(view))
+      ) {
+        placeWarnings.push(
+          `{${site.argument}} is a pointer with no place of its own, as it is no variable or field of one, so place() in its view gives nothing there: caption it in words, or render a variable holding the position, as {next}, which place() names.`
+        );
+      }
       if (!at || !(chosen[name] || pointerChosen[name])) continue;
       const { plain, marks } = optionsOf(name);
       const asMark = marks.length > 0 && (!inNode || !plain.length);
+      if (asMark && !site.within && marks.some((view) => namingViews.has(view)))
+        labelledPlaces.add(at);
       // A place drawn both as a pointer and as a value, as a caption's number, takes its pointer's
       // paint.
       if (!site.within && (asMark || !rootPlaces.has(at)))
@@ -1803,9 +1835,11 @@ function prepareViews(
             : kind;
     });
     // A name nothing gives the page would fail only in the browser.
+    const placeStarts = new Set(placeNames.map(({ start }) => start));
     const unread = unknownReadOf(
       ast.html,
-      (name) =>
+      (name, start) =>
+        (name === 'place' && placeStarts.has(start)) ||
         stateNames.includes(name) ||
         paths.has(name) ||
         definesType(viewing, name) ||
@@ -1821,7 +1855,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), count(n) and spans(@label); a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), count(n), spans(@label), and place() in a pointer view; a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -2232,6 +2266,12 @@ function prepareViews(
     const slotted = new Map<number, string[]>();
     const unresolvedEnds: { end: string; written: string; start: number }[] = [];
     const tagged = withInsertions(svelteSource, [
+      // place() reads the place its pointer view is drawn at, a name no source can declare.
+      ...placeNames.map(({ start }) => ({
+        at: start,
+        text: 'sverlinPlace',
+        remove: 'place'.length
+      })),
       ...counts.flatMap(({ start, end }) => [
         { at: start, text: 'Array.from({ length: Math.max(0, ', remove: 'count('.length },
         { at: end - 1, text: ') }, (_, k) => k)', remove: 1 }
@@ -2394,7 +2434,9 @@ function prepareViews(
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
       ...(initialiserWarnings.length ? { initialiserWarnings } : {}),
-      ...(pointers.warnings.length ? { positionWarnings: pointers.warnings } : {}),
+      ...(pointers.warnings.length || placeWarnings.length
+        ? { positionWarnings: [...pointers.warnings, ...placeWarnings] }
+        : {}),
       ...(pointerMarks.length ? { pointerMarks } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
@@ -2448,6 +2490,10 @@ function prepareViews(
             ),
             ...listingRegionSpace(regionLabels),
             ...placesSpace,
+            // A label for each place a pointer view naming its place is drawn at.
+            ...Object.fromEntries(
+              [...labelledPlaces].map((at) => [placeLabelKey(at), [at.slice(1)]])
+            ),
             ...boundDesign(bindings).space
           },
           bindings
@@ -2467,6 +2513,9 @@ function prepareViews(
               layoutDesign
             ),
             ...regionStarter,
+            ...Object.fromEntries(
+              [...labelledPlaces].map((at) => [placeLabelKey(at), at.slice(1)])
+            ),
             // A link's label, as a weight, and a card's fields start unboxed: a box would read as
             // a node of its own. The card is the box.
             ...Object.fromEntries(
@@ -4553,6 +4602,8 @@ function renderSites(
   name: string;
   start: number;
   callee: { start: number; end: number };
+  /** Its argument as written, as lo + 1. */
+  argument: string;
   inNode: boolean;
   at?: string;
   label: boolean;
@@ -4604,6 +4655,7 @@ function renderSites(
           name,
           start: part.start ?? 0,
           callee: { start: callee?.start ?? 0, end: callee?.end ?? 0 },
+          argument: argument ? source.slice(argument.start, argument.end) : '',
           inNode,
           ...(written ? { at: written } : {}),
           label,

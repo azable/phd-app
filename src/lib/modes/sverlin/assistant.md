@@ -289,7 +289,9 @@ cell highlight without its label?”). How a position is labelled is open: the
 algorithm’s own name (`i`), the element it reads (`A[i]`), a word, or no label;
 prefer the algorithm’s own names, matching the listing, to words such as
 “current” unless the participant asks for words, and compare the forms rather
-than settling on one. Where a part of the picture could be drawn in genuinely
+than settling on one. A pointer view captions its pointer with `{place()}`, so
+one view serves every pointer; a word for one place is the design’s `:lo.label`,
+not another view. Where a part of the picture could be drawn in genuinely
 different ways, as a position marked by its name, by the element it reads, or by
 a highlight alone, write those as alternative views or pointer views (`<View>`s)
 of the same type, so the variant can choose between them and you can compare

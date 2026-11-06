@@ -5,7 +5,7 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import { placedKind, type DesignValues, type Place } from './node/design';
+import { placedKind, placeLabelKey, type DesignValues, type Place } from './node/design';
 import type { ShownFrame } from './fit';
 import type { ArrangeEdge } from './node/arrange';
 import type { Layout } from './node/props';
@@ -484,6 +484,17 @@ export function placeContext(): Place | undefined {
 }
 
 /**
+ * What place() in a pointer view gives: the design's label for the place the pointer is rendered
+ * at (`label@lo`), else the place's own name, as `lo` or `pair.left`; nothing outside a place.
+ */
+export function sverlinPlace(): string {
+  const place = placeContext();
+  if (!place) return '';
+  const label = designContext()[placeLabelKey(place.at)];
+  return typeof label === 'string' && label ? label : place.at.slice(1);
+}
+
+/**
  * Inside a render at a place of the root or a part, until its outermost node: the place, by its
  * name, as @key, which that node refers to (see listing/places.ts).
  */
@@ -539,7 +550,39 @@ export type PointedSlot = {
   placeholder: boolean;
   outer: Record<string, unknown>;
   render?: Snippet<[Record<string, unknown>]>;
+  /** The ids outside the pointer view, which the element it draws claims its own from. */
+  ids?: NodeIds;
 };
+
+/**
+ * Inside a pointer's view: ids claimed apart for each pointer, as one view can draw several, so a
+ * node of one pointer's mark keeps its id, and the size it keeps by it (LayoutMemory.reserved),
+ * whichever pointers it nests in at a step.
+ */
+export function providePointerNodeIds(order: number): void {
+  const outer = nodeIdsContext();
+  if (!outer) return;
+  setContext<NodeIds>('sverlin:node-ids', {
+    claim: (ref) => outer.claim(keyedRef(ref, `pointer${order}`))
+  });
+}
+
+/**
+ * Inside a pointer's view, until its outermost node or its <Pointed>: that node holds the pointers
+ * nested inside it, so it keeps its own pointer's size, not its view's box (see Node).
+ */
+export function provideInPointerView(inside: boolean): void {
+  setContext('sverlin:in-pointer-view', inside);
+}
+
+export function inPointerViewContext(): boolean {
+  return getContext<boolean | undefined>('sverlin:in-pointer-view') ?? false;
+}
+
+/** Where a <Pointed> draws its element: the ids outside the pointer views around it again. */
+export function restoreNodeIds(ids: NodeIds | undefined): void {
+  if (ids) setContext<NodeIds>('sverlin:node-ids', ids);
+}
 
 export function providePointed(pointed: PointedSlot | undefined): void {
   setContext('sverlin:pointed', pointed);
