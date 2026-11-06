@@ -1627,6 +1627,8 @@ describe('submitProjectFeedback', () => {
       const run = failed('algorithm_error');
       expect(refusedAsWritten(written)).toBe(true);
       expect(refusedAsWritten(failed('view_storyboard'))).toBe(true);
+      // Design values that are not one JSON object are a slip of writing too.
+      expect(refusedAsWritten(failed('values_unreadable'))).toBe(true);
       expect(refusedAsWritten(run)).toBe(false);
       expect(refusedAsWritten(failed('view_label', 'layout_failed'))).toBe(false);
       expect(refusedAsWritten({ source: '', diagnostics: [{ message: 'No code.' }] })).toBe(false);
@@ -3127,15 +3129,16 @@ describe('several variants from chat', () => {
       result.appendedEvents.filter(({ type }) => type === 'visualization.presented')
     ).toHaveLength(1);
   });
+  // Each side's values as the decision writes them: one JSON string of a nested design.
   const views = (left: string, right: string) => ({
     question: 'Cells or tallies for the numbers?',
-    left: { label: left, values: [{ variable: 'views.Int', value: left }] },
-    right: { label: right, values: [{ variable: 'views.Int', value: right }] }
+    left: { label: left, values: JSON.stringify({ '{Int}': left }) },
+    right: { label: right, values: JSON.stringify({ '{Int}': right }) }
   });
   const marks = {
     question: 'Amber or blue marks?',
-    left: { label: 'amber', values: [{ variable: 'Highlight.Pointed.fill', value: 'amber-100' }] },
-    right: { label: 'blue', values: [{ variable: 'Highlight.Pointed.fill', value: 'blue-100' }] }
+    left: { label: 'amber', values: '{"Highlight": {"Pointed": {"fill": "amber-100"}}}' },
+    right: { label: 'blue', values: '{"Highlight": {"Pointed": {"fill": "blue-100"}}}' }
   };
 
   it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
@@ -3584,6 +3587,29 @@ describe('several variants from chat', () => {
       await tried([unclosed, working]);
       expect(attemptsOf()).toEqual([1, 2]);
       expect(mocks.attemptProfiles[1].parameters.model).toBe('gpt-6.1-terra');
+
+      // Values that are not JSON go back before anything is built, to the quick retry too.
+      mocks.preparePrompt.mockClear();
+      const unreadable = await attempts(
+        ({ attempt }) => ({
+          ...generation(undefined, 'Done.'),
+          decision: {
+            action: 'revise',
+            source: working,
+            values: attempt.number === 1 ? '{"Shown": {"fill": "sky-100"' : '{}',
+            summary: 'Done'
+          }
+        }),
+        'Unreadable values'
+      );
+      expect(attemptsOf()).toEqual([1, 2]);
+      const rejected = unreadable.appendedEvents.find(
+        (event) => event.type === 'revision.edits-rejected'
+      );
+      expect(rejected?.payload).toMatchObject({
+        rejected: 'values',
+        problems: [expect.stringMatching(/^values: The values are not valid JSON/u)]
+      });
 
       mocks.preparePrompt.mockClear();
       await tried([unclosed, unclosed, unclosed]);

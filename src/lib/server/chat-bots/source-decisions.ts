@@ -51,36 +51,24 @@ const count = v.optional(
   )
 );
 
-/** One variable set to one of its options. */
-const designValue = v.strictObject({
-  variable: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description(
-      'A variable from project.design, by its key, as Compared.Pointed.fill, views.Int, or pointers.Index.'
-    )
-  ),
-  value: v.pipe(
-    v.union([v.string(), v.number(), v.boolean()]),
-    v.description('One of the variable’s options.')
+/**
+ * Design values as one JSON object written as a string, in the nested form project.design shows,
+ * applied as a JSON Merge Patch (see design-patch.ts): strict structured output cannot describe a
+ * nested design's free keys.
+ */
+const designPatch = v.pipe(
+  v.string(),
+  v.description(
+    'Design values as one JSON object written as a string, nested as project.design shows: a kind\u2019s props in its object, as {"IntCell": {"fill": "sky-100"}}; a token, as {"$accent": "teal-600"}; a style, as {"$cell": {"radius": 4}}; a group, as {"<Node>": {"padding": 0.25}}; a place or a data value inside its kind, as {"IntCell": {":target": {"stroke": "violet-500"}}}; what a kind inherits, as {"IntCell": {"...": "$cell"}}; a type\u2019s view, as {"{Int}": "IntTally"}. Each value one of its variable\u2019s options; null removes a value, so it returns to what it inherits or follows. "{}" for none.'
   )
-});
+);
 
 /**
  * Values for a changed source's variables, which its first version is built with over the viewed
  * variant's: the assistant's own choices, as a first version's colours. Optional (null in
  * the strict response).
  */
-const sourceValues = v.optional(
-  v.nullable(
-    v.pipe(
-      v.array(designValue),
-      v.description(
-        'Values for the changed source’s variables, by key, as Cell.fill, its version built with them; or null to keep the viewed variant’s values and the starter’s for new ones.'
-      )
-    )
-  )
-);
+const sourceValues = v.optional(v.nullable(designPatch));
 
 /** The most characters of a side's label: a word or two, shown after its question as the answer. */
 export const maximumSideLabel = 40;
@@ -98,9 +86,10 @@ function comparisonSide(side: string) {
       )
     ),
     values: v.pipe(
-      v.array(designValue),
-      v.minLength(1),
-      v.description(`The values ${side.toLowerCase()} sets.`)
+      designPatch,
+      v.description(
+        `The values ${side.toLowerCase()} sets, as a JSON object written as a string, nested as project.design shows, as {"{Int}": "IntTally"}.`
+      )
     )
   });
 }
@@ -232,7 +221,7 @@ export const sourceDecisions = {
   vary: v.pipe(
     v.strictObject({
       action: v.literal('vary'),
-      values: v.array(designValue),
+      values: designPatch,
       randomise: v.pipe(
         v.array(v.string()),
         v.description('Variables, by key, to give fresh random values.')

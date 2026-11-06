@@ -82,7 +82,11 @@ values. The assistant is the one author of a turn: its change to the source, or
 a `vary` without a `count` (which sets values without changing the source),
 shows as one version, its first build, with the viewed variant's values where
 they still fit and the starter's for anything new; an `edit` or `revise` may
-give `values` of its own over those, which unlike a `vary`'s settle nothing;
+give `values` of its own over those, which unlike a `vary`'s settle nothing
+(every decision writes its values, and each comparison side's, as one JSON
+object in a string, nested as the design reads and applied as a JSON Merge
+Patch, `null` removing a value; text that is not one object goes back as a slip
+of writing: [`design-patch.ts`](src/lib/server/chat-bots/design-patch.ts));
 after a manual change the first presentation keeps the viewed variant's values
 and the second is randomised; a manual change can also edit the viewed variant's
 choices as nested JSON (the Choices tab while editing): the values it changes or
