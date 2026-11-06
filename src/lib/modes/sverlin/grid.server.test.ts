@@ -74,6 +74,33 @@ describe('the grid', () => {
   });
 });
 
+describe('coordinates outside the range', () => {
+  const marks = sort(`${valuesRow}
+    <Node row={1} col={j}>{j}</Node>
+    <Node row={2} col={j - 1}>{j - 1}</Node>`);
+
+  it('extends the grid by a track before the first cell, so j - 1 at −1 has a place', async () => {
+    const { steps, built } = await drawnSteps(marks);
+    const labels = (built as { steps: string[] }).steps;
+    const front = steps.findIndex((_, k) => labels[k].startsWith('@insert.scan.swap'));
+    expect(front).toBeGreaterThan(0);
+    // After the first swap j is 0, so j - 1 is −1: its mark is left of every value cell.
+    const step = steps[front];
+    const cells = boxes(step, 'IntCell');
+    const before = step.nodes.find((node) => node.runs?.some((run) => run.text === '-1'));
+    expect(before).toBeDefined();
+    expect(before!.box.x + before!.box.width).toBeLessThanOrEqual(cells[0].x);
+  });
+
+  it('keeps every value cell where it is at every step', async () => {
+    const { steps } = await drawnSteps(marks);
+    const placed = steps
+      .slice(1, -1)
+      .map((step) => JSON.stringify(boxes(step, 'IntCell').map(({ x, y }) => [x, y])));
+    expect(new Set(placed).size).toBe(1);
+  });
+});
+
 describe('typed grid coordinates', () => {
   it('places cells by a position, an expression over one, a loop index and a literal, with no warning', async () => {
     const { built } = await drawnSteps(

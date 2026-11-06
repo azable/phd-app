@@ -22,7 +22,7 @@ exports[`every fixture draws the scenes it drew 1`] = `
   "dijkstra-fields.sverlin": "3b7b2a7b54b5f44d",
   "dijkstra.sverlin": "638e9ba771d82e23",
   "fib-calls.sverlin": "a1e977d13dfe4020",
-  "grid-marks.sverlin": "8be9c125c20eb3e3",
+  "grid-marks.sverlin": "0794eb00dea6473e",
   "grid-view.sverlin": "ad2765889902a16b",
   "heap-tree.sverlin": "adc72383c99c84c6",
   "insertion-decisions.sverlin": "315257910836d8a8",

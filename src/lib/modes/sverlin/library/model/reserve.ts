@@ -388,12 +388,19 @@ function sizer(options: ReserveOptions) {
    * the widest cell it holds and each row as tall as the tallest. A track no drawn cell reaches that
    * its coordinates' types allow (data-sv-extent) is as large as the largest drawn, room for a cell
    * another input puts there; one they rule out is a gap. Where those types are not known, the
-   * tracks are those the drawn cells reach.
+   * tracks are those the drawn cells reach. Tracks start at the smallest coordinate a drawn cell
+   * reaches or the types allow, below 0 where one does: a position's type allows −1, before the
+   * first item, as it allows the length, after the last, so a grid placed by positions keeps a
+   * track for each, whatever this run reaches.
    */
   function widenTracks(grid: string, drawn: readonly { at: Read; element: ModelElement }[]) {
     const kept = memory.tracks.get(grid);
-    const columns = [...(kept?.columns ?? [])];
-    const rows = [...(kept?.rows ?? [])];
+    const [keptRowStart, keptColumnStart] = kept?.start ?? [0, 0];
+    // Each track's size by its coordinate, which may be below 0.
+    const columns = new Map<number, number>();
+    const rows = new Map<number, number>();
+    (kept?.columns ?? []).forEach((size, index) => columns.set(index + keptColumnStart, size));
+    (kept?.rows ?? []).forEach((size, index) => rows.set(index + keptRowStart, size));
     const allowed = [new Set<number>(), new Set<number>()];
     for (const { at, element } of drawn) {
       const given = String(element.attributes['data-sv-extent'] ?? '').split(',');
@@ -405,21 +412,30 @@ function sizer(options: ReserveOptions) {
         const column = Number(cell.attributes['data-sv-col']);
         if (!Number.isInteger(row) || !Number.isInteger(column)) continue;
         const { width, height } = sizeAlone(at, cell);
-        columns[column] = Math.max(columns[column] ?? 0, width);
-        rows[row] = Math.max(rows[row] ?? 0, height);
+        columns.set(column, Math.max(columns.get(column) ?? 0, width));
+        rows.set(row, Math.max(rows.get(row) ?? 0, height));
       }
     }
-    const filled = (tracks: (number | undefined)[], allowed: ReadonlySet<number>) => {
-      // Array.from visits a sparse array's holes, which map skips and spreading reads as undefined.
-      const largest = Math.max(0, ...Array.from(tracks, (size) => size ?? 0));
-      return Array.from(
-        { length: Math.max(tracks.length, ...[...allowed].map((index) => index + 1)) },
-        (_, index) => tracks[index] ?? (allowed.has(index) ? largest : 0)
-      );
+    const filled = (tracks: ReadonlyMap<number, number>, allowed: ReadonlySet<number>) => {
+      const reached = [...tracks.keys()];
+      const start = Math.min(0, ...reached, ...[...allowed]);
+      const end = Math.max(-1, ...reached, ...[...allowed]) + 1;
+      const largest = Math.max(0, ...tracks.values());
+      return {
+        start,
+        sizes: Array.from(
+          { length: end - start },
+          (_, index) => tracks.get(index + start) ?? (allowed.has(index + start) ? largest : 0)
+        )
+      };
     };
+    const [placedRows, placedColumns] = [filled(rows, allowed[0]), filled(columns, allowed[1])];
     memory.tracks.set(grid, {
-      columns: filled(columns, allowed[1]),
-      rows: filled(rows, allowed[0])
+      columns: placedColumns.sizes,
+      rows: placedRows.sizes,
+      ...(placedRows.start || placedColumns.start
+        ? { start: [placedRows.start, placedColumns.start] as [number, number] }
+        : {})
     });
   }
 

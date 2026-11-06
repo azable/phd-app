@@ -211,7 +211,7 @@ export type LayoutMemory = {
    * step and every row as tall as the tallest, as many as the largest coordinate any step uses, so a
    * grid filling in never moves.
    */
-  tracks: Map<string, { columns: number[]; rows: number[] }>;
+  tracks: Map<string, { columns: number[]; rows: number[]; start?: [number, number] }>;
   /**
    * The largest size each typed component's root reaches for any value of its parameters, by
    * component; every render of the component keeps it as its least size, so they line up.
@@ -716,13 +716,19 @@ export function packingContext(): Packing | undefined {
   return getContext<Packing | undefined>('sverlin:packing');
 }
 
-/** The cells a grid holds at this step, by row and col, so two at one coordinate are found. */
-export function provideGrid(cells: Set<string> | undefined): void {
-  setContext('sverlin:grid', cells);
+/**
+ * A grid around its cells: the cells it holds at this step, by row and col, so two at one coordinate
+ * are found; and the coordinate its first row and column take, below 0 where a step places a cell
+ * there (see widenTracks in model/reserve.ts).
+ */
+export type GridCells = { cells: Set<string>; start: readonly [number, number] };
+
+export function provideGrid(grid: GridCells | undefined): void {
+  setContext('sverlin:grid', grid);
 }
 
-export function gridContext(): Set<string> | undefined {
-  return getContext<Set<string> | undefined>('sverlin:grid');
+export function gridContext(): GridCells | undefined {
+  return getContext<GridCells | undefined>('sverlin:grid');
 }
 
 /** The way the collection around a node runs, so a collection inside it runs across it, as rows in a column do. */

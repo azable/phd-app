@@ -1901,6 +1901,15 @@ cell by `row` and `col`, usually loop indices or positions:
 
 - A grid holds only nodes placed by `row` and `col`, from any number of
   `{#each}` and `{#if}` blocks, in any order; a value or text goes inside one.
+- A coordinate is a whole number: a position (`index(...)`), an expression over
+  one, as `j - 1`, a loop's index, or a number written in the source. A
+  coordinate outside the array's range, as −1 for `j - 1` before the first cell,
+  or the length after the last, extends the grid by a track, so a mark there has
+  a place of its own; a position's type allows both, so a grid placed by
+  positions keeps a track before the first cell and after the last. A coordinate
+  whose values cannot be worked out, as `values.length - 1`, is still placed,
+  with a warning: the grid then keeps only the tracks the run reaches on that
+  axis.
 - It may also hold `<Link>`s among its cells, each drawn straight from cell to
   cell, its ends often computed from the index: a heap drawn as a tree places
   slot `k` by its depth and joins it to its children,

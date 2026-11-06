@@ -558,18 +558,21 @@
   const cell = untrack(() => (row !== undefined && col !== undefined ? { row, col } : undefined));
   untrack(() => {
     if (!cell) return;
-    if (![cell.row, cell.col].every((at) => Number.isInteger(at) && at >= 0))
+    // A coordinate below 0 or past the last track extends the grid by a track (see widenTracks).
+    if (![cell.row, cell.col].every((at) => Number.isInteger(at)))
       throw new Error(
-        `A grid's cell is placed at whole numbers from 0, not row ${cell.row}, col ${cell.col}.`
+        `A grid's cell is placed at whole numbers, not row ${cell.row}, col ${cell.col}.`
       );
     const at = `${cell.row},${cell.col}`;
-    if (grid?.has(at))
+    if (grid?.cells.has(at))
       throw new Error(
         `Two cells of a grid are at row ${cell.row}, col ${cell.col} at this step: each coordinate holds one cell at a time.`
       );
-    grid?.add(at);
+    grid?.cells.add(at);
   });
-  untrack(() => provideGrid(arrangement === 'grid' ? new Set() : undefined));
+  // The CSS line a coordinate takes: tracks start at the smallest coordinate any step reaches, which
+  // the page knows once it has measured every step; while measuring, a cell is sized alone.
+  const line = (at: number, start: number) => Math.max(1, at - start + 1);
   // A grid in a typed view is drawn by every copy of the view and for every value it is probed
   // with, so it keeps its tracks by its site, one set they all share and line up by.
   const inView = untrack(() => Boolean(__component) || insideView());
@@ -581,6 +584,11 @@
   );
   const tracks = untrack(() =>
     gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
+  );
+  untrack(() =>
+    provideGrid(
+      arrangement === 'grid' ? { cells: new Set(), start: tracks?.start ?? [0, 0] } : undefined
+    )
   );
   const trackCss = (sizes: readonly number[] | undefined) =>
     sizes?.length ? sizes.map((size) => `${size}px`).join(' ') : undefined;
@@ -955,8 +963,8 @@
     class="sv-cell"
     data-sv-row={cell.row}
     data-sv-col={cell.col}
-    style:grid-row-start={cell.row + 1}
-    style:grid-column-start={cell.col + 1}
+    style:grid-row-start={line(cell.row, grid?.start[0] ?? 0)}
+    style:grid-column-start={line(cell.col, grid?.start[1] ?? 0)}
   >
     {@render drawn()}
   </div>

@@ -25,7 +25,7 @@ export type Geometry = {
   devicePixelRatio: number;
   borders: number[];
   reserved: [string, Size][];
-  tracks: [string, { columns: number[]; rows: number[] }][];
+  tracks: [string, { columns: number[]; rows: number[]; start?: [number, number] }][];
   components: [string, Size][];
   spans: [string, SpanLayout][];
   /** The frame every step shows in, and its fit (see shownFrame); none with no step. */
