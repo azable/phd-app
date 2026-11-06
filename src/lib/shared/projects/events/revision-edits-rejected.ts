@@ -27,6 +27,8 @@ export const revisionEditsRejectedEventSchema = v.object({
       v.picklist(['values', 'comparisons', 'picture', 'warnings', 'alternatives', 'helpers'])
     ),
     problems: v.pipe(v.array(v.string()), v.minLength(1)),
+    /** Each problem's warning code, in order, where the picture went back for its warnings. */
+    codes: v.optional(v.array(v.pipe(v.string(), v.maxLength(64)))),
     /**
      * The comparisons, by number from 1, built without those rejected; none where the source was
      * shown alone.

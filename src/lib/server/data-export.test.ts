@@ -85,6 +85,7 @@ describe('project data export traversal', () => {
       'study/phases.json',
       'study/flows.json',
       'projects/project-test/project.json',
+      'warnings-summary.json',
       'interactions/sessions.json',
       'interactions/events.jsonl',
       'sensitive/unsent-feedback-drafts.jsonl',
@@ -96,7 +97,7 @@ describe('project data export traversal', () => {
       ownerCount: 1,
       projectCount: 1
     });
-    expect(manifest.files).toHaveLength(12);
+    expect(manifest.files).toHaveLength(13);
     expect(manifest.interactions).toMatchObject({
       status: 'included',
       sessionCount: 1,

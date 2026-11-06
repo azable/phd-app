@@ -288,7 +288,8 @@ export async function runSverlinAssistantTurn(
           | 'alternatives'
           | 'helpers',
         problems: string[],
-        failedSource: string
+        failedSource: string,
+        codes?: string[]
       ) => {
         const outcome = {
           edits: 'the edits could not be applied',
@@ -312,7 +313,8 @@ export async function runSverlinAssistantTurn(
                 attempt,
                 ...generationReference(current, operationId),
                 ...(kind === 'edits' ? {} : { rejected: kind }),
-                problems
+                problems,
+                ...(codes ? { codes } : {})
               }
             })
           ],
@@ -619,7 +621,17 @@ export async function runSverlinAssistantTurn(
       );
       if (warnings.length && candidate !== undefined) {
         softReturned = true;
-        return reject('warnings', warnings, candidate);
+        const codeOf = new Map(
+          bundles
+            .flatMap(({ warnings = [] }) => warnings)
+            .map((warning) => [presentationWarningText(warning), presentationWarningCode(warning)])
+        );
+        return reject(
+          'warnings',
+          warnings,
+          candidate,
+          warnings.map((warning) => codeOf.get(warning) ?? 'uncoded')
+        );
       }
       // A request for particular graphics, where the helpers are on, goes back once to give them a
       // task too, beside the assistant's own alternatives.
