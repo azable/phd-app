@@ -1910,6 +1910,10 @@ cell by `row` and `col`, usually loop indices or positions:
   whose values cannot be worked out, as `values.length - 1`, is still placed,
   with a warning: the grid then keeps only the tracks the run reaches on that
   axis.
+- A position in a cell placed by it, as `<Node row={1} col={i}>{i}</Node>`,
+  draws through the view the design chooses for its type, so a pointer view with
+  no `<Pointed>`, as an arrow and a caption, draws a mark in a lane of its own,
+  and slides from cell to cell as the position moves.
 - It may also hold `<Link>`s among its cells, each drawn straight from cell to
   cell, its ends often computed from the index: a heap drawn as a tree places
   slot `k` by its depth and joins it to its children,

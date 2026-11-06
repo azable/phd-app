@@ -890,11 +890,14 @@ export function pointerCalls(
     conditions: readonly string[] = [],
     inNode = false,
     // Whether the node around holds words of its own, as at {i}, which a number reads in.
-    words = false
+    words = false,
+    // Whether a grid cell, placed by row or col, is around it: a position there draws through the
+    // view the design chooses for it, as a mark in its own cell (see Grid in the guide).
+    inCell = false
   ): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
-      for (const item of node) visit(item, where, conditions, inNode, words);
+      for (const item of node) visit(item, where, conditions, inNode, words, inCell);
       return;
     }
     const part = node as Part;
@@ -902,7 +905,7 @@ export function pointerCalls(
       const call = part.expression as Part;
       const name = (call?.callee as Part | undefined)?.name;
       const numbered = typeof name === 'string' ? positions.get(name) : undefined;
-      if (numbered && inNode && !words && !warned.has(part.start ?? 0)) {
+      if (numbered && inNode && !words && !inCell && !warned.has(part.start ?? 0)) {
         // A bare position, in no words, in a source drawing its array, was likely meant as a mark.
         const [argument] = (call.arguments as Part[] | undefined) ?? [];
         // Its collection drawn in the source, as a render of the collection's type.
@@ -978,14 +981,14 @@ export function pointerCalls(
     const named = where === 'top' ? layoutNameOf(part) : undefined;
     if (named !== undefined) {
       layout = named;
-      visit(part.children, where, conditions, inNode, words);
+      visit(part.children, where, conditions, inNode, words, inCell);
       layout = undefined;
       return;
     }
     if (part.type === 'IfBlock' && where === 'top') {
       const test = `(${text(part.expression as Part)})`;
-      visit(part.children, where, [...conditions, test], inNode, words);
-      visit(part.else, where, [...conditions, `!${test}`], inNode, words);
+      visit(part.children, where, [...conditions, test], inNode, words, inCell);
+      visit(part.else, where, [...conditions, `!${test}`], inNode, words, inCell);
       return;
     }
     // A layout drawn by tag is a snippet with no parameters by now; a view's takes its value.
@@ -1018,8 +1021,15 @@ export function pointerCalls(
         )
       : words;
     if (isNode && !worded) blocksFlowing(part);
+    const cell =
+      inCell ||
+      (isNode &&
+        ((part.attributes as Part[] | undefined) ?? []).some(
+          (attribute) => attribute.name === 'row' || attribute.name === 'col'
+        ));
     for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'expression') visit(child, inner, conditions, inside, worded);
+      if (key !== 'parent' && key !== 'expression')
+        visit(child, inner, conditions, inside, worded, cell);
   };
   // A node with no layout places its children as text, so two blocks in it, holding no words of
   // its own, wrap against each other with no gap (as a goal and its cells did on 5 November).

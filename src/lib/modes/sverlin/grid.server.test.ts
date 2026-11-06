@@ -101,6 +101,17 @@ describe('coordinates outside the range', () => {
   });
 });
 
+describe('marks as grid cells', () => {
+  it('draws a position in a cell placed by it through its view, with no position-in-node warning', async () => {
+    const { steps, built } = await drawnSteps(
+      sort(`${valuesRow}
+    <Node row={1} col={i}>{i}</Node>`)
+    );
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/draws as its number/u));
+    expect(steps[1].nodes.some((node) => node.kind === 'Arrow.Tip')).toBe(true);
+  });
+});
+
 describe('typed grid coordinates', () => {
   it('places cells by a position, an expression over one, a loop index and a literal, with no warning', async () => {
     const { built } = await drawnSteps(
