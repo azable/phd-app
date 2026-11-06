@@ -28,7 +28,7 @@ import {
 import { releaseHeldQuestion } from '$lib/server/ai/turns/replies';
 import { handleParticipantIntake } from '$lib/server/ai/turns/intake';
 import { modeTurns } from '$lib/modes/assistants.server';
-import { runWithEscalation, struggleSignal } from '$lib/server/ai/turns/struggle';
+import { designingSignal, runWithEscalation, struggleSignal } from '$lib/server/ai/turns/struggle';
 
 /** Process one durable claim while allowing new participant interactions to append concurrently. */
 export async function runQueuedAssistantTurn(
@@ -149,9 +149,11 @@ export async function runQueuedAssistantTurn(
     };
   }
   // Every mode's turn steps its first call up alike where the participant seems to be struggling
-  // (ai/turns/struggle.ts), so the study's conditions get the same ladder.
+  // (ai/turns/struggle.ts), or where it designs a first version for the helpers, so the study's
+  // conditions get the same ladder.
   const document = await runWithEscalation(
-    struggleSignal(intake.document.events, claim.payload.interactionEventIds),
+    struggleSignal(intake.document.events, claim.payload.interactionEventIds) ??
+      designingSignal(intake.document),
     () =>
       modeTurns[projectSnapshotAt(intake.document).mode](
         intake.document,

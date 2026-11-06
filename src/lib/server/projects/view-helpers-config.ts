@@ -1,6 +1,7 @@
 /**
- * Whether a project's turns run the view helpers: an administrator's dev-mode switch on the
- * project, else its study condition's `viewHelpers`, else off. Each turn records the answer on its
+ * Whether a project's turns run the view helpers: never where the pipeline's `helpers` is off
+ * (ai/bots/helper-pipeline.ts), else an administrator's dev-mode switch on the project, else its
+ * study condition's `viewHelpers`, else off. Each turn records the answer on its
  * assistant.turn-started event, which the turn then follows.
  */
 
@@ -8,6 +9,7 @@ import type { ProjectDocument } from '$lib/shared/projects/model';
 import { defaultHelperCounts, type HelperCounts } from '$lib/shared/study/definition';
 import { viewHelpersSwitch } from '$lib/shared/projects/view-helpers';
 import { projectTrialCondition, studyProjectContext } from '$lib/server/study';
+import { helperPipeline } from '$lib/server/ai/bots/helper-pipeline';
 
 /** The study condition's setting for a project, or its trial condition's outside a study. */
 export async function conditionViewHelpers(projectId: string): Promise<boolean> {
@@ -17,7 +19,11 @@ export async function conditionViewHelpers(projectId: string): Promise<boolean> 
 }
 
 /** Whether the next turn of this project runs the view helpers. */
-export async function projectViewHelpers(document: ProjectDocument): Promise<boolean> {
+export async function projectViewHelpers(
+  document: ProjectDocument,
+  pipeline = helperPipeline
+): Promise<boolean> {
+  if (!pipeline.helpers) return false;
   return viewHelpersSwitch(document.events) ?? (await conditionViewHelpers(document.projectId));
 }
 

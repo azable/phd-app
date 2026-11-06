@@ -10,10 +10,14 @@ import { runAttemptLadder } from '$lib/server/ai/turns/attempt-ladder';
 import { runPreparedGeneration } from '$lib/server/ai/turns/generation';
 import {
   currentEscalation,
+  designingSignal,
   escalateForFlag,
   runWithEscalation,
   struggleSignal
 } from '$lib/server/ai/turns/struggle';
+import * as attemptLadder from '$lib/server/ai/turns/attempt-ladder';
+import { helperPipeline } from '$lib/server/ai/bots/helper-pipeline';
+import type { ProjectDocument } from '$lib/shared/projects/model';
 import { modeAssistants } from '$lib/modes/assistants.server';
 import * as v from 'valibot';
 
@@ -120,6 +124,26 @@ describe('a stepped-up first call', () => {
       expect((await prepare(2)).parameters).toMatchObject({ reasoningEffort: 'high' });
       expect((await prepare(2)).escalation).toBeUndefined();
     });
+  });
+
+  it('steps a first version up to the designing model only while the helpers are on', async () => {
+    await runWithEscalation('designing', async () => {
+      expect((await prepare(1)).parameters).toMatchObject(helperPipeline.designing);
+    });
+    const started = (viewHelpers: boolean) =>
+      event(1, 'assistant.turn-started', {
+        requestEventIds: [],
+        interactionEventIds: [],
+        viewHelpers
+      });
+    const document = (viewHelpers: boolean) =>
+      ({ events: [started(viewHelpers)] }) as unknown as ProjectDocument;
+    const firstVersion = vi.spyOn(attemptLadder, 'hasWorkingVersion').mockReturnValue(false);
+    expect(designingSignal(document(true))).toBe('designing');
+    expect(designingSignal(document(false))).toBeUndefined();
+    firstVersion.mockReturnValue(true);
+    expect(designingSignal(document(true))).toBeUndefined();
+    firstVersion.mockRestore();
   });
 
   it('steps up both modes alike, as both start their ladder with the same first call', () => {

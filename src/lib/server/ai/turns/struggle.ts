@@ -15,6 +15,9 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import type { EscalationReason } from '$lib/shared/projects/events/ai-generation';
 import type { MessageContent } from '$lib/shared/projects/events/message-content';
+import type { ProjectDocument } from '$lib/shared/projects/model';
+import { hasWorkingVersion } from '$lib/server/ai/turns/attempt-ladder';
+import { turnViewHelpers } from '$lib/server/projects/view-helpers-config';
 
 type Turn = { reason?: EscalationReason };
 
@@ -153,4 +156,13 @@ export function struggleSignal(
 
   if (feedback.some(vaguelyNegative)) return 'vague-negative';
   return undefined;
+}
+
+/**
+ * 'designing' where this turn designs a first version while the helpers are on: the main agent then
+ * writes the idea and the skeleton the helpers fill, so it reasons more (ai/bots/helper-pipeline.ts
+ * designing); later turns keep the fast first call unless the participant struggles.
+ */
+export function designingSignal(document: ProjectDocument): EscalationReason | undefined {
+  return turnViewHelpers(document) && !hasWorkingVersion(document) ? 'designing' : undefined;
 }

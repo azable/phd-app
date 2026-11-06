@@ -13,6 +13,7 @@ import {
 } from '$lib/server/ai/bots/participant-intake';
 import type { AiProjectContext } from '$lib/server/ai/context/project-context';
 import { steppedUpParameters } from '$lib/server/ai/bots/attempt-profiles';
+import { helperPipeline } from '$lib/server/ai/bots/helper-pipeline';
 import { currentEscalation } from '$lib/server/ai/turns/struggle';
 import type {
   CandidateAssistantOutput,
@@ -45,7 +46,12 @@ export function createChatbot<Project, Output extends object>(
       initialPrompt: config.initialPrompt,
       context: await config.buildContext({ ...request, attempt }),
       attempt,
-      parameters: escalation ? { ...parameters, ...steppedUpParameters } : parameters,
+      parameters: escalation
+        ? {
+            ...parameters,
+            ...(escalation === 'designing' ? helperPipeline.designing : steppedUpParameters)
+          }
+        : parameters,
       responseFormat: config.responseFormatFor?.(request) ?? config.responseFormat,
       ...(escalation ? { escalation } : {})
     };
