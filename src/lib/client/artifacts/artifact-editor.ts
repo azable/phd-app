@@ -64,7 +64,7 @@ const sverlinHighlightStyle = HighlightStyle.define([
 export function artifactLanguageSupport(language: ArtifactLanguage): Extension {
   switch (language) {
     case 'svelte':
-      return html();
+      return html({ selfClosingTags: true });
     case 'json':
       return javascript();
   }
