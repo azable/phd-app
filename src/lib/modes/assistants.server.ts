@@ -1,12 +1,17 @@
 /**
  * Each mode's assistant, found by folder convention from the public catalogue, as `server.ts`
- * finds each mode's builders: its bot (`assistant/bot.server.ts`), and for a mode with a design
- * space, how it reads the design values a recorded decision set.
+ * finds each mode's builders: its bot (`assistant/bot.server.ts`), what its workspace offers, and
+ * for a mode with a design space, how it tells the design and reads a recorded decision's values.
  */
 
 import { modeCatalog } from './catalog';
 import type { VisualizationMode } from '$lib/shared/presentations';
-import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
+import type {
+  AiDesign,
+  AiDesignContext,
+  AiProjectContext
+} from '$lib/server/ai/context/project-context';
+import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import type {
   CandidateAssistantOutput,
   ChatBotConfig,
@@ -20,9 +25,21 @@ export type DecisionValuesReader = (
   values: unknown
 ) => { set: { variable: string; value: string | number | boolean }[] } | { problem: string };
 
+/** How a mode with a design space tells it to its assistant (see modes/sverlin/assistant/context.server.ts). */
+export type DesignForAssistant = {
+  variables(
+    presentation: BrowserBundlePresentation | undefined,
+    structures?: Readonly<Record<string, string>>
+  ): AiDesign;
+  context(design: AiDesign): AiDesignContext;
+};
+
 type AssistantModule = {
   default: ChatBotConfig<AiProjectContext, ModeOutput>;
   readDecisionValues?: DecisionValuesReader;
+  design?: DesignForAssistant;
+  /** What the mode's workspace offers that its assistant must know, beyond every mode's. */
+  interfaceCapabilities?: readonly string[];
 };
 
 const modules = import.meta.glob<AssistantModule>('./*/assistant/bot.server.ts', { eager: true });

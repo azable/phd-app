@@ -96,13 +96,13 @@ import {
 import {
   projectAiContext,
   projectConversationMessages,
-  designVariables,
   sourceBuildFacts,
   viewedPresentation,
   type AiContextSelection,
   type AiDesign,
   type AiProjectContext
-} from '$lib/server/chat-bots/project-context';
+} from '$lib/server/ai/context/project-context';
+import { designVariables } from '$lib/modes/sverlin/assistant/context.server';
 import type {
   Chatbot,
   ChatbotPrompt,

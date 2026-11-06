@@ -8,8 +8,8 @@ import {
   briefSteering,
   conversationState
 } from '$lib/server/ai/context/brief-context';
-import { openChoices, preferenceSummary } from '$lib/server/chat-bots/preference-summary';
-import type { AiDesign } from '$lib/server/chat-bots/project-context';
+import { openChoices, preferenceSummary } from '$lib/server/projects/preference-summary';
+import type { AiDesign } from '$lib/server/ai/context/project-context';
 
 const design: AiDesign = {
   options: { fill: ['none', 'white', 'amber-200', 'sky-200'], font: ['sans', 'serif', 'mono'] },

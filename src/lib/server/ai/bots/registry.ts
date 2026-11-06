@@ -11,7 +11,7 @@ import {
   participantIntakeClassifier,
   type ParticipantIntakeClassifierOutput
 } from '$lib/server/ai/bots/participant-intake';
-import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
+import type { AiProjectContext } from '$lib/server/ai/context/project-context';
 import type {
   CandidateAssistantOutput,
   ChatBotConfig,

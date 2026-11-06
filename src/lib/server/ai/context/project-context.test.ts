@@ -9,14 +9,13 @@ import type { ProjectEvent } from '$lib/shared/projects/events';
 import type { FeedbackViewing } from '$lib/shared/projects/events/feedback-submitted';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
+import { designContext, designVariables } from '$lib/modes/sverlin/assistant/context.server';
 import {
-  designContext,
-  designVariables,
   presentationSummary,
   projectAiContext,
   projectAiTimelineEntry,
   projectConversationMessages
-} from '$lib/server/chat-bots/project-context';
+} from '$lib/server/ai/context/project-context';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const sha256 = 'a'.repeat(64);

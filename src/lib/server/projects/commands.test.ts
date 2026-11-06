@@ -196,7 +196,7 @@ describe('createProject', () => {
   it('records a view failure the browser reports once, for the assistant to read', async () => {
     const { getProjectTemplate } = await import('./starter-catalog');
     const { createProject, reportRuntimeFailure } = await import('./service');
-    const { projectConversationMessages } = await import('$lib/server/chat-bots/project-context');
+    const { projectConversationMessages } = await import('$lib/server/ai/context/project-context');
     const created = await createProject(
       { creation: { templateId: getProjectTemplate('linear-search').id } },
       serviceDependencies
@@ -278,7 +278,7 @@ describe('createProject', () => {
     const { getProjectTemplate } = await import('./starter-catalog');
     const { createProject, recordPresentationLoad } = await import('./service');
     const { projectAiContext, projectConversationMessages } =
-      await import('$lib/server/chat-bots/project-context');
+      await import('$lib/server/ai/context/project-context');
     const created = await createProject(
       { creation: { templateId: getProjectTemplate('linear-search').id } },
       serviceDependencies
@@ -347,7 +347,7 @@ describe('createProject', () => {
     const { buildProjectPresentations, createProject, reportRuntimeFailure } =
       await import('./service');
     const { presentationBufferState } = await import('$lib/shared/projects/presentation-buffer');
-    const { projectConversationMessages } = await import('$lib/server/chat-bots/project-context');
+    const { projectConversationMessages } = await import('$lib/server/ai/context/project-context');
     const created = await createProject(
       { creation: { templateId: getProjectTemplate('linear-search').id } },
       serviceDependencies
@@ -4090,7 +4090,7 @@ describe('several variants from chat', () => {
     const prompted = () => mocks.preparePrompt.mock.calls.at(-1)?.[0].project;
 
     it('is held back, and asked with an open alternative once the last pair is answered, with no model call', async () => {
-      const { projectAiContext } = await import('$lib/server/chat-bots/project-context');
+      const { projectAiContext } = await import('$lib/server/ai/context/project-context');
       const { result } = await asking('Who is it for?');
       const [reply] = replies(result.appendedEvents);
       expect(reply).toMatchObject({ heldQuestion: { text: 'Who is it for?' } });

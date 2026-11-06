@@ -18,7 +18,7 @@ import {
 } from '$lib/server/projects/preference-model';
 
 import type { BriefSteering } from '$lib/server/ai/context/brief-context';
-import type { AiDesign } from '$lib/server/chat-bots/project-context';
+import type { AiDesign } from '$lib/server/ai/context/project-context';
 
 type DesignValue = string | number | boolean;
 

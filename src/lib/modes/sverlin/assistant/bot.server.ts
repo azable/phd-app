@@ -20,12 +20,23 @@ import {
 } from '$lib/server/ai/decisions/source-decisions';
 import { visualizationParticipantIntake } from '$lib/server/ai/bots/participant-intake';
 import * as v from 'valibot';
-import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
+import type { AiProjectContext } from '$lib/server/ai/context/project-context';
 
+import type { DesignForAssistant } from '$lib/modes/assistants.server';
+import { designContext, designVariables } from './context.server';
 import assistant from './assistant.md?raw';
 
 /** How a recorded decision's design values are read (see ../../assistants.server.ts). */
 export { readDesignPatch as readDecisionValues } from './design-patch.server';
+
+/** The design as the assistant reads it (see ../../assistants.server.ts). */
+export const design: DesignForAssistant = { variables: designVariables, context: designContext };
+
+/** What a Sverlin workspace offers beyond every mode's, for the assistant (see project-context.ts). */
+export const interfaceCapabilities = [
+  'selected.elements traces each element a participant referenced to the <Node> tag that drew it.',
+  'A project may keep another pair generated ahead of time; ordinary conversation does not advance the visible pair.'
+];
 import guide from '../README.md?raw';
 import { listingMapsOf, recordedTrace } from '../compile.server';
 

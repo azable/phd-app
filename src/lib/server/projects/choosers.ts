@@ -4,7 +4,7 @@
  * (variant-guard.ts).
  */
 
-import type { AiDesign, SourceBuildFacts } from '$lib/server/chat-bots/project-context';
+import type { AiDesign, SourceBuildFacts } from '$lib/server/ai/context/project-context';
 import { designKeys, type BuildRequest } from '$lib/modes/server';
 import type { BrowserBundlePresentation, DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';

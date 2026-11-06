@@ -127,6 +127,22 @@ export type DesignKeys = {
   kept(key: string, has?: (key: string) => boolean): string;
   written(key: string, has?: (key: string) => boolean): string;
   tokenProp(variable: string): string | undefined;
+  /** A variant's values as people and the model read them, nested by kind. */
+  writtenNested(values: Readonly<Record<string, DesignValue>>): NestedDesign;
+};
+
+type DesignValue = string | number | boolean;
+/** Values nested by the parts of their keys, as `{ "IntCell": { "fill": "white" } }`. */
+export type NestedDesign = { [key: string]: DesignValue | NestedDesign };
+
+/** Where a selected element's id points in a version's source: its tag's line and column, and more. */
+export type ElementLocation = {
+  line: number;
+  column: number;
+  key?: string;
+  occurrence: number;
+  items: number[];
+  markup: string;
 };
 
 type ModeBuilders = {
@@ -135,6 +151,8 @@ type ModeBuilders = {
   scenes?: SceneSource;
   exportFile?: ExportSource;
   designKeys?: DesignKeys;
+  /** The tag in a version's source that drew a selected element, as its id names it. */
+  locateElement?: (source: string, id: string) => ElementLocation | undefined;
 };
 
 const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {
@@ -154,16 +172,24 @@ export const modeBuilders = Object.fromEntries(
 export const designKeys: DesignKeys = (() => {
   const all = Object.values(modules).flatMap(({ designKeys }) => (designKeys ? [designKeys] : []));
   if (all.length > 1) throw new Error('More than one mode has a design space; pass the mode.');
-  return all[0] ?? { kept: (key) => key, written: (key) => key, tokenProp: () => undefined };
+  return (
+    all[0] ?? {
+      kept: (key) => key,
+      written: (key) => key,
+      tokenProp: () => undefined,
+      writtenNested: (values) => ({ ...values })
+    }
+  );
 })();
 
 function limited(builders: ModeBuilders | undefined): ModeBuilders | undefined {
   if (!builders) return undefined;
-  const { buildPresentation, buildBatch, scenes, exportFile, designKeys } = builders;
+  const { buildPresentation, buildBatch, scenes, exportFile, designKeys, locateElement } = builders;
   return {
     ...(scenes && { scenes }),
     ...(exportFile && { exportFile }),
     ...(designKeys && { designKeys }),
+    ...(locateElement && { locateElement }),
     ...(buildPresentation && {
       buildPresentation: (...options: Parameters<PresentationBuilder>) =>
         buildLimit.run(() => buildPresentation(...options))

@@ -4,7 +4,7 @@ import * as v from 'valibot';
 
 import { htmlFramesManifestSchema, type HtmlFramesManifest } from '$lib/shared/presentations';
 
-import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
+import type { AiProjectContext } from '$lib/server/ai/context/project-context';
 import {
   generatedMessageContentJsonSchema,
   generatedMessageContentSchema,

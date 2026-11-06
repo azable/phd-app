@@ -9,16 +9,18 @@ import {
 } from './compile.server';
 import type { BuildRequest, DesignKeys, ModeBuildResult } from '../server';
 import { isToken, tokenProps } from './library/node/design';
-import { keptKey, writtenKey } from './library/node/design-keys';
+import { keptKey, nestedDesign, writtenKey, writtenValues } from './library/node/design-keys';
 
 export { versionScenes as scenes } from './scenes.server';
 export { exportFile } from './targets/export.server';
+export { locateElement } from './element-ref';
 
-/** How the design names its variables, for the preference model and its summary (see ../server.ts). */
+/** How the design names its variables, for code outside the mode that reads variants (see ../server.ts). */
 export const designKeys: DesignKeys = {
   kept: keptKey,
   written: writtenKey,
-  tokenProp: (variable) => (isToken(variable) ? tokenProps[variable] : undefined)
+  tokenProp: (variable) => (isToken(variable) ? tokenProps[variable] : undefined),
+  writtenNested: (values) => nestedDesign(writtenValues(values))
 };
 
 /** Text cut to what a presentation stores, as presentations.ts bounds it, so a long warning never fails the turn. */

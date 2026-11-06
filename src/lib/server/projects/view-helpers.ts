@@ -3,12 +3,9 @@
  * last proposed for the base source. Present in its context only where the turn runs them.
  */
 
-import {
-  designVariables,
-  viewedPresentation,
-  type AiViewHelpers
-} from '$lib/server/chat-bots/project-context';
-import { preferenceSummary } from '$lib/server/chat-bots/preference-summary';
+import { viewedPresentation, type AiViewHelpers } from '$lib/server/ai/context/project-context';
+import { designVariables } from '$lib/modes/sverlin/assistant/context.server';
+import { preferenceSummary } from '$lib/server/projects/preference-summary';
 import { layoutBlock } from '$lib/modes/sverlin/assistant/view-helpers.server';
 import { projectBrief } from '$lib/shared/projects/brief';
 import type { ProjectDocument } from '$lib/shared/projects/model';

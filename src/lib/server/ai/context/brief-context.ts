@@ -15,7 +15,7 @@ import {
 } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { choiceFamily } from '$lib/server/chat-bots/preference-summary';
+import { choiceFamily } from '$lib/server/projects/preference-summary';
 
 /** How the brief weighs a choice's worth asking, and why it keeps one out of comparisons. */
 export type BriefSteering = {
