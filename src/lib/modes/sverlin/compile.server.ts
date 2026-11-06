@@ -2838,6 +2838,7 @@ export async function bundlePresentation(
         : []
     };
   });
+  warnings.push(...neverDrawnLabelNodes(prepared, states));
   const listing = shownListing(prepared, values, lit);
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
@@ -2942,6 +2943,52 @@ export async function bundlePresentation(
     leftOut: leftOut.nodes,
     ...(warnings.length ? { warnings } : {})
   };
+}
+
+/**
+ * Warnings for each node that reads labels and is hidden at every step: its words and renders are
+ * one statement, hidden where one of its renders has no value (see hiddenAt), so a node reading
+ * labels that never give values at one step together is drawn at no step at all.
+ */
+function neverDrawnLabelNodes(
+  prepared: Pick<PreparedComponent, 'leftOut'>,
+  states: readonly { __hiddenSites: string[] }[]
+): string[] {
+  if (!prepared.leftOut || !states.length) return [];
+  const { model } = prepared.leftOut;
+  // A label's value is read as what it applied, `__applied_<label>_<label>` (see leftOutSites).
+  const labelOf = (read: string) =>
+    isLabelKey(read)
+      ? read
+      : read.startsWith('__applied_')
+        ? read.slice('__applied_'.length).split('_')[0]
+        : undefined;
+  const hiddenEverywhere = states
+    .slice(1)
+    .reduce(
+      (hidden, { __hiddenSites }) => hidden.filter((site) => __hiddenSites.includes(site)),
+      states[0].__hiddenSites
+    );
+  return hiddenEverywhere.flatMap((site) => {
+    if (!model.nodes[site]) return [];
+    const labels = [
+      ...new Set(
+        Object.values(model.renders)
+          .filter(({ parent }) => parent === site)
+          .flatMap(({ reads }) => reads.map(labelOf))
+          .filter((label): label is string => label !== undefined && isLabelKey(label))
+      )
+    ].map(asWritten);
+    if (!labels.length) return [];
+    const [line, column] = site.split(':');
+    const reading =
+      labels.length === 1
+        ? `${labels[0]}, which gives no value at any step shown`
+        : `${labels.join(' and ')}, which give values at no step together`;
+    return [
+      `The <Node> at line ${line}, column ${column} reads ${reading}, so it is drawn at no step: a node's words and renders are one statement, hidden where one of them has no value. Put each label in a node of its own, as <Node when="@label">{@label}</Node>.`
+    ];
+  });
 }
 
 /**

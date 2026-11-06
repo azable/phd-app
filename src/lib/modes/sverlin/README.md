@@ -871,9 +871,14 @@ parameters by name for a labelled call, and its result `this.value`, each drawn
 through its type's view (a plain `true` or `false` as text).
 `{@sweep.pair.test}` in a layout draws what that expression computed since the
 step before, through the view `{@sweep.pair.test}` chooses, and nothing, keeping
-its room, where it computed nothing. A view typed by a label no step evaluates
-is refused. The view never computes itself: label the expression, as
-`@next[i + 1]`, and read the label.
+its room, where it computed nothing. A node's words and renders are one
+statement, so a node is hidden at each step where a label it reads computed
+nothing, and a node reading two labels that never give values at one step, as
+`<Node>{@insert.front} {@insert.cmp}</Node>`, is drawn at no step and warned of:
+give each its own node. A layout's `of` lists variables; it reads its labels
+whether listed or not. A view typed by a label no step evaluates is refused. The
+view never computes itself: label the expression, as `@next[i + 1]`, and read
+the label.
 
 A label on a block or a statement is a type too. Its view draws one span of the
 label: the variables in scope where the span ends, each read as `this.name`. For
