@@ -4,10 +4,16 @@ import { prepareSvelteComponent } from './compile.server';
 import { bundlePresentation } from './testing/scenes';
 import { designOnlyWarning } from './padding-warnings.server';
 import { repeatedStepWarnings } from './storyboard.server';
+import { placeWarningCodes } from './place-checks.server';
+import type { BuildWarning } from './warnings';
 
 /** A build's warnings but those of its look only, as padding nobody sees, which these leave aside. */
-const unlooked = (warnings: readonly string[] = []) =>
-  warnings.filter((warning) => !warning.endsWith(designOnlyWarning));
+// The scene's warnings: a look only, and the place and label checks (place-checks.server.ts), left out.
+const unlooked = (warnings: readonly BuildWarning[] = []) =>
+  warnings
+    .filter(({ code }) => !placeWarningCodes.has(code))
+    .map(({ message }) => message)
+    .filter((warning) => !warning.endsWith(designOnlyWarning));
 
 const blocks = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -94,7 +100,7 @@ describe('storyboards', () => {
     // target, moves nothing, and the view reads neither: each draws what the step before drew, so
     // is left out, with a warning naming it.
     expect(labels.at(-1)).toBe('probe (the second probe): @probe#2:before');
-    expect(warnings).toContain(
+    expect(warnings?.map(({ message }) => message)).toContain(
       'In the scene probe, @probe#2:before and @probe.pick#2 draw the same picture, so @probe.pick#2 is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
     );
     // Every presentation shows the source's steps.
@@ -471,7 +477,7 @@ ${views}
 </Storyboard>`;
     const value = '@probe[const mid = @mid[Index(Math.floor(values.length / 2))];]';
     const before = await bundlePresentation(prepareSvelteComponent(search(value, '@probe.mid')), 1);
-    expect(before.warnings).toContain(
+    expect(before.warnings?.map(({ message }) => message)).toContain(
       '@probe.mid wraps only the value given to mid, so a scene pausing there pauses after the value is worked out but before mid holds it: mid does not exist at that step, and nothing drawing it shows. Label the whole statement, as @mid[const mid = …;].'
     );
     const whole = await bundlePresentation(
@@ -480,7 +486,7 @@ ${views}
       ),
       1
     );
-    expect(whole.warnings ?? []).not.toContainEqual(
+    expect((whole.warnings ?? []).map(({ message }) => message)).not.toContainEqual(
       expect.stringContaining('wraps only the value')
     );
   });

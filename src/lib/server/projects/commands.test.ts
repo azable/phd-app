@@ -1929,6 +1929,14 @@ describe('submitProjectFeedback', () => {
       expect(returnedWarnings([guessed, steps], false)).toEqual([guessed, steps]);
     });
 
+    it('sends a clumped label back, but only tells a change a listing region marks nowhere', async () => {
+      const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const clumped = { code: 'label.clumped', message: '@first holds 2 statements.' };
+      const unmarked = { code: 'listing.unmarked-read', message: 'The region @start changes i.' };
+      expect(returnedWarnings([clumped, unmarked], true)).toEqual([clumped.message]);
+      expect(returnedWarnings([clumped, unmarked], false)).toEqual([clumped.message]);
+    });
+
     it('never sends a picture back for padding nobody sees, a look only', async () => {
       const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const padding =
@@ -4211,9 +4219,7 @@ describe('several variants from chat', () => {
     const asked = unofferedAlternatives(bundle, new Set(), shown);
     expect(asked).toContain('views.Seen');
     expect(asked).not.toContain('views.Int');
-    expect(
-      unofferedAlternatives(bundle, new Set(), { views: bundle.views })
-    ).toBeUndefined();
+    expect(unofferedAlternatives(bundle, new Set(), { views: bundle.views })).toBeUndefined();
   });
 
   it('shows a version whose source offers no other form at once', async () => {

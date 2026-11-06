@@ -6,6 +6,7 @@ import { bundlePresentation } from './testing/scenes';
 import framesFixture from './fixtures/call-frames.sverlin?raw';
 import fibFixture from './fixtures/fib-calls.sverlin?raw';
 import { designOnlyWarning } from './padding-warnings.server';
+import { placeWarningCodes } from './place-checks.server';
 
 const problemOf = (source: string) => {
   try {
@@ -39,8 +40,14 @@ describe('call types', () => {
     const { labels, warnings } = await bundlePresentation(prepareSvelteComponent(framesFixture), 1);
     expect(labels[0]).toBe(':before');
     expect(labels).toContain('@sort.merge#7');
-    // Its look's padding nobody sees aside, which the build tells too.
-    expect((warnings ?? []).filter((warning) => !warning.endsWith(designOnlyWarning))).toEqual([]);
+    // Its look's padding nobody sees aside, which the build tells too, and the place and label
+    // checks (place-checks.server.ts), which its listing and labels are not written for.
+    expect(
+      (warnings ?? [])
+        .filter(({ code }) => !placeWarningCodes.has(code))
+        .map(({ message }) => message)
+        .filter((warning) => !warning.endsWith(designOnlyWarning))
+    ).toEqual([]);
   });
 
   it("gives a call's result once it has returned", async () => {

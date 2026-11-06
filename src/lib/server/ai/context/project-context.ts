@@ -38,7 +38,7 @@ import type {
   DesignValues,
   RenderablePresentation
 } from '$lib/shared/presentations';
-import { presentationStepLabels } from '$lib/shared/presentations';
+import { presentationStepLabels, presentationWarningText } from '$lib/shared/presentations';
 
 type DesignValue = string | number | boolean;
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -1081,7 +1081,9 @@ export function presentationSummary(
           )
         }
       : {}),
-    ...(scripted && presentation.warnings?.length ? { warnings: presentation.warnings } : {}),
+    ...(scripted && presentation.warnings?.length
+      ? { warnings: presentation.warnings.map(presentationWarningText) }
+      : {}),
     ...(scripted && presentation.drawing ? { drawing: presentation.drawing } : {})
   };
 }

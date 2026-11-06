@@ -100,6 +100,8 @@ import {
 } from './components.server';
 import { callTypes } from './calls.server';
 import { paddingWarnings } from './padding-warnings.server';
+import { placeWarnings } from './place-checks.server';
+import type { BuildWarning } from './warnings';
 import {
   overSteps,
   selectsOf,
@@ -273,8 +275,8 @@ export type SvelteBundle = {
   origins: Record<string, DesignOrigin>;
   /** The <Node> tags it leaves out, by their line:column. */
   leftOut: string[];
-  /** Each step a scene leaves out, drawing what the step before it drew (see sceneSteps). */
-  warnings?: string[];
+  /** What the build warns of, each with its code (see warnings.ts). */
+  warnings?: BuildWarning[];
   /**
    * Every step laid out on the server, which the page is given: how long working it out took, the
    * steps the view failed to draw, and what each step draws (see layout.server.ts).
@@ -1144,7 +1146,8 @@ function prepareViews(
     // A view whose links sit outside its nodes joins the children of the node it is rendered in,
     // which lays them out.
     const linkedTypes = new Set<string>();
-    for (const { type, node } of found.components) if (outerLinks(node).length) linkedTypes.add(type);
+    for (const { type, node } of found.components)
+      if (outerLinks(node).length) linkedTypes.add(type);
     const {
       insertions,
       problems,
@@ -2148,10 +2151,7 @@ function prepareViews(
         ast.html,
         svelteSource,
         viewState,
-        new Set([
-          ...Object.keys(components),
-          ...Object.keys(chosen)
-        ]),
+        new Set([...Object.keys(components), ...Object.keys(chosen)]),
         new Set(Object.keys(components)),
         scoped,
         operators,
@@ -2479,12 +2479,15 @@ export async function bundlePresentation(
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
   // run has given so far.
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
-  const warnings: string[] = [
-    ...(prepared.listingWarnings ?? []),
-    ...(prepared.inputWarnings ?? []),
-    ...(prepared.initialiserWarnings ?? []),
-    ...(prepared.positionWarnings ?? []),
-    ...variant.dropped
+  const coded = (code: string, messages: readonly string[] = []): BuildWarning[] =>
+    messages.map((message) => ({ code, message }));
+  const warnings: BuildWarning[] = [
+    ...coded('listing.label-without-region', prepared.listingWarnings),
+    ...placeWarnings(prepared.source),
+    ...coded('input.unread', prepared.inputWarnings),
+    ...coded('algorithm.initialiser', prepared.initialiserWarnings),
+    ...coded('algorithm.position', prepared.positionWarnings),
+    ...coded('design.unknown-value', variant.dropped)
   ];
   const entries = scenes.flatMap((scene, sceneIndex) => {
     const run = prepared.paced(scenePauses(scene), sceneEdges(scene), scene.case, scene.over);
@@ -2495,7 +2498,12 @@ export async function bundlePresentation(
     };
     const left: LeftOutStep[] = [];
     const chosen = scene.frame ? [0] : sceneSteps(scene, run.steps, view, left);
-    warnings.push(...left.map((each) => leftOutWarning(each, run.steps, scenes.length)));
+    warnings.push(
+      ...coded(
+        'scene.left-out-step',
+        left.map((each) => leftOutWarning(each, run.steps, scenes.length))
+      )
+    );
     return chosen.map((index) => ({
       scene,
       sceneIndex,
@@ -2663,7 +2671,7 @@ export async function bundlePresentation(
         : []
     };
   });
-  warnings.push(...neverDrawnLabelNodes(prepared, states));
+  warnings.push(...coded('view.never-drawn', neverDrawnLabelNodes(prepared, states)));
   const listing = shownListing(prepared, values, lit);
   const trace = JSON.stringify(packStates(states));
   const result = await bundle(
@@ -2717,20 +2725,21 @@ export async function bundlePresentation(
   // before it again (its motion from it aside).
   const drawnSteps = laid.scenes.steps;
   warnings.push(
-    ...drawnWarnings,
-    ...repeatedStepWarnings(
-      entries.map(({ scene, run, index }, at) => ({
-        scene,
-        name: scene.frame ? undefined : run.steps[index].name,
-        drawn: JSON.stringify({ ...drawnSteps[at], copies: undefined })
-      })),
-      scenes.length
+    ...coded('layout.runtime', drawnWarnings),
+    ...coded(
+      'scene.repeated-step',
+      repeatedStepWarnings(
+        entries.map(({ scene, run, index }, at) => ({
+          scene,
+          name: scene.frame ? undefined : run.steps[index].name,
+          drawn: JSON.stringify({ ...drawnSteps[at], copies: undefined })
+        })),
+        scenes.length
+      )
     ),
-    ...paddingWarnings(
-      drawnSteps,
-      design.roles,
-      values,
-      new Set(scenes.map(({ layout }) => layout))
+    ...coded(
+      'design.padding',
+      paddingWarnings(drawnSteps, design.roles, values, new Set(scenes.map(({ layout }) => layout)))
     )
   );
   const arrangements =
@@ -3792,9 +3801,7 @@ function withNodeRefs(
       walk(tag.children, around, inNode, view, page, names);
       return;
     }
-    const library =
-      tag.type === 'InlineComponent' &&
-      (tag.name === 'Node' || tag.name === 'Link');
+    const library = tag.type === 'InlineComponent' && (tag.name === 'Node' || tag.name === 'Link');
     const element = tag.type === 'Element' || (tag.type === 'InlineComponent' && !library);
     const special = typeof tag.type === 'string' && Object.hasOwn(unsupportedMarkup, tag.type);
     // A view written as a tag, as <Cells values={values} />, the commonest unknown tag in the

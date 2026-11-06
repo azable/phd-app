@@ -17,7 +17,12 @@ import {
   type DesignValues,
   type RenderablePresentation
 } from '$lib/shared/presentations';
-import { presentationVariant } from '$lib/shared/presentations';
+import {
+  presentationVariant,
+  presentationWarningCode,
+  presentationWarningText,
+  type PresentationWarning
+} from '$lib/shared/presentations';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
 import { differingSteps } from '$lib/shared/differing-steps';
 import { unreadableProblem } from '$lib/shared/readability';
@@ -602,7 +607,14 @@ export async function runSverlinAssistantTurn(
         return reject('picture', [unreadable], candidate);
       }
       const warnings = returnedWarnings(
-        [...new Set(bundles.flatMap(({ warnings = [] }) => warnings))],
+        bundles
+          .flatMap(({ warnings = [] }) => warnings)
+          .filter(
+            (warning, index, all) =>
+              all.findIndex(
+                (each) => presentationWarningText(each) === presentationWarningText(warning)
+              ) === index
+          ),
         !hasWorkingVersion(current)
       );
       if (warnings.length && candidate !== undefined) {
@@ -952,9 +964,7 @@ export function typeNamedIn(text: string, source: string): string | undefined {
 export function shownForms(document: ProjectDocument): { views?: Record<string, string[]> } {
   const shown =
     projectSnapshotAt(document).activePresentationSet?.presentations[0]?.payload.presentation;
-  return shown?.format === 'browser-bundle-v1'
-    ? { views: shown.views ?? {} }
-    : {};
+  return shown?.format === 'browser-bundle-v1' ? { views: shown.views ?? {} } : {};
 }
 
 /**
@@ -1438,18 +1448,30 @@ export const sverlinBuildStages: BuildStages = {
  * sources that built. Nor does a first source go back for steps that draw the picture before them
  * (repeatedStepWarnings in modes/sverlin/storyboard.server.ts): nothing the participant asked sets its
  * pauses yet, and some repeat rightly, as a merge sort's calls on one value return showing
- * nothing new (project a60d96ec). The warning stays with the version, for the next turn to read.
+ * nothing new (project a60d96ec). A listing region's change it marks nowhere is told only: a
+ * region's text need not name every value its code changes (of 98 in the fixtures, many were
+ * helper values its line rightly leaves out, 7 November 2026). The warning stays with the version,
+ * for the next turn to read.
  */
-export function returnedWarnings(warnings: readonly string[], firstSource: boolean): string[] {
-  // A look only, as padding nobody sees, never sends a picture back: it is right, only roomier.
-  const returned = warnings.filter((warning) => !warning.endsWith(designOnlyWarning));
-  return firstSource
-    ? returned.filter(
-        (warning) =>
-          !warning.endsWith('The value is left out.') &&
-          !warning.includes('draw the same picture as the step before them')
-      )
-    : returned;
+export function returnedWarnings(
+  warnings: readonly PresentationWarning[],
+  firstSource: boolean
+): string[] {
+  const toldOnly = new Set(['listing.unmarked-read']);
+  const firstSourceKept = new Set(['design.unknown-value', 'scene.repeated-step']);
+  return warnings.flatMap((warning) => {
+    const code = presentationWarningCode(warning);
+    const text = presentationWarningText(warning);
+    // A look only, as padding nobody sees, never sends a picture back: it is right, only roomier.
+    if (toldOnly.has(code) || text.endsWith(designOnlyWarning)) return [];
+    // A warning stored before codes is known by its words.
+    const keptForFirst =
+      firstSourceKept.has(code) ||
+      text.endsWith('The value is left out.') ||
+      text.includes('draw the same picture as the step before them');
+    if (firstSource && keptForFirst) return [];
+    return [text];
+  });
 }
 
 /**

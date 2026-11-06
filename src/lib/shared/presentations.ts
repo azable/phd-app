@@ -7,6 +7,25 @@ import { arrangementSchema, readabilitySchema } from '$lib/shared/readability';
 import { positiveSchema, recordedTextSchema, textSchema } from './projects/events/values';
 
 /** Modes available to projects and study conditions. */
+/** A build's warning: its code and its sentence, or the sentence alone as stored before codes. */
+export const presentationWarningSchema = v.union([
+  v.pipe(v.string(), v.maxLength(1000)),
+  v.object({
+    code: v.pipe(v.string(), v.maxLength(64)),
+    message: v.pipe(v.string(), v.maxLength(1000))
+  })
+]);
+
+export type PresentationWarning = v.InferOutput<typeof presentationWarningSchema>;
+
+/** A warning's sentence. */
+export const presentationWarningText = (warning: PresentationWarning): string =>
+  typeof warning === 'string' ? warning : warning.message;
+
+/** A warning's code, `uncoded` for one stored before codes. */
+export const presentationWarningCode = (warning: PresentationWarning): string =>
+  typeof warning === 'string' ? 'uncoded' : warning.code;
+
 export const visualizationModeSchema = v.picklist(
   Object.keys(modeCatalog) as [keyof typeof modeCatalog, ...(keyof typeof modeCatalog)[]]
 );
@@ -138,8 +157,11 @@ export const browserBundlePresentationSchema = v.strictObject({
   readability: v.optional(readabilitySchema),
   /** Other arrangements of its free layouts, laid out by the server, for the assistant. */
   arrangements: v.optional(v.pipe(v.array(arrangementSchema), v.maxLength(16))),
-  /** Each step a scene leaves out, drawing what the step before it drew, for the assistant. */
-  warnings: v.optional(v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(200))),
+  /**
+   * What the build warns of, for the assistant: each with a fixed code (presentationWarningCode),
+   * as the export counts them; a presentation stored before codes holds the sentences alone.
+   */
+  warnings: v.optional(v.pipe(v.array(presentationWarningSchema), v.maxLength(200))),
   /** What it draws, in kinds and links, from the server's layout (modes/sverlin/library/drawing.ts). */
   drawing: v.optional(v.pipe(v.string(), v.maxLength(1000))),
   generationEventId: v.optional(positiveSchema)

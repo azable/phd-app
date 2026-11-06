@@ -376,7 +376,9 @@ describe('single-component Svelte compilation', () => {
       prepareSvelteComponent(
         `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<Layout name="Main" of="i, values"><Node>{#each values as v}{v}{/each}{i}</Node></Layout>`
       )
-    ).toThrow(/<Pointed> is no longer part of the library: draw a pointer as a link from the variable[^]*<Link to=\{this\} \/>/u);
+    ).toThrow(
+      /<Pointed> is no longer part of the library: draw a pointer as a link from the variable[^]*<Link to=\{this\} \/>/u
+    );
   });
 
   it('rejects props a library component does not take, and written values it cannot use', async () => {
@@ -627,7 +629,11 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 <Storyboard><Scene name="main" case="main"><Main values={values} /></Scene></Storyboard>`;
     const { warnings } = await bundlePresentation(prepareCurrent(source), 1);
     // The third node holds words of its own, so its children are read as a sentence.
-    expect(warnings?.filter((warning) => warning.includes('with no layout'))).toEqual([
+    expect(
+      warnings
+        ?.map(({ message }) => message)
+        .filter((warning) => warning.includes('with no layout'))
+    ).toEqual([
       '<Node kind="Problem">, a node with no layout, holds <Goal />, <Cells /> and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.',
       'A node with no layout in Main holds {values}, a node with a layout and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.'
     ]);

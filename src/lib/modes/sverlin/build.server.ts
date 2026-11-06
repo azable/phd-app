@@ -81,7 +81,13 @@ export async function buildBatch(
           roles: prepared.design.roles,
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
-          ...(bundle.warnings ? { warnings: bundle.warnings.slice(0, 200).map(within(1000)) } : {}),
+          ...(bundle.warnings
+            ? {
+                warnings: bundle.warnings
+                  .slice(0, 200)
+                  .map(({ code, message }) => ({ code, message: within(1000)(message) }))
+              }
+            : {}),
           runs: prepared.pauses.runs,
           structures: prepared.design.structures,
           ...(bundle.layout.drawn ? { drawn: bundle.layout.drawn } : {}),
