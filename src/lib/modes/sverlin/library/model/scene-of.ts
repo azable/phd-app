@@ -399,10 +399,12 @@ export function sceneOf(
         return name && name !== 'none' ? [[use, name]] : [];
       })
     ) as SceneNode['colours'];
-    const parent = open.at(-1)?.element.attributes['data-sv-node'] ?? frameRef;
+    const id = attributes['data-sv-node'] ?? '';
+    const enclosing = open.at(-1)?.element.attributes['data-sv-node'] ?? frameRef;
+    const parent = enclosing === id ? undefined : enclosing;
     const shadow = attributes['data-sv-shadow'];
     return {
-      id: attributes['data-sv-node'] ?? '',
+      id,
       ...(parent ? { parent } : {}),
       ...(attributes['data-sv-type'] ? { type: attributes['data-sv-type'] } : {}),
       ...(attributes['data-sv-kind'] ? { kind: attributes['data-sv-kind'] } : {}),

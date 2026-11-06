@@ -66,6 +66,7 @@ describe('the grid', () => {
     const tips = step.nodes.filter((node) => node.kind === 'Arrow.Tip').map(({ box }) => box);
     expect(tips.length).toBe(2);
     expect(tips.every(({ y }) => y > cells[0].y)).toBe(true);
+    expect(step.nodes.filter(({ id, parent }) => id === parent)).toEqual([]);
   });
 
   it('refuses props on a grid root other than its layout', async () => {
