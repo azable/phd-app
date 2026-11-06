@@ -1,8 +1,9 @@
 /**
  * SceneView's moves between steps, in a real browser, for the replay and graph fixtures: every
  * node and link it draws lies between where it was and where it goes, frame by frame, so nothing
- * jumps; fills ease from the old colour to the new; and a value stays in its own place where
- * another like it changes. Run with `pnpm run test:browser`.
+ * jumps; fills ease from the old colour to the new; a value stays in its own place where
+ * another like it changes; and a step back plays the move on backwards. Run with
+ * `pnpm run test:browser`.
  */
 
 import type { Page } from 'playwright-core';
@@ -233,6 +234,55 @@ describe('SceneView’s motion', () => {
       }
       expect(travelled).toEqual([]);
       expect(checked).toBeGreaterThan(10);
+    }
+  );
+
+  // values[1] = values[0]: going on, the copy slides from its source to its place; a step back
+  // plays that move backwards, so it slides back rather than changing where it is.
+  it.skipIf(!enabled)(
+    'slides a copy back to its source on a step back',
+    { timeout: 300_000 },
+    async () => {
+      const copying = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 3 });
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  @copy[values[1] = values[0];]
+</script>
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<Layout name="Main" of="values">
+  <Node layout="row">{#each values as v}{v}{/each}</Node>
+</Layout>
+<Case name="main" values={[3, 8, 5]} />
+<Storyboard>
+  <Scene name="main" case="main" pause="@copy"><Main values={values} /></Scene>
+</Storyboard>`;
+      const built = await bundlePresentation(prepareSvelteComponent(copying), 1);
+      const page = await openPresentation(built);
+      const copied = built.labels.findIndex((label) => label.startsWith('@copy'));
+      expect(copied).toBeGreaterThan(0);
+      if (copied > 1) await framesTo(page, copied - 1);
+      const on = await framesTo(page, copied);
+      const id = Object.keys(on.at(-1)!.nodes).find((node) =>
+        on.some((sample) => sample.was[node])
+      )!;
+      expect(id).toBeDefined();
+      const [start, end] = [
+        on[0].nodes[on.find((sample) => sample.was[id])!.was[id]],
+        on.at(-1)!.nodes[id]
+      ];
+      const back = await framesTo(page, copied - 1);
+      const xs = back
+        .slice(1, -1)
+        .flatMap((sample) => (sample.nodes[id] ? [sample.nodes[id].x] : []));
+      expect(
+        xs.some((x) => Math.abs(x - start.x) > tolerance && Math.abs(x - end.x) > tolerance)
+      ).toBe(true);
+      expect(jumps(back)).toEqual([]);
     }
   );
 });

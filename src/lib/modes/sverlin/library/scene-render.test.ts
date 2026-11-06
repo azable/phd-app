@@ -7,8 +7,11 @@ import {
   linkPath,
   mixColour,
   mixPath,
+  ease,
   pairNodes,
+  planMove,
   sceneBetween,
+  sceneDuring,
   strokeInside
 } from './scene-render';
 
@@ -236,5 +239,62 @@ describe('scenes drawn as SVG', () => {
     const stays = sceneBetween(from, to, 0.5);
     expect(stays.nodes.find(({ key }) => key === 's')?.box.x).toBe(0);
     expect(stays.nodes.find(({ key }) => key === 'c')?.opacity).toBe(0.5);
+  });
+});
+
+describe('moves between steps', () => {
+  // values[1] = values[0]: 29 stays at 0, and 31, its copy, replaces 5 at 1.
+  const before = drawnScene(
+    step([node('a', 0, { identity: '29' }), node('b', 100, { identity: '5' })])
+  );
+  const after = drawnScene({
+    ...step([node('a', 0, { identity: '29' }), node('b', 100, { identity: '31' })]),
+    copies: { '31': 29 }
+  });
+  const xOf = (scene: ReturnType<typeof drawnScene>, key: string) =>
+    scene.nodes.find((node) => node.key === key && !node.leaving)?.box.x;
+
+  it('plays the move on from the step before, and a step back as that move reversed', () => {
+    expect(planMove(undefined, { step: 0, scene: before })).toBeUndefined();
+    expect(planMove({ step: 4, scene: before }, { step: 5, scene: after })).toEqual({
+      from: before,
+      to: after,
+      reversed: false
+    });
+    expect(planMove({ step: 5, scene: after }, { step: 4, scene: before })).toEqual({
+      from: before,
+      to: after,
+      reversed: true
+    });
+  });
+
+  it('moves straight to another step, or from a move still playing, without copies', () => {
+    const jump = planMove({ step: 1, scene: before }, { step: 5, scene: after });
+    expect(jump).toMatchObject({ from: before, reversed: false });
+    expect(jump?.to.copies).toBeUndefined();
+    const playing = sceneBetween(before, after, 0.3);
+    const back = planMove({ step: 5, scene: after }, { step: 4, scene: before }, playing);
+    expect(back).toMatchObject({ from: playing, reversed: false });
+    expect(back?.to.copies).toBeUndefined();
+  });
+
+  it('shows a step back at each moment as the move on was at the same time from its end', () => {
+    const on = { from: before, to: after, reversed: false };
+    const back = { ...on, reversed: true };
+    for (const progress of [0, 0.25, 0.5, 0.8]) {
+      const reversed = sceneDuring(back, progress);
+      const forward = sceneDuring(on, 1 - progress);
+      expect(xOf(reversed, 'b')).toBe(xOf(forward, 'b'));
+      expect(reversed.nodes.map(({ opacity }) => opacity)).toEqual(
+        forward.nodes.map(({ opacity }) => opacity)
+      );
+    }
+    // The copy slides back from 1 to 0, and the value it overwrote fades back in at 1.
+    expect(xOf(sceneDuring(back, 0), 'b')).toBe(100);
+    expect(xOf(sceneDuring(back, 0.5), 'b')).toBe(50);
+    expect(sceneDuring(back, 0.25).nodes.find(({ leaving }) => leaving)?.opacity).toBe(
+      1 - ease(0.75)
+    );
+    expect(sceneDuring(back, 1)).toBe(before);
   });
 });

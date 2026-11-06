@@ -201,7 +201,8 @@ fitted to the page as a zoomable, pannable canvas with a dashed outline; the
 sandboxed page loads once per presentation and the app sends each later step as
 a `sverlin:step` message, and each step's scene as the page asks for it
 (`sverlin:scenes-wanted`, `sverlin:scenes`): SceneView moves to it, pairing what
-each step draws by the value it draws, so zoom and pan carry over, while
+each step draws by the value it draws, and plays a step back as the move on from
+that step reversed (`planMove`), so zoom and pan carry over, while
 `sverlin:view` messages report the view to the app. Every arrangement is a set
 of constraints over a node's measured children, and a node hugs them: rows,
 columns, and grids are solved by CSS, with any links drawn over them, while

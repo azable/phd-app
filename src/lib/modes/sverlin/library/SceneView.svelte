@@ -12,17 +12,19 @@
   import { glowHalo, shadows } from './node/design';
   import {
     drawnScene,
-    ease,
     headShape,
     headTransform,
     indexed,
     layoutsAround,
+    planMove,
     selectableParts,
-    sceneBetween,
+    sceneDuring,
     shapePath,
     strokeInside,
     type DrawnNode,
-    type DrawnScene
+    type DrawnScene,
+    type Move,
+    type ShownStep
   } from './scene-render';
   import type { ArrangementLayout, SceneBox, SceneFrame, SceneStep, SceneText } from './scene';
 
@@ -49,30 +51,31 @@
     onsettled?: (step: number) => void;
   } = $props();
 
-  // The scene moved to, the one moved from, and how far through the move it is.
+  // The scene moved to, the move playing to it, and how far through the move it is (in time).
   let target = $state.raw<DrawnScene>(indexed([], []));
-  let origin = $state.raw<DrawnScene | undefined>();
+  let move = $state.raw<Move | undefined>();
   let progress = $state(1);
-  let shownStep = -1;
+  let shownStep: ShownStep | undefined;
   let animation = 0;
   const maxSelected = 50;
   const maxLabel = 60;
   // svelte-ignore state_referenced_locally
   let selected = $state<string[]>(selection.slice(0, maxSelected));
 
-  const drawn = $derived(origin ? sceneBetween(origin, target, ease(progress)) : target);
+  const drawn = $derived(move ? sceneDuring(move, progress) : target);
 
-  /** Show a step's scene, moving from the one shown, if any. */
+  /**
+   * Show a step's scene, moving from the one shown, if any: a step back plays the move on from it
+   * backwards (see planMove).
+   */
   export function show(step: number, scene: SceneStep): void {
     cancelAnimationFrame(animation);
-    // Copies start where their sources were only when moving on from the step before.
-    const drawnStep = drawnScene(scene);
-    const next = step === shownStep + 1 ? drawnStep : { ...drawnStep, copies: undefined };
-    const first = shownStep < 0;
-    origin = first ? undefined : drawn;
-    target = next;
-    shownStep = step;
-    if (first) {
+    const next = { step, scene: drawnScene(scene) };
+    const planned = planMove(shownStep, next, move ? drawn : undefined);
+    shownStep = next;
+    target = next.scene;
+    move = planned;
+    if (!planned) {
       progress = 1;
       onsettled?.(step);
       return;
@@ -83,7 +86,7 @@
       progress = Math.min(1, (now - started) / motionDuration);
       if (progress < 1) animation = requestAnimationFrame(tick);
       else {
-        origin = undefined;
+        move = undefined;
         onsettled?.(step);
       }
     };

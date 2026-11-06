@@ -497,6 +497,47 @@ function drawnWith(scene: DrawnScene): Map<DrawnNode, Set<string>> {
 }
 
 // Each move pairs its scenes once, not at every frame it draws.
+/** A step's scene, as drawn, with the copies it records from the step before it. */
+export type ShownStep = { step: number; scene: DrawnScene };
+
+/**
+ * A move between two scenes: `sceneBetween(from, to, t)` with `t` running from 0 to 1, or from 1
+ * to 0 where `reversed`, so a step back plays the move forward from that step backwards.
+ */
+export type Move = { from: DrawnScene; to: DrawnScene; reversed: boolean };
+
+/**
+ * How to move from the step shown to the next one: none for the first; on from the step before,
+ * its copies starting where their sources were; back to the step before, the move on from it
+ * played backwards, so every slide and fade is the one seen going on, reversed; to any other step,
+ * or from a move still playing (`playing`, the scene part way through it), straight there, as
+ * copies record only how a step came from the one before it.
+ */
+export function planMove(
+  shown: ShownStep | undefined,
+  next: ShownStep,
+  playing?: DrawnScene
+): Move | undefined {
+  if (!shown) return undefined;
+  const on = next.step === shown.step + 1;
+  if (!playing && next.step === shown.step - 1)
+    return { from: next.scene, to: shown.scene, reversed: true };
+  return {
+    from: playing ?? shown.scene,
+    to: on ? next.scene : { ...next.scene, copies: undefined },
+    reversed: false
+  };
+}
+
+/**
+ * The scene `progress` (0 to 1, in time) through a move, eased (see ease); a reversed move shows
+ * at each moment the move on as it was at the same time from its end.
+ */
+export function sceneDuring({ from, to, reversed }: Move, progress: number): DrawnScene {
+  if (!reversed) return sceneBetween(from, to, ease(progress));
+  return progress >= 1 ? from : sceneBetween(from, to, ease(1 - progress));
+}
+
 const paired = new WeakMap<DrawnScene, { from: DrawnScene; pairs: Map<string, DrawnNode> }>();
 function pairsOf(from: DrawnScene, to: DrawnScene): Map<string, DrawnNode> {
   const known = paired.get(to);
