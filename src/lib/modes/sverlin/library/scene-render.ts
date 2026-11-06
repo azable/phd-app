@@ -638,5 +638,31 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
   }
   for (const link of from.links)
     if (!newKeys.has(link.key)) links.push({ ...link, opacity: link.opacity * (1 - t) });
-  return indexed(nodes, links);
+  return indexed(abovePlaced(to, nodes, pairs), links);
+}
+
+/**
+ * The nodes of a move in drawing order, those travelling (and all they hold) after the rest, so a
+ * value passing another item's slot is not painted over by that slot's fill, as a swapped cell
+ * crossing the next cell's background; each group keeps the scene's order, parents first.
+ */
+function abovePlaced(
+  to: DrawnScene,
+  nodes: DrawnNode[],
+  pairs: Map<string, DrawnNode>
+): DrawnNode[] {
+  const travels = new Set<string>();
+  for (const node of to.nodes) {
+    const was = pairs.get(node.key);
+    if (was && (Math.abs(was.box.x - node.box.x) > 0.5 || Math.abs(was.box.y - node.box.y) > 0.5))
+      travels.add(node.id);
+  }
+  if (!travels.size) return nodes;
+  const travelling = (node: DrawnNode): boolean => {
+    if (node.leaving) return false;
+    for (let id: string | undefined = node.id; id; id = to.byId.get(id)?.parent)
+      if (travels.has(id)) return true;
+    return false;
+  };
+  return [...nodes.filter((node) => !travelling(node)), ...nodes.filter(travelling)];
 }

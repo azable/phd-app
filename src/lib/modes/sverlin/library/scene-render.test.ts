@@ -194,6 +194,24 @@ describe('scenes drawn as SVG', () => {
     expect(sceneBetween(from, to, 0.5).nodes.find(({ key }) => key === 'hiTip#5')?.box.x).toBe(200);
   });
 
+  it("draws a moving value over the slots it passes, not under the next slot's fill", () => {
+    // Two slots with a fill each; the value in the first moves into the second's place.
+    const look2 = { ...look, fill: 'grey' };
+    // In the scene's order, as a tree: the first slot, its value, the second slot.
+    const scene = (x: number) =>
+      drawnScene(
+        step([
+          node('s1', 0, { look: look2 }),
+          node('v', x, { identity: '7', parent: 's1' }),
+          node('s2', 100, { look: look2 })
+        ])
+      );
+    const [from, to] = [scene(0), scene(100)];
+    const order = sceneBetween(from, to, 0.5).nodes.map(({ key }) => key);
+    expect(order.indexOf('v')).toBeGreaterThan(order.indexOf('s2'));
+    expect(sceneBetween(from, to, 1).nodes.map(({ key }) => key)).toEqual(['s1', 'v', 's2']);
+  });
+
   it("keeps a nested pointer's arrow its own as the outer pointer leaves the element", () => {
     // i and j at one cell, i's mark inside j's; then j moves left and i stays.
     const mark = (id: string, x: number, pointer: string, parent?: string) =>

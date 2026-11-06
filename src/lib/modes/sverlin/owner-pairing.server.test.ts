@@ -42,7 +42,8 @@ function captionsBeside(from: DrawnScene, to: DrawnScene): { value: number; capt
     .filter(({ kind, leaving }) => kind === 'CostCell' && !leaving)
     .map((value) => {
       const caption = half.nodes.find(
-        ({ kind, parent }) => kind === 'Main.Caption' && parent === value.parent
+        ({ kind, parent, leaving }) =>
+          kind === 'Main.Caption' && parent === value.parent && !leaving
       )!;
       return { value: value.box.x, caption: caption.box.x };
     });
@@ -77,10 +78,12 @@ describe('nodes drawn with a value', () => {
       '{k}'
     );
     const half = sceneBetween(from, to, 0.5);
+    // In order of place, as a move draws what travels after the rest.
     const indices = (scene: DrawnScene) =>
       scene.nodes
         .filter(({ kind }) => kind === 'Main.Caption')
-        .map(({ box, runs }) => [runs.map(({ text }) => text).join(''), box.x]);
+        .map(({ box, runs }) => [runs.map(({ text }) => text).join(''), box.x])
+        .sort(([, a], [, b]) => (a as number) - (b as number));
     expect(indices(half)).toEqual(indices(from));
   });
 });
