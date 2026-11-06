@@ -304,7 +304,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     expect(Math.min(...tracks.columns, ...tracks.rows)).toBeGreaterThan(0);
     const twice = source.replace('row={i + 1} col={j + 1}', 'row={i} col={j + 1}');
     const drawnTwice = await bundlePresentation(prepareSvelteComponent(twice), 1);
-    expect(drawnTwice.warnings).toContainEqual(
+    expect(drawnTwice.warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringMatching(/^Two cells of a grid cover row 0, col 2 at one step/u)
     );
   }, 60_000);

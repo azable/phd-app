@@ -1469,7 +1469,7 @@ export function returnedWarnings(
   warnings: readonly PresentationWarning[],
   firstSource: boolean
 ): string[] {
-  const toldOnly = new Set(['listing.unmarked-read']);
+  const toldOnly = new Set(['listing.unmarked-read', 'view.caption-name']);
   const firstSourceKept = new Set(['design.unknown-value', 'scene.repeated-step']);
   return warnings.flatMap((warning) => {
     const code = presentationWarningCode(warning);

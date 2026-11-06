@@ -96,7 +96,7 @@ BFS(start)
 
 <Layout name="QueueLine" of="queue">
   <Node layout="row">
-    <Node>:queue[queue]</Node>
+    <Node>queue</Node>
     {queue}
   </Node>
 </Layout>

@@ -799,7 +799,9 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       message: expect.stringContaining('One.radius cannot be 3')
     });
     const { warnings } = await bundlePresentation(prepared, 3, { chosen: { 'One.depth': 2 } });
-    expect(warnings).toContainEqual(expect.stringContaining('One has no prop depth'));
+    expect(warnings?.map(({ message }) => message)).toContainEqual(
+      expect.stringContaining('One has no prop depth')
+    );
   });
 
   it('takes the page frame from the layout’s values in the variant', async () => {
@@ -1593,7 +1595,7 @@ describe('pauses at labels', () => {
     const { warnings } = await bundlePresentation(prepared, 1, {
       chosen: { 'pause@insert.swap': 'on' }
     });
-    expect(warnings).toContainEqual(
+    expect(warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringContaining('the steps a scene shows are its pause')
     );
   });
@@ -2649,7 +2651,7 @@ describe('slots and boxes', () => {
     const { warnings } = await bundlePresentation(prepared, 1, {
       chosen: { 'Bar.height': 'varying' }
     });
-    expect(warnings).toContain(
+    expect(warnings?.map(({ message }) => message)).toContain(
       "Bar's height is bound to its value in the view, height={…}, so it has no height variable; Bar.yAnchor places it. The value is left out."
     );
   }, 60_000);

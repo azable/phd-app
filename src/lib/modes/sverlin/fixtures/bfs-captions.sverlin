@@ -56,7 +56,7 @@
 <View of="VertexRef" name="CurrentMark">
   <Node layout="column">
     <Link to={this} />
-    <Node kind="CurrentLabel">:current[current]</Node>
+    <Node kind="CurrentLabel">current</Node>
   </Node>
 </View>
 
@@ -86,7 +86,7 @@
 
 <Layout name="QueueLine">
   <Node layout="row">
-    <Node kind="QueueLabel">:queue[queue]</Node>
+    <Node kind="QueueLabel">queue</Node>
     {queue}
   </Node>
 </Layout>

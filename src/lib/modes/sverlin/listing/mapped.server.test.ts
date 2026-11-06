@@ -181,7 +181,7 @@ describe('listings of the source’s own', () => {
       1,
       {}
     );
-    expect(warned.warnings).toContain(
+    expect(warned.warnings?.map(({ message }) => message)).toContain(
       'The step @size.more lights nothing in the listing: mark the text its code shows as @more[…] inside @size, as A[@left[j - 1]] marks the j - 1 of A[j - 1].'
     );
     const unpaused = await bundlePresentation(prepareSvelteComponent(source), 1, {});

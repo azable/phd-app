@@ -104,7 +104,7 @@
 <View of="TextIndex" name="TextMarker">
   <Node layout="column">
     <Link to={this} />
-    <Node kind="TextMarkerLabel">:i[i]</Node>
+    <Node kind="TextMarkerLabel">i</Node>
   </Node>
 </View>
 

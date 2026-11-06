@@ -288,7 +288,7 @@ export function captionNames(source: string): BuildWarning[] {
     )
   ].map((variable) => ({
     code: 'view.caption-name',
-    message: `A node's words are ${variable}, the variable's name as plain text: write {place()} in the view drawn at it, or a token, :${variable}[${variable}], so the words follow and light with the place.`
+    message: `A node's words are ${variable}, the variable's name as plain text: write {place()} in a view drawn at the place, so the words follow it, or a token, :${variable}[${variable}], which lights with the place and draws the words as inline code.`
   }));
 }
 

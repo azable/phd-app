@@ -87,7 +87,7 @@ while @more[the :queue[queue] is not empty]
 </Layout>
 <Layout name="QueueLine" of="queue">
   <Node layout="row">
-    <Node>:queue[queue]</Node>
+    <Node>queue</Node>
     {queue}
   </Node>
 </Layout>

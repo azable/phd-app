@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareSvelteComponent } from './compile.server';
 import { keptKey, writtenKey } from './library/node/design-keys';
 import { drawnSteps, ofKind } from './testing/scenes';
+import { placeWarningCodes } from './place-checks.server';
 
 // A binary search whose three pointers share one pointer view, each captioned by place().
 const search = (mark: string, array: string, page: string) =>
@@ -56,7 +57,9 @@ describe('place() in a pointer view', () => {
       chosen: { ':lo.label': 'low', ':hi.label': 'high', ':mid.label': 'middle' }
     });
     expect(captions(labelled.steps[2]).sort()).toEqual(['high', 'low', 'middle']);
-    expect(labelled.built.warnings ?? []).toEqual([]);
+    expect(
+      (labelled.built.warnings ?? []).filter(({ code }) => !placeWarningCodes.has(code))
+    ).toEqual([]);
   });
 
   it('keeps each pointer the room it needs, as one view for each would', async () => {

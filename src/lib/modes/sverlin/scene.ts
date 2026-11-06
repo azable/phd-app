@@ -150,7 +150,8 @@ const sceneFrameSchema = v.strictObject({
   height: length,
   background: colour,
   node: v.optional(v.strictObject({ id: text, label: text })),
-  places: v.optional(v.record(text, colour))
+  places: v.optional(v.record(text, colour)),
+  placeLines: v.optional(v.record(text, colour))
 });
 
 /** The page's answer to a request for its scene: every step, or why it could not describe them. */
