@@ -14,6 +14,8 @@
  *   slot with longer ones ("seen" beside "unseen", up to 16 px), a stack's sentences (a status
  *   line, up to 214 px), and sentences holding values (those values with them); the rest move by
  *   under 1 px, from the block's rounding.
+ * - replay/ucs-ten: a union's members start with one look, so ∞ (UnknownCost) starts boxed like the
+ *   costs it stands beside (CostValue).
  */
 
 import { createHash } from 'node:crypto';

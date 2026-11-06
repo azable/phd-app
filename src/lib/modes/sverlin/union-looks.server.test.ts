@@ -49,4 +49,18 @@ describe("a union's members", () => {
     expect(Math.abs(boxX - runX)).toBeLessThan(0.5);
     expect(Math.abs(boxY - runY)).toBeLessThan(0.5);
   });
+
+  it('start with one look, words beside a value starting as a value', async () => {
+    const { steps } = await drawnSteps(costs);
+    const look = (kind: string) =>
+      (
+        steps
+          .find((step) => step.nodes.some((node) => node.kind === kind))!
+          .nodes.find((node) => node.kind === kind) as { look?: Record<string, unknown> }
+      ).look;
+    const cost = look('CostText');
+    const infinity = look('Infinity');
+    for (const prop of ['fill', 'stroke', 'fontSize', 'fontWeight', 'radius'])
+      expect(infinity?.[prop]).toEqual(cost?.[prop]);
+  });
 });

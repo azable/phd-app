@@ -42,7 +42,7 @@ exports[`every fixture draws the scenes it drew 1`] = `
   "replay/linear-search.sverlin": "5dc46adb5a230992",
   "replay/merge-sort-fallback.sverlin": "b53d6e389339b71a",
   "replay/merge-sort-overview.sverlin": "a66f013920437054",
-  "replay/ucs-ten.sverlin": "4b4555a9842c22b5",
+  "replay/ucs-ten.sverlin": "c9deb9d7a14be86d",
   "search-at.sverlin": "c784dde078793e3e",
   "search-labels.sverlin": "1dc81a9544acfb06",
   "search-places.sverlin": "f8bc381c9fa23fa4",

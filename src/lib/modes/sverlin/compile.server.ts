@@ -4358,6 +4358,16 @@ function withNodeRefs(
     }
     tagKinds[`${line}:${column + 1}`] = [key, ...alternatives];
   }
+  // A union is one variable, so its members start with one look: where a member's view draws a
+  // value, a member's view drawing words (as ∞ for a cost not yet known) starts as a value too.
+  for (const structure of Object.values(domain?.structures ?? {})) {
+    if (structure.kind !== 'union') continue;
+    const memberViews = [...viewTypes]
+      .filter(([, type]) => structure.members.includes(type))
+      .map(([view]) => view);
+    if (!memberViews.some((view) => kinds.get(view) === 'value')) continue;
+    for (const view of memberViews) if (kinds.get(view) === 'text') kinds.set(view, 'value');
+  }
   const insertions = tags.map((entry): Insertion => {
     const { start, name, links, view } = entry;
     const { line, column } = sourcePosition(source, start);

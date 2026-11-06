@@ -284,7 +284,11 @@ index, is text, and a value shown as plain text is a node's value,
 `<Node value={key} />`. A union's value is drawn by the view of the member it
 holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
 of its own; one member drawn as a pointer, as a position beside `'none'`, marks
-where the value points. Name views after how they draw, as `IntCell` or
+where the value points. A union is one variable, so its members start with one
+look: where a member's view draws a value, as `<Node value={this} />`, a
+member's view of words, as `<Node>∞</Node>` for a cost not yet known, starts
+with a value's look too, a box like the numbers it stands beside; the design can
+still give it a look of its own. Name views after how they draw, as `IntCell` or
 `IntTally`. Which view draws a value is the variant's, so a view named as its
 type (`<View of="Int" name="Int">`) and a value whose type no view draws are
 errors; to draw one value with a view of its own, choose it for its place (see
