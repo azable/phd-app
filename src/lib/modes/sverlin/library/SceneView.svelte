@@ -29,7 +29,7 @@
   import type { ArrangementLayout, SceneBox, SceneFrame, SceneStep, SceneText } from './scene';
 
   type CanvasView = { zoom: number; panX: number; panY: number };
-  type Selected = { id: string; label: string; layouts: ArrangementLayout[] };
+  type Selected = { id: string; label: string; layouts: ArrangementLayout[]; place?: string };
 
   let {
     frame,
@@ -139,7 +139,15 @@
   // The pointer gesture in progress: panning, or a press that becomes a click or a selection box.
   let gesture = $state<
     | { kind: 'pan'; pointer: number; last: Point }
-    | { kind: 'select'; pointer: number; start: Point; at: Point; node?: string; additive: boolean }
+    | {
+        kind: 'select';
+        pointer: number;
+        start: Point;
+        at: Point;
+        node?: string;
+        place?: string;
+        additive: boolean;
+      }
     | undefined
   >();
   let spaceHeld = $state(false);
@@ -174,13 +182,21 @@
           .join('')}…`
       : label;
 
-  function setSelection(ids: string[]) {
+  /** Select these parts; a click on a token's text, as a listing's :i[…], names its place too. */
+  function setSelection(ids: string[], clicked?: { node: string; place: string }) {
     selected = [...new Set(ids)].slice(0, maxSelected);
     onselection?.(
       selected.flatMap((id) => {
         const part = selectable.get(id);
         return part
-          ? [{ id, label: shortened(part.label), layouts: layoutsAround(target, id) }]
+          ? [
+              {
+                id,
+                label: shortened(part.label),
+                layouts: layoutsAround(target, id),
+                ...(clicked?.node === id ? { place: clicked.place } : {})
+              }
+            ]
           : [];
       })
     );
@@ -190,6 +206,13 @@
   const partAt = (target: EventTarget | null) =>
     target instanceof Element
       ? (target.closest<SVGElement>('[data-sv-node]')?.getAttribute('data-sv-node') ?? undefined)
+      : undefined;
+
+  /** The first place the text at an event's target refers to, if it is a token's. */
+  const placeAt = (target: EventTarget | null) =>
+    target instanceof Element
+      ? (target.closest('text[data-sv-place]')?.getAttribute('data-sv-place')?.split(' ')[0] ??
+        undefined)
       : undefined;
 
   /** The parts lying wholly inside an area of the canvas, keeping only the outermost. */
@@ -252,6 +275,7 @@
           start: at,
           at,
           node: partAt(event.target),
+          place: placeAt(event.target),
           additive: event.shiftKey || event.ctrlKey || event.metaKey
         };
   }
@@ -282,7 +306,8 @@
           ? selected.includes(ended.node)
             ? selected.filter((id) => id !== ended.node)
             : [...selected, ended.node]
-          : [ended.node]
+          : [ended.node],
+        ended.place ? { node: ended.node, place: ended.place } : undefined
       );
     else if (!ended.additive && selected.length) setSelection([]);
   }

@@ -166,9 +166,18 @@
       const presentation = visiblePresentations.find(
         (entry) => entry.presentation.presentationId === selection.presentationId
       )?.presentation;
-      return presentation?.format === 'browser-bundle-v1'
-        ? [{ source: presentation.source.text, ids: selection.elements.map(({ id }) => id) }]
-        : [];
+      if (presentation?.format !== 'browser-bundle-v1') return [];
+      const listingName = presentation.variant?.['listing.language'];
+      return [
+        {
+          source: presentation.source.text,
+          elements: selection.elements.map(({ id, place }) => ({
+            id,
+            ...(place ? { place } : {})
+          })),
+          ...(typeof listingName === 'string' ? { listingName } : {})
+        }
+      ];
     })
   );
 

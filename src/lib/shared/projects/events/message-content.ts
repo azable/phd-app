@@ -53,10 +53,16 @@ export const elementLayoutSchema = v.strictObject({
   curve: v.optional(v.picklist(['straight', 'curved']))
 });
 
-/** A selected element: its id, a label from what it showed, and the layouts around it. */
+/**
+ * A selected element: its id, a label from what it showed, the layouts around it, and the place of
+ * the token clicked in it, as `:i` or `:@scan.check` for a listing's `:i[…]`.
+ */
 export const selectedElementSchema = v.strictObject({
   id: elementIdSchema,
   label: elementLabelSchema,
+  place: v.optional(
+    v.pipe(v.string(), v.regex(/^:@?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/u), v.maxLength(200))
+  ),
   layouts: v.optional(v.pipe(v.array(elementLayoutSchema), v.maxLength(2)))
 });
 

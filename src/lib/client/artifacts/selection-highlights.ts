@@ -14,8 +14,41 @@ import {
 } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
-/** The position of a selected element's tag, with line and column both from 1. */
-export type SourceHighlight = { line: number; column: number };
+import { locateElement } from '$lib/modes/sverlin/element-ref';
+import { labelCode } from '$lib/modes/sverlin/listing/source-lines';
+
+import { placeRanges } from './source-references';
+
+/**
+ * The position of a selected element's tag, with line and column both from 1; or a range of the
+ * source by offset, as a selected listing line's line in its block or its label's code.
+ */
+export type SourceHighlight = { line: number; column: number } | { from: number; to: number };
+
+/**
+ * What a selected element highlights in its source: its tag; for a listing's line, also that line
+ * in its block and the algorithm code of the innermost label round it, or, where a token on it was
+ * clicked, every place the token's place is declared and drawn.
+ */
+export function elementHighlights(
+  source: string,
+  element: { id: string; place?: string },
+  listingName?: string
+): SourceHighlight[] {
+  const located = locateElement(source, element.id, listingName);
+  if (!located) return [];
+  const tag: SourceHighlight = { line: located.line, column: located.column };
+  const listing = located.listing;
+  if (!listing && !element.place) return [tag];
+  const starts = [0];
+  for (const line of source.split('\n')) starts.push(starts.at(-1)! + line.length + 1);
+  const lines: SourceHighlight[] = listing
+    ? [{ from: starts[listing.lines.first - 1], to: starts[listing.lines.last] - 1 }]
+    : [];
+  if (element.place) return [tag, ...lines, ...placeRanges(source, element.place)];
+  const code = listing?.labels.length ? labelCode(source, listing.labels.at(-1)!) : undefined;
+  return [tag, ...lines, ...(code ? [{ from: code.from, to: code.end }] : [])];
+}
 
 /** Replace the highlighted tags; the editor scrolls to the first. */
 export const setSourceHighlights = StateEffect.define<readonly SourceHighlight[]>();
@@ -29,7 +62,14 @@ export function highlightRanges(
   highlights: readonly SourceHighlight[]
 ): { from: number; to: number }[] {
   const ranges = new Map<number, { from: number; to: number }>();
-  for (const { line, column } of highlights) {
+  for (const highlight of highlights) {
+    if ('from' in highlight) {
+      const from = Math.max(0, Math.min(highlight.from, state.doc.length));
+      const to = Math.max(from, Math.min(highlight.to, state.doc.length));
+      if (to > from) ranges.set(from, { from, to });
+      continue;
+    }
+    const { line, column } = highlight;
     if (line < 1 || line > state.doc.lines) continue;
     const from = state.doc.line(line).from + column - 1;
     // A selection names a node, link, or listing component.

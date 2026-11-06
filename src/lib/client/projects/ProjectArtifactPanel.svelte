@@ -15,7 +15,7 @@
     variantDocument
   } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
-  import type { SourceHighlight } from '$lib/client/artifacts/selection-highlights';
+  import { elementHighlights } from '$lib/client/artifacts/selection-highlights';
   import { buildDiagnosticsFor } from '$lib/client/artifacts/source-diagnostics';
   import { diagnosticRanges } from '$lib/client/artifacts/source-references';
   import * as AlertDialog from '$lib/client/components/ui/alert-dialog';
@@ -28,7 +28,6 @@
   import { copyText, isCopyNameShortcut } from '$lib/client/visualization/copy-text';
   import CopyName from '$lib/client/visualization/CopyName.svelte';
   import { sourceId, type CandidateId } from '$lib/client/visualization/presentation-history';
-  import { locateElement } from '$lib/modes/sverlin/element-ref';
   import type { DesignValues } from '$lib/shared/presentations';
 
   import type { ProjectSession } from './project-session.svelte';
@@ -45,7 +44,12 @@
     developerView?: boolean;
     editMode?: ProjectArtifactEditMode;
     /** Elements selected in visible presentations, with the source each presentation was built from. */
-    selectedSources?: readonly { source: string; ids: readonly string[] }[];
+    selectedSources?: readonly {
+      source: string;
+      elements: readonly { id: string; place?: string }[];
+      /** The listing the presentation shows, its listing.language. */
+      listingName?: string;
+    }[];
     /** What the visible presentations drew, with the source each was built from. */
     drawnSources?: readonly (DrawnPresentation & {
       source: string;
@@ -162,14 +166,17 @@
   // One highlight per tag, however many of its renders are selected.
   const highlights = $derived(
     matching
-      .flatMap(({ ids }) => ids.flatMap((id) => locateElement(displayedSource, id) ?? []))
-      .map(({ line, column }): SourceHighlight => ({ line, column }))
+      .flatMap(({ elements, listingName }) =>
+        elements.flatMap((element) => elementHighlights(displayedSource, element, listingName))
+      )
       .filter(
         (highlight, index, all) =>
-          all.findIndex(
-            (other) => other.line === highlight.line && other.column === highlight.column
-          ) === index
+          all.findIndex((other) => JSON.stringify(other) === JSON.stringify(highlight)) === index
       )
+  );
+  // What the badge counts: the elements selected, not the parts of the source each lights.
+  const selectedCount = $derived(
+    matching.reduce((total, { elements }) => total + elements.length, 0)
   );
   const unmatched = $derived(selectedSources.length > matching.length);
   // Draws are marked in the source shown, and keep their places in a draft made from it.
@@ -389,7 +396,7 @@
           {/if}
         </div>
         {#if highlights.length}
-          <Badge variant="secondary">{highlights.length} selected</Badge>
+          <Badge variant="secondary">{selectedCount} selected</Badge>
         {/if}
         {#if diagnosed.items.length}
           <button
