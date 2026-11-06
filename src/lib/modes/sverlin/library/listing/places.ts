@@ -33,14 +33,24 @@ export function lineColour(paint: string, background: string): string | undefine
     .find((css) => contrast(css, page) >= lineContrast);
 }
 
-/** The places among those given that a token names, where the variant lights places. */
+/**
+ * The places among those given that a token names, where the variant lights places, each by its
+ * full name, so a text's :@front is the listing's :@insert.front.
+ */
 export function namedPlaces(
   listing: ShownListing | undefined,
   places: readonly (string | undefined)[]
 ): string[] {
   const paints = listing?.places?.paints;
   if (!paints) return [];
-  return [...new Set(places.filter((place): place is string => !!place && place in paints))];
+  const aliases = listing?.places?.aliases ?? {};
+  return [
+    ...new Set(
+      places
+        .map((place) => (place && aliases[place]) || place)
+        .filter((place): place is string => !!place && place in paints)
+    )
+  ];
 }
 
 /** The colour a reference to these places lights in at the step: the first touched place's. */

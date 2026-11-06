@@ -7,12 +7,15 @@
 
 import type { PlaceToken } from './listing';
 import type { Lit } from './light.server';
-import type { MappingProblem, Token } from './mapped.server';
+import { isLabelPlace, type MappingProblem, type Token } from './mapped.server';
 
 /** What the root renders at a place: the type rendered, and whether it is drawn as a pointer. */
 export type RenderedPlace = { type: string; pointer: boolean };
 
-/** The tokens naming a place the root renders nowhere, each refused with the places it does. */
+/**
+ * The tokens naming a place the root renders nowhere, each refused with the places it does; a
+ * label's place, a moment of the run, needs no render (see labelTouches).
+ */
 export function tokenProblems(
   tokens: readonly Token[],
   rendered: readonly string[]
@@ -22,7 +25,7 @@ export function tokenProblems(
     ? `the places it renders are ${[...known].sort().join(', ')}`
     : 'it draws nothing at a place, as {mid} at :mid';
   return tokens
-    .filter(({ place }) => !known.has(place))
+    .filter(({ place }) => !known.has(place) && !isLabelPlace(place))
     .map(({ place, at }) => ({
       message: `The token ${place}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}, and ${listed}.`,
       block: 'listing' as const,
@@ -32,15 +35,29 @@ export function tokenProblems(
 
 /**
  * The places each step touches: those with a token overlapping the code the step itself ran, not
- * the code it keeps lit from earlier.
+ * the code it keeps lit from earlier; and each label's place, as :@insert.front, wherever that code
+ * overlaps the label's own region, so its tokens light when its region lights as the step's own
+ * code, wherever they are written.
  */
-export function touchedPlaces(tokens: readonly PlaceToken[], lit: readonly Lit[]): string[][] {
+export function touchedPlaces(
+  tokens: readonly PlaceToken[],
+  lit: readonly Lit[],
+  labels: {
+    places: readonly string[];
+    regions: readonly { label: string; start: number; end: number }[];
+  } = { places: [], regions: [] }
+): string[][] {
+  const overlaps = (current: Lit['current'], start: number, end: number) =>
+    current.some(([from, to]) => from < end && start < to);
   return lit.map(({ current }) => [
-    ...new Set(
-      tokens
-        .filter(({ start, end }) => current.some(([from, to]) => from < end && start < to))
-        .map(({ place }) => place)
-    )
+    ...new Set([
+      ...tokens.filter(({ start, end }) => overlaps(current, start, end)).map(({ place }) => place),
+      ...labels.places.filter((place) =>
+        labels.regions.some(
+          ({ label, start, end }) => `:@${label}` === place && overlaps(current, start, end)
+        )
+      )
+    ])
   ]);
 }
 
@@ -50,7 +67,8 @@ const unseen = new Set(['none', 'white', undefined]);
 /**
  * The colour a place lights in: the fill of its mark, the <Pointed> of the pointer view drawn there
  * (Mark.Pointed:i.fill) or the view a value there is drawn with (IntCell:key.fill), or its stroke
- * where the fill is none or white, else the listing's lit fill. Its line, which outlines its
+ * where the fill is none or white; for a label's place nothing draws, its region's lit paint
+ * (listing.lit@insert.front.fill); else the listing's lit fill. Its line, which outlines its
  * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
  * then darkens it as far as it needs, see lineColour in ../library/listing/places.ts).
  */
@@ -78,6 +96,14 @@ export function placePaint(
     .map(prop)
     .find((paint) => !unseen.has(paint));
   if (seen) return seen;
+  // A label's place nothing draws lights as its region does (listing.lit@insert.front.fill).
+  const region = !kind && isLabelPlace(place) ? `listing.lit@${place.slice(2)}` : undefined;
+  const regionPaint = region
+    ? (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])
+        .map((name) => values[`${region}.${name}`] as string | undefined)
+        .find((paint) => !unseen.has(paint))
+    : undefined;
+  if (regionPaint) return regionPaint;
   const lit = values['listing.lit.fill'] as string | undefined;
   return unseen.has(lit) ? 'amber-300' : (lit as string);
 }
