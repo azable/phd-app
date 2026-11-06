@@ -92,14 +92,20 @@ while @moreRounds[round ≤ number of vertices]
 <View of="Weight" name="WeightText"><Node value={this} /></View>
 <View of="None" name="NoneMark"><Node value="—" /></View>
 <View of="VisitedFlag" name="VisitedWord"><Node>{this ? 'settled' : 'unsettled'}</Node></View>
-<View of="VertexRef" name="ScanMark"><Pointed /></View>
+<View of="VertexRef" name="ScanMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 
 <Layout name="Title" of="vertices, source">
   <Node>Dijkstra’s shortest paths from {vertices[source].name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, distances, previous, visited, adjacency">
+<Layout name="Graph" of="vertices, distances, previous, visited, adjacency, v">
   <Node layout="free">
+    <Node kind="Var">{v}</Node>
     {#each vertices as vertex, k}
       <Node layout="column">
         {vertex.name}
@@ -120,11 +126,11 @@ while @moreRounds[round ≤ number of vertices]
   <Node>Each edge label is its weight. “Via” records the predecessor on the best route found so far.</Node>
 </Layout>
 
-<Layout name="Board" of="vertices, distances, previous, visited, adjacency">
+<Layout name="Board" of="vertices, distances, previous, visited, adjacency, v">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Graph vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} />
+      <Graph vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} v={v} />
       <Key />
     </Node>
   </Node>
@@ -133,8 +139,7 @@ while @moreRounds[round ≤ number of vertices]
 <Layout name="Main" of="v, vertices, source, distances, previous, visited, adjacency">
   <Node>
     <Title vertices={vertices} source={source} />
-    <Board vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} />
-    {v}
+    <Board vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} v={v} />
   </Node>
 </Layout>
 

@@ -55,21 +55,25 @@ while @more[the queue is not empty]
     {this.seen}
   </Node>
 </View>
-<View of="VertexRef" name="VertexNumber"><Node value={this} /></View>
 <View of="Queue" name="QueueItems">
-  <Node>{#each this as item}{item}{/each}</Node>
+  <Node>{#each this as item}<Node kind="Entry">{at(item).name}</Node>{/each}</Node>
 </View>
 
-<View of="VertexRef" name="Outline"><Pointed /></View>
+<View of="VertexRef" name="Outline">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="VertexRef" name="Captioned">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="Caption">start here</Node>
   </Node>
 </View>
 
 <Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
-<Layout name="Graph" of="vertices, neighbours">
+<Layout name="Graph" of="vertices, neighbours, start, current">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -77,6 +81,8 @@ while @more[the queue is not empty]
         <Link from={k} to={w} />
       {/each}
     {/each}
+    <Node kind="Var">{start}</Node>
+    <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
 <Layout name="QueueLine" of="queue">
@@ -85,11 +91,11 @@ while @more[the queue is not empty]
     {queue}
   </Node>
 </Layout>
-<Layout name="Board" of="vertices, neighbours, queue">
+<Layout name="Board" of="vertices, neighbours, queue, start, current">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Graph vertices={vertices} neighbours={neighbours} />
+      <Graph vertices={vertices} neighbours={neighbours} start={start} current={current} />
       <QueueLine queue={queue} />
     </Node>
   </Node>
@@ -98,9 +104,7 @@ while @more[the queue is not empty]
 <Layout name="Main" of="start, current, vertices, neighbours, queue">
   <Node>
     <Title />
-    <Board vertices={vertices} neighbours={neighbours} queue={queue} />
-    {start}
-    {current}
+    <Board vertices={vertices} neighbours={neighbours} queue={queue} start={start} current={current} />
   </Node>
 </Layout>
 

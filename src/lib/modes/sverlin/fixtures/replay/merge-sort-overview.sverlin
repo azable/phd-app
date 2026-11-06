@@ -82,23 +82,23 @@ MERGE-SORT(A, lo, hi)
   <Node value={this} />
 </View>
 <View of="Index" name="Mark">
-  <Pointed />
+  <Link to={this} />
 </View>
 <View of="Index" name="IMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="ILabel">i</Node>
   </Node>
 </View>
 <View of="Index" name="JMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="JLabel">j</Node>
   </Node>
 </View>
 <View of="Index" name="KMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="KLabel">k</Node>
   </Node>
 </View>

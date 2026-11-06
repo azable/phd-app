@@ -21,12 +21,22 @@
 </script>
 
 <View of="Int" name="Bar"><Node height={this} /></View>
-<View of="Position" name="Here"><Pointed /></View>
+<View of="Position" name="Here">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 
-<Layout name="Bars" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Bars" of="values, j">
+  <Node layout="grid">
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={j}>{j}</Node>
+  </Node>
+</Layout>
 
 <Layout name="Main" of="j, values">
-  <Node><Bars values={values} />{j}</Node>
+  <Node><Bars values={values} j={j} /></Node>
 </Layout>
 
 <Case name="main" values={[6, 2, 9, 4, 0, 7]} />

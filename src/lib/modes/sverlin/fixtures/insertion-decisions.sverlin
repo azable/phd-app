@@ -48,7 +48,7 @@
   </Node>
 </View>
 <View of="Position" name="Mark">
-  <Node layout="column"><Pointed /><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node>
+  <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
 </View>
 <View of="@insert.scan.cmp" name="Ask">
   <Node>is {this.left} > {this.right}? {this.value ? 'yes, so swap' : 'no, so the round stops'}</Node>
@@ -57,11 +57,13 @@
   <Node>{this.value ? 'j > 0, so compare' : 'j is at the front, so the round stops'}</Node>
 </View>
 
-<Layout name="Cells" of="values, i">
-  <Node layout="row">
+<Layout name="Cells" of="values, i, j">
+  <Node kind="Track" layout="grid">
+    <Node kind="Lane" row={-1} col={i}>{i}</Node>
     {#each values as v, k}
-      {#if k < i}<Node kind="Sorted">{v}</Node>{:else}<Node kind="Unsorted">{v}</Node>{/if}
+      {#if k < i}<Node kind="Sorted" row={0} col={k}>{v}</Node>{:else}<Node kind="Unsorted" row={0} col={k}>{v}</Node>{/if}
     {/each}
+    <Node kind="Lane" row={1} col={j}>{j}</Node>
   </Node>
 </Layout>
 <Layout name="Board">
@@ -81,8 +83,6 @@
 <Layout name="Main" of="values, i, j">
   <Node>
     <Board />
-    {i}
-    {j}
   </Node>
 </Layout>
 

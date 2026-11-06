@@ -35,25 +35,30 @@
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Flag" name="SeenMark"><Node>{this ? '✓' : '·'}</Node></View>
 <View of="Vertex" name="VertexCard"><Node layout="column">{this.name}{this.seen}</Node></View>
+<View of="VertexRef" name="Marked">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="VertexRef" name="RefCard"><Node value={this} /></View>
-<View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
-<View of="VertexRef" name="Marked"><Pointed /></View>
-<Layout name="Graph" of="vertices, out">
+<View of="Queue" name="QueueItems"><Node>{#each this as v}<Node kind="Entry">{at(v).name}</Node>{/each}</Node></View>
+<Layout name="Graph" of="vertices, out, current, @visit.look.check.next">
   <Node layout="free">
     {#each vertices as v, k}
       <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
       {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{@visit.look.check.next}</Node>
   </Node>
 </Layout>
 <Layout name="QueueLine" of="queue"><Node>queue {queue}</Node></Layout>
 
 <Layout name="Main" of="current, vertices, out, queue, @visit.look.check.next">
   <Node>
-    <Graph vertices={vertices} out={out} />
+    <Graph vertices={vertices} out={out} current={current} />
     <QueueLine queue={queue} />
-    {current}
-    {@visit.look.check.next}
   </Node>
 </Layout>
 

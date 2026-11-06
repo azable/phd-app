@@ -16,11 +16,16 @@
     {#each count(this) as k}<Node kind="Dot" row={Math.floor(k / 5)} col={k % 5}>●</Node>{/each}
   </Node>
 </View>
-<View of="Index" name="Here"><Pointed /></View>
-<Layout name="Board" of="counts, i">
+<View of="Index" name="Here">
   <Node layout="column">
-    <Node layout="row">{#each counts as c}{c}{/each}</Node>
-    {i}
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
+<Layout name="Board" of="counts, i">
+  <Node layout="grid">
+    {#each counts as c, k}<Node row={0} col={k}>{c}</Node>{/each}
+    <Node kind="Lane" row={1} col={i}>{i}</Node>
   </Node>
 </Layout>
 <Case name="main" counts={[1, 4, 6, 9]} />

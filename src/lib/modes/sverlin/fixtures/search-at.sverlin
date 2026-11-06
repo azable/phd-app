@@ -22,24 +22,33 @@
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 
+<View of="Index" name="Arrow">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="Index" name="IndexNumber"><Node value={this} /></View>
 <View of="Index" name="IndexValue">{at(this)}</View>
-<View of="Index" name="Arrow"><Pointed /></View>
 
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Cells" of="values, lo, hi">
+  <Node layout="grid">
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={hi}>{hi}</Node>
+  </Node>
+</Layout>
 <Layout name="Bounds" of="lo, hi">
   <Node layout="row">
-    <Node>lo</Node>{lo}
-    <Node>hi</Node>{hi}
+    <Node>lo</Node><Node kind="Bound" value={lo} />
+    <Node>hi</Node><Node kind="Bound" value={hi} />
   </Node>
 </Layout>
 
 <Layout name="Main" of="lo, hi, values">
   <Node>
-    <Cells values={values} />
+    <Cells values={values} lo={lo} hi={hi} />
     <Bounds lo={lo} hi={hi} />
-    {lo}
-    {hi}
   </Node>
 </Layout>
 

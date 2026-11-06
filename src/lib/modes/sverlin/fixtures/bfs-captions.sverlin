@@ -42,7 +42,7 @@
 </View>
 
 <View of="Vertex" name="VertexCard">
-  <Node fill={this.seen}>{this.name}</Node>
+  <Node fill={this.seen} value={this.name} />
 </View>
 
 <View of="Queue" name="QueueItems">
@@ -55,14 +55,14 @@
 
 <View of="VertexRef" name="CurrentMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="CurrentLabel">current</Node>
   </Node>
 </View>
 
 <View of="VertexRef" name="NeighbourMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="NeighbourLabel">neighbour</Node>
   </Node>
 </View>
@@ -79,6 +79,8 @@
         <Link from={k} to={neighbour} />
       {/each}
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{w}</Node>
   </Node>
 </Layout>
 
@@ -110,8 +112,6 @@
     <Graph />
     <QueueLine />
     <Status />
-    {current}
-    {w}
   </Node>
 </Layout>
 

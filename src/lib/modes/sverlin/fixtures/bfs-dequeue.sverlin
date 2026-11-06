@@ -50,7 +50,12 @@
   <Node>{#each this as item}{item}{/each}</Node>
 </View>
 
-<View of="VertexRef" name="Outline"><Pointed /></View>
+<View of="VertexRef" name="Outline">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 
 <Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
 <Layout name="Graph" of="vertices, neighbours">

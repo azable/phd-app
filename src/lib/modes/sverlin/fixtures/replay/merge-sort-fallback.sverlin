@@ -87,20 +87,26 @@
   </Node>
 </View>
 
+<View of="Position" name="SourceMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
+
 <View of="Position" name="PositionNumber">
   <Node value={this} />
 </View>
 
-<View of="Position" name="SourceMark">
-  <Pointed />
+<View of="ScratchPosition" name="ScratchMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
 </View>
 
 <View of="ScratchPosition" name="ScratchNumber">
   <Node value={this} />
-</View>
-
-<View of="ScratchPosition" name="ScratchMark">
-  <Pointed />
 </View>
 
 <Layout name="Title">
@@ -108,7 +114,7 @@
 </Layout>
 
 <Layout name="PassInfo">
-  <Node>Current run width: {width}</Node>
+  <Node layout="row"><Node>Current run width:</Node><Node kind="Number" value={width} /></Node>
 </Layout>
 
 <Layout name="SourceRow">
@@ -162,17 +168,18 @@
     <SourceRow />
     <ScratchRow />
     <Explanation />
-
-    {@pass.pair.merge.takeLeft.from}
-    {@pass.pair.merge.takeLeft.to}
-    {@pass.pair.merge.takeRight.from}
-    {@pass.pair.merge.takeRight.to}
-    {@pass.pair.leftTail.from}
-    {@pass.pair.leftTail.to}
-    {@pass.pair.rightTail.from}
-    {@pass.pair.rightTail.to}
-    {@pass.pair.copy.dest}
-    {@pass.pair.copy.source}
+    <Node kind="Marks" layout="row">
+      <Node>{@pass.pair.merge.takeLeft.from}</Node>
+      <Node>{@pass.pair.merge.takeLeft.to}</Node>
+      <Node>{@pass.pair.merge.takeRight.from}</Node>
+      <Node>{@pass.pair.merge.takeRight.to}</Node>
+      <Node>{@pass.pair.leftTail.from}</Node>
+      <Node>{@pass.pair.leftTail.to}</Node>
+      <Node>{@pass.pair.rightTail.from}</Node>
+      <Node>{@pass.pair.rightTail.to}</Node>
+      <Node>{@pass.pair.copy.dest}</Node>
+      <Node>{@pass.pair.copy.source}</Node>
+    </Node>
   </Node>
 </Layout>
 

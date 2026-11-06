@@ -17,10 +17,10 @@
   @begin[let prev = Next(End('end'));
   let cur = Next(head);]
   while (@more[cur !== 'end']) @rewire{
-    @save[const after = cur.next;]
+    @save[const next = cur.next;]
     @reverse[cur.next = prev;]
     @advance[prev = cur;
-    cur = after;]
+    cur = next;]
   }
   @finish[const result = prev;]
 </script>
@@ -52,10 +52,10 @@ while @more[cur ≠ ∅]
   </Node>
 </View>
 
-<View of="NodeRef" name="Marker">
+<View of="NodeRef" name="RefArrow">
   <Node layout="column">
-    <Pointed />
-    <Node kind="PointerLabel">{this === prev ? 'prev' : this === cur ? 'cur' : 'next'}</Node>
+    <Node kind="Caption">{place()}</Node>
+    <Link to={this} />
   </Node>
 </View>
 
@@ -63,11 +63,14 @@ while @more[cur ≠ ∅]
   <Node>Reverse a singly linked list</Node>
 </Layout>
 
-<Layout name="Nodes" of="nodes">
+<Layout name="Nodes" of="nodes, prev, cur, next">
   <Node layout="free">
     {#each nodes as node}
       {node}
     {/each}
+    <Node kind="Var">{prev}</Node>
+    <Node kind="Var">{cur}</Node>
+    <Node kind="Var">{next}</Node>
   </Node>
 </Layout>
 
@@ -108,27 +111,24 @@ while @more[cur ≠ ∅]
   </Node>
 </Layout>
 
-<Layout name="Diagram" of="nodes, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Diagram" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="column">
-    <Nodes nodes={nodes} />
+    <Nodes nodes={nodes} prev={prev} cur={cur} next={next} />
     <StepNote />
   </Node>
 </Layout>
 
-<Layout name="Board" of="nodes, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Board" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node layout="row">
     <Listing />
-    <Diagram nodes={nodes} />
+    <Diagram nodes={nodes} prev={prev} cur={cur} next={next} />
   </Node>
 </Layout>
 
-<Layout name="Main" of="nodes, prev, cur, after, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Main" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node>
     <Title />
-    <Board nodes={nodes} />
-    {prev}
-    {cur}
-    {after}
+    <Board nodes={nodes} prev={prev} cur={cur} next={next} />
   </Node>
 </Layout>
 
@@ -141,5 +141,5 @@ while @more[cur ≠ ∅]
   }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} after={after} /></Scene>
+  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} next={next} /></Scene>
 </Storyboard>

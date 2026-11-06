@@ -40,19 +40,21 @@
 <View of="Vertex" name="VertexCard">
   <Node layout="column">{this.name}{this.seen}<Node kind="OutField">{#each this.out as w}<Link to={w} />{/each}</Node></Node>
 </View>
-<View of="VertexRef" name="Marked"><Pointed /></View>
-<Layout name="Graph" of="vertices">
-  <Node layout="free">{#each vertices as v}{v}{/each}</Node>
+<View of="VertexRef" name="Marked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
+<Layout name="Graph" of="vertices, current, @visit.look.check.next">
+  <Node layout="free">
+    {#each vertices as v}{v}{/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{@visit.look.check.next}</Node>
+  </Node>
 </Layout>
 
 <Layout name="Line" of="queue"><Node>queue: {#each queue as q}{q.name}{/each}</Node></Layout>
 
 <Layout name="Main" of="vertices, current, queue, @visit.look.check.next">
   <Node>
-    <Graph vertices={vertices} />
+    <Graph vertices={vertices} current={current} />
     <Line queue={queue} />
-    {current}
-    {@visit.look.check.next}
   </Node>
 </Layout>
 

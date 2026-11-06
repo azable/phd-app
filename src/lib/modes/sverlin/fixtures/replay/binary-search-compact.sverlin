@@ -82,31 +82,30 @@ BINARY-SEARCH(A, target)
   </Node>
 </View>
 
-<View of="Index" name="IndexText">
-  <Node value={this} />
-</View>
-
 <View of="Index" name="Mark">
-  <Pointed />
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
 </View>
 
 <View of="Index" name="LoMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="LoLabel">lo</Node>
   </Node>
 </View>
 
 <View of="Index" name="MidMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="MidLabel">mid</Node>
   </Node>
 </View>
 
 <View of="Index" name="HiMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="HiLabel">hi</Node>
   </Node>
 </View>
@@ -116,19 +115,27 @@ BINARY-SEARCH(A, target)
 </Layout>
 
 <Layout name="Cells">
-  <Node>
+  <Node layout="grid">
+    <Node kind="Lane" row={-1} col={mid}>{mid}</Node>
     {#each values as value, k}
       {#if lo <= k && k <= hi}
-        <Node kind="Candidate">{value}</Node>
+        <Node kind="Candidate" row={0} col={k}>{value}</Node>
       {:else}
-        <Node kind="Discarded">{value}</Node>
+        <Node kind="Discarded" row={0} col={k}>{value}</Node>
       {/if}
     {/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={hi}>{hi}</Node>
   </Node>
 </Layout>
 
 <Layout name="Range">
-  <Node>Possible positions: {lo} to {hi}</Node>
+  <Node layout="row">
+    <Node>Possible positions:</Node>
+    <Node kind="Bound" value={lo} />
+    <Node>to</Node>
+    <Node kind="Bound" value={hi} />
+  </Node>
 </Layout>
 
 <Layout name="Status">
@@ -142,8 +149,9 @@ BINARY-SEARCH(A, target)
     <Node when="@probe.left">
       The target is smaller, so discard the right part.
     </Node>
-    <Node when="@probe.found">
-      Found {target} at index {mid}.
+    <Node when="@probe.found" layout="row">
+      <Node>Found {target} at index</Node>
+      <Node kind="Number" value={mid} />
     </Node>
     <Node when="@missing">
       {target} is not in the array.
@@ -166,9 +174,6 @@ BINARY-SEARCH(A, target)
   <Node layout="column">
     <Title />
     <Board />
-    {lo}
-    {mid}
-    {hi}
   </Node>
 </Layout>
 

@@ -70,47 +70,43 @@
   {/if}
 </View>
 
-<View of="VertexRef" name="VertexName">
-  <Node>{at(this).name}</Node>
-</View>
-
 <View of="VertexRef" name="Current">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="CurrentLabel">current</Node>
   </Node>
 </View>
 
 <View of="VertexRef" name="Neighbour">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="NeighbourLabel">next</Node>
   </Node>
 </View>
 
 <View of="VertexRef" name="CurrentIcon">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="CurrentMarker" icon />
   </Node>
 </View>
 
 <View of="VertexRef" name="NeighbourIcon">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="NeighbourMarker" icon />
   </Node>
 </View>
 
 <View of="Queue" name="QueueItems">
-  <Node>{#each this as vertex}{vertex}{/each}</Node>
+  <Node>{#each this as vertex}<Node kind="Entry">{at(vertex).name}</Node>{/each}</Node>
 </View>
 
 <Layout name="Title" of="start">
-  <Node>Breadth-first search from {start}</Node>
+  <Node>Breadth-first search from {at(start).name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, out">
+<Layout name="Graph" of="vertices, out, current, next">
   <Node layout="free">
     {#each vertices as vertex, k}
       <Node kind="VertexPlace" layout="stack">
@@ -123,6 +119,8 @@
         <Link from={k} to={neighbour} />
       {/each}
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{next}</Node>
   </Node>
 </Layout>
 
@@ -143,28 +141,28 @@
       <When of="@init">
         <Node kind="StatusLine" layout="row">
           <Node>Begin by adding</Node>
-          <Node kind="StatusVertex">{start}</Node>
+          <Node kind="StatusVertex">{at(start).name}</Node>
           <Node>to the frontier.</Node>
         </Node>
       </When>
       <When of="@visit.take">
         <Node kind="StatusLine" layout="row">
           <Node>Remove</Node>
-          <Node kind="StatusVertex">{current}</Node>
+          <Node kind="StatusVertex">{at(current).name}</Node>
           <Node>from the front of the frontier.</Node>
         </Node>
       </When>
       <When of="@visit.look.unseen">
         <Node kind="StatusLine" layout="row">
           <Node>Check whether neighbour</Node>
-          <Node kind="StatusVertex">{next}</Node>
+          <Node kind="StatusVertex">{at(next).name}</Node>
           <Node>is undiscovered.</Node>
         </Node>
       </When>
       <When of="@visit.look.discover">
         <Node kind="StatusLine" layout="row">
           <Node>Discover</Node>
-          <Node kind="StatusVertex">{next}</Node>
+          <Node kind="StatusVertex">{at(next).name}</Node>
           <Node>and add it to the frontier.</Node>
         </Node>
       </When>
@@ -184,15 +182,13 @@
   <Node>
     <Title start={start} />
     <Node kind="Content" layout="row">
-      <Graph vertices={vertices} out={out} />
+      <Graph vertices={vertices} out={out} current={current} next={next} />
       <Node kind="Side" layout="column">
         <Listing />
         <QueueLine frontier={frontier} />
         <Status start={start} current={current} next={next} />
       </Node>
     </Node>
-    {current}
-    {next}
   </Node>
 </Layout>
 
