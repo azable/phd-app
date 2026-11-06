@@ -57,13 +57,23 @@ describe('padding warnings', () => {
 
   it("tells a page's nodes written without a kind, which take the page's margin as padding", () => {
     const warnings = paddingWarnings(
-      steps([node('3:3', 'Main', { layout: 'row' })]),
+      steps([node('3:3', 'Main', { layout: 'row', parent: '2:1' })]),
       { Main: 'container' },
       padded,
       new Set(['Main'])
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/^Main \(padding 1\.5\): a page's padding is its margin/u);
+  });
+
+  it("tells nothing of the page's root itself, as a grid that is the page", () => {
+    const warnings = paddingWarnings(
+      steps([node('2:1', 'Main', { layout: 'grid' })]),
+      { Main: 'container' },
+      padded,
+      new Set(['Main'])
+    );
+    expect(warnings).toEqual([]);
   });
 });
 
@@ -107,6 +117,23 @@ describe('padding warnings of a build', () => {
     expect(built.warnings?.filter((warning) => warning.endsWith(designOnlyWarning)) ?? []).toEqual(
       []
     );
+  });
+
+  it('tells nothing of a grid that is the page, and tells a cell in it without a kind', async () => {
+    const grid = (cell: string) =>
+      page('').replace(
+        '<Node layout="column">\n    \n  </Node>',
+        `<Node layout="grid">
+    <Node kind="Title" row={0}>Values</Node>
+    {#each values as v, k}${cell}{/each}
+  </Node>`
+      );
+    const pageWarning = (warnings: string[] | undefined) =>
+      (warnings ?? []).filter((warning) => warning.startsWith('Main (padding'));
+    const kinded = await drawnSteps(grid('<Node kind="Cell" row={1} col={k}>{v}</Node>'));
+    expect(pageWarning(kinded.built.warnings)).toEqual([]);
+    const bare = await drawnSteps(grid('<Node row={1} col={k} layout="row">{v}</Node>'));
+    expect(pageWarning(bare.built.warnings)).toHaveLength(1);
   });
 
   it("pads a caption token's code inside its tint", async () => {

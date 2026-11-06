@@ -68,7 +68,11 @@ export function paddingWarnings(
   const pageKinds: string[] = [];
   const arranging: string[] = [];
   const unseen: string[] = [];
-  for (const [kind, drawn] of byKind) {
+  for (const [kind, all] of byKind) {
+    // The page's root, as a grid that is the page, has its own padding as the margin and can take
+    // no kind: only nodes inside it pad again.
+    const drawn = pages.has(kind) ? all.filter(({ parent }) => parent) : all;
+    if (!drawn.length) continue;
     const padding = values[`${kind}.padding`];
     if (typeof padding !== 'number' || padding <= 0) continue;
     const role = roles[kind];
