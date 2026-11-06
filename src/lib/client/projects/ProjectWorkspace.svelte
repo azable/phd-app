@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { onMount, untrack } from 'svelte';
+  import { backgroundOperationKinds } from '$lib/shared/projects/events';
 
   import LogOutIcon from '@lucide/svelte/icons/log-out';
   import PencilIcon from '@lucide/svelte/icons/pencil';
@@ -295,8 +296,9 @@
     expired &&
       graceOpen &&
       (session.assistantResponding ||
-        (activeProjectOperation(session.events)?.kind ?? 'presentation-refill') !==
-          'presentation-refill')
+        !backgroundOperationKinds.has(
+          activeProjectOperation(session.events)?.kind ?? 'presentation-refill'
+        ))
   );
   const busy = $derived(!!session.pending || session.creating);
   const mutationsDisabled = $derived(busy || expired || session.readOnly || editMode === 'editing');

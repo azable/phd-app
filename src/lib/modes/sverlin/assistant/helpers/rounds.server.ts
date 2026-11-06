@@ -13,6 +13,7 @@ import { pendingAssistantTurnRequests } from '$lib/shared/projects/operations';
 import {
   bestCandidates,
   checkFills,
+  drawingShape,
   holeHelperPrompt,
   layoutHelperDirections,
   viewHelperDirections,
@@ -21,6 +22,8 @@ import {
 import {
   holeGroups,
   holesOf,
+  pictureHole,
+  representationFamilies,
   representationSkeleton,
   skeletonFor,
   type Hole
@@ -160,11 +163,42 @@ function prepared(
 }
 
 /**
+ * The answers of the open question still to prepare for this source: each with a task and a
+ * skeleton, none prepared yet, and none once a background operation has started on the question,
+ * so a round cancelled by the participant, or one that failed, is not started again (the answer's
+ * turn then runs an ordinary round). None where caching is off.
+ */
+export function answersToPrepare(
+  document: ProjectDocument,
+  source: string,
+  pipeline: HelperPipelineConfig = helperPipeline
+): { option: { question: number; label: string }; task: string; skeleton: string }[] {
+  if (!pipeline.firstTurns.caching) return [];
+  const open = openQuestion(document.events);
+  if (!open?.options) return [];
+  const tried = document.events.some(
+    (event) =>
+      event.id > open.eventId &&
+      event.type === 'operation.accepted' &&
+      event.payload.kind === 'prepare-answers'
+  );
+  if (tried) return [];
+  return open.options.flatMap(({ label, task }) => {
+    const option = { question: open.eventId, label };
+    const skeleton = task ? representationSkeleton(source, task) : undefined;
+    return task && skeleton && !prepared(document, option, sourceSha256(source))
+      ? [{ option, task, skeleton }]
+      : [];
+  });
+}
+
+/**
  * While the participant reads a question with answers, a round for each answer with a task, in
  * order, its candidates kept by that answer (helper-pipeline.ts firstTurns.caching): whole pictures,
- * as the question settles what to show, each its own round so it never waits for the others. Each
- * runs once a source; a turn that asked the assistant for a follow-up leaves them to that turn,
- * which runs as soon as this one ends.
+ * as the question settles what to show, each its own round so it never waits for the others. They
+ * run in a background operation of their own once the turn has ended (prepare-answers), which the
+ * participant's next action cancels, so no answer waits for them (project 2c3573a3's preference
+ * waited 45 s while they ran in the follow-up's turn).
  */
 export async function prepareAnswers(
   document: ProjectDocument,
@@ -173,15 +207,10 @@ export async function prepareAnswers(
   dependencies: ProjectCommandDependencies
 ): Promise<ProjectDocument> {
   const pipeline = dependencies.helperPipeline ?? helperPipeline;
-  if (!pipeline.firstTurns.caching) return document;
-  const open = openQuestion(document.events);
-  if (!open?.options) return document;
+  const signal = currentProjectOperationSignal();
   let current = document;
-  for (const { label, task } of open.options) {
-    const option = { question: open.eventId, label };
-    if (!task || prepared(current, option, sourceSha256(source))) continue;
-    const skeleton = representationSkeleton(source, task);
-    if (!skeleton) return current;
+  for (const { option, task, skeleton } of answersToPrepare(document, source, pipeline)) {
+    if (signal?.aborted) break;
     current = await runViewHelpers(
       current,
       operationId,
@@ -228,19 +257,28 @@ const strongestKind = (holes: readonly Hole[]): HoleKind =>
     holes.some((hole) => hole.kind === kind)
   ) ?? 'view';
 
+/** Whether a group is a whole-picture skeleton's one hole (see representationSkeleton). */
+const isWholePicture = (group: readonly Hole[]) =>
+  group.length === 1 && group[0].kind === 'any' && group[0].name === pictureHole;
+
 /** One group's helpers: their directions, prompt, and model. */
 function groupRound(
   group: readonly Hole[],
   document: ProjectDocument,
-  pipeline: HelperPipelineConfig
+  pipeline: HelperPipelineConfig,
+  skeleton: string
 ) {
   const counts = turnHelperCounts(document);
   const kinds = group.map((hole) => hole.kind);
-  const directions = kinds.every((kind) => kind === 'view')
-    ? viewHelperDirections.slice(0, counts.views)
-    : kinds.every((kind) => kind === 'layout')
-      ? layoutHelperDirections.slice(0, counts.layouts)
-      : holeDirections.slice(0, counts.views);
+  const directions = isWholePicture(group)
+    ? representationFamilies(skeleton)
+        .slice(0, counts.views)
+        .map((family) => `a whole picture drawn as ${family}`)
+    : kinds.every((kind) => kind === 'view')
+      ? viewHelperDirections.slice(0, counts.views)
+      : kinds.every((kind) => kind === 'layout')
+        ? layoutHelperDirections.slice(0, counts.layouts)
+        : holeDirections.slice(0, counts.views);
   return {
     holes: group,
     directions,
@@ -304,7 +342,9 @@ export async function runViewHelpers(
     ? undefined
     : AbortSignal.timeout(pipeline.timing.replyWaitMs);
   const pastWait = () => performance.now() - roundStarted > pipeline.timing.replyWaitMs;
-  const groups = holeGroups(parsed.holes).map((group) => groupRound(group, document, pipeline));
+  const groups = holeGroups(parsed.holes).map((group) =>
+    groupRound(group, document, pipeline, skeleton)
+  );
   let attemptNumber = 0;
   const prompts = groups.flatMap((round, group) =>
     round.directions.map((direction) => ({
@@ -525,7 +565,12 @@ export async function runViewHelpers(
   // builds held a 6.3 s retry call).
   const buildsMs = performance.now() - buildsStarted - retryCallsMs;
   callsMs += retryCallsMs;
-  const kept = checked.filter(({ candidate }) => candidate.kept);
+  // Whole pictures that draw the same shapes in the same arrangement are one picture, however their
+  // kinds are named: the best measured of each is kept, before scoring spends a call on the rest.
+  const kept = distinctPictures(
+    checked.filter(({ candidate }) => candidate.kept),
+    (each) => isWholePicture(groups[each.group].holes)
+  );
   const stages: Stages = {
     scoring: pipeline.scoring.enabled ? 'on' : 'off',
     choosing: pipeline.choosing.enabled ? 'on' : 'off',
@@ -682,6 +727,9 @@ export async function runViewHelpers(
     stages.ms.choosing = Math.round(performance.now() - started);
   }
   stages.late = pastWait();
+  // A round its operation cancelled, as participant work does a background one, records no
+  // candidates, only the calls it spent.
+  if (operation?.aborted) return current;
 
   const best = new Set(
     bestCandidates(
@@ -823,4 +871,29 @@ async function recordScoring(
       'openai-decisions'
     );
   }
+}
+
+/**
+ * The kept candidates with one of each whole picture that draws alike in shape (drawingShape), the
+ * best measured first; candidates `compared` leaves out pass as they are.
+ */
+export function distinctPictures<Each extends { candidate: ViewCandidate }>(
+  kept: readonly Each[],
+  compared: (each: Each) => boolean
+): Each[] {
+  const score = ({ candidate }: Each) => (candidate.kept ? (candidate.facts?.score ?? 0) : 0);
+  const seen = new Set<string>();
+  const distinct = new Set(
+    kept
+      .filter(compared)
+      .toSorted((a, b) => score(b) - score(a))
+      .filter(({ candidate }) => {
+        const shape = candidate.kept && candidate.built ? drawingShape(candidate.built) : undefined;
+        if (shape === undefined) return true;
+        if (seen.has(shape)) return false;
+        seen.add(shape);
+        return true;
+      })
+  );
+  return kept.filter((each) => !compared(each) || distinct.has(each));
 }

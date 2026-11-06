@@ -1266,7 +1266,7 @@ describe('submitProjectFeedback', () => {
         }
       });
 
-      it('prepares a round for each offered answer with a task while it waits, once', async () => {
+      it('leaves a round for each offered answer with a task to background work, once', async () => {
         const { picture } = await pictureOf();
         const question = {
           text: 'What should learners notice first?',
@@ -1277,8 +1277,8 @@ describe('submitProjectFeedback', () => {
             { label: 'The index', task: null }
           ]
         };
-        // A message written meanwhile holds back the follow-up, so this turn prepares the answers.
-        const { document, appendedEvents } = await claimedWithHelpers(
+        // A message written meanwhile holds back the follow-up; the turn prepares no answers itself.
+        const { document: replied, appendedEvents } = await claimedWithHelpers(
           true,
           filling(picture),
           () => [
@@ -1304,21 +1304,39 @@ describe('submitProjectFeedback', () => {
             }
           }
         });
-        expect(rounds.map(({ payload }) => payload.option)).toEqual([
-          undefined,
+        expect(rounds.map(({ payload }) => payload.option)).toEqual([undefined]);
+        // The executor then runs them as background work (a prepare-answers operation).
+        const { backgroundWork } = await import('$lib/modes/sverlin/assistant/turn.server');
+        const prompts: string[] = [];
+        const helpers = filling(picture);
+        const recording = {
+          ...helpers,
+          generateReply: async (prompt: Parameters<typeof helpers.generateReply>[0]) => {
+            prompts.push(JSON.stringify(prompt));
+            return helpers.generateReply(prompt);
+          }
+        } as typeof helpers;
+        const dependencies = { ...commandDependencies, viewHelperAdapter: recording, decide };
+        expect(backgroundWork.pending(replied)).toBe(true);
+        const document = await backgroundWork.run(replied, crypto.randomUUID(), dependencies);
+        // Each helper draws the whole picture as a representation of its own.
+        const drawnAs = prompts.flatMap(
+          (prompt) => /a whole picture drawn as ([^"\\]+)/u.exec(prompt)?.[1] ?? []
+        );
+        expect(drawnAs.length).toBeGreaterThan(1);
+        expect(new Set(drawnAs).size).toBe(drawnAs.length);
+        const prepared = document.events.filter(
+          (event): event is ProjectEventOf<'visualization.view-candidates'> =>
+            event.type === 'visualization.view-candidates' && event.id > projectHead(replied).id
+        );
+        expect(prepared.map(({ payload }) => payload.option)).toEqual([
           { question: asked?.id, label: 'The comparisons' }
         ]);
-        expect(wholePictures(rounds[1])).toBe(true);
-        expect(rounds[1].payload.task).toBe('make the comparisons the focus');
+        expect(wholePictures(prepared[0])).toBe(true);
+        expect(prepared[0].payload.task).toBe('make the comparisons the focus');
         // For the same source, an answer prepared once is not prepared again.
-        const { prepareAnswers } =
-          await import('$lib/modes/sverlin/assistant/helpers/rounds.server');
-        const { entrySource } = await import('$lib/server/ai/turns/attempt-ladder');
-        const again = await prepareAnswers(document, crypto.randomUUID(), entrySource(document), {
-          ...commandDependencies,
-          viewHelperAdapter: filling(picture),
-          decide
-        });
+        expect(backgroundWork.pending(document)).toBe(false);
+        const again = await backgroundWork.run(document, crypto.randomUUID(), dependencies);
         expect(again.events).toHaveLength(document.events.length);
       });
     });

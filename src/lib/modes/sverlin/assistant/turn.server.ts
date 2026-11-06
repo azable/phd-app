@@ -128,7 +128,9 @@ import { appendSystemFailure, assistantBotId } from '$lib/server/ai/turns/failur
 import type { AttemptFailure } from '$lib/server/ai/turns/failures';
 import { buildCandidateBatch, shownInRandomOrder } from '$lib/server/ai/turns/comparisons';
 import type { ShownComparison } from '$lib/server/ai/turns/comparisons';
+import type { BackgroundWork } from '$lib/modes/assistants.server';
 import {
+  answersToPrepare,
   followAfterHelpers,
   prepareAnswers,
   runViewHelpers,
@@ -778,14 +780,21 @@ export async function runSverlinAssistantTurn(
             : firstType
               ? { type: firstType }
               : undefined);
-  if (source === starter) return done;
-  if (!request) return prepareAnswers(done, operationId, source, dependencies);
+  if (source === starter || !request) return done;
   const helped = await runViewHelpers(done, operationId, source, request, dependencies);
-  const followed = await followAfterHelpers(helped, operationId, contextSelection, dependencies);
-  return followed.events.length > helped.events.length
-    ? followed
-    : prepareAnswers(followed, operationId, source, dependencies);
+  return followAfterHelpers(helped, operationId, contextSelection, dependencies);
 }
+
+/**
+ * The rounds prepared for the open question's answers, run once the turn has ended as a background
+ * operation the participant's next action cancels (prepareAnswers), where the turn ran the helpers.
+ */
+export const backgroundWork: BackgroundWork = {
+  pending: (document) =>
+    turnViewHelpers(document) && answersToPrepare(document, entrySource(document)).length > 0,
+  run: (document, operationId, dependencies) =>
+    prepareAnswers(document, operationId, entrySource(document), dependencies)
+};
 
 export async function runSverlinGeneration(
   options: {

@@ -549,10 +549,14 @@ fails, the round skips scoring and ranks by the app's measures.
 `firstTurns` sets how the first turns go, from the big picture down. With
 `flow`, a first version's reply shows one version and asks a question in words
 with up to three answers shown as buttons; the app's round after it tries whole
-pictures (one hole in place of the views and layouts), and the follow-up shows
-them as the comparison. With `caching`, each answer that names a task gets a
-round of its own while the question waits, and the reply to that answer is given
-its candidates at once.
+pictures (one hole in place of the views and layouts), each helper drawing a
+different representation that fits the data (cells, bars, a variable table, a
+trace table, …), alike pictures kept once, and the follow-up shows them as the
+comparison. With `caching`, each answer that names a task gets a round of its
+own while the question waits, run once the turn has ended as a background
+`prepare-answers` operation that the participant's next action cancels, as it
+does a presentation refill, and the reply to that answer is given its candidates
+at once.
 
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):

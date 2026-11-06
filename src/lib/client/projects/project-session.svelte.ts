@@ -27,6 +27,7 @@ import {
 import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
 import { defaultProjectCreation, type ProjectCreation } from '$lib/shared/projects/creation';
 import { projectSnapshotAt, summarizeProject } from '$lib/shared/projects/projection';
+import { backgroundOperationKinds } from '$lib/shared/projects/events';
 import {
   activeProjectOperation,
   pendingAssistantTurnRequests,
@@ -101,7 +102,7 @@ export class ProjectSession {
     const operation = this.#resource ? activeProjectOperation(this.#resource.document) : undefined;
     if (
       !operation ||
-      operation.kind === 'presentation-refill' ||
+      backgroundOperationKinds.has(operation.kind) ||
       operation.kind === 'assistant-turn'
     )
       return null;

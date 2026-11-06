@@ -144,6 +144,42 @@ const attributeText = (value: string) => value.replace(/"/gu, '“').replace(/[<
 export const representationTask =
   'another whole picture of the algorithm: different views and layouts showing its main structure and what each step does, not a small variation of these';
 
+/** The name of the one hole of a whole-picture skeleton (see representationSkeleton). */
+export const pictureHole = 'picture';
+
+/**
+ * The representations a whole-picture round's helpers each take one of, in order, fitting what the
+ * domain holds: a structure of references, an array, or plain values. Each helper is given a
+ * different one, so the round tries different pictures, not variations of one (project 2c3573a3's
+ * follow-up left its candidates out as "similar cell-by-cell views").
+ */
+export function representationFamilies(source: string): string[] {
+  const domain = /<script\s+domain\s*>([\s\S]*?)<\/script\s*>/u.exec(source)?.[1] ?? '';
+  const common = [
+    'the code as a listing beside a table of the variables, one row each, lit at each step',
+    'a trace table: one row for each step so far, a column for each variable, the newest row lit'
+  ];
+  if (/\b(?:ref|pool)\(/u.test(domain))
+    return [
+      'a node-and-arrow diagram: each element a box or circle, each reference an arrow',
+      'a table of the elements, one row each, with a column for each field and reference',
+      ...common,
+      'the elements in one row in their order, the current one marked, each reference a short arrow'
+    ];
+  if (/\barray\(/u.test(domain))
+    return [
+      'a row of cells with each index under its cell and each position variable a pointer',
+      'bars whose heights are the values, each position variable marked under its bar',
+      ...common,
+      'a grid with one row of the array for each step so far, so its history reads downward'
+    ];
+  return [
+    ...common,
+    'each value as a bar or gauge whose length is the value',
+    'one sentence for each step saying what it did, with its values in place'
+  ];
+}
+
 /**
  * The skeleton of a round trying whole pictures: the source with one hole of any kind in place of
  * its views and layouts, from the first to the last, so a fill can redraw everything shown while
@@ -160,7 +196,7 @@ export function representationSkeleton(source: string, task?: string): string | 
   const to = Math.max(...ends);
   if (to <= from || /<script\b|<Case\b|<Storyboard\b/u.test(source.slice(from, to)))
     return undefined;
-  const hole = `<Hole name="picture" kind="any" task="${attributeText(task ?? representationTask)}" />`;
+  const hole = `<Hole name="${pictureHole}" kind="any" task="${attributeText(task ?? representationTask)}" />`;
   return source.slice(0, from) + hole + source.slice(to);
 }
 

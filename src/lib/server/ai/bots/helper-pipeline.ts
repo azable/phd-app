@@ -69,8 +69,9 @@ export type HelperPipelineConfig = {
     flow: boolean;
     /**
      * While a question with answers waits, each answer with a task gets a round of its own in the
-     * background, its candidates kept by that answer until the source changes, so the reply to the
-     * answer offers them at once instead of starting a round.
+     * background (a prepare-answers operation the participant's next action cancels), its
+     * candidates kept by that answer until the source changes, so the reply to the answer offers
+     * them at once instead of starting a round.
      */
     caching: boolean;
   };

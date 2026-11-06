@@ -80,6 +80,7 @@ export const projectEventSchema = v.variant('type', [
 export type { ParticipantIntakeStepId } from './assistant-intake';
 
 export type { ProjectOperationKind } from './operation-lifecycle';
+export { backgroundOperationKinds } from './operation-lifecycle';
 
 /** Any validated immutable event in a project Timeline. */
 export type ProjectEvent = v.InferOutput<typeof projectEventSchema>;

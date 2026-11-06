@@ -272,6 +272,26 @@ export function bestCandidates(checked: readonly ViewCandidate[], most: number):
 }
 
 /**
+ * What a built picture draws at its fullest step, whatever its kinds are named: each shape with how
+ * many it draws, read from its drawing ("Cell: 6 box, about 40×40 px; …", library/drawing.ts
+ * drawingText), whether it draws links, and whether it is wider than tall. Two candidates alike in
+ * this draw one picture with other names, as two cell-by-cell views with different labels do.
+ */
+export function drawingShape(built: Built): string | undefined {
+  const drawing = built.layout.drawing;
+  if (!drawing) return undefined;
+  const shapes = [...drawing.matchAll(/:\s(\d+)\s([^,;.]+)/gu)]
+    .map(([, count, shape]) => `${shape.trim()}×${count}`)
+    .toSorted();
+  const content = built.layout.readability?.content;
+  return JSON.stringify([
+    shapes,
+    /links: \d+ drawn/u.test(drawing),
+    content ? content.width >= content.height : undefined
+  ]);
+}
+
+/**
  * Check a proposed arrangement of a layout: it must be that layout, reading what the old one read,
  * build in its place, and read on a typical stage.
  */
