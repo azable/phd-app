@@ -12,6 +12,10 @@ import type {
   AiProjectContext
 } from '$lib/server/ai/context/project-context';
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
+import type { AiContextSelection } from '$lib/server/ai/context/project-context';
+import type { ProjectCommandDependencies } from '$lib/server/projects/commands';
+import type { EventId } from '$lib/shared/projects/events';
+import type { ProjectDocument } from '$lib/shared/projects/model';
 import type {
   CandidateAssistantOutput,
   ChatBotConfig,
@@ -28,7 +32,12 @@ export type DecisionValuesReader = (
 /** How a mode with a design space tells it to its assistant (see modes/sverlin/assistant/context.server.ts). */
 export type DesignForAssistant = {
   variables(
-    presentation: BrowserBundlePresentation | undefined,
+    presentation:
+      | Pick<
+          BrowserBundlePresentation,
+          'variant' | 'origins' | 'views' | 'pointers' | 'listings' | 'roles'
+        >
+      | undefined,
     structures?: Readonly<Record<string, string>>
   ): AiDesign;
   context(design: AiDesign): AiDesignContext;
@@ -43,6 +52,36 @@ type AssistantModule = {
 };
 
 const modules = import.meta.glob<AssistantModule>('./*/assistant/bot.server.ts', { eager: true });
+
+/**
+ * A mode's own authoring turn, once answers, held questions and intake are done (see
+ * $lib/server/ai/turns/entry.ts): the selection the participant's messages make, how many
+ * presentations to show, and the interactions it answers.
+ */
+export type AssistantTurn = (
+  document: ProjectDocument,
+  operationId: string,
+  selection: AiContextSelection,
+  presentationCount: 1 | 2,
+  dependencies: ProjectCommandDependencies,
+  inReplyTo?: readonly EventId[]
+) => Promise<ProjectDocument>;
+
+const turns = import.meta.glob<{ runAssistantTurn: AssistantTurn }>(
+  './*/assistant/turn.server.ts',
+  {
+    eager: true
+  }
+);
+
+/** Each mode's authoring turn. */
+export const modeTurns = Object.fromEntries(
+  Object.keys(modeCatalog).map((mode) => {
+    const turn = turns[`./${mode}/assistant/turn.server.ts`]?.runAssistantTurn;
+    if (!turn) throw new Error(`Visualization mode ${mode} needs its own assistant turn.`);
+    return [mode, turn];
+  })
+) as Record<VisualizationMode, AssistantTurn>;
 
 for (const pathname of Object.keys(modules)) {
   const id = pathname.split('/').at(-3) ?? '';

@@ -9,7 +9,13 @@ import {
 } from './compile.server';
 import type { BuildRequest, DesignKeys, ModeBuildResult } from '../server';
 import { isToken, tokenProps } from './library/node/design';
-import { keptKey, nestedDesign, writtenKey, writtenValues } from './library/node/design-keys';
+import {
+  flatDesign,
+  keptKey,
+  nestedDesign,
+  writtenKey,
+  writtenValues
+} from './library/node/design-keys';
 
 export { versionScenes as scenes } from './scenes.server';
 export { exportFile } from './targets/export.server';
@@ -20,7 +26,8 @@ export const designKeys: DesignKeys = {
   kept: keptKey,
   written: writtenKey,
   tokenProp: (variable) => (isToken(variable) ? tokenProps[variable] : undefined),
-  writtenNested: (values) => nestedDesign(writtenValues(values))
+  writtenNested: (values) => nestedDesign(writtenValues(values)),
+  flat: flatDesign
 };
 
 /** Text cut to what a presentation stores, as presentations.ts bounds it, so a long warning never fails the turn. */

@@ -59,8 +59,8 @@ vi.mock('$lib/server/ai/bots/registry', () => {
 });
 
 // Whether a turn runs the view helpers reads the study from the database, which this test has not.
-vi.mock('./view-helpers-config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./view-helpers-config')>()),
+vi.mock('$lib/server/projects/view-helpers-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/server/projects/view-helpers-config')>()),
   projectViewHelpers: async () => false
 }));
 

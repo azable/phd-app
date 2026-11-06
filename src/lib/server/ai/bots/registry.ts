@@ -73,12 +73,16 @@ export function createChatbot<Project, Output extends object>(
 }
 
 type ModeOutput = SourceArtifactChatOutput | CandidateAssistantOutput;
-const modeChatbots = Object.fromEntries(
-  Object.entries(modeAssistants).map(([mode, { default: config }]) => [
-    mode,
-    createChatbot(config, openAIAdapter)
-  ])
-) as Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>>;
+// Made on first use: the modes' assistant modules import the turns, which import this module, so
+// the assistants registry is not yet loaded when this one is.
+let chatbots: Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>> | undefined;
+const modeChatbots = () =>
+  (chatbots ??= Object.fromEntries(
+    Object.entries(modeAssistants).map(([mode, { default: config }]) => [
+      mode,
+      createChatbot(config, openAIAdapter)
+    ])
+  ) as Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>>);
 
 const intakeClassifier = createChatbot(participantIntakeClassifier, openAIAdapter);
 /** Return the source-authoring bot recorded by a Sverlin project. */
@@ -88,7 +92,7 @@ export function getChatbot(
   const mode = assistantMode(assistantId);
   if (modeCatalog[mode].authoring !== 'source')
     throw new Error(`Unknown source-authoring assistant: ${assistantId}`);
-  return modeChatbots[mode] as Chatbot<AiProjectContext, SourceArtifactChatOutput>;
+  return modeChatbots()[mode] as Chatbot<AiProjectContext, SourceArtifactChatOutput>;
 }
 
 /** Return the candidate-authoring bot recorded by a direct-artifact mode. */
@@ -98,7 +102,7 @@ export function getCandidateChatbot(
   const mode = assistantMode(assistantId);
   if (modeCatalog[mode].authoring !== 'candidates')
     throw new Error(`Unknown candidate assistant: ${assistantId}`);
-  return modeChatbots[mode] as Chatbot<AiProjectContext, CandidateAssistantOutput>;
+  return modeChatbots()[mode] as Chatbot<AiProjectContext, CandidateAssistantOutput>;
 }
 
 export function getParticipantIntakeClassifier(): Chatbot<
@@ -113,7 +117,7 @@ export function assistantIntroduction(assistantId: AssistantId): {
   text: string;
   step: ParticipantIntakeStepId;
 } {
-  const bot = modeChatbots[assistantMode(assistantId)];
+  const bot = modeChatbots()[assistantMode(assistantId)];
   const first = bot.config.participantIntake[0];
   return { botId: bot.id, text: first.question, step: first.id };
 }

@@ -25,12 +25,8 @@ import { headStillCurrent } from '$lib/shared/projects/projection';
 import { cutText } from '$lib/shared/text';
 import { sqlClient } from '$lib/server/db';
 
-import {
-  chosenVariantRequests,
-  queueProjectFeedback,
-  queueProjectPreference,
-  runQueuedAssistantTurn
-} from './commands';
+import { chosenVariantRequests, queueProjectFeedback, queueProjectPreference } from './commands';
+import { runQueuedAssistantTurn } from '$lib/server/ai/turns/entry';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
 import { conditionHelperCounts, projectViewHelpers } from './view-helpers-config';

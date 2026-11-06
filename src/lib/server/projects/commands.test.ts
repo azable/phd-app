@@ -681,7 +681,7 @@ describe('submitProjectFeedback', () => {
 
   it('processes a claimed interaction and correlates the early assistant observation', async () => {
     const { createProject } = await import('./service');
-    const { runQueuedAssistantTurn } = await import('./commands');
+    const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
     const created = await createProject({ title: 'Claimed feedback' }, serviceDependencies);
     const feedbackOperationId = '12345678-1234-4123-8123-123456789abc';
     const assistantOperationId = '12345678-1234-4123-8123-123456789abd';
@@ -821,7 +821,7 @@ describe('submitProjectFeedback', () => {
         const source = change && change.operation === 'upsert' ? change.artifact.content.text : '';
         for (const reply of replies(source)) mocks.generatePrepared.mockResolvedValueOnce(reply);
       }
-      const { runQueuedAssistantTurn } = await import('./commands');
+      const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
       return runQueuedAssistantTurn(
         { projectId: created.projectId, operationId: assistantOperationId },
         { ...commandDependencies, viewHelperAdapter: adapter }
@@ -861,7 +861,7 @@ describe('submitProjectFeedback', () => {
           }
         }
       ]);
-      const { runQueuedAssistantTurn } = await import('./commands');
+      const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
       const followed = await runQueuedAssistantTurn(
         { projectId: document.projectId, operationId: followUpId },
         { ...commandDependencies, viewHelperAdapter: helperAdapter }
@@ -988,7 +988,7 @@ describe('submitProjectFeedback', () => {
     });
 
     it('finds the type a request names, by its name or plural', async () => {
-      const { typeNamedIn } = await import('./commands');
+      const { typeNamedIn } = await import('$lib/modes/sverlin/assistant/turn.server');
       const source = `<script domain>
   const Name = type(['A', 'B']);
   const Vertex = record({ name: Name });
@@ -1000,14 +1000,14 @@ describe('submitProjectFeedback', () => {
     });
 
     it('takes a request about the arrangement as one for the layout helpers', async () => {
-      const { asksForLayouts } = await import('./commands');
+      const { asksForLayouts } = await import('$lib/modes/sverlin/assistant/turn.server');
       expect(asksForLayouts('Try lots of different layouts')).toBe(true);
       expect(asksForLayouts('Still very sparse')).toBe(true);
       expect(asksForLayouts('Make the numbers bigger')).toBe(false);
     });
 
     it('takes requests about other things than graphics as they are', async () => {
-      const { asksForGraphics } = await import('./commands');
+      const { asksForGraphics } = await import('$lib/modes/sverlin/assistant/turn.server');
       expect(asksForGraphics('Can we try some icons for discovered and current?')).toBe(true);
       expect(asksForGraphics('Draw each suit as a symbol')).toBe(true);
       expect(asksForGraphics('Pause on every swap, and slow it down')).toBe(false);
@@ -1026,7 +1026,7 @@ describe('submitProjectFeedback', () => {
   it('repairs a view failure the browser reports without the participant asking', async () => {
     const { getProjectTemplate } = await import('./starter-catalog');
     const { createProject, reportRuntimeFailure } = await import('./service');
-    const { runQueuedAssistantTurn } = await import('./commands');
+    const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
     const created = await createProject(
       { creation: { templateId: getProjectTemplate('linear-search').id } },
       serviceDependencies
@@ -1080,7 +1080,7 @@ describe('submitProjectFeedback', () => {
 
   it('processes queued HTML feedback through its own assistant after intake', async () => {
     const { createProject } = await import('./service');
-    const { runQueuedAssistantTurn } = await import('./commands');
+    const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
     const created = await createProject(
       { creation: { templateId: 'blank', mode: 'html' } },
       serviceDependencies
@@ -1582,7 +1582,11 @@ describe('submitProjectFeedback', () => {
     });
 
     it('takes a problem whose message lists what exists, as the list changes, as the same', async () => {
-      const { repairWandered } = await import('./commands');
+      const attemptLadder = await import('$lib/server/ai/turns/attempt-ladder');
+      const { sverlinBuildStages } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const repairWandered = (
+        ...[previous, repair]: Parameters<typeof attemptLadder.repairWandered>
+      ) => attemptLadder.repairWandered(previous, repair, sverlinBuildStages);
       const missing = (kinds: string) => ({
         source: '',
         diagnostics: [
@@ -1598,7 +1602,7 @@ describe('submitProjectFeedback', () => {
     });
 
     it('leaves out a design value a first source names that the design lacks, without sending it back', async () => {
-      const { returnedWarnings } = await import('./commands');
+      const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const guessed =
         'The design has no variable Cells.Eliminated.opacity; its kinds of node are IntCell. The value is left out.';
       const steps = 'Two paused steps draw the same picture.';
@@ -1607,7 +1611,7 @@ describe('submitProjectFeedback', () => {
     });
 
     it('never sends a picture back for padding nobody sees, a look only', async () => {
-      const { returnedWarnings } = await import('./commands');
+      const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const padding =
         'NameText (padding 0.375) has padding but never shows a fill or a stroke, so the padding is space nobody sees. Use the parent’s gap for space between items, or give the kind a box. The picture is drawn as it is.';
       const steps = 'Two paused steps draw the same picture.';
@@ -1616,7 +1620,7 @@ describe('submitProjectFeedback', () => {
     });
 
     it('keeps a first source whose steps repeat the picture before them, as a merge sort’s singleton calls do', async () => {
-      const { returnedWarnings } = await import('./commands');
+      const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const repeated =
         '8 steps at @sort draw the same picture as the step before them, as @sort#4:before to @sort#4: what changes there shows nowhere in the view.';
       expect(returnedWarnings([repeated], true)).toEqual([]);
@@ -1624,7 +1628,13 @@ describe('submitProjectFeedback', () => {
     });
 
     it('takes the quick retries only after a source refused as written, one after another', async () => {
-      const { nextAttempt, refusedAsWritten, softReturnLeft } = await import('./commands');
+      const { refusedAsWritten } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const { softReturnLeft } = await import('$lib/server/ai/turns/attempt-ladder');
+      const attemptLadder = await import('$lib/server/ai/turns/attempt-ladder');
+      const { sverlinBuildStages } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const nextAttempt = (
+        ...[profiles, attempt, failure]: Parameters<typeof attemptLadder.nextAttempt>
+      ) => attemptLadder.nextAttempt(profiles, attempt, failure, sverlinBuildStages);
       const { visualizationAttemptProfiles, writtenRetries } =
         await import('$lib/server/ai/bots/attempt-profiles');
       const ladder = visualizationAttemptProfiles(12_000);
@@ -1671,7 +1681,11 @@ describe('submitProjectFeedback', () => {
     });
 
     it('takes problems a later stage of the build finds as progress, not wandering', async () => {
-      const { repairWandered } = await import('./commands');
+      const attemptLadder = await import('$lib/server/ai/turns/attempt-ladder');
+      const { sverlinBuildStages } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const repairWandered = (
+        ...[previous, repair]: Parameters<typeof attemptLadder.repairWandered>
+      ) => attemptLadder.repairWandered(previous, repair, sverlinBuildStages);
       const failed = (...codes: string[]) => ({
         source: '',
         diagnostics: codes.map((code, index) => ({ code, message: `Problem ${index} of ${code}.` }))
@@ -1695,7 +1709,11 @@ describe('submitProjectFeedback', () => {
     });
 
     it("reads project 7464186f's repairs as progress: a bound prop retried, then its scenes", async () => {
-      const { repairWandered } = await import('./commands');
+      const attemptLadder = await import('$lib/server/ai/turns/attempt-ladder');
+      const { sverlinBuildStages } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const repairWandered = (
+        ...[previous, repair]: Parameters<typeof attemptLadder.repairWandered>
+      ) => attemptLadder.repairWandered(previous, repair, sverlinBuildStages);
       const bound = (expression: string) =>
         `fill={${expression}} takes values that cannot be known before the algorithm runs.`;
       const failed = (...diagnostics: { code: string; message: string }[]) => ({
@@ -3031,7 +3049,7 @@ describe('assistant edits', () => {
 
   it('varies the viewed variant in one version, where two are shown: chosen values set, the rest kept', async () => {
     const { createProject } = await import('./service');
-    const { runQueuedAssistantTurn } = await import('./commands');
+    const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
     const document = await createProject(
       { title: 'Varied', creation: { templateId: 'linear-search' }, presentationCount: 2 },
       serviceDependencies
@@ -3749,7 +3767,7 @@ describe('several variants from chat', () => {
   });
 
   it('asks for no comparison of a form the participant has already answered', async () => {
-    const { unofferedAlternatives } = await import('./commands');
+    const { unofferedAlternatives } = await import('$lib/modes/sverlin/assistant/turn.server');
     const bundle = { views: { Int: ['IntCell', 'IntBar'] }, variant: { 'Tree.layoutSeed': 1 } };
     expect(unofferedAlternatives(bundle, new Set(['views.Int']))).toContain('arrangement of Tree');
     expect(unofferedAlternatives(bundle, new Set(['views.Int']))).not.toContain('views.Int');
@@ -3757,7 +3775,7 @@ describe('several variants from chat', () => {
   });
 
   it('asks only about forms the shown version did not already offer', async () => {
-    const { unofferedAlternatives } = await import('./commands');
+    const { unofferedAlternatives } = await import('$lib/modes/sverlin/assistant/turn.server');
     const bundle = { views: { Int: ['IntCell', 'IntBar'], Seen: ['Word', 'Icon'] } };
     const shown = { views: { Int: ['IntCell', 'IntBar'] }, pointers: {} };
     const asked = unofferedAlternatives(bundle, new Set(), shown);
@@ -4198,7 +4216,8 @@ describe('several variants from chat', () => {
     });
 
     it('is asked by the queued turn the last answer requests, with no model call', async () => {
-      const { queueProjectPreference, runQueuedAssistantTurn } = await import('./commands');
+      const { queueProjectPreference } = await import('./commands');
+      const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
       const { result } = await asking('Who is it for?');
       const projectId = result.document.projectId;
       const ids = presented(result.appendedEvents).map(
@@ -4286,13 +4305,13 @@ describe('several variants from chat', () => {
 
 describe('a reply’s text', () => {
   it('leaves long ordinary text as it is, at once', async () => {
-    const { withoutLeakedStyles } = await import('./commands');
+    const { withoutLeakedStyles } = await import('$lib/server/ai/turns/replies');
     const text = 'The preference suggests clearer spacing between the cells. '.repeat(40);
     expect(withoutLeakedStyles([{ type: 'markdown', text }])).toEqual([{ type: 'markdown', text }]);
   });
 
   it('loses CSS a model leaked at its start, and nothing else', async () => {
-    const { withoutLeakedStyles } = await import('./commands');
+    const { withoutLeakedStyles } = await import('$lib/server/ai/turns/replies');
     expect(
       withoutLeakedStyles([
         { type: 'markdown', text: '.panel{display:none} Lighter borders now.' },

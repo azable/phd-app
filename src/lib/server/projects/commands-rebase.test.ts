@@ -228,7 +228,7 @@ async function answer(
 
 /** Run the assistant turn the latest answer asked for. */
 async function runTurn(projectId: string): Promise<ProjectEvent[]> {
-  const { runQueuedAssistantTurn } = await import('./commands');
+  const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
   const document = await repository.load(projectId);
   const request = document.events.findLast(
     (event): event is ProjectEventOf<'assistant.turn-requested'> =>

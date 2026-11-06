@@ -12,7 +12,7 @@ export type HelperCounts = { views: number; layouts: number };
 /**
  * A round's helpers, each trying a direction of its own: up to five ways to draw a value, and up to
  * ten arrangements of a page, which differ more. Their builds share one time budget, and only the
- * best few reach the assistant (projects/view-helpers.ts), so more helpers add cost, not waiting.
+ * best few reach the assistant (modes/sverlin/assistant/helpers/context.server.ts), so more helpers add cost, not waiting.
  */
 export const defaultHelperCounts: HelperCounts = { views: 5, layouts: 8 };
 

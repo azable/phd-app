@@ -140,10 +140,10 @@ draw: a choice one option of which is at least 0.9 likely best over two answers,
 a `vary` decision's value until an answer goes against it, or, where Either is
 fine was its latest answer, the value showing; skips are no evidence. Its
 summary
-([`preference-summary.ts`](src/lib/server/projects/preference-summary.ts)),
-each touched choice's likeliest option, what is most worth asking, what was
-never compared, and `showFirst`, the riskiest choice no alternative has shown (a
-free layout never compared first, its first automatic layout being a guess, then
+([`preference-summary.ts`](src/lib/server/projects/preference-summary.ts)), each
+touched choice's likeliest option, what is most worth asking, what was never
+compared, and `showFirst`, the riskiest choice no alternative has shown (a free
+layout never compared first, its first automatic layout being a guess, then
 views or arrangement), goes in the assistant's context as `preferences`, and so
 into each request's recorded prompt. Beside it goes the design brief, `brief`:
 the attributes of what the participant is trying to achieve, defined in

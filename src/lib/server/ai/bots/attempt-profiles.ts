@@ -24,7 +24,7 @@ import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
  * https://developers.openai.com/api/docs/models/gpt-6.1-sol (read 2026-11-05).
  *
  * Where a study condition, or an administrator's dev-mode switch, turns the view helpers on
- * (projects/view-helpers.ts), a turn adds one round of Luna calls at low effort after its reply has
+ * (modes/sverlin/assistant/helpers/context.server.ts), a turn adds one round of Luna calls at low effort after its reply has
  * shown, all at once, each time-boxed to 30 seconds: five views of a type or eight arrangements of
  * a layout by default (study/definition.ts), and a retry for at most three that did not build or
  * read. Each call sends its extract of the guide and the source, about 11k input tokens for a view

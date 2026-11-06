@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
-import { helpersHaveRun, viewHelpersContext } from './view-helpers';
+import { helpersHaveRun, viewHelpersContext } from './context.server';
 
 const cell = '<View of="Int" name="Cell"><Node value={this} /></View>';
 const dot = '<View of="Int" name="Dot"><Node value={this} /></View>';

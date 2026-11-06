@@ -129,6 +129,8 @@ export type DesignKeys = {
   tokenProp(variable: string): string | undefined;
   /** A variant's values as people and the model read them, nested by kind. */
   writtenNested(values: Readonly<Record<string, DesignValue>>): NestedDesign;
+  /** A nested design as flat keys, a flat one as it is (the form a demo or the model may write). */
+  flat(design: Readonly<Record<string, unknown>>): Record<string, unknown>;
 };
 
 type DesignValue = string | number | boolean;
@@ -177,7 +179,8 @@ export const designKeys: DesignKeys = (() => {
       kept: (key) => key,
       written: (key) => key,
       tokenProp: () => undefined,
-      writtenNested: (values) => ({ ...values })
+      writtenNested: (values) => ({ ...values }),
+      flat: (design) => ({ ...design })
     }
   );
 })();
