@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
-import { markLabels, viewTags, whenTags } from './label-values';
+import { markLabels, viewTags, viewThisValues, whenTags } from './label-values';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -198,6 +198,19 @@ describe('<When> and <OneOf>', () => {
       'The <When> is never closed: close it with </When>.'
     );
     expect(problem('<When of="a">x</When>')[0]).toContain('<When of="a"> is no <When>');
+  });
+});
+
+describe("a view's this", () => {
+  it('is rewritten only as a name, never inside a string, a template’s text or a comment', () => {
+    const view =
+      '{#snippet Ask(this: Flag)}<Node>{this ? \'yes, so this one\' : "no, this"} {`at ${this} and this`} {thisValue /* this */}</Node>{/snippet}';
+    const { source, problems } = viewThisValues(view);
+    expect(problems).toEqual([]);
+    expect(source).toHaveLength(view.length);
+    expect(source).toBe(
+      '{#snippet Ask(þhis: Flag)}<Node>{þhis ? \'yes, so this one\' : "no, this"} {`at ${þhis} and this`} {thisValue /* this */}</Node>{/snippet}'
+    );
   });
 });
 

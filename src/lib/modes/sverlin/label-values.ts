@@ -362,14 +362,39 @@ export function viewThisValues(source: string): {
     }
     views.push({ start: start + match[0].length, end });
   }
-  // Each `this` inside braces: a view's becomes its value; any other is a problem.
+  // Each `this` inside braces: a view's becomes its value; any other is a problem. Inside braces
+  // the text is JavaScript, so a string, a template's text and a comment are skipped: `this` in
+  // 'no, so this round stops' is a word, not the value.
   const reads = /(?<![\w$.:'"`])this(?![\w$'"`])/gu;
-  let depth = 0;
+  // Open braces and template literals, innermost last; a template's ${ opens a brace inside it.
+  const open: ('brace' | 'template')[] = [];
   for (let at = 0; at < scanned.length; at++) {
     const char = scanned[at];
-    if (char === '{') depth++;
-    else if (char === '}') depth = Math.max(0, depth - 1);
-    else if (depth > 0 && char === 't' && scanned.startsWith('this', at)) {
+    const inside = open.at(-1);
+    if (inside === undefined) {
+      if (char === '{') open.push('brace');
+      continue;
+    }
+    if (inside === 'template') {
+      if (char === '\\') at++;
+      else if (char === '`') open.pop();
+      else if (char === '$' && scanned[at + 1] === '{') {
+        open.push('brace');
+        at++;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      for (at++; at < scanned.length && scanned[at] !== char; at++) if (scanned[at] === '\\') at++;
+    } else if (char === '`') open.push('template');
+    else if (char === '/' && scanned[at + 1] === '/') {
+      while (at < scanned.length && scanned[at] !== '\n') at++;
+    } else if (char === '/' && scanned[at + 1] === '*') {
+      const end = scanned.indexOf('*/', at + 2);
+      at = end < 0 ? scanned.length : end + 1;
+    } else if (char === '{') open.push('brace');
+    else if (char === '}') open.pop();
+    else if (char === 't' && scanned.startsWith('this', at)) {
       reads.lastIndex = at;
       const read = reads.exec(scanned);
       if (!read || read.index !== at) continue;
