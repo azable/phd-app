@@ -641,6 +641,20 @@ export function pointerAroundContext(): string | undefined {
 }
 
 /**
+ * The room a pointer's view is drawn in round an element, its slot there (see sharedSlots), for the
+ * outermost node it draws: every pointer sharing the slot draws that node at the slot's one size,
+ * the largest any of them reaches (see data-sv-room in model/reserve.ts), so the element stays put
+ * whichever of them is drawn.
+ */
+export function providePointerRoom(room: string | undefined): void {
+  setContext('sverlin:pointer-room', room);
+}
+
+export function pointerRoomContext(): string | undefined {
+  return getContext<string | undefined>('sverlin:pointer-room');
+}
+
+/**
  * Inside the hidden copy of an element that keeps an end slot's room: its nodes name no element, so
  * no pointer is drawn at them and no identity is shown twice.
  */

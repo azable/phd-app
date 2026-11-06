@@ -150,6 +150,11 @@ function sizer(options: ReserveOptions) {
           if (child.attributes['data-sv-node']) items.add(child.attributes['data-sv-node']);
         collections.set(collection, items);
       }
+      // The pointers sharing a slot round an element draw it at one size, as a collection's items
+      // keep one, so the element stays put whichever of them is drawn there (see providePointerRoom).
+      const room = element.attributes['data-sv-room'];
+      if (room && id)
+        collections.set(`room:${room}`, (collections.get(`room:${room}`) ?? new Set()).add(id));
       for (const child of elementsOf(element)) classify(child, inside);
     };
     classify(flow, false);
@@ -161,9 +166,26 @@ function sizer(options: ReserveOptions) {
   const alone = new Map<ModelElement, Size>();
   const leastOf = (at: Read, element: ModelElement): Size | undefined => {
     const kind = at.kinds.get(element);
-    if (kind?.kind === 'boxed') return kind.size;
-    if (kind?.kind === 'reserved') return memory.reserved.get(kind.id);
-    return undefined;
+    const size =
+      kind?.kind === 'boxed'
+        ? kind.size
+        : kind?.kind === 'reserved'
+          ? memory.reserved.get(kind.id)
+          : undefined;
+    return size && alongTracks(element, size);
+  };
+  /**
+   * A size with nothing kept along a subgrid's axis: there its size is its tracks', which the grid
+   * keeps (see widenTracks), and a size kept from its layout alone, with its own gap, would move its
+   * items off the tracks.
+   */
+  const alongTracks = (element: ModelElement, size: Size): Size => {
+    const subgrid = element.attributes['data-sv-subgrid'];
+    return subgrid === 'col'
+      ? { ...size, width: 0 }
+      : subgrid === 'row'
+        ? { ...size, height: 0 }
+        : size;
   };
   const arrangedSize = (at: Read, element: ModelElement): Size | undefined => {
     const kind = at.kinds.get(element);
@@ -383,46 +405,20 @@ function sizer(options: ReserveOptions) {
     const { width, height } = extentAlone(at, element);
     return { width: Math.round(width), height: Math.round(height) };
   }
-  type SubgridLeaf = { at: number; size: number; before: number; after: number };
+  type SubgridLeaf = { at: number; size: number };
   /**
    * A subgrid's items along its axis (0 rows, 1 columns) by their coordinates, those of subgrids
-   * inside it included, each with the room the subgrids add round it, as the layout model adds it
-   * (see leavesOf in layout.ts): a subgrid's padding and border round its first and last items, and
-   * half the difference between its gap and its parent's between the others.
+   * inside it included. Each sizes its track alone: the layout model moves no item off its track
+   * for its subgrid's padding, border or gap (see leavesOf in layout.ts).
    */
-  function subgridLeaves(
-    at: Read,
-    subgrid: ModelElement,
-    axis: 0 | 1,
-    parentGap: number
-  ): SubgridLeaf[] {
-    const look = at.styled.get(subgrid)?.look;
-    if (!look) return [];
-    const gap = axis === 1 ? look.columnGap : look.rowGap;
-    const inside = (gap - parentGap) / 2;
-    const [start, end] = axis === 1 ? [3, 1] : [0, 2];
-    const [startEdge, endEdge] = [start, end].map((side) => look.padding[side] + look.border[side]);
+  function subgridLeaves(at: Read, subgrid: ModelElement, axis: 0 | 1): SubgridLeaf[] {
     const name = axis === 1 ? 'col' : 'row';
-    const units = elementsOf(subgrid).flatMap((child): SubgridLeaf[][] => {
-      if (child.attributes['data-sv-subgrid'] === name)
-        return [subgridLeaves(at, child, axis, gap)];
+    return elementsOf(subgrid).flatMap((child): SubgridLeaf[] => {
+      if (child.attributes['data-sv-subgrid'] === name) return subgridLeaves(at, child, axis);
       const placed = child.attributes[`data-sv-${name}`];
       if (placed === undefined) return [];
       const { width, height } = sizeAlone(at, child);
-      return [[{ at: Number(placed), size: axis === 1 ? width : height, before: 0, after: 0 }]];
-    });
-    const rangeOf = (leaves: readonly SubgridLeaf[]) => [
-      Math.min(...leaves.map((leaf) => leaf.at)),
-      Math.max(...leaves.map((leaf) => leaf.at))
-    ];
-    const [first, last] = rangeOf(units.flat());
-    return units.flatMap((leaves) => {
-      const [from, to] = rangeOf(leaves);
-      return leaves.map((leaf) => ({
-        ...leaf,
-        before: leaf.before + (leaf.at === from ? (from === first ? startEdge : inside) : 0),
-        after: leaf.after + (leaf.at === to ? (to === last ? endEdge : inside) : 0)
-      }));
+      return [{ at: Number(placed), size: axis === 1 ? width : height }];
     });
   }
 
@@ -476,10 +472,8 @@ function sizer(options: ReserveOptions) {
           const sized = tracks as Map<number, number>;
           // A subgrid's items size the tracks they are on, in its place.
           if (subgrid === (axis === 1 ? 'col' : 'row'))
-            for (const leaf of subgridLeaves(at, cell, axis as 0 | 1, gaps[axis])) {
-              const size = leaf.size + leaf.before + leaf.after;
-              sized.set(leaf.at, Math.max(sized.get(leaf.at) ?? 0, size));
-            }
+            for (const leaf of subgridLeaves(at, cell, axis as 0 | 1))
+              sized.set(leaf.at, Math.max(sized.get(leaf.at) ?? 0, leaf.size));
           else if (placed !== 'all' && span === 1)
             sized.set(placed as number, Math.max(sized.get(placed as number) ?? 0, size as number));
           else
@@ -1088,6 +1082,7 @@ const unseenAttributes = new Set([
   'data-sv-slot',
   'data-sv-item',
   'data-sv-around',
+  'data-sv-room',
   'data-sv-pair',
   'data-sv-way',
   'data-sv-ref',

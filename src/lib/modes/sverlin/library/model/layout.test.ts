@@ -231,7 +231,7 @@ describe('layout', () => {
     expect(solved.boxes.get(items[1])).toMatchObject({ x: 39, y: 0 });
   });
 
-  it('lays a subgrid’s items on its grid’s columns, its padding and its gap moving them', () => {
+  it('lays a subgrid’s items on its grid’s columns, its padding reaching out past them', () => {
     const sized = (width: number, style: Record<string, string> = {}) =>
       div({ width: `${width}px`, height: '10px', ...style });
     const placed = (row: number, column: number, width: number) =>
@@ -260,12 +260,14 @@ describe('layout', () => {
     const root = div({ display: 'grid', ...tracks, 'column-gap': '4px' }, a, b, subgrid);
     const { boxes, problems } = lay(root);
     expect(problems).toEqual([]);
-    // Column 1 holds x with the subgrid's padding before it and half of its gap's 4px less after
-    // it, 30 + 3 − 2; column 2, b at 50. The subgrid spans both, and y starts 2px into the gap.
-    expect(boxes.get(b)?.x).toBe(31 + 4);
-    expect(boxes.get(subgrid)).toMatchObject({ x: 0, width: 31 + 4 + 50 });
+    // Column 1 holds x at 30 and column 2 b at 50, with the grid's 4px gap: the subgrid's own gap
+    // and padding move no item. Its box reaches 3px past its first track, which the grid keeps
+    // room for at its edge, so the columns start at 3 and each item is where a cell there is.
+    expect(boxes.get(a)?.x).toBe(3);
+    expect(boxes.get(b)?.x).toBe(3 + 30 + 4);
+    expect(boxes.get(subgrid)).toMatchObject({ x: 0, width: 3 + 30 + 4 + 50 });
     expect(boxes.get(x)?.x).toBe(3);
-    expect(boxes.get(y)?.x).toBe(31 + 4 - 2);
+    expect(boxes.get(y)?.x).toBe(3 + 30 + 4);
   });
 
   it('centres a cell value, the cell kept at its least size', () => {

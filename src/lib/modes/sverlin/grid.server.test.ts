@@ -334,6 +334,63 @@ describe('subgrids', () => {
     expect(values!.x + values!.width).toBeLessThanOrEqual(cell.x);
   });
 
+  // A grid as the page, and one nested in a column, as the linear search that showed the fault
+  // (its row's kept least size, laid out alone with its own gap, was wider than its tracks).
+  it.each([
+    ['as the page', (source: string) => source, 'Main'],
+    [
+      'nested in a column',
+      (source: string) =>
+        source
+          .replace(
+            '<Node layout="grid">',
+            '<Node layout="column"><Node kind="Track" layout="grid">'
+          )
+          .replace('  </Node>\n</Layout>', '  </Node></Node>\n</Layout>'),
+      'Main.Track'
+    ]
+  ])(
+    'keeps its items on the grid’s tracks whatever its padding and gap, %s',
+    async (_, placed, grid) => {
+      const indexedCells = `<View of="Values" name="IndexedCells">
+  <Node layout="row">
+    {#each this as v, k}
+      <Node kind="Entry" layout="column">{v}<Node kind="CellIndex">{k}</Node></Node>
+    {/each}
+  </Node>
+</View>`;
+      const { steps } = await drawnSteps(
+        placed(
+          sort(
+            `    <Node kind="Band" row={0}>{values}</Node>
+    <Node kind="Lane" row={1} col={i}>{i}</Node>`,
+            indexedCells
+          )
+        ),
+        {
+          chosen: {
+            [`${grid}.Band.padding`]: 0.75,
+            [`${grid}.Band.stroke`]: 'neutral-300',
+            [`${grid}.Band.strokeWidth`]: 2,
+            'IndexedCells.gap': 1,
+            'IndexedCells.padding': 0.5
+          }
+        }
+      );
+      for (const step of steps.slice(1, 4)) {
+        const entries = centres(step, 'IndexedCells.Entry');
+        expect(entries).toHaveLength(5);
+        const spacings = entries.slice(1).map((centre, k) => centre - entries[k]);
+        expect(Math.max(...spacings) - Math.min(...spacings)).toBeLessThanOrEqual(1);
+        // The mark is centred under the value in its column, as a cell there is.
+        const [tip] = centres(step, 'Arrow.Tip');
+        const column = entries.findIndex((centre) => Math.abs(centre - tip) < spacings[0] / 2);
+        expect(column).toBeGreaterThanOrEqual(0);
+        expect(Math.abs(tip - entries[column])).toBeLessThanOrEqual(1);
+      }
+    }
+  );
+
   it('warns that justify cannot spread a subgrid’s tracks', async () => {
     const { built } = await drawnSteps(
       sort(`    <Node kind="Band" row={0}>{#each values as v}<Node>{v}</Node>{/each}</Node>`),
