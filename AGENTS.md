@@ -129,8 +129,10 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   for a kind inside `Board`, `Main.Board.AtI`) is left out with a warning posted
   after it. A version the developer names, as `3fa2c1/Misty-Falcon-09` (its copy
   button, or Alt+Shift+C for the one shown, copies it), maps to its example in
-  `.demo/names.json`. When done, `touch .demo/flush` to replace the project with
-  a fresh one ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
+  `.demo/names.json`; when telling the developer about an example, name it by
+  that reference, which the chat shows, never by its file name. When done,
+  `touch .demo/flush` to replace the project with a fresh one
+  ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
 
 ## Engineering rules
 
