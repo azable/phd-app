@@ -38,6 +38,8 @@
     elementSlot,
     pointedContext,
     pointerAroundContext,
+    pointerRoomContext,
+    providePointerRoom,
     inPointerViewContext,
     provideInPointerView,
     pointerIdentityContext,
@@ -335,6 +337,9 @@
   // The element the outermost node of a pointer's view is drawn around, active or not.
   const drawnAround = pointerAroundContext();
   if (drawnAround) providePointerAround(undefined);
+  // The slot it is drawn in there, which every pointer sharing it draws at one size.
+  const pointerRoom = pointerRoomContext();
+  if (pointerRoom) providePointerRoom(undefined);
   // A pointer view's outermost node, not the element its <Pointed> draws (see provideInPointerView).
   const pointerViewRoot = inPointerViewContext();
   if (pointerViewRoot) provideInPointerView(false);
@@ -972,6 +977,7 @@
     data-sv-slot={slot}
     data-sv-identity={identity}
     data-sv-around={drawnAround}
+    data-sv-room={pointerRoom}
     data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
     data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
     data-sv-type={__type}

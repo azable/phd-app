@@ -20,6 +20,7 @@
     provideHidden,
     providePointerAround,
     providePointerIdentity,
+    providePointerRoom,
     provideSlot,
     sharedSlots,
     typeContext,
@@ -33,7 +34,8 @@
     outer = {},
     draw,
     placeholder = false,
-    slotted = false
+    slotted = false,
+    depth = 0
   }: {
     pointers: readonly Pointer[];
     position: number;
@@ -44,6 +46,8 @@
     placeholder?: boolean;
     /** Whether the pointers are already one for each slot, as inside the outermost. */
     slotted?: boolean;
+    /** How many slots are drawn outside this one round the element. */
+    depth?: number;
   } = $props();
 
   const types = typeContext();
@@ -65,6 +69,7 @@
   provideHidden(!active);
   untrack(() => providePointerIdentity(active ? `pointer:${pointer.order}` : undefined));
   untrack(() => providePointerAround(name));
+  untrack(() => providePointerRoom(`${name}/${depth}`));
   // The pointer view draws no element of its own; its <Pointed> draws the one it points at.
   provideSlot(undefined);
   untrack(() => providePlace(pointer.place));
@@ -73,7 +78,16 @@
 </script>
 
 {#snippet next(props: Record<string, unknown>)}
-  <Pointing pointers={inside} {position} {name} outer={props} {draw} {placeholder} slotted />
+  <Pointing
+    pointers={inside}
+    {position}
+    {name}
+    outer={props}
+    {draw}
+    {placeholder}
+    slotted
+    depth={depth + 1}
+  />
 {/snippet}
 
 {@render pointer.view(position)}

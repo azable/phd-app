@@ -382,9 +382,11 @@ pointer that marks nothing at any step.
   position shown past an end gets a slot there, so nothing moves as pointers
   move. Pointers at one element nest, the one rendered last outermost; pointers
   never at the same element at the same step share one slot, so an element keeps
-  room only for as many labels as are ever there together. A pointer out of
-  scope, pointing nowhere, or in an `{#if}` branch not taken draws nothing and
-  keeps its room.
+  room only for as many labels as are ever there together; a slot is as large as
+  the largest of the pointers sharing it, whichever is drawn, so the element
+  stays where it is in any layout, a free one included. A pointer out of scope,
+  pointing nowhere, or in an `{#if}` branch not taken draws nothing and keeps
+  its room.
 - A pointer view may read the input and algorithm variables, so its label can
   follow the state. A pointer at an element drawn as a link, as the edge being
   examined, gives the link its kind's stroke and width.

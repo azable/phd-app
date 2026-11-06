@@ -150,6 +150,11 @@ function sizer(options: ReserveOptions) {
           if (child.attributes['data-sv-node']) items.add(child.attributes['data-sv-node']);
         collections.set(collection, items);
       }
+      // The pointers sharing a slot round an element draw it at one size, as a collection's items
+      // keep one, so the element stays put whichever of them is drawn there (see providePointerRoom).
+      const room = element.attributes['data-sv-room'];
+      if (room && id)
+        collections.set(`room:${room}`, (collections.get(`room:${room}`) ?? new Set()).add(id));
       for (const child of elementsOf(element)) classify(child, inside);
     };
     classify(flow, false);
@@ -1077,6 +1082,7 @@ const unseenAttributes = new Set([
   'data-sv-slot',
   'data-sv-item',
   'data-sv-around',
+  'data-sv-room',
   'data-sv-pair',
   'data-sv-way',
   'data-sv-ref',
