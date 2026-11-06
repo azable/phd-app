@@ -58,6 +58,12 @@ export const visualizationViewCandidatesEventSchema = v.object({
     /** The skeleton the main agent wrote, where it wrote one rather than naming a type or layout. */
     skeleton: v.optional(v.string()),
     /**
+     * The answer, by the reply asking its question and its label, that this round prepared
+     * candidates for in the background, kept until that answer is given (helper-pipeline.ts
+     * firstTurns.caching).
+     */
+    option: v.optional(v.object({ question: positiveSchema, label: v.string() })),
+    /**
      * Which stages ran and how long each took (ai/bots/helper-pipeline.ts): scoring and choosing
      * on, off by the configuration, or skipped (no pictures, a failed call, or past the wait).
      */

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from '../compile.server';
 import { bundlePresentation } from '../testing/scenes';
-import { fillSkeleton, holeGroups, holesOf, skeletonFor } from './skeleton.server';
+import {
+  fillSkeleton,
+  holeGroups,
+  holesOf,
+  representationSkeleton,
+  skeletonFor
+} from './skeleton.server';
 
 const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -33,6 +39,28 @@ const layout = `<Layout name="Main" of="values">
 </Layout>`;
 
 describe('skeletons', () => {
+  it('puts one hole of any kind over the views and layouts for a whole-picture round', () => {
+    const skeleton = representationSkeleton(source, 'show the values as bars');
+    expect(skeleton).toBeDefined();
+    const parsed = holesOf(skeleton!);
+    if ('problems' in parsed) throw new Error(parsed.problems.join(' '));
+    expect(parsed.holes).toMatchObject([
+      { name: 'picture', kind: 'any', task: 'show the values as bars' }
+    ]);
+    expect(skeleton).not.toMatch(/<View\b|<Layout\b/u);
+    expect(skeleton).toContain('<Case name="main"');
+    // Filled with what it replaced, it is the source again, and builds.
+    const region = source.slice(source.indexOf('<View'), source.lastIndexOf('</Layout>') + 9);
+    const filled = fillSkeleton(skeleton!, { picture: region });
+    expect(filled).toEqual({ source });
+  });
+
+  it('makes no whole-picture skeleton where a case lies among the views, or none is written', () => {
+    const mixed = source.replace('<Layout name="Main"', '<Case name="x" />\n<Layout name="Main"');
+    expect(representationSkeleton(mixed)).toBeUndefined();
+    expect(representationSkeleton('<script algorithm></script>')).toBeUndefined();
+  });
+
   it('reads holes, each its own group unless it shares one', () => {
     const parsed = holesOf(
       `<Hole name="page" kind="layout" task="wide" group="graph" />\n<Hole name="input" kind="case" task="a cycle" group="graph" />\n<Hole name="look" kind="view" of="Int" task="bars" />`

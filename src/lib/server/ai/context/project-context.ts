@@ -300,6 +300,10 @@ export type AiViewHelpers = {
   layout?: string;
   /** The task the candidates answered, as the assistant gave it. */
   task?: string;
+  /** The offered answer the participant just gave, which these candidates were prepared for. */
+  answer?: string;
+  /** How the first turns go (helper-pipeline.ts firstTurns), so the reply follows them. */
+  firstTurns?: { flow: boolean; caching: boolean };
   candidates: {
     name: string;
     description: string;

@@ -15,6 +15,9 @@
  *
  * With `helpers` off no turn runs any stage, whatever its condition says, and turns behave as they
  * did before the helpers existed.
+ *
+ * `firstTurns` sets how the first turns go, from the big picture down (the developer, 7 November
+ * 2026: one first comparison was often not enough to see what is wanted at a high level).
  */
 
 import type { ChatBotParameters } from '$lib/server/ai/bots/types';
@@ -55,6 +58,22 @@ export type HelperPipelineConfig = {
    * this, as a struggling participant's does (bots/attempt-profiles.ts steppedUpParameters).
    */
   designing: Pick<Parameters, 'model' | 'reasoningEffort'>;
+  firstTurns: {
+    /**
+     * A first version's reply shows one version and asks a high-level question with short answers,
+     * not a comparison of its own, and the round the app starts after it tries whole pictures (one
+     * hole over the views and layouts), not the main type's look; the helpers' candidates then
+     * become the comparison, shown live by the follow-up as nothing else waits. Off, a first
+     * version is as before: the reply's own comparison, then a round on the main type or layout.
+     */
+    flow: boolean;
+    /**
+     * While a question with answers waits, each answer with a task gets a round of its own in the
+     * background, its candidates kept by that answer until the source changes, so the reply to the
+     * answer offers them at once instead of starting a round.
+     */
+    caching: boolean;
+  };
 };
 
 /**
@@ -112,5 +131,9 @@ export const helperPipeline: HelperPipelineConfig = {
     replyWaitMs: 10_000,
     lateCandidatesJoin: true
   },
-  designing: { model: 'gpt-6.1-sol', reasoningEffort: 'medium' }
+  designing: { model: 'gpt-6.1-sol', reasoningEffort: 'medium' },
+  // Both on to try the flow (the developer, 7 November 2026). Caching runs a round for each answer
+  // with a task, at most three (source-decisions.ts maximumQuestionOptions), chosen or not, and a
+  // whole-picture round goes to holeModels.any, the whole-source helper, dearer than a Luna call.
+  firstTurns: { flow: true, caching: true }
 };

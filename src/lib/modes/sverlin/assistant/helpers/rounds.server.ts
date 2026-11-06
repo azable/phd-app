@@ -21,9 +21,11 @@ import {
 import {
   holeGroups,
   holesOf,
+  representationSkeleton,
   skeletonFor,
   type Hole
 } from '$lib/modes/sverlin/assistant/skeleton.server';
+import { openQuestion } from '$lib/shared/projects/questions';
 import {
   fillsOf,
   holeHelperTask,
@@ -136,6 +138,59 @@ export async function followAfterHelpers(
     ],
     dependencies.projectService
   );
+}
+
+/**
+ * Whether a round has prepared candidates for an answer of a question for this source: one whose
+ * candidates were written for it, kept or not, so an answer that proposed nothing is not tried
+ * again for the same source.
+ */
+function prepared(
+  document: ProjectDocument,
+  option: { question: number; label: string },
+  sha256: string
+): boolean {
+  return document.events.some(
+    (event) =>
+      event.type === 'visualization.view-candidates' &&
+      event.payload.sourceSha256 === sha256 &&
+      event.payload.option?.question === option.question &&
+      event.payload.option.label === option.label
+  );
+}
+
+/**
+ * While the participant reads a question with answers, a round for each answer with a task, in
+ * order, its candidates kept by that answer (helper-pipeline.ts firstTurns.caching): whole pictures,
+ * as the question settles what to show, each its own round so it never waits for the others. Each
+ * runs once a source; a turn that asked the assistant for a follow-up leaves them to that turn,
+ * which runs as soon as this one ends.
+ */
+export async function prepareAnswers(
+  document: ProjectDocument,
+  operationId: string,
+  source: string,
+  dependencies: ProjectCommandDependencies
+): Promise<ProjectDocument> {
+  const pipeline = dependencies.helperPipeline ?? helperPipeline;
+  if (!pipeline.firstTurns.caching) return document;
+  const open = openQuestion(document.events);
+  if (!open?.options) return document;
+  let current = document;
+  for (const { label, task } of open.options) {
+    const option = { question: open.eventId, label };
+    if (!task || prepared(current, option, sourceSha256(source))) continue;
+    const skeleton = representationSkeleton(source, task);
+    if (!skeleton) return current;
+    current = await runViewHelpers(
+      current,
+      operationId,
+      source,
+      { skeleton, task, option },
+      dependencies
+    );
+  }
+  return current;
 }
 
 /** The assistant's context, with the view helpers' where the turn runs them. */
@@ -650,6 +705,7 @@ export async function runViewHelpers(
               ? { layout: request.layout }
               : { type: request.type }),
           ...(request.task ? { task: request.task } : {}),
+          ...(request.skeleton !== undefined && request.option ? { option: request.option } : {}),
           generationEventIds,
           candidates: offered.flatMap(({ candidate, label, group, score, why }) =>
             candidate.kept

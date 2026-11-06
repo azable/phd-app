@@ -140,6 +140,30 @@ export function fillSkeleton(
 
 const attributeText = (value: string) => value.replace(/"/gu, '“').replace(/[<>]/gu, '');
 
+/** What a whole-picture round asks for where no answer gives a task of its own. */
+export const representationTask =
+  'another whole picture of the algorithm: different views and layouts showing its main structure and what each step does, not a small variation of these';
+
+/**
+ * The skeleton of a round trying whole pictures: the source with one hole of any kind in place of
+ * its views and layouts, from the first to the last, so a fill can redraw everything shown while
+ * the algorithm, the cases and the storyboard stay. None where those lie between them, or where the
+ * source has no view or layout.
+ */
+export function representationSkeleton(source: string, task?: string): string | undefined {
+  const starts = [...source.matchAll(/<(?:View|Layout)\b/gu)].map((match) => match.index);
+  const ends = [...source.matchAll(/<\/(?:View|Layout)>/gu)].map(
+    (match) => match.index + match[0].length
+  );
+  if (!starts.length || !ends.length) return undefined;
+  const from = Math.min(...starts);
+  const to = Math.max(...ends);
+  if (to <= from || /<script\b|<Case\b|<Storyboard\b/u.test(source.slice(from, to)))
+    return undefined;
+  const hole = `<Hole name="picture" kind="any" task="${attributeText(task ?? representationTask)}" />`;
+  return source.slice(0, from) + hole + source.slice(to);
+}
+
 /**
  * The skeleton of an older request, a view of one type or another arrangement of one layout: the
  * source with a view hole after its views, or with a hole in place of the layout, and what each hole
