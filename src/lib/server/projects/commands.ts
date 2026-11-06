@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { APIConnectionTimeoutError, APIUserAbortError } from 'openai';
 
-import { InvalidChatbotResponseError } from '$lib/server/chat-adapters/types';
+import { InvalidChatbotResponseError } from '$lib/server/ai/providers/types';
 import type {
   EventId,
   NewProjectEvent,
@@ -75,8 +75,8 @@ import {
   type ProposedView,
   type ViewCandidate
 } from '$lib/modes/sverlin/view-helpers.server';
-import { openAIAdapter } from '$lib/server/chat-adapters/openai';
-import type { ChatAdapter } from '$lib/server/chat-adapters/types';
+import { openAIAdapter } from '$lib/server/ai/providers/openai';
+import type { ChatAdapter } from '$lib/server/ai/providers/types';
 import { turnHelperCounts, turnViewHelpers } from './view-helpers-config';
 import {
   candidatesGiven,

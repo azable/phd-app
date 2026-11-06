@@ -1,7 +1,7 @@
 /** Provider assembly for mode-owned assistants and the shared intake classifier. */
 
-import { openAIAdapter } from '$lib/server/chat-adapters/openai';
-import { InvalidChatbotResponseError, type ChatAdapter } from '$lib/server/chat-adapters/types';
+import { openAIAdapter } from '$lib/server/ai/providers/openai';
+import { InvalidChatbotResponseError, type ChatAdapter } from '$lib/server/ai/providers/types';
 import { assistantMode, type AssistantId } from '$lib/shared/assistants';
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
 import { modeCatalog } from '$lib/modes/catalog';

@@ -9,7 +9,7 @@ import type { ChatBotAttemptProfile } from './types';
  * xhigh repair ran once and took 91 s, and in project 7464186f the fallback succeeded at once where
  * two repairs had failed. So the xhigh repair was dropped and the fallback runs at high: the worst
  * case falls from about five minutes to about two, in a 15-minute session. With the 180-second
- * request ceiling (chat-adapters/openai.ts) and provider retries off, a turn can never outlast the
+ * request ceiling (ai/providers/openai.ts) and provider retries off, a turn can never outlast the
  * 15-minute study phase, and each condition's turns stay bounded and comparable.
  *
  * The first call is GPT-6.1 Terra at low effort, the repairs and fallback GPT-6.1 Sol. On

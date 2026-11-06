@@ -269,7 +269,7 @@ export type ChatbotResult<Output extends object = SourceArtifactChatOutput> = Ou
 };
 
 /** Adapter contracts re-exported for chatbot consumers. */
-export type { ChatAdapter, ChatAdapterResult } from '$lib/server/chat-adapters/types';
+export type { ChatAdapter, ChatAdapterResult } from '$lib/server/ai/providers/types';
 
 /** Executable chatbot assembled from a bot configuration and provider adapter. */
 export interface Chatbot<Project, Output extends object = SourceArtifactChatOutput> {
