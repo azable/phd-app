@@ -143,20 +143,12 @@
   of="states, current, symbol, @run.zero, @run.one, @accepted, @rejected"
 >
   <Node>
-    <OneOf>
-      <When of="@run.zero">
-        <Node>Read {symbol}: follow the 0 transition.</Node>
-      </When>
-      <When of="@run.one">
-        <Node>Read {symbol}: follow the 1 transition.</Node>
-      </When>
-      <When of="@accepted">
-        <Node>Accepted: {states[current].name} is an accepting state.</Node>
-      </When>
-      <When of="@rejected">
-        <Node>Rejected: {states[current].name} is not accepting.</Node>
-      </When>
-    </OneOf>
+    <Node layout="stack">
+      <Node when="@run.zero">Read {symbol}: follow the 0 transition.</Node>
+      <Node when="@run.one">Read {symbol}: follow the 1 transition.</Node>
+      <Node when="@accepted">Accepted: {states[current].name} is an accepting state.</Node>
+      <Node when="@rejected">Rejected: {states[current].name} is not accepting.</Node>
+    </Node>
   </Node>
 </Layout>
 

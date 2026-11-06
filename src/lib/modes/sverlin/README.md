@@ -67,12 +67,11 @@ presentations can vary it. Nodes take no props that set a look: a node's kind is
 the view or layout it is in, or one it names with `kind`, and the design gives
 each kind its look. Every input and algorithm variable in scope at the selected
 step and the library components are already in scope; never write `import`, and
-never declare names `Node`, `Link`, `Listing`, `View`, `Layout`, `When`, or
-`OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`); Sverlin's own
-constructs are capitalised tags, as `<Node>`, `<View>`, `<Layout>`, and
-`<When>`; and code is in `<script>` blocks named by an attribute. `{#snippet}`
-and `{@render}` are refused: what one would draw is a layout, a view, or a node
-with a `kind`.
+never declare names `Node`, `Link`, `Listing`, `View`, or `Layout`. Blocks in
+`{#…}` are Svelte's own (`{#if}`, `{#each}`); Sverlin's own constructs are
+capitalised tags, as `<Node>`, `<View>`, and `<Layout>`; and code is in
+`<script>` blocks named by an attribute. `{#snippet}` and `{@render}` are
+refused: what one would draw is a layout, a view, or a node with a `kind`.
 
 - The top level holds views, at least one layout, and the storyboard (see
   Storyboard): every source declares its layouts, and one without is refused. A
@@ -205,14 +204,14 @@ scene at least.
   both. The scene pauses at those stops and no others, and `within` only chooses
   which spans it shows, so a scene with no `pause` shows its `:before` and its
   `:after`. A step the view draws from exactly what it drew the step before from
-  (the variables it reads, the marks held, the code lit, and each `<When>`)
-  draws the same picture, so it is left out, and the build warns, naming both
-  steps, unless the step left out is the scene's own `:before` or `:after`. A
-  paused step whose values differ but whose drawn picture is the step before's,
-  as one moving a pointer that marks nothing, is shown, and the build warns,
-  naming the first run of such steps at each label. `at=":before"` or
-  `at=":after"` shows only one of them. `title` is a caption beside its name in
-  the controls. Props are written as they are, never computed.
+  (the variables it reads, the marks held, the code lit, and each `when`) draws
+  the same picture, so it is left out, and the build warns, naming both steps,
+  unless the step left out is the scene's own `:before` or `:after`. A paused
+  step whose values differ but whose drawn picture is the step before's, as one
+  moving a pointer that marks nothing, is shown, and the build warns, naming the
+  first run of such steps at each label. `at=":before"` or `at=":after"` shows
+  only one of them. `title` is a caption beside its name in the controls. Props
+  are written as they are, never computed.
 - Pause at each decision as well as at the action it leads to: a loop's test and
   an `if`'s test, labelled, so the reader sees why something happens and why it
   stops, not only that it did. Draw the decision's answer where it helps,
@@ -320,8 +319,9 @@ still reach its items. Where a pointer's label should stand in a lane at its
 cell, the layout draws the array as a grid instead (see Pointers). Every view is
 measured for every input its type allows, so its box keeps one size and nothing
 moves between steps or inputs: with every value of its type where there are few,
-else the widest, and with each `{#if}`, `<When>`, and `<OneOf>` in it going each
-way, whatever its values say, so a branch no input here takes still has room.
+else the widest, and with each `{#if}` and each node with `when` in it going
+each way, whatever its values say, so a branch no input here takes still has
+room.
 
 So a test of which member a union holds that reads inside it in a branch is an
 error, as `{#if this.next !== 'end'}{this.next.name}{/if}`: measured going the
@@ -992,24 +992,23 @@ reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
 only the pairs found out of order red, and with `@insert.swap.to` in the scene's
 pause, as a step of their own before anything is written. Showing or hiding
 something at some steps needs no flag, sentinel, or cast in the algorithm: a
-label, a link from a label, a view chosen per place, or `<When of="@label">`
-below does it.
+label, a link from a label, a view chosen per place, or `when="@label"` below
+does it.
 
-`<Node when="@insert.swap">…</Node>` shows the node at each step inside a span
-of a label, any label: the step that ends a span and those inside it where
-labels within pause, whatever the pauses, never steps leading up to it or after
-it; elsewhere it is hidden, keeping its room. `when=":before"` and
-`when=":after"`, the whole case's stops, show it at the first step, the input as
-given, and at the last, as a note the same in every case, as "the array is now
-sorted". `when` names one label or stop, written as text, and never reads the
-label's value: `when={i < n}` and `{#if @label}` are refused. Nodes that take
-turns share one place in a stack, as large as the largest,
+`<Node when="@insert.swap">…</Node>`, or a link with `when`, shows it at each
+step inside a span of a label, any label: the step that ends a span and those
+inside it where labels within pause, whatever the pauses, never steps leading up
+to it or after it; elsewhere it is hidden, keeping its room. `when=":before"`
+and `when=":after"`, the whole case's stops, show it at the first step, the
+input as given, and at the last, as a note the same in every case, as "the array
+is now sorted". `when` names one label or stop, written as text, and never reads
+the label's value: `when={i < n}` and `{#if @label}` are refused. Nodes that
+take turns share one place in a stack, as large as the largest,
 `<Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>`;
 give them labels that never show at one step, or their texts overlap. Text that
 changes from step to step in one place, as a status line saying what each step
 does, is one such stack: separate nodes with `when` each keep their own room, so
-their texts stack down the page instead of replacing one another. Older sources
-write `<When of="@a">…</When>` and `<OneOf>`, which are read as these.
+their texts stack down the page instead of replacing one another.
 
 Each outcome of the algorithm, as found and not found, is a label of its own,
 and its message a node with `when` of that label. An outcome is decided in the
@@ -1329,7 +1328,7 @@ amber accent.
 Inside a view, and only there, a node's look may follow the view's value: a prop
 written as an expression of `this`, its fields, and comparisons and arithmetic
 of them, as `<Node fill={this.seen}>` or `<Node textSize={this.level}>`. Any
-prop above with options of its own may be bound but `shown`, which `<When>`
+prop above with options of its own may be bound but `shown`, which `when`
 decides. The expression's values, worked out from the view's type before the
 algorithm runs, must fit the prop's options: a colour tells apart its colours,
 `opacity` four values, `weight` two. A `Level` of

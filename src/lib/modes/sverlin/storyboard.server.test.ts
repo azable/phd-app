@@ -389,9 +389,9 @@ describe('steps drawing the same picture', () => {
     ]);
   });
 
-  it('keeps the end where a <When of=":after"> draws something new there, one branch at each step', async () => {
+  it('keeps the end where a node with when=":after" draws something new there, one at each step', async () => {
     const oneOf =
-      '<OneOf><When of="@compare"><Node>checking</Node></When><When of=":after"><Node>done</Node></When></OneOf>';
+      '<Node layout="stack"><Node when="@compare">checking</Node><Node when=":after">done</Node></Node>';
     const prepared = prepareSvelteComponent(
       linear('@compare', oneOf).replace('of="values, i"', 'of="values, i, @compare"')
     );

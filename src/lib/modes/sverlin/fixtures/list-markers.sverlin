@@ -96,18 +96,18 @@ while @more[cur ≠ ∅]
 
 <Layout name="StepNote" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
   <Node>
-    <OneOf><When of="@rewire.save">
+    <Node layout="stack"><Node when="@rewire.save">
       <SaveNote />
-    </When><When of="@rewire.reverse">
+    </Node><Node when="@rewire.reverse">
       <ReverseNote />
-    </When><When of="@rewire.advance">
+    </Node><Node when="@rewire.advance">
       <AdvanceNote />
-    </When><When of="@finish">
+    </Node><Node when="@finish">
       <FinishNote />
-    </When></OneOf>
-    <When of=":before">
+    </Node></Node>
+    <Node when=":before">
       <StartNote />
-    </When>
+    </Node>
   </Node>
 </Layout>
 

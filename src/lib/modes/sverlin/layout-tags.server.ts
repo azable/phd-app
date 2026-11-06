@@ -419,9 +419,9 @@ export function layoutTags(source: string): {
       });
     }
   }
-  // A node shown only at a label's steps, <Node when="@scan.found">, is <When> around it, and
-  // keeps its room elsewhere; a stack of such nodes takes turns in one place, as <OneOf> did.
-  const nodeOpening = /<Node\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
+  // A node or link shown only at a label's steps, <Node when="@scan.found">, is <When> around
+  // it, and a node keeps its room elsewhere; a stack of such nodes takes turns in one place.
+  const nodeOpening = /<(?:Node|Link)\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
   for (const match of scanned.matchAll(nodeOpening)) {
     const [opening, props] = match;
     const when = /\swhen\s*=\s*("([^"]*)"|'([^']*)'|\{[^}]*\})/u.exec(props);
@@ -447,6 +447,7 @@ export function layoutTags(source: string): {
       edits.push(around, unwhen, { start: start + opening.length, length: 0, text: '</When>' });
       continue;
     }
+    if (opening.startsWith('<Link')) continue; // a link holds nothing, so it closes itself
     // Its closing tag, past the nodes inside it.
     let depth = 1;
     let at = start + opening.length;
