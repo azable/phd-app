@@ -46,7 +46,7 @@ const mocks = vi.hoisted(() => ({
   generatePrepared: vi.fn()
 }));
 
-vi.mock('$lib/server/chat-bots/registry', () => ({
+vi.mock('$lib/server/ai/bots/registry', () => ({
   assistantIntroduction: (assistantId: string) => ({
     botId: assistantId,
     text: 'Tell me what you would like to visualize.'
@@ -1626,7 +1626,7 @@ describe('submitProjectFeedback', () => {
     it('takes the quick retries only after a source refused as written, one after another', async () => {
       const { nextAttempt, refusedAsWritten, softReturnLeft } = await import('./commands');
       const { visualizationAttemptProfiles, writtenRetries } =
-        await import('$lib/server/chat-bots/attempt-profiles');
+        await import('$lib/server/ai/bots/attempt-profiles');
       const ladder = visualizationAttemptProfiles(12_000);
       const failed = (...codes: string[]) => ({
         source: '',
@@ -3604,7 +3604,7 @@ describe('several variants from chat', () => {
   });
 
   it('retries a source refused as written on the quick profile before the slower repairs', async () => {
-    const { visualizationAttemptProfiles } = await import('$lib/server/chat-bots/attempt-profiles');
+    const { visualizationAttemptProfiles } = await import('$lib/server/ai/bots/attempt-profiles');
     const kept = mocks.attemptProfiles.splice(0, mocks.attemptProfiles.length);
     mocks.attemptProfiles.push(...(visualizationAttemptProfiles(12_000) as unknown as typeof kept));
     try {

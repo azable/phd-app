@@ -4,7 +4,10 @@ import * as v from 'valibot';
 
 import { interfacePartIds } from '$lib/shared/interface-parts';
 
-import { generatedMessageContentJsonSchema, generatedMessageContentSchema } from './types';
+import {
+  generatedMessageContentJsonSchema,
+  generatedMessageContentSchema
+} from '$lib/server/ai/bots/types';
 
 describe('generated message provider schema', () => {
   it('uses structured-output-compatible unions and mirrors non-empty text validation', () => {

@@ -1,4 +1,4 @@
-import type { ChatBotAttemptProfile } from './types';
+import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
 
 /**
  * One bounded attempt ladder shared by visualization modes: a first call, quick retries for a

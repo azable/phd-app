@@ -9,16 +9,16 @@ import {
   type ChatBotConfig,
   type ChatResponseFormat,
   type ViewHelpersRequest
-} from '$lib/server/chat-bots/types';
-import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
+} from '$lib/server/ai/bots/types';
+import { visualizationAttemptProfiles } from '$lib/server/ai/bots/attempt-profiles';
 import {
   briefUpdateJsonSchema,
   briefUpdateSchema,
   recordedBrief,
   sourceDecisionJsonSchema,
   sourceDecisionSchema
-} from '$lib/server/chat-bots/source-decisions';
-import { visualizationParticipantIntake } from '$lib/server/chat-bots/participant-intake';
+} from '$lib/server/ai/decisions/source-decisions';
+import { visualizationParticipantIntake } from '$lib/server/ai/bots/participant-intake';
 import * as v from 'valibot';
 import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
 

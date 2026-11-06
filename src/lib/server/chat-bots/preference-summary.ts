@@ -18,8 +18,8 @@ import {
   type PreferenceEvidence
 } from '$lib/server/projects/preference-model';
 
-import type { BriefSteering } from './brief-context';
-import type { AiDesign } from './project-context';
+import type { BriefSteering } from '$lib/server/ai/context/brief-context';
+import type { AiDesign } from '$lib/server/chat-bots/project-context';
 
 type DesignValue = string | number | boolean;
 

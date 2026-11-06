@@ -164,7 +164,7 @@ for those `brief.ts` marks `asked: "showing"`, by a comparison
 (`prompt: "show"`), and, once a question in words has been asked since anything
 new was last shown, `next: "show"`, so the next turn shows a change or a
 comparison rather than asking again
-([`brief-context.ts`](src/lib/server/chat-bots/brief-context.ts)); and what the
+([`brief-context.ts`](src/lib/server/ai/context/brief-context.ts)); and what the
 brief keeps out of comparisons, as colour where it must print in grey, which a
 comparison varying it is sent back to the assistant for. The brief's values
 weight the summary's ranking of what is worth asking. The assistant may also ask
@@ -552,7 +552,7 @@ Sverlin ladder whose repairs keep failing with new problems stops early, keeping
 the current version and saying so (`runAttemptLadder`). Provider retries are
 disabled. The default 180-second request ceiling and study deadline bound each
 attempt; see
-[`src/lib/server/chat-bots/attempt-profiles.ts`](src/lib/server/chat-bots/attempt-profiles.ts),
+[`src/lib/server/ai/bots/attempt-profiles.ts`](src/lib/server/ai/bots/attempt-profiles.ts),
 [`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts),
 and
 [`src/lib/server/projects/operations.ts`](src/lib/server/projects/operations.ts).

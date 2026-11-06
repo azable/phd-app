@@ -12,7 +12,7 @@ import { interfacePartIds } from '$lib/shared/interface-parts';
 import { presentationIdSchema } from '$lib/shared/presentations';
 import { textSchema } from '$lib/shared/projects/events/values';
 
-import type { SourceDecision } from './source-decisions';
+import type { SourceDecision } from '$lib/server/ai/decisions/source-decisions';
 import type { BriefEntry } from '$lib/shared/projects/brief';
 
 /** User or assistant message retained as conversational context. */

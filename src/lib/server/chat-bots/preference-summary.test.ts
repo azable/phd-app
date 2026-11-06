@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { choiceFamily, preferenceSummary } from './preference-summary';
-import type { AiDesign } from './project-context';
+import { choiceFamily, preferenceSummary } from '$lib/server/chat-bots/preference-summary';
+import type { AiDesign } from '$lib/server/chat-bots/project-context';
 
 const design: AiDesign = {
   options: { fill: ['none', 'white', 'amber-200', 'sky-200'], font: ['sans', 'serif'] },

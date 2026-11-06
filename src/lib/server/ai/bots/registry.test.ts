@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ChatBotConfig } from './types';
-import { assistantIntroduction, createChatbot, getChatbot, getCandidateChatbot } from './registry';
+import type { ChatBotConfig } from '$lib/server/ai/bots/types';
+import {
+  assistantIntroduction,
+  createChatbot,
+  getChatbot,
+  getCandidateChatbot
+} from '$lib/server/ai/bots/registry';
 
 describe('chatbot registry', () => {
   it('resolves only assistants compatible with the requested execution contract', () => {

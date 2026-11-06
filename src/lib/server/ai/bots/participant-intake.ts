@@ -5,7 +5,7 @@ import * as v from 'valibot';
 import { briefAttribute, intakeKeys } from '$lib/shared/projects/brief';
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
 
-import type { ChatBotConfig } from './types';
+import type { ChatBotConfig } from '$lib/server/ai/bots/types';
 
 export type ParticipantIntakeStep = {
   id: ParticipantIntakeStepId;

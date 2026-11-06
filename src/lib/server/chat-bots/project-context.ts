@@ -63,7 +63,7 @@ import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { stepRuns } from '$lib/shared/differing-steps';
 import { arrangementsText, readabilityText } from '$lib/shared/readability';
 import { interfacePartsFor, type InterfacePartId } from '$lib/shared/interface-parts';
-import type { ConversationMessage } from '$lib/server/chat-bots/types';
+import type { ConversationMessage } from '$lib/server/ai/bots/types';
 import {
   heldQuestion,
   projectQuestions,
@@ -72,8 +72,17 @@ import {
 
 import { projectBrief } from '$lib/shared/projects/brief';
 
-import { briefContext, briefSteering, conversationState, type AiBrief } from './brief-context';
-import { openChoices, preferenceSummary, type AiPreferences } from './preference-summary';
+import {
+  briefContext,
+  briefSteering,
+  conversationState,
+  type AiBrief
+} from '$lib/server/ai/context/brief-context';
+import {
+  openChoices,
+  preferenceSummary,
+  type AiPreferences
+} from '$lib/server/chat-bots/preference-summary';
 
 /** Compact, body-free entry that lets the AI identify one retained event. */
 export type AiTimelineEntry = {

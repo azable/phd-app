@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { visualizationAttemptProfiles, writtenRetries } from './attempt-profiles';
+import { visualizationAttemptProfiles, writtenRetries } from '$lib/server/ai/bots/attempt-profiles';
 
 describe('visualization attempt profiles', () => {
   it('keeps the shared ladder bounded: a quick Terra first call and retries, then Sol repairs', () => {

@@ -13,9 +13,9 @@ import {
   type ChatBotConfig,
   type GeneratedMessageContent,
   type RecoveryExplanation
-} from '$lib/server/chat-bots/types';
-import { visualizationAttemptProfiles } from '$lib/server/chat-bots/attempt-profiles';
-import { visualizationParticipantIntake } from '$lib/server/chat-bots/participant-intake';
+} from '$lib/server/ai/bots/types';
+import { visualizationAttemptProfiles } from '$lib/server/ai/bots/attempt-profiles';
+import { visualizationParticipantIntake } from '$lib/server/ai/bots/participant-intake';
 
 export type HtmlAssistantOutput = {
   reply: GeneratedMessageContent;

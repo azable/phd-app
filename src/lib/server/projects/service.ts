@@ -47,7 +47,7 @@ import { presentationBufferState, waitingBehind } from '$lib/shared/projects/pre
 import { activeProjectOperation } from '$lib/shared/projects/operations';
 import type { BriefKey } from '$lib/shared/projects/brief';
 import type { PresentationLoadTiming } from '$lib/shared/presentation-load-timing';
-import { assistantIntroduction } from '$lib/server/chat-bots/registry';
+import { assistantIntroduction } from '$lib/server/ai/bots/registry';
 
 import { runProjectCommand } from './command-lock';
 import { currentProjectOperationSignal } from './operation-context';

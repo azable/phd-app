@@ -53,7 +53,7 @@ import {
   getChatbot,
   getCandidateChatbot,
   getParticipantIntakeClassifier
-} from '$lib/server/chat-bots/registry';
+} from '$lib/server/ai/bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
 import { designOnlyWarning } from '$lib/modes/sverlin/padding-warnings.server';
@@ -92,7 +92,7 @@ import {
   nextParticipantIntakeStep,
   participantIntakeStep,
   type ParticipantIntakeClassifierOutput
-} from '$lib/server/chat-bots/participant-intake';
+} from '$lib/server/ai/bots/participant-intake';
 import {
   projectAiContext,
   projectConversationMessages,
@@ -114,13 +114,13 @@ import type {
   RecoveryExplanation,
   SourceArtifactChatOutput,
   ViewHelpersRequest
-} from '$lib/server/chat-bots/types';
+} from '$lib/server/ai/bots/types';
 import type {
   Comparisons,
   DecisionQuestion,
   SourceDecision,
   SourceDecisionOf
-} from '$lib/server/chat-bots/source-decisions';
+} from '$lib/server/ai/decisions/source-decisions';
 import { heldQuestion, openQuestion } from '$lib/shared/projects/questions';
 import { maximumQuestionText } from '$lib/shared/projects/events/assistant-responded';
 import {
@@ -129,7 +129,7 @@ import {
   type BriefEntry,
   type BriefItem
 } from '$lib/shared/projects/brief';
-import { briefSteering, type BriefSteering } from '$lib/server/chat-bots/brief-context';
+import { briefSteering, type BriefSteering } from '$lib/server/ai/context/brief-context';
 import { choiceStates, preferenceEvidence } from './preference-model';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
@@ -139,8 +139,8 @@ import {
   withoutRemoved,
   type DesignPatch
 } from '$lib/server/chat-bots/design-patch';
-import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
-import type { ChatBotAttemptProfile } from '$lib/server/chat-bots/types';
+import { applySourceEdits } from '$lib/server/ai/decisions/source-edits';
+import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
 
 import { logModelCall } from './ai-cost-log';
 import { runProjectCommand } from './command-lock';
@@ -3456,7 +3456,7 @@ const valuesUnreadable = 'values_unreadable';
  * Whether the build refused a failed attempt's source as written: every problem from its first
  * stage (the source's blocks, labels, and views), a scene or listing naming a label that does not
  * exist, or design values that are not one JSON object. Such a slip gets the ladder's quick retries
- * (writtenRetries in chat-bots/attempt-profiles.ts); a failure of the run or the layout, a problem
+ * (writtenRetries in ai/bots/attempt-profiles.ts); a failure of the run or the layout, a problem
  * with no code, or an attempt set aside for another reason goes to the slower repairs.
  */
 export function refusedAsWritten(failure: AttemptFailure | undefined): boolean {

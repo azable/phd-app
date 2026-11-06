@@ -9,7 +9,7 @@ import type {
   ChatBotParameters,
   ConversationMessage,
   ChatResponseFormat
-} from '$lib/server/chat-bots/types';
+} from '$lib/server/ai/bots/types';
 
 /** Fully prepared request accepted by a provider adapter. */
 export type ChatAdapterRequest = {

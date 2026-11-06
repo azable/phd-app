@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applySourceEdits } from './source-edits';
+import { applySourceEdits } from '$lib/server/ai/decisions/source-edits';
 
 const source = '<Node layout="row">\n  <Node>a</Node>\n  <Node>b</Node>\n</Node>';
 

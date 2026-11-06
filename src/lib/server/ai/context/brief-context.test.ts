@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { briefKeys, type BriefItem, type BriefKey } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 
-import { briefContext, briefSteering, conversationState } from './brief-context';
-import { openChoices, preferenceSummary } from './preference-summary';
-import type { AiDesign } from './project-context';
+import {
+  briefContext,
+  briefSteering,
+  conversationState
+} from '$lib/server/ai/context/brief-context';
+import { openChoices, preferenceSummary } from '$lib/server/chat-bots/preference-summary';
+import type { AiDesign } from '$lib/server/chat-bots/project-context';
 
 const design: AiDesign = {
   options: { fill: ['none', 'white', 'amber-200', 'sky-200'], font: ['sans', 'serif', 'mono'] },

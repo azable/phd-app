@@ -9,15 +9,15 @@ import { modeCatalog } from '$lib/modes/catalog';
 import {
   participantIntakeClassifier,
   type ParticipantIntakeClassifierOutput
-} from './participant-intake';
-import type { AiProjectContext } from './project-context';
+} from '$lib/server/ai/bots/participant-intake';
+import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
 import type {
   CandidateAssistantOutput,
   ChatBotConfig,
   Chatbot,
   ChatbotRequest,
   SourceArtifactChatOutput
-} from './types';
+} from '$lib/server/ai/bots/types';
 
 /** Combine a bot definition with a provider adapter into an executable chatbot. */
 export function createChatbot<Project, Output extends object>(
@@ -73,12 +73,12 @@ export function createChatbot<Project, Output extends object>(
 
 type ModeOutput = SourceArtifactChatOutput | CandidateAssistantOutput;
 const modules = import.meta.glob<{ default: ChatBotConfig<AiProjectContext, ModeOutput> }>(
-  '../../modes/*/bot.server.ts',
+  '../../../modes/*/bot.server.ts',
   { eager: true }
 );
 const modeChatbots = Object.fromEntries(
   Object.keys(modeCatalog).map((mode) => {
-    const config = modules[`../../modes/${mode}/bot.server.ts`]?.default;
+    const config = modules[`../../../modes/${mode}/bot.server.ts`]?.default;
     if (!config || config.id !== modeCatalog[mode as keyof typeof modeCatalog].assistantId)
       throw new Error(`Visualization mode ${mode} needs its own matching assistant.`);
     return [mode, createChatbot(config, openAIAdapter)];

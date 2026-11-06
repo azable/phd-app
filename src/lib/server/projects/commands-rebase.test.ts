@@ -12,7 +12,7 @@ import { MemoryProjectRepository } from './memory-repository.test-support';
 
 const mocks = vi.hoisted(() => ({ generatePrepared: vi.fn() }));
 
-vi.mock('$lib/server/chat-bots/registry', () => {
+vi.mock('$lib/server/ai/bots/registry', () => {
   const chatbot = {
     config: {
       attemptProfiles: [

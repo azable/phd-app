@@ -16,7 +16,7 @@ import {
   projectAiContext,
   projectAiTimelineEntry,
   projectConversationMessages
-} from './project-context';
+} from '$lib/server/chat-bots/project-context';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const sha256 = 'a'.repeat(64);

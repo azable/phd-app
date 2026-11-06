@@ -31,7 +31,7 @@ vi.mock('./repository', async (importOriginal) => ({
   )
 }));
 
-vi.mock('$lib/server/chat-bots/registry', () => {
+vi.mock('$lib/server/ai/bots/registry', () => {
   const chatbot = {
     config: {
       attemptProfiles: [
