@@ -59,7 +59,7 @@ describe('the preference summary', () => {
     expect(choiceFamily('views.Int').impact).toBeGreaterThan(choiceFamily('Graph.form').impact);
     expect(choiceFamily('Graph.form').impact).toBeGreaterThan(choiceFamily('Cell.font').impact);
     expect(choiceFamily('Cell.font').impact).toBeGreaterThan(choiceFamily('Cell.fill').impact);
-    expect(choiceFamily('pointers.Index@j').family).toBe('views');
+    expect(choiceFamily('views.Index@j').family).toBe('views');
   });
 
   it('says where each touched choice stands, what to ask next, and what was never compared', () => {

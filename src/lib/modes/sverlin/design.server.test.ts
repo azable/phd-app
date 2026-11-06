@@ -11,9 +11,6 @@ import { forms } from './library/node/forms';
 import {
   buildVariant as buildOnBase,
   DesignValueError,
-  listingRegionFallbacks,
-  listingRegionSpace,
-  starterVariant,
   withStarterBase,
   type VariantRequest
 } from './design.server';
@@ -42,14 +39,14 @@ const { space, starter } = prepared.design;
 describe('design space', () => {
   it('has every view of each type rendered by name, the layout’s frame, and every prop of every kind', () => {
     expect(space['views.Int']).toEqual(['IntCell', 'IntTally', 'none']);
-    expect(space['views.Index']).toEqual(['IndexText', 'none']);
+    expect(space['views.Index']).toEqual(['Highlight', 'none']);
     expect(space['Main.ratio']).toContain('4:3');
     const kinds = new Set(
       Object.keys(space)
         .filter(
           (key) =>
             !key.startsWith('views.') &&
-            !key.startsWith('pointers.') &&
+            !key.startsWith('views.') &&
             !key.startsWith('<') &&
             !key.startsWith('$') &&
             key !== 'layout' &&
@@ -69,20 +66,21 @@ describe('design space', () => {
         'IntCell',
         'IntTally',
         'IntTally.Tally',
-        'IndexText',
+        'Checking.Number',
+        'Result.Number',
+        'Highlight',
+        'Highlight.Link',
+        'Highlight.Name',
         'Row',
-        'Row.Under',
-        'Highlight.Pointed'
+        'Row.Under'
       ].sort()
     );
-    // A layout's props, and nothing to hide a <Pointed> by.
+    // A layout's props, and a link's target paint.
     expect(space['Row.gap']).toBeDefined();
     expect(space['IntCell.gap']).toBeUndefined();
-    expect(space['Highlight.Pointed.shown']).toBeUndefined();
-    expect(space['Highlight.Pointed.fill']).toContain('amber-100');
-    // Overflow: a pointer's, drawn past the ends or not; a collection's end slots are tracks of it,
-    // with no choice. Dashed borders are paint, for any node.
-    expect(space['Highlight.Pointed.overflow']).toEqual(['shown', 'hidden']);
+    expect(space['Highlight.Link.targetFill']).toContain('amber-100');
+    // No overflow: a collection's tracks past its ends are no choice. Dashed borders are paint, for
+    // any node.
     expect(space['IntTally.Tally.overflow']).toBeUndefined();
     expect(space['Row.overflow']).toBeUndefined();
     expect(space['IntCell.overflow']).toBeUndefined();
@@ -91,9 +89,9 @@ describe('design space', () => {
 
   it('records the kind of each tag, by its line and column', () => {
     const lines = linearSearchSource.split('\n');
-    const line = lines.findIndex((text) => text.includes('<Pointed'));
-    const position = `${line + 1}:${lines[line].indexOf('<Pointed') + 1}`;
-    expect(prepared.design.tags[position]).toEqual(['Highlight.Pointed']);
+    const line = lines.findIndex((text) => text.includes('<Link to={this}'));
+    const position = `${line + 1}:${lines[line].indexOf('<Link') + 1}`;
+    expect(prepared.design.tags[position]).toEqual(['Highlight.Link']);
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
@@ -165,34 +163,26 @@ describe('variants', () => {
     expect(depth.dropped).toEqual([expect.stringContaining('IntCell has no prop depth')]);
     // A view choice for a place the source has not is no variable, not a prop of "pointers".
     expect(
-      buildVariant(space, starter, { chosen: { 'pointers.Index:found': 'Arrow' } }, 1).dropped
+      buildVariant(space, starter, { chosen: { 'views.Index:found': 'Arrow' } }, 1).dropped
     ).toEqual([
       expect.stringContaining(
         'The design has no variable {Index}:found; its view choices are {Int}'
       )
     ]);
-    // Where no position draws as a mark, it says where one does (project 97eba2f1 set three).
-    const unmarked = Object.fromEntries(
-      Object.entries(space).filter(([key]) => !key.startsWith('pointers.'))
-    );
-    expect(
-      buildVariant(unmarked, starter, { chosen: { 'pointers.Index:found': 'Arrow' } }, 1).dropped[0]
-    ).toContain("a position draws as a mark only where it is rendered in a page layout's root");
   });
 
   it('leaves out a place setting what takes room, which holds for its kind at every step', () => {
-    expect(space).not.toHaveProperty('Highlight.Pointed:found.padding');
-    expect(space).toHaveProperty('Highlight.Pointed.padding');
+    expect(space).not.toHaveProperty('Highlight.Name:found.padding');
+    expect(space).toHaveProperty('Highlight.Name.padding');
     expect(
-      buildVariant(space, starter, { chosen: { 'Highlight.Pointed:found.padding': 0.5 } }, 1)
-        .dropped
+      buildVariant(space, starter, { chosen: { 'Highlight.Name:found.padding': 0.5 } }, 1).dropped
     ).toEqual([
-      'A place sets only its paint (fill, stroke, color) and whether it is shown, never how much room anything takes: padding holds for every Highlight.Pointed at every step, as Highlight.Pointed.padding. The value is left out.'
+      'A place sets only its paint (fill, stroke, color) and whether it is shown, never how much room anything takes: padding holds for every Highlight.Name at every step, as Highlight.Name.padding. The value is left out.'
     ]);
     expect(
       Object.keys(space)
         // A view chosen per place holds at every step, as a type's does; the rest are a place's looks.
-        .filter((key) => /@[^.]/u.test(key) && !/^(views\.|pointers\.)/u.test(key))
+        .filter((key) => /@[^.]/u.test(key) && !key.startsWith('views.'))
         .map((key) => key.slice(key.lastIndexOf('.') + 1))
         .filter((prop) => !['unit', 'true', 'false', 'from', 'order', 'hue'].includes(prop))
         .every((prop) => ['shown', 'fill', 'stroke', 'color'].includes(prop))
@@ -201,37 +191,37 @@ describe('variants', () => {
 
   it('keeps a place as its kinds are until a variant sets it apart', () => {
     const { fallbacks } = prepared.design;
-    const [first, second] = space['Highlight.Pointed.fill'].filter(
-      (option) => option !== 'none' && option !== starter['Highlight.Pointed.fill']
+    const [first, second] = space['Highlight.Link.targetFill'].filter(
+      (option) => option !== 'none' && option !== starter['Highlight.Link.targetFill']
     );
     // A place follows the kind it falls back to.
     const followed = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.Pointed.fill': first } },
+      { chosen: { 'Highlight.Link.targetFill': first } },
       1,
       fallbacks
     ).values;
-    expect(followed['Highlight.Pointed:found.fill']).toBe(first);
+    expect(followed['Highlight.Link:found.targetFill']).toBe(first);
     // Chosen, it is set apart, and stays so as the kind changes.
     const apart = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.Pointed:found.fill': second } },
+      { chosen: { 'Highlight.Link:found.targetFill': second } },
       1,
       fallbacks
     ).values;
-    expect(apart['Highlight.Pointed:found.fill']).toBe(second);
-    expect(apart['Highlight.Pointed:i.fill']).toBe(starter['Highlight.Pointed.fill']);
+    expect(apart['Highlight.Link:found.targetFill']).toBe(second);
+    expect(apart['Highlight.Link:i.targetFill']).toBe(starter['Highlight.Link.targetFill']);
     const kept = buildVariant(
       space,
       starter,
-      { base: apart, chosen: { 'Highlight.Pointed.fill': first } },
+      { base: apart, chosen: { 'Highlight.Link.targetFill': first } },
       1,
       fallbacks
     ).values;
-    expect(kept['Highlight.Pointed:found.fill']).toBe(second);
-    expect(kept['Highlight.Pointed:i.fill']).toBe(first);
+    expect(kept['Highlight.Link:found.targetFill']).toBe(second);
+    expect(kept['Highlight.Link:i.targetFill']).toBe(first);
   });
 
   it('randomises keeping equalities, shades, and what is shown or none', () => {
@@ -251,14 +241,14 @@ describe('variants', () => {
       expect(values['views.Int']).not.toBe('none');
     }
     expect(
-      new Set(variants.map((values) => values['Highlight.Pointed.fill'])).size
+      new Set(variants.map((values) => values['Highlight.Link.targetFill'])).size
     ).toBeGreaterThan(1);
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
 
   it('gives every kind of node the style props, drawn at random but for decoration', () => {
     expect(space['IntCell.shadow']).toEqual(['none', 'soft', 'lifted', 'hard']);
-    expect(space['Highlight.Pointed.case']).toEqual(['normal', 'uppercase', 'small-caps']);
+    expect(space['Highlight.Name.case']).toEqual(['normal', 'uppercase', 'small-caps']);
     expect(starter['Row.fillStyle']).toBe('solid');
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.glow': 'bright' } }, 1)).toThrow(
       'IntCell.glow cannot be "bright"'
@@ -291,59 +281,6 @@ describe('variants', () => {
     expect(bundle.variant['views.Int']).toBe('IntTally');
     expect(bundle.origins['Row.Under.shown']).toBe('chosen');
     expect(bundle.layoutCode).toContain('"views.Int":"IntTally"');
-  });
-});
-
-describe('listing regions', () => {
-  it('fall back to the mark of the view the place chose, or the level, by order', () => {
-    const marks = new Map([
-      [
-        'pass.left',
-        {
-          kinds: { Arrow: 'Arrow.Pointed:pass.left', Mark: 'Mark.Pointed:pass.left' },
-          by: 'pointers.Position:pass.left'
-        }
-      ]
-    ]);
-    const fallbacks = {
-      'pointers.Position:pass.left': 'pointers.Position',
-      'Arrow.Pointed:pass.left.fill': 'Arrow.Pointed.fill',
-      'Mark.Pointed:pass.left.fill': 'Mark.Pointed.fill',
-      ...listingRegionFallbacks(['pass', 'pass.left'], marks)
-    };
-    const regionSpace = listingRegionSpace(['pass', 'pass.left']);
-    const designed = {
-      'pointers.Position': ['Arrow', 'Mark', 'none'],
-      'pointers.Position:pass.left': ['Arrow', 'Mark', 'none'],
-      'Arrow.Pointed.fill': ['none', 'sky-100'],
-      'Mark.Pointed.fill': ['none', 'rose-100'],
-      'Arrow.Pointed:pass.left.fill': ['none', 'sky-100'],
-      'Mark.Pointed:pass.left.fill': ['none', 'rose-100'],
-      'listing.lit.fill': ['none', 'amber-200'],
-      'listing.lit.stroke': ['none'],
-      'listing.lit.color': ['none'],
-      ...regionSpace
-    };
-    const start = Object.fromEntries(
-      Object.entries(designed).map(([key, [first]]) => [key, first])
-    );
-    const values = (chosen: Record<string, string>) =>
-      buildVariant(designed, start, { chosen }, 1, fallbacks).values;
-    const shared = {
-      'Arrow.Pointed.fill': 'sky-100',
-      'Mark.Pointed.fill': 'rose-100',
-      'listing.lit.fill': 'amber-200'
-    };
-    expect(values({ ...shared, 'pointers.Position': 'Mark' })['listing.lit@pass.left.fill']).toBe(
-      'rose-100'
-    );
-    expect(values({ ...shared, 'pointers.Position': 'Arrow' })['listing.lit@pass.left.fill']).toBe(
-      'sky-100'
-    );
-    // A place drawing no mark, and a region with no mark, take the level's own.
-    const none = values({ ...shared, 'pointers.Position:pass.left': 'none' });
-    expect(none['listing.lit@pass.left.fill']).toBe('amber-200');
-    expect(none['listing.lit@pass.fill']).toBe('amber-200');
   });
 });
 
@@ -424,31 +361,11 @@ describe('free layouts', () => {
   });
 });
 
-describe('a bare icon', () => {
-  it('starts as an arrow up in a pointer view, which marks where it points', () => {
-    const starter = starterVariant(
-      [
-        { key: 'CurrentMark', role: 'icon' },
-        { key: 'CurrentMark.Pointed', role: 'pointed' },
-        { key: 'Legend', role: 'icon' }
-      ],
-      {},
-      false,
-      [],
-      {},
-      undefined,
-      []
-    );
-    expect(starter['CurrentMark.icon']).toBe('arrow-up');
-    expect(starter['Legend.icon']).toBe('circle-dot');
-  });
-});
-
 describe('design tokens and tag groups', () => {
   // IntCell and IntDot are values, Cells a container and Note a text, all made by <Node>;
-  // Arrow.Pointed is a pointer mark, made by <Pointed>; `{v}` is a place, IntCell@v.
+  // Arrow.Link is a link, made by <Link>; `{v}` is a place, IntCell:v.
   const levelled = prepareSvelteComponent(
-    `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main i={i} values={values} /></Scene></Storyboard>`
+    `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main i={i} values={values} /></Scene></Storyboard>`
   ).design;
   const build = (request: Parameters<typeof buildVariant>[2]) =>
     buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles)
@@ -459,8 +376,8 @@ describe('design tokens and tag groups', () => {
     expect(levelled.space['<Node>.padding']).toContain('$spacing');
     expect(levelled.starter['<Node>.padding']).toBeUndefined();
     expect(levelled.space['<Node>.shown']).toBeUndefined();
-    expect(levelled.space['<Pointed>.expand']).toBeDefined();
-    expect(levelled.space['<Node>.expand']).toBeUndefined();
+    expect(levelled.space['<Link>.targetFill']).toBeDefined();
+    expect(levelled.space['<Node>.targetFill']).toBeUndefined();
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
   });
@@ -468,14 +385,13 @@ describe('design tokens and tag groups', () => {
   it('changes every kind following a token, and a group overrides the token for its tag', () => {
     const spacing = build({ chosen: { $spacing: 0.25 } });
     expect([spacing['IntCell.padding'], spacing['IntDot.padding']]).toEqual([0.25, 0.25]);
-    expect(spacing['Arrow.Pointed.padding']).toBe(0.25);
     expect(spacing['Cells.padding']).toBe(0);
     const group = build({ chosen: { $spacing: 0.25, '<Node>.padding': 0.5 } });
     expect([group['IntCell.padding'], group['Cells.padding'], group['Note.padding']]).toEqual([
       0.5, 0.5, 0.5
     ]);
-    // <Node> never reaches a pointer mark.
-    expect(group['Arrow.Pointed.padding']).toBe(0.25);
+    // <Node> never reaches a link.
+    expect(group['Arrow.Link.padding']).toBeUndefined();
     const named = build({ chosen: { '<Node>.fill': '$highlight' } });
     expect([named['IntCell.fill'], named['Note.fill']]).toEqual(['amber-100', 'amber-100']);
   });
@@ -591,8 +507,6 @@ describe('design tokens and tag groups', () => {
     const based = build({ chosen: { '$Value.radius': 0, '$Value.fill': '$surface' } });
     expect([based['IntCell.radius'], based['IntDot.radius']]).toEqual([0, 0]);
     expect(based['IntCell.fill']).toBe('white');
-    // Words and pointers keep their own roles' looks.
-    expect(based['Arrow.Pointed.radius']).toBe(8);
     const grouped = build({ chosen: { '$Value.radius': 0, '<Node>.radius': 4 } });
     expect(grouped['IntCell.radius']).toBe(4);
     const own = build({ chosen: { '$Value.radius': 0, 'IntCell.radius': 12 } });

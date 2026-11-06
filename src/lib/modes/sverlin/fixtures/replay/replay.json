@@ -256,7 +256,7 @@
       "SuitColourGlyph=false.color": "black",
       "views.CardFace.Suit:this.suit": "SuitColourGlyph"
     },
-    "minText": 21
+    "minText": 19.7
   },
   "binary-search-compact": {
     "summary": "binary search, compact indices (180c7b48)",

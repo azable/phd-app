@@ -36,16 +36,14 @@ describe('padding warnings', () => {
     expect(warnings.every((warning) => warning.endsWith(designOnlyWarning))).toBe(true);
   });
 
-  it('leaves a node that shows a box at some step, a pointer paints, links end at, or is small', () => {
-    const roles = { Cell: 'value', Vertex: 'vertex', 'Mark.Pointed': 'pointed' } as const;
+  it('leaves a node that shows a box at some step, links end at, or is small', () => {
+    const roles = { Cell: 'value', Vertex: 'vertex' } as const;
     const pages = new Set<string>();
     const boxedLater = steps(
       [node('1:1', 'Cell')],
       [node('1:1', 'Cell', { look: { ...look, fill: 'white', padding: [6, 6, 6, 6] } })]
     );
     expect(paddingWarnings(boxedLater, roles, padded, pages)).toEqual([]);
-    const pointedLater = steps([node('1:1', 'Cell')], [node('1:1', 'Mark.Pointed')]);
-    expect(paddingWarnings(pointedLater, roles, padded, pages)).toEqual([]);
     const vertex = steps([node('1:1', 'Vertex')]);
     expect(paddingWarnings(vertex, roles, { 'Vertex.padding': 0.5 }, pages)).toEqual([]);
     const small = steps([node('1:1', 'Cell', { box: { x: 0, y: 0, width: 28, height: 36 } })]);

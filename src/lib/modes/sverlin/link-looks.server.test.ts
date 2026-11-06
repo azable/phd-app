@@ -14,6 +14,9 @@ import { pausingEveryLabel } from './testing/every-pause';
 import { centreOf, drawnSteps, edgeOf, endsOf, ofKind } from './testing/scenes';
 
 /** A source's scene built with chosen values, at a step. */
+/** A step's links between elements, leaving out those from a variable's label, as current's arrow. */
+const elementLinks = (step: SceneStep) => step.links.filter(({ from }) => from.includes('['));
+
 async function open(source: string, chosen: Record<string, string | number>, step = 0) {
   const { steps } = await drawnSteps(pausingEveryLabel(source), { chosen });
   return steps[step];
@@ -34,7 +37,7 @@ function reaches(step: SceneStep, ...kinds: string[]) {
         )
       )
     );
-  return step.links.map((link) => ({
+  return elementLinks(step).map((link) => ({
     edge: edgeOf(link),
     start: link.heads?.start?.shape,
     end: link.heads?.end?.shape,
@@ -146,7 +149,7 @@ it(
         kind: node.kind,
         visible: true,
         off: Math.min(
-          ...step.links.map((link) => {
+          ...elementLinks(step).map((link) => {
             const at = middleOf(link);
             return Math.hypot(centre.x - at.x, centre.y - at.y);
           })
@@ -157,8 +160,9 @@ it(
     for (const label of labels) {
       expect(label.kind).toBe('WeightText');
       expect(label.visible).toBe(true);
-      // A curve's middle by length and by its parameter differ a little where it bends.
-      expect(label.off, label.text).toBeLessThan(12);
+      // A curve's middle by length and by its parameter differ where it bends, the more as the
+      // vertices sit closer (no room kept round them for a pointer since 7 November 2026).
+      expect(label.off, label.text).toBeLessThan(24);
     }
   }
 );
@@ -169,7 +173,7 @@ it(
   async () => {
     const step = await open(cards, { 'Graph.form': 'natural', 'Graph.Link.route': 'wire' });
     const boxes = ofKind(step, 'VertexCard').map(({ box }) => box);
-    const wires = step.links.map((link) => {
+    const wires = elementLinks(step).map((link) => {
       const corners = link.wire ?? [];
       const square = corners
         .slice(1)

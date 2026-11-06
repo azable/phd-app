@@ -49,7 +49,7 @@ const kindsOf = (space: Record<string, unknown>) =>
         .filter(
           (key) =>
             !key.startsWith('views.') &&
-            !key.startsWith('pointers.') &&
+            !key.startsWith('views.') &&
             !key.startsWith('<') &&
             !key.startsWith('$') &&
             key !== 'layout' &&
@@ -134,7 +134,8 @@ describe('single-component Svelte compilation', () => {
         '@check.equal#3',
         '@next#3',
         '@check.equal#4',
-        '@run#1'
+        '@run#1',
+        ':after'
       ]);
       // Every variant shows the source's steps.
       expect(bundle.steps).toEqual(bundle.labels);
@@ -300,16 +301,18 @@ describe('single-component Svelte compilation', () => {
 
   it('gives every kind of node, the snippet it is in, the variables its role has', () => {
     const { design } = prepareSvelteComponent(
-      `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Name">i</Node></Node></View>\n<View of="Position" name="Mark"><Pointed /></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="i, values, j"><Node><Cells values={values} />{i}<Note /><Pair values={values} i={i} j={j} /></Node></Layout>`
+      `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">i</Node></Node></View>\n<View of="Position" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Pair" of="values, i, j"><Node layout="free">{#each values as v}{v}{/each}<Link from={i} to={j} /></Node></Layout><Layout name="Main" of="i, values, j"><Node><Cells values={values} />{i}<Note /><Pair values={values} i={i} j={j} /></Node></Layout>`
     );
     expect(kindsOf(design.space)).toEqual(
       [
         'Arrow',
+        'Arrow.Link',
         'Arrow.Name',
-        'Arrow.Pointed',
         'Cells',
         'IntCell',
-        'Mark.Pointed',
+        'Mark',
+        'Mark.Caption',
+        'Mark.Link',
         'Note',
         'Pair',
         'Pair.Link'
@@ -317,19 +320,18 @@ describe('single-component Svelte compilation', () => {
     );
     expect(design.space['Cells.gap']).toBeDefined();
     expect(design.space['IntCell.gap']).toBeUndefined();
-    expect(design.space['Arrow.Pointed.shown']).toBeUndefined();
     expect(design.space['Pair.Link.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
     expect(design.space['views.Int']).toEqual(['IntCell', 'none']);
     // Each render with an argument is a place: its own choice where its type has several views of
     // the kind it draws, and its own paint for the kinds of each.
-    expect(design.space['pointers.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
-    expect(design.starter['pointers.Position:i']).toBe('Arrow');
-    expect(design.space['Arrow.Pointed:i.fill']).toBeDefined();
+    expect(design.space['views.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
+    expect(design.starter['views.Position:i']).toBe('Arrow');
+    expect(design.space['Arrow.Link:i.targetFill']).toBeDefined();
     expect(design.space['Arrow.Name:i.color']).toBeDefined();
-    expect(design.space['Arrow.Pointed:i.padding']).toBeUndefined();
+    expect(design.space['Arrow.Link:i.padding']).toBeUndefined();
     expect(design.space['IntCell:v.fill']).toBeDefined();
     expect(design.space['views.Int:v']).toBeUndefined();
-    expect(design.fallbacks['Mark.Pointed:i.stroke']).toBe('Mark.Pointed.stroke');
+    expect(design.fallbacks['Mark.Link:i.targetStroke']).toBe('Mark.Link.targetStroke');
   });
 
   it.each([
@@ -369,12 +371,12 @@ describe('single-component Svelte compilation', () => {
     );
   });
 
-  it('rejects a <Pointed> and a node of one kind', () => {
+  it('refuses <Pointed>, naming the link form', () => {
     expect(() =>
       prepareSvelteComponent(
-        `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0);]</script><View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node kind="Pointed">i</Node></Node></View>\n<Layout name="Cells" of="values"><Node layout="row">{#each values as v}<Node value={v} />{/each}</Node></Layout><Layout name="Main" of="i, values"><Node><Cells values={values} />{i}</Node></Layout>`
+        `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<Layout name="Main" of="i, values"><Node>{#each values as v}{v}{/each}{i}</Node></Layout>`
       )
-    ).toThrow(/Arrow\.Pointed is the kind of a <\w+> and of another kind of tag/);
+    ).toThrow(/<Pointed> is no longer part of the library: draw a pointer as a link from the variable[^]*<Link to=\{this\} \/>/u);
   });
 
   it('rejects props a library component does not take, and written values it cannot use', async () => {
@@ -896,130 +898,6 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       column: 9,
       code: 'js_parse_error'
     } satisfies Partial<InvalidSvelteSourceError>);
-  });
-});
-
-describe('pointers', () => {
-  /** A source of the values and their row, its parts, and its layout drawing the row and `renders`. */
-  const view = (parts: string, renders = '') =>
-    `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n${parts}\n<Layout name="Main"><Node>{values}${renders}</Node></Layout>`;
-
-  it('marks from the page root an element a layout drawn by tag draws', async () => {
-    // Benchmark run 4's Dijkstra drew {current} in its page's root while <Graph> drew the
-    // vertices; the guide has the mark drawn around the element wherever that is drawn.
-    const source = `<script domain>const Int = type("integer", { min: 0, max: 99 }); const Values = array(Int, { max: 7 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[2, 5, 7]} /><script algorithm>for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @scan{ @look[const v = values[i];] }</script><View of="Int" name="Cell"><Node value={this} /></View>\n<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Tag">i</Node></Node></View>\n<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>\n<Layout name="Main"><Node><Cells />{i}</Node></Layout>\n<Storyboard><Scene name="main" case="main" pause="@scan.look"><Main /></Scene></Storyboard>`;
-    const built = await bundlePresentation(prepareSvelteComponent(source), 1, {});
-    expect(built.layout.drawing).toContain('Mark.Pointed: 1 box');
-  });
-
-  it('warns of a bare position drawn as its number beside the array it points into', async () => {
-    // Project 10c556d3 drew {i} in a column beside {values}, nested in the root, printing a lone
-    // number under the row, with its pointer view PositionMark unused.
-    const page = (inner: string) =>
-      `<script domain>const Int = type("integer", { min: 0, max: 9 }); const Values = array(Int, { max: 4 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[3, 1]} /><script algorithm>for (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) @scan{ @look[const v = values[i];] }</script><View of="Int" name="Cell"><Node value={this} /></View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<View of="Index" name="IndexNumber"><Node value={this} /></View>\n<View of="Index" name="PositionMark"><Pointed /></View>\n<Layout name="Main"><Node>${inner}</Node></Layout>\n<Storyboard><Scene name="main" case="main" pause="@scan.look"><Main /></Scene></Storyboard>`;
-    const warned = await bundlePresentation(
-      prepareSvelteComponent(page('<Node layout="column">{values}{i}</Node>')),
-      1,
-      {}
-    );
-    expect(warned.warnings).toContainEqual(
-      expect.stringContaining(
-        "{i} draws as its number (IndexNumber), not on the element of values it points to, because it is inside a node within the layout's root. To mark the element, put {i} directly in the root's node"
-      )
-    );
-    expect(warned.warnings?.join(' ')).toContain('PositionMark');
-    // In words a number is meant.
-    const worded = await bundlePresentation(
-      prepareSvelteComponent(page('<Node layout="column">{values}<Node>at {i}</Node></Node>')),
-      1,
-      {}
-    );
-    expect(worded.warnings?.join(' ') ?? '').not.toContain('draws as its number');
-  });
-
-  it('draws a view with a <Pointed> around the element its position points at', () => {
-    const prepared = prepareSvelteComponent(
-      view(
-        '<View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>i</Node></Node></View>',
-        '{i}'
-      )
-    );
-    expect(prepared.component).toContain('__sverlinPointers');
-    expect(prepared.components.map(({ name }) => name)).toContain('Arrow');
-    expect(prepared.design.space['Arrow.Pointed.fill']).toBeDefined();
-  });
-
-  it('draws a position type rendered by name as a mark outside a node, its number inside one', () => {
-    const pointer = '<View of="Position" name="Highlight"><Pointed /></View>';
-    const caption = '<Layout name="At" of="i"><Node>at {i}</Node></Layout>';
-    const text = '<View of="Position" name="PositionText"><Node value={this} /></View>';
-    const both = prepareSvelteComponent(
-      view(`${text}\n${pointer}\n${caption}`, '{@render At()}{i}')
-    );
-    expect(both.design.space['views.Position']).toEqual(['PositionText', 'none']);
-    expect(both.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
-    expect(both.design.starter['pointers.Position']).toBe('Highlight');
-    // Each render's variable, by its line:column, for the editor.
-    const source = currentForm(view(`${text}\n${pointer}\n${caption}`, '{@render At()}{i}'));
-    const siteOf = (needle: string, from = 0) => {
-      const at = source.indexOf(needle, from);
-      const before = source.slice(0, at);
-      return `${before.split('\n').length}:${at - before.lastIndexOf('\n')}`;
-    };
-    expect(both.design.renders).toMatchObject({
-      [siteOf('{i}')]: 'views.Position',
-      // The root's own {i}, after the caption's tag passing it.
-      [siteOf('{i}', source.indexOf('<At i={i} />') + '<At i={i} />'.length)]: 'pointers.Position'
-    });
-    expect(both.component).toContain('__sverlinPointers');
-    // With only pointer views, the type's choice is its pointers variable all the same.
-    const marks = prepareSvelteComponent(view(pointer, '{i}'));
-    expect(marks.design.space['pointers.Position']).toEqual(['Highlight', 'none']);
-    expect(marks.design.space['views.Position']).toBeUndefined();
-    expect(() => prepareSvelteComponent(view(`${pointer}\n${caption}`, '{@render At()}'))).toThrow(
-      'or, to show the position as a number here, add a view that draws it, as <View of="Position" name="PositionText"><Node value={this} /></View>'
-    );
-  });
-
-  it.each([
-    [
-      '<Pointed> outside a view of an index type',
-      '<Layout name="P"><Node><Pointed /></Node></Layout>',
-      '<P />',
-      /belongs in a view of an index type/
-    ],
-    [
-      'a pointer that is not a view of an index type',
-      '<View of="Int" name="Mark"><Pointed /></View>',
-      '',
-      /Int is neither an index nor a reference type/
-    ],
-    [
-      'two <Pointed> in one pointer',
-      '<View of="Position" name="Arrow"><Node><Pointed /><Pointed /></Node></View>',
-      '',
-      /has 2 <Pointed>/
-    ],
-    [
-      'props <Pointed> does not take',
-      '<View of="Position" name="Arrow"><Pointed layout="row" /></View>',
-      '',
-      /<Pointed> takes no props/
-    ],
-    [
-      'a pointer rendered in a part of the page',
-      '<View of="Position" name="Arrow"><Pointed /></View>\n<Layout name="Marks" of="i">{i}</Layout>',
-      '{@render Marks()}',
-      /is in Marks, a layout another draws by its tag, where a position draws nothing: write it in the root of the page layout/
-    ],
-    [
-      'a <Pointed> in a snippet inside its pointer view',
-      '<View of="Position" name="Arrow"><Node kind="Mark"><Pointed /></Node></View>',
-      '{i}',
-      /A <Pointed> is written in its pointer view itself/
-    ]
-  ])('rejects %s', (_name, parts, renders, message) => {
-    expect(() => prepareSvelteComponent(view(parts, renders))).toThrow(message);
   });
 });
 
@@ -1619,7 +1497,7 @@ describe('pauses at labels', () => {
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
 <View of="@insert.compare" name="Ask"><Node>is {this.left} > {this.right}? {this.value}</Node></View>
-<View of="Position" name="Highlight"><Pointed /></View>
+<View of="Position" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Board" of="values, @insert.compare">
   <Node layout="row">
     <Listing />
@@ -1715,7 +1593,7 @@ describe('pauses at labels', () => {
   });
 
   describe('listing regions as places', () => {
-    it('gives each region its paint, falling back to its label’s mark', () => {
+    it('gives each region its paint, falling back to the lit look', () => {
       const { design } = prepareSvelteComponent(insertion);
       expect(design.space['listing.lit.radius']).toContain(999);
       expect(design.space['listing.lit.color']).toContain('none');
@@ -1725,33 +1603,8 @@ describe('pauses at labels', () => {
         false
       );
       expect(design.starter['listing.lit.fill']).toBe('amber-200');
-      // A region follows the mark where the root draws its label; an unmarked one the lit look.
-      expect(design.fallbacks['listing.lit@insert.compare.left.fill']).toBe(
-        'Highlight.Pointed:@insert.compare.left.fill'
-      );
+      expect(design.fallbacks['listing.lit@insert.compare.left.fill']).toBe('listing.lit.fill');
       expect(design.fallbacks['listing.lit@insert.swap.fill']).toBe('listing.lit.fill');
-    });
-
-    it('follows the mark through its place to its kind, until set apart', () => {
-      const { design } = prepareSvelteComponent(insertion);
-      const build = (request: Parameters<typeof buildVariant>[2]) =>
-        buildVariant(design.space, design.starter, request, 1, design.fallbacks).values;
-      const marked = build({
-        chosen: {
-          'Highlight.Pointed.fill': 'violet-100',
-          'Highlight.Pointed:@insert.compare.left.fill': 'sky-100',
-          'listing.lit.fill': 'amber-200'
-        }
-      });
-      expect(marked['listing.lit@insert.compare.left.fill']).toBe('sky-100');
-      expect(marked['listing.lit@insert.compare.right.fill']).toBe('violet-100');
-      expect(marked['listing.lit@insert.compare.fill']).toBe('amber-200');
-      // A region given a paint of its own in the variant built on keeps it as the mark changes.
-      const apart = build({
-        base: { ...marked, 'listing.lit@insert.swap.to.fill': 'red-200' },
-        chosen: { 'Highlight.Pointed:@insert.swap.to.fill': 'rose-100' }
-      });
-      expect(apart['listing.lit@insert.swap.to.fill']).toBe('red-200');
     });
 
     it('hands the page each region by its label’s full name', async () => {
@@ -1810,7 +1663,7 @@ describe('pauses inside a run', () => {
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Flag" name="FlagWord"><Node>{this ? 'yes' : 'no'}</Node></View>
 <View of="@insert.compare" name="Ask"><Node>is {this.left} > {this.right}? {this.value}</Node></View>
-<View of="Position" name="Highlight"><Pointed /></View>
+<View of="Position" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Board" of="values, @insert.compare">
   <Node layout="row">
     <Listing />
@@ -1890,9 +1743,9 @@ describe('pauses inside a run', () => {
 
   it('keys a label’s place by its full name only', () => {
     const { space, starter } = insertion.design;
-    expect(space['Highlight.Pointed:@insert.compare.left.fill']).toBeDefined();
-    expect(space['Highlight.Pointed:left.fill']).toBeUndefined();
-    const chosen = { 'Highlight.Pointed:left.fill': 'sky-100' };
+    expect(space['Highlight.Link:@insert.compare.left.targetFill']).toBeDefined();
+    expect(space['Highlight.Link:left.targetFill']).toBeUndefined();
+    const chosen = { 'Highlight.Link:left.targetFill': 'sky-100' };
     expect(buildVariant(space, starter, { chosen }, 1).dropped).toHaveLength(1);
   });
 });
@@ -1994,14 +1847,14 @@ describe('pools and references', () => {
 </script>
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
-<View of="NodeRef" name="Here"><Pointed /></View>`;
+<View of="NodeRef" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>`;
   const list = `<Layout name="List" of="nodes"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout><Layout name="Main" of="nodes, cur"><Node><List nodes={nodes} />{cur}</Node></Layout>`;
   const box = `<View of="ListNode" name="NodeBox"><Node layout="row">{this.name}<Link to={this.next} /></Node></View>`;
 
   it('draws every node of a pool, a reference as a pointer, and the end through its view', () => {
     const prepared = prepareSvelteComponent(`${domain}\n${box}\n${list}`);
     expect(prepared.design.space['views.ListNode']).toEqual(['NodeBox', 'none']);
-    expect(prepared.design.space['pointers.NodeRef']).toEqual(['Here', 'none']);
+    expect(prepared.design.space['views.NodeRef']).toEqual(['Here', 'none']);
     // The end a link to no node gives is drawn with its type's view, a choice of its own.
     expect(prepared.design.space['views.End']).toEqual(['EndMark', 'none']);
     expect(prepared.master.at(-1)!.state.nodes).toEqual([
@@ -2048,7 +1901,7 @@ describe('the view reaching the code only through labels', () => {
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Position" name="Highlight"><Pointed /></View>
+<View of="Position" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Cells" of="values, @insert.swap.to, @insert.swap.from">
   <Node layout="row">
     {#each values as v}{v}{/each}
@@ -2093,21 +1946,6 @@ describe('the view reaching the code only through labels', () => {
     const unlaid = bst.replaceAll('<Node layout="row"><Node>', '<Node><Node>');
     expect(unlaid).not.toContain('<Node layout="row"><Node>L');
     expect(() => prepareSvelteComponent(unlaid)).not.toThrow();
-  });
-
-  it('refuse a link in a pointer view, which draws inside the element it marks', () => {
-    expect(() =>
-      prepareSvelteComponent(
-        swaps
-          .replace(
-            '<View of="Position" name="Highlight"><Pointed /></View>',
-            '<View of="Position" name="Highlight"><Pointed /><Link from={this} to={this} /></View>'
-          )
-          .replace('{@render Cells()}', '{@render Cells()}\n{@insert.swap.to}')
-      )
-    ).toThrow(
-      'Highlight is a pointer view, drawn inside the element it marks, so its <Link> joins'
-    );
   });
 
   it('refuse arithmetic on a label in the view, which draws only what the algorithm computed', () => {
@@ -2332,8 +2170,9 @@ describe('the bundle', () => {
       .join(', ');
     const prepared = prepareSvelteComponent(dijkstra.replace(/pause="[^"]*"/u, `pause="${pause}"`));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
-    // The steps drawing something new, those drawing what the step before drew left out.
-    expect(labels.length).toBeGreaterThan(60);
+    // The steps drawing something new, those drawing what the step before drew left out (fewer
+    // since the current edge is marked no longer, 7 November 2026).
+    expect(labels.length).toBeGreaterThan(30);
     expect(javascript.length).toBeLessThan(1024 * 1024);
   });
 });
@@ -2347,8 +2186,8 @@ describe('references read in the view', () => {
 
   it('refuse a reference to a node drawn as a value, its place in the heap', () => {
     const drawn = bfsReferences.replace(
-      '<View of="VertexRef" name="Marked"><Pointed /></View>',
-      '<View of="VertexRef" name="Marked"><Pointed /></View>\n<View of="VertexRef" name="RefCard"><Node value={this} /></View>'
+      '<View of="VertexRef" name="Marked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
+      '<View of="VertexRef" name="Marked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>\n<View of="VertexRef" name="RefCard"><Node value={this} /></View>'
     );
     expect(drawn).toContain('RefCard');
     expect(() => prepareSvelteComponent(drawn)).toThrow(
@@ -2721,7 +2560,7 @@ describe('props bound to a view’s value', () => {
   describe('a label’s operands', () => {
     const labelled = (bound: string, than = 'Level(2)') =>
       prepareSvelteComponent(
-        `<script domain>const Level = type('integer', { min: 0, max: 3 }); const Levels = array(Level, { max: 3 }); const Position = index(Levels);</script><script input>const levels = Levels;</script><Case name="main" levels={[3, 1, 2]} /><script algorithm>@start[let i = Position(0);]\nwhile (@more[i < levels.length]) @step{ if (@test[levels[i] > ${than}]) @big[i++;] else @small[i++;] }</script><View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<View of="@step.test" name="Ask"><Node ${bound}>is {this.left} more than {this.right}?</Node></View>\n<Layout name="Main"><Node><Node>{#each levels as v}{v}{/each}</Node>{@step.test}{i}</Node></Layout>`
+        `<script domain>const Level = type('integer', { min: 0, max: 3 }); const Levels = array(Level, { max: 3 }); const Position = index(Levels);</script><script input>const levels = Levels;</script><Case name="main" levels={[3, 1, 2]} /><script algorithm>@start[let i = Position(0);]\nwhile (@more[i < levels.length]) @step{ if (@test[levels[i] > ${than}]) @big[i++;] else @small[i++;] }</script><View of="Level" name="LevelText"><Node value={this} /></View>\n<View of="Position" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>\n<View of="@step.test" name="Ask"><Node ${bound}>is {this.left} more than {this.right}?</Node></View>\n<Layout name="Main"><Node><Node>{#each levels as v}{v}{/each}</Node>{@step.test}{i}</Node></Layout>`
       );
 
     it('binds an operand by the type its runs gave it', () => {
@@ -2956,7 +2795,7 @@ describe('tokens in captions', () => {
   while (@more[i < values.length]) @next[i++;]
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Board" of="values, i">
   <Node layout="column">
     <Node layout="row">{#each values as v}{v}{/each}</Node>
@@ -3145,7 +2984,7 @@ describe('cases', () => {
   }
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Board" of="values, j">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>
@@ -3177,7 +3016,7 @@ describe('cases', () => {
   }
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Board" of="values, i">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>

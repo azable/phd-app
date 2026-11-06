@@ -123,12 +123,12 @@ describe('drawn value markers', () => {
 
 describe('variant markers', () => {
   const source =
-    '<View of="Index" name="Here">\n  <Pointed />\n</View>\n<Layout name="Title"><Node>Search</Node></Layout>';
+    '<View of="Index" name="Here">\n  <Link to={this} />\n</View>\n<Layout name="Title"><Node>Search</Node></Layout>';
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
-    'Here.Pointed.fill': fill,
-    'Here.Pointed.textSize': 16,
+    'Here.Link.targetFill': fill,
+    'Here.Link.strokeWidth': 2,
     'Title.textSize': 24
   });
   const presentations = [
@@ -136,30 +136,30 @@ describe('variant markers', () => {
       label: 'top',
       seed: 1,
       variant: variant('amber-100'),
-      origins: { 'Here.Pointed.fill': 'starter' },
-      kinds: { '2:3': ['Here.Pointed'], '4:22': ['Title'] }
+      origins: { 'Here.Link.targetFill': 'starter' },
+      kinds: { '2:3': ['Here.Link'], '4:22': ['Title'] }
     },
     {
       label: 'bottom',
       seed: 2,
       variant: variant('blue-100'),
-      origins: { 'Here.Pointed.fill': 'random' },
-      kinds: { '2:3': ['Here.Pointed'], '4:22': ['Title'] }
+      origins: { 'Here.Link.targetFill': 'random' },
+      kinds: { '2:3': ['Here.Link'], '4:22': ['Title'] }
     }
   ];
 
   it('gives each tag its kind’s values in every shown variant, and whether they differ', () => {
     const ghosts = tagGhosts(EditorState.create({ doc: source }), presentations);
-    expect(ghosts.map(({ kinds }) => kinds)).toEqual([['Here.Pointed'], ['Title']]);
+    expect(ghosts.map(({ kinds }) => kinds)).toEqual([['Here.Link'], ['Title']]);
     const [pointer, title] = ghosts;
     expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
-      ['fill', true],
-      ['textSize', false]
+      ['strokeWidth', false],
+      ['targetFill', true]
     ]);
-    expect(pointer.props[0].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
+    expect(pointer.props[1].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
       [
-        ['amber-100', 'Here.Pointed.fill = amber-100, from the starter', true],
-        ['blue-100', 'Here.Pointed.fill = blue-100, randomised', true]
+        ['amber-100', 'Here.Link.targetFill = amber-100, from the starter', true],
+        ['blue-100', 'Here.Link.targetFill = blue-100, randomised', true]
       ]
     );
     expect(title.props.map(({ name }) => name)).toEqual(['textSize']);
@@ -245,11 +245,11 @@ describe('variant markers', () => {
     ).toEqual([['{@render Int(values[i + 1])}', true, ['IntCell', 'IntTally']]]);
   });
 
-  it('marks a render with the variable the build says it reads, a mark or a number', () => {
+  it('marks a render with the variable the build says it reads, its type or its place', () => {
     const doc =
       '<Layout name="At"><Node>at {@render Index(lo)}</Node></Layout>\n{@render Index(@mid)}';
-    const variant = { 'views.Index': 'IndexText', 'pointers.Index': 'Highlight' };
-    const renders = { '1:25': 'views.Index', '2:1': 'pointers.Index' };
+    const variant = { 'views.Index': 'IndexText', 'views.Index:@mid': 'Highlight' };
+    const renders = { '1:25': 'views.Index', '2:1': 'views.Index:@mid' };
     const markers = viewMarkers(EditorState.create({ doc }), [
       { ...presentations[0], variant, renders }
     ]);
@@ -262,8 +262,8 @@ describe('variant markers', () => {
 
 describe('place values', () => {
   const doc = [
-    '<View of="Index" name="Highlight"><Pointed /></View>',
-    '<View of="Index" name="Arrow"><Node layout="column"><Pointed /></Node></View>',
+    '<View of="Index" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
+    '<View of="Index" name="Arrow"><Node layout="column"><Link to={this} /></Node></View>',
     '<View of="Int" name="IntCell"><Node value={this} /></View>',
     '<View of="Index" name="IndexText"><Node value={this} /></View>',
     '<View of="Greater" name="Ask"><Node>{@render Int(this.a)}</Node></View>',
@@ -275,12 +275,11 @@ describe('place values', () => {
   const variant = {
     'views.Int': 'IntCell',
     'views.Index': 'IndexText',
-    'pointers.Index': 'Highlight',
-    'pointers.Index:@left': 'Highlight',
-    'Highlight.Pointed.fill': 'amber-100',
-    'Highlight.Pointed:@left.fill': 'sky-100',
-    'Highlight.Pointed:@left.shown': true,
-    'Arrow.Pointed:@left.fill': 'amber-100',
+    'views.Index:@left': 'Highlight',
+    'Highlight.Link.targetFill': 'amber-100',
+    'Highlight.Link:@left.targetFill': 'sky-100',
+    'Highlight.Caption:@left.shown': true,
+    'Arrow.Link:@left.targetFill': 'amber-100',
     'IndexText:i.fill': 'sky-100',
     'IntCell:v.fill': 'white',
     'Ask.IntCell:this.a.fill': 'green-100',
@@ -294,12 +293,11 @@ describe('place values', () => {
   const presentation = {
     seed: 1,
     variant,
-    views: { Int: ['IntCell'], Index: ['IndexText'] },
-    pointers: { Index: ['Highlight', 'Arrow'] },
+    views: { Int: ['IntCell'], Index: ['IndexText', 'Highlight', 'Arrow'] },
     kinds: { [sites('<Node>{@render Int(this.a)}')]: ['Ask'] },
     renders: {
-      [sites('{@render Index(@left)}')]: 'pointers.Index:@left',
-      [sites('{@render Index(@right)}')]: 'pointers.Index',
+      [sites('{@render Index(@left)}')]: 'views.Index:@left',
+      [sites('{@render Index(@right)}')]: 'views.Index',
       [sites('{@render Index(i)}')]: 'views.Index',
       [sites('{@render Int(this.a)}')]: 'views.Int',
       [sites('{@render Int(v)}')]: 'views.Int'
@@ -312,9 +310,9 @@ describe('place values', () => {
 
   it("shows a place's own view choice and the paint of the view it draws, after its render", () => {
     expect(rows('{@render Index(@left)}')).toEqual([
-      ['view', 'pointers.Index:@left', 'Highlight'],
-      ['Highlight.Pointed.shown', 'Highlight.Pointed:@left.shown', 'true'],
-      ['Highlight.Pointed.fill', 'Highlight.Pointed:@left.fill', 'sky-100']
+      ['view', 'views.Index:@left', 'Highlight'],
+      ['Highlight.Caption.shown', 'Highlight.Caption:@left.shown', 'true'],
+      ['Highlight.Link.targetFill', 'Highlight.Link:@left.targetFill', 'sky-100']
     ]);
     // A render whose argument has no variables of its own is no place shown.
     expect(rows('{@render Index(@right)}')).toBeUndefined();
@@ -337,7 +335,7 @@ describe('place values', () => {
     const state = EditorState.create({ doc, extensions: [drawnValues] }).update({
       effects: [
         setDrawnValues.of({ presentations: [presentation] }),
-        setRevealedKeys.of(['Highlight.Pointed:@left.fill'])
+        setRevealedKeys.of(['Highlight.Link:@left.targetFill'])
       ]
     }).state;
     const tables: string[][] = [];
@@ -347,8 +345,8 @@ describe('place values', () => {
           const widget = decoration.spec.widget as { revealed?: readonly string[] } | undefined;
           if (widget && Array.isArray(widget.revealed)) tables.push([...widget.revealed]);
         });
-    expect(tables).toEqual([['Highlight.Pointed:@left.fill']]);
-    expect(ghostRowAt(state, ['Highlight.Pointed:@left.fill'])).toBe(
+    expect(tables).toEqual([['Highlight.Link:@left.targetFill']]);
+    expect(ghostRowAt(state, ['Highlight.Link:@left.targetFill'])).toBe(
       state.doc.lineAt(doc.indexOf('{@render Index(@left)}')).to
     );
     expect(ghostRowAt(state, ['Nothing.fill'])).toBeUndefined();

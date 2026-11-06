@@ -227,11 +227,11 @@ describe('Svelte-backed project lifecycle', () => {
     expect(right.views).toEqual({
       ℓcheckˑequal: ['Ask'],
       Int: ['IntCell', 'IntTally'],
-      Index: ['IndexText'],
+      Index: ['Highlight'],
       Values: ['Row']
     });
     const frames = alignPresentationFrames([left, right]);
-    expect(frames).toHaveLength(10);
+    expect(frames).toHaveLength(11);
     const document = await appendProjectPreference(
       result.document,
       {

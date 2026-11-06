@@ -961,7 +961,7 @@ describe('submitProjectFeedback', () => {
           count: null,
           comparisons: [
             pair('Cells or tallies?', 'views.Int', 'IntCell', 'IntTally'),
-            pair('Amber or blue marks?', 'Highlight.Pointed.fill', 'amber-100', 'blue-100')
+            pair('Amber or blue marks?', 'Highlight.Link.targetFill', 'amber-100', 'blue-100')
           ],
           summary: 'Asks two questions'
         }
@@ -3332,7 +3332,7 @@ describe('assistant edits', () => {
       decision: {
         action: 'vary' as const,
         values: [{ variable: 'views.Int', value: 'IntTally' }],
-        randomise: ['Highlight.Pointed.fill'],
+        randomise: ['Highlight.Link.targetFill'],
         summary: 'Draws every value with a tally'
       }
     });
@@ -3355,12 +3355,12 @@ describe('assistant edits', () => {
         ])
       );
     expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
-    expect(origins(first)['Highlight.Pointed.fill'].origin).not.toBe('chosen');
+    expect(origins(first)['Highlight.Link.targetFill'].origin).not.toBe('chosen');
     // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
     const follows = (key: string) =>
-      /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.Pointed:@?\w+\.fill$/u.test(key);
+      /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.Link:@?\w+\.targetFill$/u.test(key);
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'views.Int' && key !== 'Highlight.Pointed.fill' && !follows(key))
+      if (key !== 'views.Int' && key !== 'Highlight.Link.targetFill' && !follows(key))
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
   });
 });
@@ -3431,8 +3431,8 @@ describe('several variants from chat', () => {
   });
   const marks = {
     question: 'Amber or blue marks?',
-    left: { label: 'amber', values: '{"Highlight": {"Pointed": {"fill": "amber-100"}}}' },
-    right: { label: 'blue', values: '{"Highlight": {"Pointed": {"fill": "blue-100"}}}' }
+    left: { label: 'amber', values: '{"Highlight": {"Link": {"targetFill": "amber-100"}}}' },
+    right: { label: 'blue', values: '{"Highlight": {"Link": {"targetFill": "blue-100"}}}' }
   };
 
   it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
@@ -3454,7 +3454,7 @@ describe('several variants from chat', () => {
     // With no presentation named, the turn builds on the newest (viewedPresentation).
     const viewed = presented(before.events).at(-1)!.payload.presentation;
     // Each pair differs only in what its comparison sets, and the variables that follow them.
-    const following = [/^views\.(\w+\.)?Int(:.*)?$/u, /^Highlight\.Pointed(:@?\w+)?\.fill$/u];
+    const following = [/^views\.(\w+\.)?Int(:.*)?$/u, /^Highlight\.Link(:@?\w+)?\.targetFill$/u];
     for (const index of [0, 1]) {
       const [left, right] = shown.slice(index * 2, index * 2 + 2).map(({ payload }) => payload);
       expect(left.displaySetId).toBe(right.displaySetId);
@@ -3735,8 +3735,8 @@ describe('several variants from chat', () => {
   // A cell's least size is under what the highlight keeps, so the two sides draw alike.
   const sizes = {
     question: 'Smaller or larger cells?',
-    left: { label: 'smaller', values: [{ variable: 'IntCell.minSize', value: 1 }] },
-    right: { label: 'larger', values: [{ variable: 'IntCell.minSize', value: 2 }] }
+    left: { label: 'smaller', values: [{ variable: 'IntCell.minSize', value: 0 }] },
+    right: { label: 'larger', values: [{ variable: 'IntCell.minSize', value: 1 }] }
   };
 
   it('sends a picture too large to read back once, then shows it as built', async () => {
@@ -3787,7 +3787,7 @@ describe('several variants from chat', () => {
       '  while (@compare[values[i] !== target]) @next[i++;]',
       '</script>',
       '<View of="Int" name="Cell"><Node value={this} /></View>',
-      '<View of="Index" name="Mark"><Pointed /></View>',
+      '<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
       '<Layout name="Scan" of="values, i">',
       '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
       '</Layout>',
@@ -3932,7 +3932,7 @@ describe('several variants from chat', () => {
       '  while (@compare[values[i] !== target]) @next[i++;]',
       '</script>',
       views,
-      '<View of="Index" name="Mark"><Pointed /></View>',
+      '<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
       '<Layout name="Scan" of="values, i">',
       '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
       '</Layout>',
@@ -4002,12 +4002,12 @@ describe('several variants from chat', () => {
   it('asks only about forms the shown version did not already offer', async () => {
     const { unofferedAlternatives } = await import('$lib/modes/sverlin/assistant/turn.server');
     const bundle = { views: { Int: ['IntCell', 'IntBar'], Seen: ['Word', 'Icon'] } };
-    const shown = { views: { Int: ['IntCell', 'IntBar'] }, pointers: {} };
+    const shown = { views: { Int: ['IntCell', 'IntBar'] } };
     const asked = unofferedAlternatives(bundle, new Set(), shown);
     expect(asked).toContain('views.Seen');
     expect(asked).not.toContain('views.Int');
     expect(
-      unofferedAlternatives(bundle, new Set(), { views: bundle.views, pointers: {} })
+      unofferedAlternatives(bundle, new Set(), { views: bundle.views })
     ).toBeUndefined();
   });
 
@@ -4042,8 +4042,8 @@ describe('several variants from chat', () => {
     ]);
     // The highlight shows from the second step, where the search first sets its position.
     expect(presented(result.appendedEvents).map(({ payload }) => payload.differsAt)).toEqual([
-      [1, 2, 3, 4, 5, 6, 7, 8, 9],
-      [1, 2, 3, 4, 5, 6, 7, 8, 9]
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     ]);
     expect(replies(result.appendedEvents)[0].content.at(-1)).toEqual({
       type: 'markdown',
@@ -4434,8 +4434,8 @@ describe('several variants from chat', () => {
       const variant = presentationVariant(shown[0].payload.presentation);
       // The first pair's pick; the second, unsure, keeps what the first pair's sides share.
       expect(variant['views.Int']).toBe('IntTally');
-      expect(variant['Highlight.Pointed.fill']).toBe(
-        presentationVariant(sides[0])['Highlight.Pointed.fill']
+      expect(variant['Highlight.Link.targetFill']).toBe(
+        presentationVariant(sides[0])['Highlight.Link.targetFill']
       );
       expect(mocks.generatePrepared).not.toHaveBeenCalled();
     });

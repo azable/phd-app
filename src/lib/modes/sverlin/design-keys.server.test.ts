@@ -12,12 +12,12 @@ const cases = [
     source: search,
     kept: {
       'IntCell:target.stroke': 'violet-500',
-      'Arrow.Pointed:lo.fill': 'sky-100',
+      'Arrow.Link:lo.targetFill': 'sky-100',
       'listing.places': 'fill'
     },
     written: {
       'IntCell:target.stroke': 'violet-500',
-      'Arrow.Pointed:lo.fill': 'sky-100',
+      'Arrow.Link:lo.targetFill': 'sky-100',
       '<Listing>.places': 'fill'
     }
   },

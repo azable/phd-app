@@ -27,7 +27,7 @@ const binarySearch = (listing: string) => `<script domain>
 ${listing}
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Arrow"><Pointed /></View>
+<View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 <Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
 <Layout name="Main" of="lo, hi, mid, target, values">
@@ -72,7 +72,7 @@ const linearSearch = `<script domain>
     @scan[@check[if @cond[$i[A[i]] = $target[target]] then return $i[i]]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
 <Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 <Layout name="Main" of="i, target, values">
@@ -175,7 +175,7 @@ describe('tokens naming places in a listing', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
     const values = {
       ...prepared.design.starter,
-      'Arrow.Pointed:mid.fill': 'sky-200',
+      'Arrow.Link:mid.targetFill': 'sky-200',
       'IntCell:target.fill': 'white',
       'IntCell:target.stroke': 'violet-500'
     };
@@ -183,25 +183,25 @@ describe('tokens naming places in a listing', () => {
     expect(listing?.places?.paints).toMatchObject({
       ':mid': 'sky-200',
       ':target': 'violet-500',
-      ':lo': prepared.design.starter['Arrow.Pointed.fill']
+      ':lo': prepared.design.starter['Arrow.Link.targetFill']
     });
     expect(listing?.places?.look).toBe('fill');
     // A place's own fill falls back to its kind's.
     expect(
       placePaint(
         ':x',
-        { type: 'Int', pointer: false },
+        { type: 'Int' },
         { 'views.Int': 'IntCell', 'IntCell.fill': 'red-200' }
       )
     ).toBe('red-200');
     // Its line takes the stroke first, as a pale fill would not show as a line; the fill where the
     // stroke is none.
     const pointer = { type: 'Index', pointer: true };
-    const arrow = { 'pointers.Index': 'Arrow', 'Arrow.Pointed.fill': 'amber-100' };
+    const arrow = { 'views.Index': 'Arrow', 'Arrow.Link.targetFill': 'amber-100' };
     expect(
-      placePaint(':lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'amber-500' }, 'line')
+      placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'amber-500' }, 'line')
     ).toBe('amber-500');
-    expect(placePaint(':lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'none' }, 'line')).toBe(
+    expect(placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'none' }, 'line')).toBe(
       'amber-100'
     );
     expect(listing?.places?.lines).toHaveProperty(':target', 'violet-500');
@@ -216,7 +216,7 @@ describe('tokens naming places in a listing', () => {
 
   it('are told to the assistant with the variable that removes them, as no node prop does', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
-    const values = { ...prepared.design.starter, 'Arrow.Pointed:mid.fill': 'sky-200' };
+    const values = { ...prepared.design.starter, 'Arrow.Link:mid.targetFill': 'sky-200' };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     const text = placeLightsText(listing?.places);
     expect(text).toContain('listing.places fill');
@@ -262,7 +262,7 @@ describe('tokens naming places in a listing', () => {
       @place[$j[A[j + 1]] = $key[key]]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Position" name="Mark"><Pointed /></View>
+<View of="Position" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Key" of="key"><Node>key {key}</Node></Layout>
 <Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 <Layout name="Stacked" of="i, j, key, values">

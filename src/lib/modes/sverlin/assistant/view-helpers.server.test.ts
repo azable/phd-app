@@ -56,7 +56,7 @@ describe('view helpers', () => {
     const other = await checkCandidate(bars, 'Int', {
       name: 'Elsewhere',
       description: 'a view of another type',
-      markup: '<View of="Position" name="Elsewhere"><Pointed /></View>'
+      markup: '<View of="Position" name="Elsewhere"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>'
     });
     expect(other).toMatchObject({ kept: false });
   });

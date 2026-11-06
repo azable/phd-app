@@ -27,7 +27,7 @@ const search = (mark: string, array: string, page: string) =>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 ${array}
-<View of="Index" name="Arrow"><Node layout="column"><Pointed /><Node kind="Tip" icon /><Node kind="Caption">${mark}</Node></Node></View>
+<View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Tip" icon /><Node kind="Caption">${mark}</Node></Node></View>
 <Layout name="Main" of="lo, hi, mid, values">
   <Node layout="row">
     ${page}
@@ -62,14 +62,14 @@ describe('place() in a pointer view', () => {
   it('keeps each pointer the room it needs, as one view for each would', async () => {
     const shared = await drawnSteps(search('{place()}', asView, '{values}'));
     const own = (name: string) =>
-      `<View of="Index" name="${name}"><Node layout="column"><Pointed /><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node></View>`;
+      `<View of="Index" name="${name}"><Node layout="column"><Link to={this} /><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node></View>`;
     const apart = await drawnSteps(
       search('{place()}', `${asView}\n${own('ArrowB')}\n${own('ArrowC')}`, '{values}'),
       {
         chosen: {
-          'pointers.Index:lo': 'Arrow',
-          'pointers.Index:hi': 'ArrowB',
-          'pointers.Index:mid': 'ArrowC'
+          'views.Index:lo': 'Arrow',
+          'views.Index:hi': 'ArrowB',
+          'views.Index:mid': 'ArrowC'
         }
       }
     );
@@ -115,7 +115,7 @@ describe('place() in a pointer view', () => {
     expect(captions(atCheck!)).not.toContain('probe.low.probed');
     const { space } = prepareSvelteComponent(source).design;
     expect(space[':@probe.low.probed.label']).toEqual(['probed']);
-    expect(space['Arrow.Pointed:@probe.low.probed.fill']).toBeDefined();
+    expect(space['Arrow.Link:@probe.low.probed.targetFill']).toBeDefined();
     const labelled = await drawnSteps(source, {
       chosen: { ':@probe.low.probed.label': 'checked' }
     });

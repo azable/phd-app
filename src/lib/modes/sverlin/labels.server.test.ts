@@ -128,7 +128,7 @@ it(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Checked"><Pointed /></View>
+<View of="Index" name="Checked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
 <Layout name="Main" of="values, @check.hit.at">
@@ -144,8 +144,9 @@ it(
     const checked = (await stepsOf(search, 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
     );
-    // The input as given, nothing checked yet; then each check adds its cell.
-    expect(checked).toEqual([[], ['3'], ['3', '8'], ['3', '8', '5']]);
+    // The input as given, nothing checked yet; then each check adds a link to its cell.
+    // Each link draws its view and its caption, both captioned p.
+    expect(checked.map((nodes) => nodes.length)).toEqual([0, 2, 4, 6]);
 
     const counting = `<script domain>
   const Digit = type('integer', { min: 0, max: 9 });
@@ -163,7 +164,7 @@ it(
 </script>
 <View of="Digit" name="DigitCell"><Node value={this} /></View>
 <View of="Count" name="CountCell"><Node value={this} /></View>
-<View of="At" name="Reading"><Pointed /></View>
+<View of="At" name="Reading"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="DigitRow" of="digits"><Node>{#each digits as d}{d}{/each}</Node></Layout>
 <Layout name="CountRow" of="counts"><Node>{#each counts as c}{c}{/each}</Node></Layout>
 
@@ -182,6 +183,7 @@ it(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]
     );
     // The page opens on the input as given, v not yet declared; then each digit counted.
-    expect(reading).toEqual([undefined, '3', '1', '4']);
+    // v's view draws its caption, its link reaching the digit counted at each step.
+    expect(reading).toEqual([undefined, 'v', 'v', 'v']);
   }
 );

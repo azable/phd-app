@@ -32,7 +32,7 @@ const blocks = `<script domain>
 
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Search" of="values, lo, hi">
   <Node>
     {values}
@@ -350,7 +350,7 @@ describe('steps drawing the same picture', () => {
   while (@compare[values[i] !== target]) @next[i++;]
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Scan" of="values, i">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>
@@ -416,7 +416,7 @@ describe('steps drawing the same picture', () => {
   while (@compare[items[i].value !== target]) @next[i++;]
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 ${views}
 <Layout name="Scan" of="items, i">
   <Node>
@@ -429,13 +429,12 @@ ${views}
   <Scene name="scan" case="main" pause="@next"><Scan items={items} i={i} /></Scene>
 </Storyboard>`;
 
-  it('warns of a pointer marking nothing, its elements drawn only by their fields, and of the paused steps it leaves alike', async () => {
+  it('warns of the paused steps a link reaching nothing leaves alike, its elements drawn only by their fields', async () => {
     const built = await bundlePresentation(prepareSvelteComponent(records('{item.value}')), 1);
     // Each step moves i, which the view reads, so none is left out; but none shows it.
     expect(built.labels).toEqual([':before', '@next#1', '@next#2', '@next#3']);
     expect(unlooked(built.warnings)).toEqual([
-      '{i} draws Mark, a pointer into Items, but it marks nothing at any step: a pointer marks the element where the view draws it, drawn whole by a view of Item (as {item} with <View of="Item">), not only by its fields, and no element of Items is drawn so. Draw the elements of Items with their own view where the layout shows them, or point at a collection the view draws.',
-      '3 steps at @next draw the same picture as the step before them, as :before to @next#3: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
+      '2 steps at @next draw the same picture as the step before them, as @next#1 to @next#3: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
     ]);
     const marked = await bundlePresentation(
       prepareSvelteComponent(
@@ -459,7 +458,7 @@ ${views}
   ${algorithm}
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Scan" of="values, mid">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>

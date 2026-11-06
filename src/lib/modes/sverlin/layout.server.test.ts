@@ -130,12 +130,11 @@ describe('laying out on the server', () => {
     // Steps drawing what the step before drew are left out: a loop's test, and the steps setting
     // only mid, which the view does not read.
     expect(starter).toHaveLength(5);
-    // Another seed places nothing here; a cell's least size is under what the pointer keeps.
+    // Another seed places nothing here.
     expect(await drawnWith(2, {})).toEqual(starter);
-    expect(await drawnWith(2, { 'IntCell.minSize': 1 })).toEqual(starter);
-    // The pointer's fill shows from the second step, where mid first points into the cells.
+    // The link's target fill shows from the second step, where mid first points into the cells.
     expect(
-      differingSteps(starter, await drawnWith(2, { 'Arrow.Pointed.fill': 'red-200' }))
+      differingSteps(starter, await drawnWith(2, { 'Arrow.Link.targetFill': 'red-200' }))
     ).toEqual(Array.from({ length: 4 }, (_, index) => index + 1));
   }, 60_000);
 
@@ -175,24 +174,25 @@ describe('laying out on the server', () => {
     expect(differingSteps(shown, await drawnWith({ 'listing.language': 'none' }))).toEqual(every);
   }, 120_000);
 
-  it('counts no step where marks differ only in the room kept for labels not yet shown', async () => {
+  it('counts the steps where labels differ, the room their lanes keep included', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-labels.sverlin', 'utf8');
     const prepared = everyPause(source);
     const drawnWith = async (labels: boolean) =>
       (
         await bundlePresentation(prepared, 1, {
           chosen: {
-            'pointers.Index@lo': 'LowerMark',
-            'pointers.Index@hi': 'UpperMark',
+            'views.Index:lo': 'LowerMark',
+            'views.Index:hi': 'UpperMark',
             'LowerMark.LowerLabel.shown': labels,
             'UpperMark.UpperLabel.shown': labels
           }
         })
       ).layout?.drawn;
     const labelled = await drawnWith(true);
-    // Before lo and hi are set, both draw the cells alone, the labelled keeping room for its labels.
+    // A label's lane keeps its room at every step, before lo and hi are set too, so the two differ
+    // at every step.
     expect(differingSteps(labelled, await drawnWith(false))).toEqual(
-      Array.from({ length: 4 }, (_, index) => index + 1)
+      Array.from({ length: 5 }, (_, index) => index)
     );
     expect(differingSteps(labelled, await drawnWith(true))).toEqual([]);
   }, 60_000);
@@ -211,14 +211,14 @@ describe('laying out on the server', () => {
       const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 2, 3]} /><script algorithm>@start[let i = Index(0);]
 while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
-<View of="Index" name="Here"><Pointed /></View>
+<View of="Index" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 <Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
   <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
 </Storyboard>`;
       const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-        chosen: { 'Cell.shadow': shadow, 'Row.gap': 0, 'Here.Pointed.glow': 'on' }
+        chosen: { 'Cell.shadow': shadow, 'Row.gap': 0, 'Cell.glow': 'on' }
       });
       expect(layout.errors).toEqual([]);
       const given = geometry;
@@ -226,43 +226,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     };
     const plain = await size('none');
     const lifted = await size('lifted');
-    // Every cell keeps the pointer glow's 10 pixels each side, at it or not, so nothing moves as
-    // it passes. Lifted reaches 12 each side, 8 above and 16 below: 2 more on each side of each of
+    // Every cell keeps its glow's 10 pixels each side. Lifted reaches 12 each side, 8 above and 16 below: 2 more on each side of each of
     // the three cells and 6 more below, and nothing more above.
     expect(lifted.width - plain.width).toBeCloseTo(3 * 4, 0);
     expect(lifted.height - plain.height).toBeCloseTo(6, 0);
-  }, 60_000);
-
-  it('keeps room round each box for how far a pointer moves or scales it, in every state', async () => {
-    const sizes = async (chosen: Record<string, string | number>) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 3 }); const Index = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 2, 3]} /><script algorithm>@start[let i = Index(0);]
-while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
-<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
-<View of="Index" name="Here"><Pointed /></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
-
-<Storyboard>
-  <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
-</Storyboard>`;
-      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
-        chosen: { 'Row.gap': 0, ...chosen }
-      });
-      expect(layout.errors).toEqual([]);
-      const given = geometry;
-      const components = new Map(given.components);
-      return { row: components.get('Row')!, cell: components.get('Cell')! };
-    };
-    const plain = await sizes({});
-    // A lift of 8 keeps 8 above every cell, at it or not, so nothing moves as it passes.
-    const lifted = await sizes({ 'Here.Pointed.offsetY': -8 });
-    expect(lifted.row.width).toBeCloseTo(plain.row.width, 0);
-    expect(lifted.row.height - plain.row.height).toBeCloseTo(8, 0);
-    // A scale of 1.2 from the cell's bottom grows it upward only, and from its centre sideways:
-    // a fifth of its height above, a tenth of its width each side, of each of the three cells.
-    const grown = await sizes({ 'Here.Pointed.scale': 1.2, 'Cell.yAnchor': 'end' });
-    const { width, height } = plain.cell;
-    expect(grown.row.height - plain.row.height).toBe(Math.ceil(0.2 * height));
-    expect(grown.row.width - plain.row.width).toBe(3 * 2 * Math.ceil(Math.ceil(0.2 * width) / 2));
   }, 60_000);
 
   it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
