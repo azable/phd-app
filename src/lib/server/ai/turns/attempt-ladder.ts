@@ -18,8 +18,8 @@ import type { AttemptFailure, Problem } from '$lib/server/ai/turns/failures';
 import type { ProjectCommandDependencies } from '$lib/server/projects/commands';
 
 /**
- * How a mode's build sorts its problems, for the ladder (Sverlin's: sverlinBuildStages in
- * modes/sverlin/assistant/turn.server.ts): the stage of the build that finds each code, in the order
+ * How a mode's build sorts its problems, for the ladder (sverlinBuildStages and htmlBuildStages in
+ * each mode's assistant/turn.server.ts): the stage of the build that finds each code, in the order
  * it checks, and which failures are slips in the source as written, which take the quick retries.
  */
 export type BuildStages = {

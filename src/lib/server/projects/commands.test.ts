@@ -1673,6 +1673,60 @@ describe('submitProjectFeedback', () => {
       // Never back to a quick retry once Sol has repaired.
       expect(nextAttempt(ladder, sol, written)).toBe(sol + 1);
 
+      // HTML's frames refused as written take the same quick retries (htmlBuildStages).
+      const { htmlBuildStages } = await import('$lib/modes/html/assistant/turn.server');
+      const htmlNext = (attempt: number, failure?: Parameters<typeof nextAttempt>[2]) =>
+        attemptLadder.nextAttempt(ladder, attempt, failure, htmlBuildStages);
+      const htmlWritten = failed('html_forbidden', 'html_labels');
+      for (const code of [
+        'html_manifest',
+        'html_labels',
+        'html_forbidden',
+        'html_empty',
+        'candidate_missing'
+      ])
+        expect(htmlBuildStages.refusedAsWritten(failed(code))).toBe(true);
+      expect(htmlBuildStages.refusedAsWritten(failed('html_too_large'))).toBe(false);
+      expect(htmlBuildStages.refusedAsWritten(failed('html_forbidden', 'html_too_large'))).toBe(
+        false
+      );
+      expect(
+        htmlBuildStages.refusedAsWritten({ source: '', diagnostics: [{ message: 'x' }] })
+      ).toBe(false);
+      expect(htmlNext(1, htmlWritten)).toBe(2);
+      expect(htmlNext(2, htmlWritten)).toBe(3);
+      expect(htmlNext(3, htmlWritten)).toBe(sol);
+      expect(htmlNext(1, failed('html_too_large'))).toBe(sol);
+      expect(htmlNext(1)).toBe(sol);
+
+      // Both conditions of the study have the same ladder and the same worst case: a turn whose
+      // every attempt is refused as written makes one call per profile, in either mode.
+      const { default: sverlinBot } = await import('$lib/modes/sverlin/assistant/bot.server');
+      const { default: htmlBot } = await import('$lib/modes/html/assistant/bot.server');
+      const shape = (profiles: typeof ladder) =>
+        profiles.map(({ purpose, writtenRetry, parameters: { model, reasoningEffort } }) => ({
+          purpose,
+          writtenRetry,
+          model,
+          reasoningEffort
+        }));
+      expect(shape(htmlBot.attemptProfiles)).toEqual(shape(sverlinBot.attemptProfiles));
+      const worstCase = (
+        profiles: typeof ladder,
+        stages: typeof sverlinBuildStages,
+        failure: Parameters<typeof nextAttempt>[2]
+      ) => {
+        let calls = 0;
+        for (let attempt = 1; attempt <= profiles.length; ) {
+          calls += 1;
+          attempt = attemptLadder.nextAttempt(profiles, attempt, failure, stages);
+        }
+        return calls;
+      };
+      const sverlinWorst = worstCase(sverlinBot.attemptProfiles, sverlinBuildStages, written);
+      expect(sverlinWorst).toBe(sverlinBot.attemptProfiles.length);
+      expect(worstCase(htmlBot.attemptProfiles, htmlBuildStages, htmlWritten)).toBe(sverlinWorst);
+
       // A picture that built goes back only to a repair, never to the fallback.
       expect(softReturnLeft(ladder, 1)).toBe(true);
       expect(softReturnLeft(ladder, sol)).toBe(true);
@@ -1872,6 +1926,63 @@ describe('submitProjectFeedback', () => {
     expect(
       result.appendedEvents.filter(({ type }) => type === 'artifact.version-created')
     ).toHaveLength(1);
+  });
+
+  it('retries HTML frames refused as written on the quick profile, as Sverlin does', async () => {
+    const { visualizationAttemptProfiles } = await import('$lib/server/ai/bots/attempt-profiles');
+    const kept = mocks.attemptProfiles.splice(0, mocks.attemptProfiles.length);
+    mocks.attemptProfiles.push(...(visualizationAttemptProfiles(14_000) as unknown as typeof kept));
+    try {
+      const { createProject } = await import('./service');
+      const { submitProjectFeedback } = await import('./commands');
+      const attemptsOf = () =>
+        mocks.preparePrompt.mock.calls.map(([options]) => options.attempt as number);
+      const submit = async (first: ReturnType<typeof htmlGeneration>) => {
+        mocks.preparePrompt.mockClear();
+        mocks.generatePrepared
+          .mockReset()
+          .mockResolvedValueOnce(first)
+          .mockResolvedValue(htmlGeneration(manifest('<main>Safe</main>'), 'Created it'));
+        const created = await createProject(
+          { creation: { templateId: 'blank', mode: 'html' } },
+          serviceDependencies
+        );
+        return submitProjectFeedback(
+          {
+            projectId: created.projectId,
+            expectedHead: projectHead(created).id,
+            content: markdownMessage('Create an HTML visualization'),
+            focus: [],
+            presentationCount: 1,
+            operationId: crypto.randomUUID()
+          },
+          commandDependencies
+        );
+      };
+
+      // A frame with a script is a slip as written: the next call is the quick Terra retry.
+      const written = await submit(
+        htmlGeneration(manifest('<script>attack()</script>'), 'Created it')
+      );
+      expect(attemptsOf()).toEqual([1, 2]);
+      expect(mocks.attemptProfiles[1]).toMatchObject({
+        writtenRetry: true,
+        parameters: { model: 'gpt-6.1-terra' }
+      });
+      expect(written.appendedEvents.some(({ type }) => type === 'visualization.presented')).toBe(
+        true
+      );
+
+      // A manifest over the size limit needs a smaller design: straight to Sol's repair.
+      const huge = await submit(
+        htmlGeneration(manifest(`<main>${'x'.repeat(600 * 1024)}</main>`), 'Created it')
+      );
+      expect(attemptsOf()).toEqual([1, 4]);
+      expect(mocks.attemptProfiles[3].parameters.model).toBe('gpt-6.1-sol');
+      expect(huge.appendedEvents.some(({ type }) => type === 'visualization.presented')).toBe(true);
+    } finally {
+      mocks.attemptProfiles.splice(0, mocks.attemptProfiles.length, ...kept);
+    }
   });
 
   it('keeps a conversational HTML reply without forcing a visualization change', async () => {

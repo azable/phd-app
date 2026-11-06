@@ -165,9 +165,9 @@ export type ChatBotParameters = {
 export type ChatBotAttemptProfile = {
   purpose: ChatAttemptPurpose;
   /**
-   * Taken only straight after an attempt whose source the build refused as written (see
-   * refusedAsWritten in modes/sverlin/assistant/turn.server.ts), and skipped otherwise: a quick retry for a slip in
-   * the source, before the ladder's slower repairs.
+   * Taken only straight after an attempt whose source the build refused as written (see each
+   * mode's BuildStages, as sverlinBuildStages and htmlBuildStages in its assistant/turn.server.ts),
+   * and skipped otherwise: a quick retry for a slip in the source, before the slower repairs.
    */
   writtenRetry?: true;
   parameters: ChatBotParameters;
