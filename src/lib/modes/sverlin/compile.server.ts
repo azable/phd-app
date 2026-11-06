@@ -82,6 +82,7 @@ import {
   probeValues,
   positionReads,
   readsOf,
+  freeReads,
   unknownReadOf,
   rootPlacements,
   scopedReadsOf,
@@ -2230,7 +2231,7 @@ function prepareViews(
         )
       );
     const absentVariables = new Set([...scoped].filter((name) => !isLabelKey(name)));
-    const openingReads = scopedReadsOf(ast.html, absentVariables);
+    const openingReads = scopedReadsOf(ast.html, absentVariables, { inKinds: false });
     const guards = guardInsertions(ast.html, absentVariables);
     const guarded = guards.flatMap(({ at }, index) =>
       index % 2 ? [] : [{ start: at, end: guards[index + 1].at }]
@@ -3791,7 +3792,10 @@ function withNodeRefs(
   const localKinds: { name: string; start: number }[] = [];
   // Each node whose kind is an expression, by its tag's start: the kind around it, the expression
   // as written, and every name it can give, each a kind of its own (see kind-expressions.server.ts).
-  const chosenKinds = new Map<number, { base: string; written: string; names: string[] }>();
+  const chosenKinds = new Map<
+    number,
+    { base: string; written: string; names: string[]; reads: string[] }
+  >();
   const ownKind = (tag: Tag, view: string): string => {
     const attribute = tag.attributes?.find(({ name }) => name === 'kind') as
       | (Attribute & { end?: number })
@@ -3820,7 +3824,8 @@ function withNodeRefs(
       chosenKinds.set(tag.start ?? start, {
         base: view,
         written: source.slice(expression.start ?? 0, expression.end ?? 0),
-        names
+        names,
+        reads: [...new Set(freeReads(expression).map(({ name }) => name))]
       });
       // The node's own kind is chosen at each step; the nodes inside it keep the kind around it.
       return view;
@@ -4354,7 +4359,7 @@ function withNodeRefs(
     const chosen = chosenKinds.get(start);
     return {
       at: start + name.length + 1,
-      text: `${chosen ? kindChoice(chosen.base, chosen.written) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: `${chosen ? kindChoice(chosen.base, chosen.written, chosen.reads) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   // A kind arranging no children has no gap, align, or justify to bind.

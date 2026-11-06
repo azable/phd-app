@@ -287,7 +287,8 @@ export function viewCallsOf(
  */
 export function scopedReadsOf(
   markup: unknown,
-  scoped: ReadonlySet<string>
+  scoped: ReadonlySet<string>,
+  { inKinds = true }: { inKinds?: boolean } = {}
 ): { name: string; start: number }[] {
   const found: { name: string; start: number }[] = [];
   // Only reads of the variable itself: not a name an {#each}, {@const} or function declares there.
@@ -302,6 +303,8 @@ export function scopedReadsOf(
       walk(node.fallback ?? node.else);
       return;
     }
+    // Where a kind expression reads an absent variable, its node takes its base kind (see kindChoice).
+    if (!inKinds && node.type === 'Attribute' && node.name === 'kind') return;
     // A link's end read straight from a variable or label is drawn hidden where it is absent.
     if (node.type === 'Attribute' && (node.name === 'from' || node.name === 'to')) {
       const [only] = Array.isArray(node.value) ? (node.value as { expression?: unknown }[]) : [];
@@ -396,7 +399,7 @@ export function unknownReadOf(
  * parameters in its body, an {#each} block's names in its body, and a function's parameters and
  * variables in the function.
  */
-function freeReads(
+export function freeReads(
   markup: unknown,
   given: readonly string[] = []
 ): { name: string; start: number }[] {
