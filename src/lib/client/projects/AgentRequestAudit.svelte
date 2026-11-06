@@ -232,6 +232,11 @@
                   class="mt-1 font-mono text-xs whitespace-pre-wrap text-destructive">{event.payload.diagnostics
                     .map(({ message }) => message)
                     .join('\n')}</pre>
+              {:else if event.type === 'revision.edits-rejected' && event.payload.problems.length > 1}
+                <!-- Every problem, as the warnings a picture was returned for, not only the first. -->
+                <ul class="mt-1 list-disc pl-5 text-xs">
+                  {#each event.payload.problems as problem, index (index)}<li>{problem}</li>{/each}
+                </ul>
               {:else if event.type === 'artifact.version-created' && event.payload.summary}
                 <p class="mt-1">{event.payload.summary}</p>
               {/if}

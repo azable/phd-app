@@ -127,6 +127,21 @@ describe('a turn chart', () => {
     expect(chart.bars[1].detail).toContain('503');
   });
 
+  it('lists the warnings the pictures it presented kept, each once', () => {
+    const presented = (warnings: string[]) => ({
+      presentation: { format: 'browser-bundle-v1', mode: 'sverlin', warnings }
+    });
+    const chart = turnChart(
+      events([
+        [0, 'ai.generation-requested', call(1, 'initial', 'low')],
+        [5, 'ai.generation-succeeded', done(1, 5000)],
+        [6, 'visualization.presented', presented(['step 3 draws nothing new', 'a gap'])],
+        [6, 'visualization.presented', presented(['a gap'])]
+      ])
+    )!;
+    expect(chart.warnings).toEqual(['step 3 draws nothing new', 'a gap']);
+  });
+
   it('draws nothing for an operation that called no model and built nothing', () => {
     expect(turnChart(events([[0, 'feedback.submitted', { content: [] }]]))).toBeUndefined();
   });

@@ -62,7 +62,9 @@
     <span class="first-letter:uppercase">{title}</span>{chart.background ? ' (background)' : ''} ·
     {chart.cost ?? `${calls.length} ${calls.length === 1 ? 'call' : 'calls'}`}{failures
       ? ` · ${failures} not ok`
-      : ''} · {seconds} s
+      : ''} · {seconds} s{chart.warnings.length
+      ? ` · ${chart.warnings.length} ${chart.warnings.length === 1 ? 'warning' : 'warnings'}`
+      : ''}
   </summary>
   <div class="mt-1.5 flex flex-col gap-0.5" role="group" aria-label="Calls and builds over time">
     {#each chart.bars as bar (bar.id)}
@@ -104,6 +106,17 @@
       </div>
     {/if}
   </div>
+  {#if chart.warnings.length}
+    <!-- What the pictures it built kept as warnings, as the assistant is told them. -->
+    <details class="mt-1.5 rounded bg-amber-500/10 px-2 py-1">
+      <summary class="cursor-pointer text-amber-700 dark:text-amber-400">
+        Warnings the pictures kept
+      </summary>
+      <ul class="mt-1 list-disc pl-4 break-words">
+        {#each chart.warnings as warning, index (index)}<li>{warning}</li>{/each}
+      </ul>
+    </details>
+  {/if}
   {#if detail}
     <p class="mt-1.5 rounded bg-muted px-2 py-1 font-mono break-words whitespace-pre-wrap">
       {detail.label}{detail.detail ? `\n${detail.detail}` : ''}

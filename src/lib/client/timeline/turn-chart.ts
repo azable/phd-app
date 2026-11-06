@@ -12,6 +12,7 @@ import { callCost, costText, costTotal, type AiCall } from '$lib/shared/projects
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import { escalationText } from '$lib/shared/projects/events/ai-generation';
 import { backgroundOperationKinds } from '$lib/shared/projects/events/operation-lifecycle';
+import { isSverlinPresentation } from '$lib/shared/presentations';
 
 import { agentRequests } from './agent-requests';
 
@@ -48,6 +49,8 @@ export type TurnChart = {
   marks: ChartMark[];
   /** The turn the app started by itself once the helpers' candidates arrived. */
   followUp: boolean;
+  /** The warnings the presentations it built kept, each once, as the assistant is told them. */
+  warnings: string[];
 };
 
 /** One operation's chart, or none where it called no model and built nothing. */
@@ -164,6 +167,13 @@ export function turnChart(
   const candidates = new Set(
     all.filter(({ type }) => type === 'visualization.view-candidates').map(({ id }) => id)
   );
+  const warnings = new Set(
+    related.flatMap((event) =>
+      event.type === 'visualization.presented' && isSverlinPresentation(event.payload.presentation)
+        ? (event.payload.presentation.warnings ?? [])
+        : []
+    )
+  );
   return {
     ...(operation ? { operation } : {}),
     background: operation !== undefined && backgroundOperationKinds.has(operation),
@@ -180,6 +190,7 @@ export function turnChart(
       }))
       .toSorted((a, b) => a.start - b.start),
     marks: marks.map(({ when, ...mark }) => ({ ...mark, at: when - origin })),
+    warnings: [...warnings],
     followUp: related.some(
       (event) =>
         event.type === 'assistant.turn-started' &&

@@ -243,6 +243,9 @@
     onSource={sourceHash ? () => chooseSource(sourceHash, pill.parentHash) : undefined}
     sourceShown={sourceHash !== undefined && chosenSource === sourceHash}
     onAdd={session.readOnly ? undefined : () => onReferenceRequest(pill.value)}
+    warnings={audit && isSverlinPresentation(pill.value.presentation)
+      ? pill.value.presentation.warnings
+      : undefined}
   />
 {/snippet}
 
