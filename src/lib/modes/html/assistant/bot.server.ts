@@ -10,6 +10,8 @@ import {
   generatedMessageContentSchema,
   parseRecoveryExplanation,
   recoveryExplanationJsonSchema,
+  needsMoreThoughtJsonSchema,
+  parseNeedsMoreThought,
   type ChatBotConfig,
   type GeneratedMessageContent,
   type RecoveryExplanation
@@ -29,6 +31,7 @@ export type HtmlAssistantOutput = {
   reply: GeneratedMessageContent;
   candidates: Array<{ label: string; manifest: HtmlFramesManifest }>;
   recovery?: RecoveryExplanation;
+  needsMoreThought?: boolean;
 };
 
 export default {
@@ -80,13 +83,19 @@ export default {
             required: ['label', 'manifest']
           }
         },
-        recovery: recoveryExplanationJsonSchema
+        recovery: recoveryExplanationJsonSchema,
+        needsMoreThought: needsMoreThoughtJsonSchema
       },
-      required: ['reply', 'candidates', 'recovery']
+      required: ['reply', 'candidates', 'recovery', 'needsMoreThought']
     }
   },
   parseOutput(value) {
-    const output = value as { reply?: unknown; candidates?: unknown; recovery?: unknown };
+    const output = value as {
+      reply?: unknown;
+      candidates?: unknown;
+      recovery?: unknown;
+      needsMoreThought?: unknown;
+    };
     if (!Array.isArray(output?.candidates) || output.candidates.length > 1) {
       throw new Error('The HTML assistant returned an invalid structured response.');
     }
@@ -103,7 +112,8 @@ export default {
           manifest: v.parse(htmlFramesManifestSchema, value.manifest)
         };
       }),
-      ...(recovery ? { recovery } : {})
+      ...(recovery ? { recovery } : {}),
+      ...(parseNeedsMoreThought(output.needsMoreThought) ? { needsMoreThought: true } : {})
     };
   }
 } satisfies ChatBotConfig<AiProjectContext, HtmlAssistantOutput>;

@@ -4,6 +4,8 @@ import {
   generatedMessageContentSchema,
   parseRecoveryExplanation,
   recoveryExplanationJsonSchema,
+  needsMoreThoughtJsonSchema,
+  parseNeedsMoreThought,
   generatedMessageContentJsonSchema,
   maximumViewHelpersTask,
   type ChatBotConfig,
@@ -103,9 +105,10 @@ const responseFormat = {
       reply: generatedMessageContentJsonSchema,
       decision: sourceDecisionJsonSchema,
       brief: briefUpdateJsonSchema,
-      recovery: recoveryExplanationJsonSchema
+      recovery: recoveryExplanationJsonSchema,
+      needsMoreThought: needsMoreThoughtJsonSchema
     },
-    required: ['reply', 'decision', 'brief', 'recovery']
+    required: ['reply', 'decision', 'brief', 'recovery', 'needsMoreThought']
   }
 } satisfies ChatResponseFormat;
 
@@ -182,6 +185,7 @@ export default {
       brief?: unknown;
       recovery?: unknown;
       viewHelpers?: unknown;
+      needsMoreThought?: unknown;
     };
     const decision = v.safeParse(sourceDecisionSchema, output?.decision);
     if (!decision.success) throw new Error('The chatbot returned an invalid structured response.');
@@ -194,7 +198,8 @@ export default {
       decision: decision.output,
       ...(entries.length ? { brief: entries } : {}),
       ...(recovery ? { recovery } : {}),
-      ...viewHelpersRequest(output.viewHelpers)
+      ...viewHelpersRequest(output.viewHelpers),
+      ...(parseNeedsMoreThought(output.needsMoreThought) ? { needsMoreThought: true } : {})
     };
   }
 } satisfies ChatBotConfig<AiProjectContext>;

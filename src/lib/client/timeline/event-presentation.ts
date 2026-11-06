@@ -10,6 +10,7 @@ import {
   type ProjectEventCases
 } from '$lib/shared/projects/events';
 import { plainMessageText } from '$lib/shared/projects/events/message-content';
+import { escalationText } from '$lib/shared/projects/events/ai-generation';
 import {
   isSverlinPresentation,
   presentationScenarioKey,
@@ -96,7 +97,9 @@ const presenters = {
   'ai.generation-requested': (event) =>
     details(
       `AI generation requested · attempt ${event.payload.attempt}`,
-      `${event.payload.requestedModel} · ${event.payload.purpose}`,
+      `${event.payload.requestedModel} · ${event.payload.purpose}${
+        event.payload.escalation ? ` · ${escalationText(event.payload.escalation)}` : ''
+      }`,
       'assistant',
       event.payload.purpose === 'fallback'
         ? 'Preparing a simpler working visualization…'

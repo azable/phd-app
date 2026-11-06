@@ -599,3 +599,7 @@ or its reply: write the reply as if this were the first attempt, saying what the
 version shows or changes, never that something failed or was fixed. For fallback
 preserve the core subject while simplifying the component, and explain what was
 difficult and reduced in the recovery object. Set recovery to null otherwise.
+Set needsMoreThought to true only when the participant's request is unclear, or
+they seem to be struggling to get a point across, and a slower, more careful
+reading should come before any answer; the turn then runs again on a model that
+reasons more. Set it to false otherwise.

@@ -148,20 +148,33 @@ export async function runAttemptLadder(
   runAttempt: (
     document: ProjectDocument,
     attempt: number
-  ) => Promise<{ document: ProjectDocument; done: boolean; failure?: AttemptFailure }>,
+  ) => Promise<{
+    document: ProjectDocument;
+    done: boolean;
+    failure?: AttemptFailure;
+    /** The fast first call flagged the request as unclear: run it once more, stepped up. */
+    rethink?: boolean;
+  }>,
   stages: BuildStages = unsortedBuild
 ): Promise<ProjectDocument> {
   const profiles = chatbot.config.attemptProfiles;
   const fallback = profiles.length;
   let previous: AttemptFailure | undefined;
   let wandered = 0;
+  let rethought = false;
   for (let attempt = 1; attempt <= fallback; ) {
-    if (attempt > 1 && !hasTimeForAnotherAttempt(chatbot)) {
+    if ((attempt > 1 || rethought) && !hasTimeForAnotherAttempt(chatbot)) {
       return appendAttemptDeadlineFailure(document, operationId, dependencies);
     }
     const result = await runAttempt(document, attempt);
     document = result.document;
     if (result.done) return document;
+    // Once per turn (escalateForFlag in ai/turns/struggle.ts marks it): the first attempt again,
+    // which the registry now prepares on the stepped-up model.
+    if (result.rethink && attempt === 1 && !rethought) {
+      rethought = true;
+      continue;
+    }
     let next = nextAttempt(profiles, attempt, result.failure, stages);
     if (previous && result.failure && repairWandered(previous, result.failure, stages)) {
       wandered += 1;

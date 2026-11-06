@@ -7,6 +7,7 @@
  */
 
 import type { ProjectEvent } from '$lib/shared/projects/events';
+import { escalationText } from '$lib/shared/projects/events/ai-generation';
 
 import { agentRequests } from './agent-requests';
 
@@ -64,6 +65,9 @@ export function turnChart(
           : `${attempt} ${purpose} ${effort} ${seconds} → ${result.label}`,
       detail: [
         `${shortModel(model)}${effort ? ` · ${effort}` : ''}`,
+        request.request.payload.escalation
+          ? escalationText(request.request.payload.escalation)
+          : '',
         tokensText(usage),
         result.detail
       ]

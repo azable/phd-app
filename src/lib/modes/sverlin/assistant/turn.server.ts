@@ -192,6 +192,8 @@ export async function runSverlinAssistantTurn(
       );
       current = generation.document;
       if (!generation.ok) {
+        // The fast first call flagged the request as unclear: it runs again, stepped up.
+        if (generation.rethink) return { document: current, done: false, rethink: true };
         if (!generation.retried) return { document: current, done: true };
         // The next attempt repairs what the last usable one left, if anything, told of this one.
         failureSummaries.push(`Attempt ${attempt}: ${generation.message}`);
