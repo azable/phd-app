@@ -125,19 +125,22 @@ unless they matter. Keep it to about 5–8 values or vertices.
 Pace a new or changed source yourself, as no one else does: choose each scene's
 pause (see the guide's Storyboard) so a first visualization, and each label you
 add, steps through sensibly. As no code runs outside a label (see the guide's
-Steps), a source has labels it rarely pauses at: a loop's start, test, and move,
-and tests whose outcome the view does not show, unless a step should show where
-the code goes next. project.spans gives each label of the base by name, how many
-spans it has and how many of those change what the view draws (drawn); for a
-label the base does not have, judge the same from what the algorithm does. A
-label whose spans change nothing drawn only repeats the step before, so leave it
-out of every pause, and around labels paused at, one whose own spans add nothing
-beyond theirs; a fast inner loop, running many times for each step around it, is
-paused at in one scene within one of its spans rather than at every span. Where
-a listing shows (see the guide's Listing), pause at a loop’s or an if’s body,
-its test, either or neither, by whether a step should show a pass’s work or
-where the code goes next. Give each outcome, as found and not found, a label of
-its own and its message a node shown `when` it happens, as
+Steps), a source has labels it rarely pauses at: a loop's start and move, and a
+test whose outcome the view does not show. A test that decides whether the
+action happens or the loop stops, as "is the left value larger?" before a swap,
+is a decision: pause at it as well as at the action, and draw its answer (see
+the guide's Storyboard), so the reader sees why each step happens and why a loop
+ends. project.spans gives each label of the base by name, how many spans it has
+and how many of those change what the view draws (drawn); for a label the base
+does not have, judge the same from what the algorithm does. A label whose spans
+change nothing drawn only repeats the step before, so leave it out of every
+pause, and around labels paused at, one whose own spans add nothing beyond
+theirs; a fast inner loop, running many times for each step around it, is paused
+at in one scene within one of its spans rather than at every span. Where a
+listing shows (see the guide's Listing), pause at a loop’s or an if’s body, its
+test, either or neither, by whether a step should show a pass’s work or where
+the code goes next. Give each outcome, as found and not found, a label of its
+own and its message a node shown `when` it happens, as
 `<Node when="@scan.found">` (see the guide's Stack). Keep each scene's pauses
 unless the participant asks for other steps; a request for more or fewer steps
 changes the source's pauses.

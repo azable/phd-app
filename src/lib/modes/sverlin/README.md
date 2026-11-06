@@ -201,6 +201,39 @@ scene at least.
   naming the first run of such steps at each label. `at=":before"` or
   `at=":after"` shows only one of them. `title` is a caption beside its name in
   the controls. Props are written as they are, never computed.
+- Pause at each decision as well as at the action it leads to: a loop's test and
+  an `if`'s test, labelled, so the reader sees why something happens and why it
+  stops, not only that it did. Draw the decision's answer where it helps,
+  through a view of its label (see Views of what a step computed), as "is 5 > 2?
+  yes, so swap". A pointer that follows the moving item marks it only once it
+  has moved, so pause after the pointer's update, at the end of the block that
+  updates it, not between the change and the update. Insertion sort, pausing at
+  each round, each test and each swap:
+
+  ```js
+  for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
+    @init[let j = i;]
+    while (@front[j > 0]) @scan{
+      if (@cmp[values[j - 1] > values[j]]) @swap{
+        @exchange[const held = values[j - 1]; values[j - 1] = values[j]; values[j] = held;]
+        @down[j--;]
+      } else @stop{ break; }
+    }
+  }
+  ```
+
+  ```svelte
+  <Scene name="sort" case="main" pause="@insert.init, @insert.front, @insert.scan.cmp, @insert.scan.swap">
+    <Main />
+  </Scene>
+  ```
+
+  Each round then shows its start, "is j above 0?", "is the left value larger?",
+  and the swap after a yes, with `j` on the item being inserted; a no, or `j` at
+  the front, shows why the round ends. With `pause="@insert.scan.swap.exchange"`
+  alone, only the swaps play, the mark stays on the value moved right, and
+  nothing shows when or why a round ends.
+
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
   again in detail after the whole sort.
