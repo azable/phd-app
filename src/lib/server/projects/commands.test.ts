@@ -758,13 +758,12 @@ describe('submitProjectFeedback', () => {
         output: proposal('<View of="Int" name="IntDot"><Node value={this} /></View>')
       })
     } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
-    // The scoring stage's Decisions API, never the real one in tests: yes at 0.7 to every question.
+    // The scoring stage's Decisions API, never the real one in tests: true at 0.7 to every question.
     const decide = vi.fn(async (request: { questions: { name: string }[] }) => ({
       answers: request.questions.map(({ name }) => ({
-        type: 'choice',
+        type: 'predicate',
         name,
-        choice: true,
-        probabilities: [0.7, 0.3]
+        probability: 0.7
       })),
       usage: { input_tokens: 1200, output_tokens: 0 }
     }));

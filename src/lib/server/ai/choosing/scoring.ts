@@ -1,6 +1,6 @@
 /**
  * The scoring stage of the helper pipeline (ai/bots/helper-pipeline.ts): a decision model looks at
- * pictures of each option and answers fixed questions, each with the probability of each answer,
+ * pictures of each option and answers fixed statements, each with the probability that it is true,
  * and the shortlist of each group is its best options. A component, as a view drawn alone, is asked
  * about itself; a part in context, as a layout in the whole picture, about the picture. With
  * scoring off, or where pictures or the model are unavailable, the app's own measure ranks them.
@@ -10,10 +10,9 @@
 import {
   createDecisions,
   maximumDecisionImages,
-  optionProbabilities,
-  type ChoiceQuestion,
   type DecisionsRequest,
-  type DecisionsResponse
+  type DecisionsResponse,
+  type PredicateQuestion
 } from '$lib/server/ai/providers/openai-decisions';
 
 /** One option to score: what it is, its group, what to ask, its pictures, and the app's facts. */
@@ -29,65 +28,53 @@ export type ScoringOption = {
   measure: number;
 };
 
-const yesNo = [
-  { value: true, description: 'yes' },
-  { value: false, description: 'no' }
-];
-
 /**
- * What a component drawn alone is asked: each question says yes for a good one. A view is judged by
- * itself, a few of its values side by side, so the questions are about how it draws a value.
+ * What a component drawn alone is asked: each statement is true of a good one. A view is judged by
+ * itself, a few of its values side by side, so the statements are about how it draws a value.
  */
-export const componentQuestions: ChoiceQuestion[] = [
+export const componentQuestions: PredicateQuestion[] = [
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'readable',
-    instructions: 'Is the value each drawing shows easy to read at this size?',
-    choices: yesNo
+    instructions: 'The value each drawing shows is easy to read at this size.'
   },
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'state_clear',
     instructions:
-      'Where a drawing shows a state, as current, visited, sorted or done, is that state clear at a glance?',
-    choices: yesNo
+      'Where a drawing shows a state, as current, visited, sorted or done, that state is clear at a glance.'
   },
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'distinct',
-    instructions: 'Do values drawn differently look clearly different from one another?',
-    choices: yesNo
+    instructions: 'Values drawn differently look clearly different from one another.'
   }
 ];
 
 /**
  * What a part shown in the whole picture is asked, over the first step, the fullest, and the last,
- * in order: each question says yes for a good one.
+ * in order: each statement is true of a good one.
  */
-export const contextQuestions: ChoiceQuestion[] = [
+export const contextQuestions: PredicateQuestion[] = [
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'no_overlap',
-    instructions:
-      'Are the pictures free of labels, marks or shapes that overlap or cover each other?',
-    choices: yesNo
+    instructions: 'No labels, marks or shapes in the pictures overlap or cover each other.'
   },
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'text_readable',
-    instructions: 'Can every text be read at the size shown?',
-    choices: yesNo
+    instructions: 'Every text can be read at the size shown.'
   },
   {
-    type: 'choice',
+    type: 'predicate',
     name: 'focus_clear',
     instructions:
-      'Going from one picture to the next, is the part that changes, the focus of the step, easy to find?',
-    choices: yesNo
+      'Going from one picture to the next, the part that changes, the focus of the step, is easy to find.'
   }
 ];
 
-/** What one option was scored: the share of good answers, and each question's probability. */
+/** What one option was scored: the mean probability of its statements, and each one's. */
 export type OptionScore = { score: number; answers: Record<string, number> };
 
 /** One call to the decision model, for the Timeline and the logs. */
@@ -141,15 +128,15 @@ export function recordedRequest(request: DecisionsRequest): unknown {
   };
 }
 
-/** An answer's probability of "yes", the chosen answer standing in where none come back. */
-const yesProbability = (response: DecisionsResponse, question: ChoiceQuestion) => {
+/** The probability that a question's statement is true; none for a refusal or a missing answer. */
+const trueProbability = (response: DecisionsResponse, question: PredicateQuestion) => {
   const answer = response.answers.find((each) => each.name === question.name);
   if (!answer || answer.type === 'refusal') return undefined;
-  return optionProbabilities(answer, question.choices).get(true) ?? 0;
+  return answer.probability;
 };
 
 /**
- * Score every option at once, one request each: the score is the mean probability of "yes" over
+ * Score every option at once, one request each: the score is the mean probability of "true" over
  * its questions. An option whose call fails, or with no pictures, has no score.
  */
 export async function scoreOptions(
@@ -172,8 +159,8 @@ export async function scoreOptions(
           const response = await decide(request, signal);
           const answers = Object.fromEntries(
             request.questions.flatMap((question) => {
-              const yes = yesProbability(response, question);
-              return yes === undefined ? [] : [[question.name, yes]];
+              const probability = trueProbability(response, question);
+              return probability === undefined ? [] : [[question.name, probability]];
             })
           );
           const values = Object.values(answers);
