@@ -29,10 +29,38 @@ export type SpanInput = {
   anchors: Record<string, KeyedAnchor>;
   parts: KeyedAnchor[];
   options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'direction' | 'curve' | 'gap'>;
+  /** The room this step's waiting labels take side by side (see withRest). */
+  rest?: { width: number; height: number };
 };
 
 /** An arrangement solved over every step, with each child's place by key. */
-export type SpanLayout = ArrangeResult & { positions: Record<string, { x: number; y: number }> };
+export type SpanLayout = ArrangeResult & {
+  positions: Record<string, { x: number; y: number }>;
+  /** Where the row of waiting labels starts, where any step has one (see withRest). */
+  rest?: { x: number; y: number };
+};
+
+/**
+ * An arrangement with a row under it, at its left, for the labels of variables that reach no
+ * element at a step, as prev holding a list's end, as wide and tall as any step's waiting labels
+ * need; where none waits at any step, the arrangement as it is.
+ */
+export function withRest<T extends ArrangeResult>(
+  solved: T,
+  rests: readonly ({ width: number; height: number } | undefined)[],
+  gap: number
+): T & { rest?: { x: number; y: number } } {
+  const kept = rests.filter((rest) => rest !== undefined);
+  if (!kept.length) return solved;
+  const width = Math.max(...kept.map((rest) => rest.width));
+  const height = Math.max(...kept.map((rest) => rest.height));
+  return {
+    ...solved,
+    width: Math.max(solved.width, width),
+    height: solved.height + gap + height,
+    rest: { x: 0, y: solved.height + gap }
+  };
+}
 
 /** Solve an arrangement once over the union of what it contains at every step. */
 export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
@@ -96,10 +124,14 @@ export function solveSpan(inputs: readonly SpanInput[]): SpanLayout {
     permanent,
     random: keyedRandom(first.seed, 'layout')
   });
-  return {
-    ...solved,
-    positions: Object.fromEntries(solved.placements.map(({ key, x, y }) => [key, { x, y }]))
-  };
+  return withRest(
+    {
+      ...solved,
+      positions: Object.fromEntries(solved.placements.map(({ key, x, y }) => [key, { x, y }]))
+    },
+    inputs.map(({ rest }) => rest),
+    first.options.gap ?? 0
+  );
 }
 
 /**

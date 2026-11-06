@@ -109,6 +109,7 @@
     __again = false,
     __type,
     __links,
+    __follower = false,
     __field = false,
     __component,
     __slot,
@@ -167,6 +168,8 @@
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
     __links?: boolean;
+    /** Internal: set by the compiler on a free layout's child drawing variables by name: it follows what their links reach. */
+    __follower?: boolean;
     /** Internal: set by the compiler on a field, a node holding only links that start at it: its content is centred, as a cell's is. */
     __field?: boolean;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
@@ -985,6 +988,7 @@
     data-sv-identity={identity}
     data-sv-around={drawnAround}
     data-sv-room={pointerRoom}
+    data-sv-follower={__follower ? 'true' : undefined}
     data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
     data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
     data-sv-type={__type}

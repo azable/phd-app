@@ -4258,18 +4258,35 @@ function withNodeRefs(
   };
   // The nodes a free layout's links join, its children inside its blocks: a graph's vertices or a
   // machine's states, which start as circles, so a link meets an edge rather than run into text.
+  // A child outside every {#each} that draws variables or labels by their bare names, as
+  // <Node kind="Var">{cur}</Node>, is a variable's label, no vertex: it follows what its
+  // variable's link reaches, and is marked so at every step (see followers in arrangement.ts).
   const vertices = new Set<number>();
-  const childNodes = (value: unknown): void => {
+  const followers = new Set<number>();
+  // A value in braces is a render of its view by now, as {@render RefArrow(cur)}.
+  type Expression = { type?: string; arguments?: Expression[] };
+  const drawsVariables = (node: Tag): boolean => {
+    const renders = (node.children ?? []).flatMap((child) => {
+      const expression = (child as Tag & { expression?: Expression }).expression;
+      if (child.type === 'MustacheTag' || child.type === 'ExpressionTag') return [expression];
+      if (child.type === 'RenderTag') return [expression?.arguments?.[0]];
+      return [];
+    });
+    return renders.length > 0 && renders.every((read) => read?.type === 'Identifier');
+  };
+  const childNodes = (value: unknown, inEach: boolean, linked: boolean | undefined): void => {
     if (!value || typeof value !== 'object') return;
-    if (Array.isArray(value)) return value.forEach(childNodes);
+    if (Array.isArray(value)) return value.forEach((child) => childNodes(child, inEach, linked));
     const part = value as Tag;
     if (part.type === 'InlineComponent') {
-      if (part.name === 'Node' && part.start !== undefined) vertices.add(part.start);
+      if (part.name !== 'Node' || part.start === undefined) return;
+      if (!inEach && drawsVariables(part)) followers.add(part.start);
+      else if (linked) vertices.add(part.start);
       return;
     }
     for (const [key, child] of Object.entries(part))
       if (key === 'children' || key === 'else' || key === 'body' || key === 'consequent')
-        childNodes(child);
+        childNodes(child, inEach || part.type === 'EachBlock', linked);
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
   const plainest: KindRole[] = [
@@ -4303,7 +4320,8 @@ function withNodeRefs(
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
   const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
-  for (const entry of tags) if (entry.links && laidOutFreely(entry)) childNodes(entry.tag.children);
+  for (const entry of tags)
+    if (laidOutFreely(entry)) childNodes(entry.tag.children, false, entry.links);
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
     // or in a row or column; one holding a collection's {#each} and links runs as the collection.
@@ -4400,7 +4418,7 @@ function withNodeRefs(
     const chosen = chosenKinds.get(start);
     return {
       at: start + name.length + 1,
-      text: `${chosen ? kindChoice(chosen.base, chosen.written, chosen.reads, constsHold) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: `${chosen ? kindChoice(chosen.base, chosen.written, chosen.reads, constsHold) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${followers.has(start) ? ' __follower' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   // A kind arranging no children has no gap, align, or justify to bind.

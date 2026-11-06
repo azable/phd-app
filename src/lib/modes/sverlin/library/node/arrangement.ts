@@ -22,7 +22,7 @@ import { labelsIn, markerLook } from './markers';
 import type { Spacing } from './props';
 import { reachDrawn } from './route';
 import { closest, contains, descendants, hasClass, type Reader } from './reader';
-import type { SpanInput } from './span';
+import { withRest, type SpanInput } from './span';
 import { seenParts, unionOf } from './visible';
 
 /** A free layout's props, which its element also carries for a step laid out on the model. */
@@ -45,6 +45,8 @@ export type Arrangement<E> = {
   elements: readonly E[];
   /** Children placed under the element their variable reaches (see ArrangementInput). */
   followers: readonly E[];
+  /** Where followers reaching nothing wait, where any step has one (see withRest). */
+  rest?: { x: number; y: number };
   placements: readonly { x: number; y: number }[];
   width: number;
   height: number;
@@ -90,15 +92,16 @@ export function arrangementInput<E>(
   // A child drawing a variable whose link reaches an element (see Link.svelte's data-sv-reach), as
   // <Node kind="Var">{cur}</Node>, follows what it reaches: it is not placed by the layout, which
   // could put it near one element only, but under the element its variable reaches at each step,
-  // as a pointer's label is (see followersOf in model/scene-of.ts).
+  // as a pointer's label is (see the followers in model/scene-of.ts). The compiler marks such a
+  // child at every step (data-sv-follower), so one whose variable reaches nothing at a step, as
+  // prev holding a list's end, is still no child the layout places.
   const followers = read
     .children(host)
     .filter(
       (child) =>
         !isMarker(child) &&
-        [...descendants(read, child)].some(
-          (inner) => isMarker(inner) && attribute(inner, 'data-sv-reach') === 'true'
-        )
+        (attribute(child, 'data-sv-follower') === 'true' ||
+          [...descendants(read, child)].some((inner) => reachOf(read, inner) !== undefined))
     );
   const following = (element: E) => followers.some((follower) => contains(read, follower, element));
   const markers = [
@@ -273,21 +276,30 @@ export function arrangementInput<E>(
     }
   });
   for (const [slot, item] of Object.entries(items)) if (!(slot in anchors)) anchors[slot] = item;
-  // A child a follower reaches at this step keeps room under the element for it, the layout's gap
-  // below the element; each child keeping its largest size over the steps (see solveSpan), every
-  // child a follower ever reaches keeps that room at every step, so nothing moves as it comes and
-  // goes, as a pointer's label keeps its slot.
+  // A child followers reach at this step keeps room under it for them, side by side, their arrows'
+  // length below the child (see followerReach); each child keeping its largest size over the steps
+  // (see solveSpan), every child a follower ever reaches keeps that room at every step, so nothing
+  // moves as they come and go, as a pointer's label keeps its slot. A follower reaching nothing at
+  // this step, drawing what its variable holds, waits in the row under the layout (see withRest).
+  const reach = followerReach(space);
+  const groups = new Map<number, { width: number; height: number }[]>();
+  const waiting: { width: number; height: number }[] = [];
   for (const follower of followers) {
     const marker = [...descendants(read, follower)].find(
-      (inner) => isMarker(inner) && attribute(inner, 'data-sv-reach') === 'true'
+      (inner) => reachOf(read, inner) !== undefined
     );
     const reached = marker && anchors[attribute(marker, 'data-to') ?? ''];
-    if (!reached) continue;
-    const { width, height } = read.size(follower);
-    const box = boxes[reached.box];
-    box.height = Math.max(box.height, read.size(elements[reached.box]).height + space + height + 1);
-    box.width = Math.max(box.width, width + 1);
+    const size = read.size(follower);
+    if (reached) groups.set(reached.box, [...(groups.get(reached.box) ?? []), size]);
+    else if (shownIn(read, follower)) waiting.push(size);
   }
+  for (const [at, sizes] of groups) {
+    const box = boxes[at];
+    const row = rowOf(sizes, space);
+    box.height = Math.max(box.height, read.size(elements[at]).height + reach + row.height + 1);
+    box.width = Math.max(box.width, row.width + 1);
+  }
+  const rest = waiting.length ? rowOf(waiting, space) : undefined;
   const options = { links: specs, flow, form, direction, curve, gap: space };
   const keyed = (anchor: Anchor) => ({ ...anchor, box: boxes[anchor.box].key });
   return {
@@ -296,7 +308,8 @@ export function arrangementInput<E>(
       boxes,
       anchors: Object.fromEntries(Object.entries(anchors).map(([key, a]) => [key, keyed(a)])),
       parts: parts.map(keyed),
-      options
+      options,
+      ...(rest ? { rest } : {})
     },
     elements,
     followers,
@@ -306,6 +319,45 @@ export function arrangementInput<E>(
     parts,
     visible
   };
+}
+
+/**
+ * How far below what is drawn under an element a follower sits, the length of its arrow: two of
+ * the layout's gaps, so the arrow's head (9 px at the start, see headSize) and a short shaft both
+ * show, where one gap (8 px at the start) is shorter than the head.
+ */
+export const followerReach = (gap: number): number => 2 * gap;
+
+/** Boxes side by side, a gap apart: the row's size. */
+export function rowOf(
+  sizes: readonly { width: number; height: number }[],
+  gap: number
+): { width: number; height: number } {
+  return {
+    width: sizes.reduce((sum, { width }) => sum + width, 0) + gap * (sizes.length - 1),
+    height: Math.max(0, ...sizes.map(({ height }) => height))
+  };
+}
+
+/** The element a link from a variable inside an element reaches, where it is one (see Link.svelte). */
+export function reachOf<E>(read: Reader<E>, element: E): string | undefined {
+  return read.attribute(element, 'data-sv-link') !== undefined &&
+    read.attribute(element, 'data-sv-reach') === 'true'
+    ? (read.attribute(element, 'data-to') ?? '')
+    : undefined;
+}
+
+/**
+ * Whether an element draws a value of the state at this step: a node in it drawing an element of
+ * the state (data-sv-slot) that no hidden part holds, so a variable out of scope, drawn hidden as
+ * a stand-in copy, draws none.
+ */
+export function shownIn<E>(read: Reader<E>, element: E): boolean {
+  const hidden = (at: E) =>
+    closest(read, at, (each) => read.attribute(each, 'data-sv-hidden') === 'true') !== undefined;
+  return [element, ...descendants(read, element)].some(
+    (inner) => read.attribute(inner, 'data-sv-slot') !== undefined && !hidden(inner)
+  );
 }
 
 /**
@@ -384,6 +436,7 @@ export function arrangeChildren<E>(
     return {
       elements,
       followers,
+      ...(span.rest ? { rest: span.rest } : {}),
       placements,
       width: span.width,
       height: span.height,
@@ -394,10 +447,15 @@ export function arrangeChildren<E>(
       problems: []
     };
   }
-  const solved = arrangeOnce(seed, boxes, { ...options, anchors, parts });
+  const solved = withRest(
+    arrangeOnce(seed, boxes, { ...options, anchors, parts }),
+    [input.rest],
+    options.gap ?? 0
+  );
   return {
     elements,
     followers,
+    ...(solved.rest ? { rest: solved.rest } : {}),
     placements: solved.placements,
     width: solved.width,
     height: solved.height,

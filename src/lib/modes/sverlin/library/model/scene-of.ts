@@ -7,7 +7,13 @@
  * fit, as Frame.svelte draws it: placed at the frame's padding, its least size the frame's inside.
  */
 
-import { arrangeChildren, type ArrangementProps } from '../node/arrangement';
+import {
+  arrangeChildren,
+  followerReach,
+  rowOf,
+  shownIn,
+  type ArrangementProps
+} from '../node/arrangement';
 import { lineColour } from '../listing/places';
 import { shadows, type Shadow } from '../node/design';
 import { headDrawing, headTrim } from '../node/heads';
@@ -206,6 +212,9 @@ export function sceneOf(
   const described = new Map<ModelElement, SceneNode>();
   const reaching: Reaching[] = [];
   const laidOut = new Set<string>();
+  // The link of each follower, with the child its variable's element is in: its arrow ends just
+  // under all that child draws, as a vertex's caption, so it crosses none of it.
+  const following = new Map<ModelElement, { left: number; right: number; bottom: number }>();
 
   const linkOf = (
     line: Line,
@@ -383,31 +392,59 @@ export function sceneOf(
       const { x, y } = arranged.placements[index];
       walk(child, { ...next, layout, x: left + x - own.x, y: top + y - own.y });
     });
-    // A child drawing a variable whose link reaches an element of this layout goes under that
-    // element, centred on it and the layout's gap below it (see followers in arrangement.ts).
+    // A child drawing a variable whose link reaches an element of this layout goes under the whole
+    // child the element is in, below all it draws there, as a vertex's caption, so its arrow
+    // crosses none of it; followers under one child at a step go side by side, centred on the
+    // element, in the room the layout kept there (see followers in arrangement.ts). One reaching
+    // nothing waits in the row under the layout, drawing what its variable holds (see withRest).
     const gap = (props.gap ?? 0) * (styledOf(host)?.look.fontSize || 16);
-    for (const follower of arranged.followers) {
+    const reach = followerReach(gap);
+    const placing = arranged.followers.map((follower) => {
       const marker = [...descendants(follower)].find(
         (inner) => inner.attributes['data-sv-reach'] === 'true'
       );
       const target = slotted.get(marker?.attributes['data-to'] ?? '');
-      if (!target) continue;
-      // Under the whole child the element is in, as a vertex with its caption, in the room the
-      // layout kept there.
-      const child = arranged.elements.find(
-        (each) => each === target.element || [...descendants(each)].includes(target.element)
-      );
-      const below = child && placedBoxes.get(child);
+      const child =
+        target &&
+        arranged.elements.find(
+          (each) => each === target.element || [...descendants(each)].includes(target.element)
+        );
       const layout = model.layOutAlone(at, follower, true);
       const own = layout.boxes.get(follower) ?? { x: 0, y: 0, width: 0, height: 0 };
-      walk(follower, {
-        ...next,
-        layout,
-        x: target.left + target.width / 2 - own.width / 2 - own.x,
-        y: (below ? below.top + below.height : target.top + target.height) + gap - own.y
-      });
-      const drawnAs = described.get(follower);
-      if (drawnAs) drawnAs.follows = marker?.attributes['data-to'];
+      const under: PlacedBox | undefined = (child && placedBoxes.get(child)) || target;
+      return { follower, marker, target, under, layout, own };
+    });
+    const groups = new Map<PlacedBox, typeof placing>();
+    for (const each of placing)
+      if (each.under) groups.set(each.under, [...(groups.get(each.under) ?? []), each]);
+    for (const [under, group] of groups) {
+      const target = group[0].target as PlacedBox;
+      const row = rowOf(
+        group.map(({ own }) => own),
+        gap
+      );
+      let x = target.left + target.width / 2 - row.width / 2;
+      const top = under.top + under.height + reach;
+      for (const { follower, marker, layout, own } of group) {
+        walk(follower, { ...next, layout, x: x - own.x, y: top - own.y });
+        const drawnAs = described.get(follower);
+        if (drawnAs) drawnAs.follows = marker?.attributes['data-to'];
+        if (marker)
+          following.set(marker, {
+            left: under.left,
+            right: under.left + under.width,
+            bottom: under.top + under.height
+          });
+        x += own.width + gap;
+      }
+    }
+    if (arranged.rest) {
+      let x = left + arranged.rest.x;
+      for (const { follower, target, layout, own } of placing) {
+        if (target || !shownIn(model.hostReader(at, host), follower)) continue;
+        walk(follower, { ...next, layout, x: x - own.x, y: top + arranged.rest.y - own.y });
+        x += own.width + gap;
+      }
     }
     for (const edge of arranged.edges) {
       if (edge.id !== undefined) laidOut.add(edge.id);
@@ -618,8 +655,14 @@ export function sceneOf(
       const reached = slotted.get(to) ?? ghostOf(to, attribute);
       if (!reached) continue;
       paintTarget(described.get(reached.element), attribute);
-      const start = edgeOf(from, centre(reached));
-      const stop = edgeOf(reached, centre(from));
+      // A follower's arrow runs up from the top of its label to just under its child, at its
+      // label's middle where the child is that wide, else at the child's nearer edge.
+      const under = following.get(marker);
+      const middle = centre(from).x;
+      const start = under ? { x: middle, y: from.top } : edgeOf(from, centre(reached));
+      const stop = under
+        ? { x: Math.min(Math.max(middle, under.left), under.right), y: under.bottom }
+        : edgeOf(reached, centre(from));
       const length = Math.hypot(stop.x - start.x, stop.y - start.y);
       if (length < 1) continue;
       const trim = Math.min(length - 1, headTrim(head?.shape, head?.size ?? 0));

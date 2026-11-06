@@ -426,12 +426,14 @@ pointer that marks nothing at any step.
   the participant's words, as `:lo.label` "low" or
   `:@visit.look.neighbour.label` "next to visit", any text of up to 24
   characters, which `place()` gives instead. `place()` is written in any view,
-  as a mark drawn in a grid cell (see Grid). An expression with no name of its
-  own, as `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as
-  written, and the design cannot label it; name it with `{@const}` to label it.
-  A name written into a view, as `i` under the mark, is right only where the
-  variant chooses that view for that place, and a randomised variant can choose
-  it elsewhere; write `{place()}` instead.
+  as a mark drawn in a grid cell (see Grid), and in a union member's view names
+  the place the union's value is drawn at, as `prev` for `{prev}` holding a
+  `Next = union(NodeRef, End)`. An expression with no name of its own, as
+  `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as written, and
+  the design cannot label it; name it with `{@const}` to label it. A name
+  written into a view, as `i` under the mark, is right only where the variant
+  chooses that view for that place, and a randomised variant can choose it
+  elsewhere; write `{place()}` instead.
 - A pointer view's layout places its marks round the element: a column puts them
   under it, which suits a row of cells. For an array drawn in a column, give the
   type a second pointer view whose marks run across, as
@@ -2328,12 +2330,22 @@ for a link in `Arrow`.
   over an earlier one at the same element. A position one past either end of its
   array reaches a ghost: an empty dashed box one step on from the element at
   that end, so the link visibly moves off the edge, as a search reporting not
-  found. A variable out of scope draws no link. In a free layout, the node
-  holding such a variable follows what it reaches: it is not placed by the
-  layout but drawn under the child holding that element, centred on it, the
-  layout's gap below, and every child it ever reaches keeps room for it there at
+  found. A variable out of scope draws no link. In a free layout, a node among
+  its children, outside every `{#each}`, that draws variables or labels by their
+  bare names, as `<Node kind="Var">{cur}</Node>`, is the variable's label, not a
+  vertex: it keeps its own look and is never placed by the layout. It follows
+  what its variable's link reaches, drawn under the child holding that element,
+  below all that child draws (a vertex's caption included), two of the layout's
+  gaps lower, centred on the element; its arrow runs straight up from it to just
+  under the child, crossing none of it. Labels under one child at a step sit
+  side by side. Every child a label ever reaches keeps room for it there at
   every step, so nothing moves as it comes and goes, as a pointer's label keeps
-  its slot.
+  its slot. At a step where its variable reaches no element, as `prev` holding a
+  list's end, the label waits in a row under the layout, at its left, drawing
+  what the variable holds there (`∅`, by the end's view) with no arrow: a `∅`
+  under an element would read as pointing at it, and a reference's end has no
+  place among the nodes for a ghost. The layout keeps that row at every step
+  where any label ever waits, so nothing moves.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
@@ -2352,7 +2364,8 @@ loops, so the nodes round it stay clear of them.
 
 In a free layout with links, a node directly among its children starts as a
 circle, as a graph's vertex or a machine's state, so links meet its edge; a node
-drawn by a view, or one with a layout of its own, keeps its own look.
+drawn by a view, or one with a layout of its own, keeps its own look, as does a
+variable's label (see Link).
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
