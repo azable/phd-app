@@ -3698,11 +3698,18 @@ async function validateMessageContent(
     else if (segment.step !== undefined)
       validateReferencedStep(document, segment.presentationId, segment.step);
   }
-  return content.map((segment) =>
-    segment.type === 'markdown' || segment.type === 'interface-ref'
-      ? segment
-      : named(document, segment)
-  );
+  return content.flatMap((segment): MessageContent => {
+    if (segment.type === 'markdown' || segment.type === 'interface-ref') return [segment];
+    if (segment.type !== 'element-ref' || elementLocated(document, segment))
+      return [named(document, segment)];
+    // An element its source does not show where its id says, as one an older compiler named,
+    // keeps the participant's words: it becomes its version at that step, with what it showed.
+    const { presentationId, step, element } = segment;
+    return [
+      named(document, { type: 'presentation-ref', presentationId, step }),
+      { type: 'markdown', text: ` (the part showing “${element.label}”)` }
+    ];
+  });
 }
 
 /** What was on screen, its presentations known and at steps they have, each step named. */
@@ -3767,7 +3774,7 @@ function validateReferencedStep(
     throw new Error(`Presentation ${presentationId} has no step ${step + 1}.`);
 }
 
-/** An element reference must name a step of a Sverlin presentation and a <Node> in its source. */
+/** An element reference must name a step of a Sverlin presentation. */
 function validateElementReference(document: ProjectDocument, reference: ElementReference): void {
   const presentation = document.events.find(
     (event) =>
@@ -3780,11 +3787,21 @@ function validateElementReference(document: ProjectDocument, reference: ElementR
     throw new Error('Only presentations built from source support element references.');
   if (reference.step >= presentationStepLabels(value).length)
     throw new Error(`Presentation ${reference.presentationId} has no step ${reference.step + 1}.`);
-  if (!locateElement(value.source.text, reference.element.id))
-    throw new Error(`Element ${reference.element.id} is not a node of that presentation.`);
-  for (const { node } of reference.element.layouts ?? [])
-    if (!locateElement(value.source.text, node))
-      throw new Error(`Layout node ${node} is not a node of that presentation.`);
+}
+
+/** Whether an element reference, and every layout around it, names a <Node> in its source. */
+function elementLocated(document: ProjectDocument, reference: ElementReference): boolean {
+  const presentation = document.events.find(
+    (event) =>
+      event.type === 'visualization.presented' &&
+      event.payload.presentation.presentationId === reference.presentationId
+  );
+  if (presentation?.type !== 'visualization.presented') return true;
+  const value = presentation.payload.presentation;
+  if (!isSverlinPresentation(value)) return true;
+  return [reference.element.id, ...(reference.element.layouts ?? []).map(({ node }) => node)].every(
+    (id) => locateElement(value.source.text, id) !== undefined
+  );
 }
 
 /** Element references in a message. */

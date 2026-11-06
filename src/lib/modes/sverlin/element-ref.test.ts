@@ -25,6 +25,16 @@ describe('element locations', () => {
     expect(locateElement(source, '5:1')).toMatchObject({ markup: '<Node' });
   });
 
+  it('traces an id to a caption token or inline maths, which the compiler draws as nodes', () => {
+    const caption = '  <Node>Inspect :i[values[i]], $j[x] and $$x^2$$ here, $5 more.</Node>';
+    expect(locateElement(caption, '1:17')).toMatchObject({ line: 1, column: 17 });
+    expect(locateElement(caption, '1:32')).toMatchObject({ column: 32 });
+    expect(locateElement(caption, '1:42')).toMatchObject({ column: 42 });
+    // A dollar amount, or plain words, are no token.
+    expect(locateElement(caption, '1:56')).toBeUndefined();
+    expect(locateElement(caption, '1:9')).toBeUndefined();
+  });
+
   it('reads a keyed node’s key, decoded, before its render count', () => {
     expect(locateElement(source, '3:25@c')).toMatchObject({ key: 'c', occurrence: 1, items: [] });
     expect(locateElement(source, '3:25@node%20b#2')).toMatchObject({
