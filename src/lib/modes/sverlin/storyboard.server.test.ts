@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { designOnlyWarning } from './padding-warnings.server';
 import { repeatedStepWarnings } from './storyboard.server';
+
+/** A build's warnings but those of its look only, as padding nobody sees, which these leave aside. */
+const unlooked = (warnings: readonly string[] = []) =>
+  warnings.filter((warning) => !warning.endsWith(designOnlyWarning));
 
 const blocks = `<script domain>
   const Int = type('integer', { min: 0, max: 99 });
@@ -363,7 +368,7 @@ describe('steps drawing the same picture', () => {
       1
     );
     expect(labels).toEqual([':before', '@compare#1', '@compare#2', '@compare#3', '@compare#4']);
-    expect(warnings).toBeUndefined();
+    expect(unlooked(warnings)).toEqual([]);
   });
 
   it('leaves out a paused step drawing exactly what the step before drew, with a warning naming both', async () => {
@@ -378,7 +383,7 @@ describe('steps drawing the same picture', () => {
       '@compare#3:before',
       '@compare#4:before'
     ]);
-    expect(warnings).toEqual([
+    expect(unlooked(warnings)).toEqual([
       '@start#1 and @compare#1:before draw the same picture, so @compare#1:before is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
     ]);
   });
@@ -391,7 +396,7 @@ describe('steps drawing the same picture', () => {
     );
     const { labels, warnings } = await bundlePresentation(prepared, 1);
     expect(labels.slice(-2)).toEqual(['@compare#4', ':after']);
-    expect(warnings).toBeUndefined();
+    expect(unlooked(warnings)).toEqual([]);
   });
 
   /** A linear search over records drawn by `item`, its pointer at the element searched. */
@@ -427,7 +432,7 @@ ${views}
     const built = await bundlePresentation(prepareSvelteComponent(records('{item.value}')), 1);
     // Each step moves i, which the view reads, so none is left out; but none shows it.
     expect(built.labels).toEqual([':before', '@next#1', '@next#2', '@next#3']);
-    expect(built.warnings).toEqual([
+    expect(unlooked(built.warnings)).toEqual([
       '{i} draws Mark, a pointer into Items, but it marks nothing at any step: a pointer marks the element where the view draws it, drawn whole by a view of Item (as {item} with <View of="Item">), not only by its fields, and no element of Items is drawn so. Draw the elements of Items with their own view where the layout shows them, or point at a collection the view draws.',
       '3 steps at @next draw the same picture as the step before them, as :before to @next#3: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
     ]);
@@ -437,7 +442,7 @@ ${views}
       ),
       1
     );
-    expect(marked.warnings).toBeUndefined();
+    expect(unlooked(marked.warnings)).toEqual([]);
   });
 
   it('warns of a pause on a label marking only the value a declaration gives, the view drawing the name', async () => {

@@ -56,6 +56,7 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
+import { designOnlyWarning } from '$lib/modes/sverlin/padding-warnings.server';
 import { keptKey, writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
 import {
   bestCandidates,
@@ -3536,13 +3537,15 @@ export function softReturnLeft(
  * nothing new (project a60d96ec). The warning stays with the version, for the next turn to read.
  */
 export function returnedWarnings(warnings: readonly string[], firstSource: boolean): string[] {
+  // A look only, as padding nobody sees, never sends a picture back: it is right, only roomier.
+  const returned = warnings.filter((warning) => !warning.endsWith(designOnlyWarning));
   return firstSource
-    ? warnings.filter(
+    ? returned.filter(
         (warning) =>
           !warning.endsWith('The value is left out.') &&
           !warning.includes('draw the same picture as the step before them')
       )
-    : [...warnings];
+    : returned;
 }
 
 /** Whether the project has a version of its own, rather than its mode's starter. */

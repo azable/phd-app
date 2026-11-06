@@ -1214,7 +1214,11 @@ Every kind of node has these props, each with a fixed set of options:
   bold.
 - `padding`: 0, 0.0625, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, or 2 em;
   `radius`: 0, 2, 4, 6, 8, or 12 pixels, or 999 for a circle or pill; `minSize`,
-  the least width and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em.
+  the least width and height: 0, 1, 1.5, 2, 2.5, 3, or 4 em. Padding is space
+  inside a box: give it to a kind that shows a fill or a stroke, and none to a
+  node arranging others, whose items its `gap` spaces; a page's padding is its
+  margin, which a row written in it without a kind takes too, so give such a row
+  a kind of its own.
 - `shadow`: none, soft (a faint blur below), lifted (deeper and further down,
   raised off the page), or hard (a crisp block down and to the right, in its
   stroke colour or else its text's, a flat graphic look); `glow`: none or on, a
