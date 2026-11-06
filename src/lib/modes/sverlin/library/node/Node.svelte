@@ -1,7 +1,7 @@
 <!--
   One node of a visualization: a primitive `value`, or children content, which makes it a
   collection when it is one {#each} over a collection. A layout arranges its children, so
-  annotations such as an index or a pointer are simply nodes beside a value. Its look is the
+  annotations such as an index are simply nodes beside a value. Its look is the
   variant's values for its kind, the snippet it is in (see design.ts), not props of its own.
 -->
 <script lang="ts">
@@ -11,15 +11,10 @@
   import LinkOverlay from './LinkOverlay.svelte';
   import type { Direction, Form } from './forms';
   import Node from './Node.svelte';
-  import ItemEnd from './ItemEnd.svelte';
-  import Pointing from './Pointing.svelte';
   import {
     designContext,
     copyContext,
     elementOf,
-    endSlotContext,
-    itemEndsContext,
-    provideItemEnds,
     hiddenContext,
     hiddenSitesContext,
     provideHidden,
@@ -36,54 +31,31 @@
     movingIdentity,
     nodeIdsContext,
     elementSlot,
-    pointedContext,
-    pointerAroundContext,
-    pointerRoomContext,
-    providePointerRoom,
-    inPointerViewContext,
-    provideInPointerView,
-    pointerIdentityContext,
     placeContext,
-    pointersContext,
-    pointsInto,
-    reachesInto,
     provideComponentBox,
-    providePointerAround,
-    providePointerIdentity,
     provideCollectionLayout,
-    provideSequence,
     providePacking,
     packingContext,
     provideGrid,
     gridContext,
     collectionLayoutContext,
-    sequenceContext,
     slotContext,
     provideDrawn,
     throughContext,
     typeContext,
-    wrappedContext,
     type Basis,
-    type Packing,
-    type Pointer
+    type Packing
   } from '../type-context';
   import {
-    addedReach,
-    anchorOrigin,
     boxEffects,
     caseCss,
     colourCss,
     decorationCss,
     fillStyleCss,
-    kindKey,
     lookUp,
-    offsetReach,
-    paintProps,
     paintReach,
     placedKind,
-    scaleReach,
-    strokeStyleCss,
-    widerReach
+    strokeStyleCss
   } from './design';
   import { boundLength, boundLook, slotAnchor, type BoundDomain } from './bound';
   import { fontClass, iconGlyph } from '../fonts';
@@ -103,28 +75,22 @@
     icon: kindIcon = false,
     __view: chosenView = 'root',
     __kindOf,
-    __over,
     __ref,
-    __id,
-    __again = false,
     __type,
     __links,
     __follower = false,
     __field = false,
     __component,
-    __slot,
     __text = false,
     __itemOf,
     __itemAt,
     __items,
-    __places,
     __code,
     __math,
     __mathText,
     __extent,
     __nodes = false,
     __domains,
-    __packedAlong,
     ...bound
   }: {
     /** A primitive to display, when the node has no children. */
@@ -153,17 +119,8 @@
       values: readonly unknown[];
       choose: (...values: unknown[]) => string;
     };
-    /**
-     * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
-     * shows only where it is, and its other props hold in every slot, so slots keep one size.
-     */
-    __over?: { kind: string; active: boolean; placed?: string };
     /** Internal: the source position of this node's tag, added by the compiler. */
     __ref?: string;
-    /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
-    __id?: string;
-    /** Internal: set where this node is drawn again by itself, inside its pointers or as a copy: it is no grid cell, the node drawing it being one. */
-    __again?: boolean;
     /** Internal: set by the compiler on a node showing its view's own value: that value's type, which gives its unit. */
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
@@ -174,8 +131,6 @@
     __field?: boolean;
     /** Internal: set by the compiler on a typed component's root, naming the component. */
     __component?: string;
-    /** Internal: the element of the state this node draws, such as values[2], given by the node a pointer draws again. */
-    __slot?: string;
     /** Internal: set by the compiler on a node writing text around views, which sit inline in it. */
     __text?: boolean;
     /** Internal: set by the compiler on the one node an {#each} draws each item in: the collection and the item's index. */
@@ -183,8 +138,6 @@
     __itemAt?: number;
     /** Internal: set by the compiler on a node whose children are one {#each}: what it iterates, which makes this node a collection. */
     __items?: ArrayLike<unknown>;
-    /** Internal: the places of the root's pointers at the element this node draws again, by their names (see Pointed). */
-    __places?: readonly string[];
     /** Internal: the place a caption's token names, as @i for $i[A[i]] (see captionTokens in layout-tags). */
     __code?: string;
     /**
@@ -198,8 +151,6 @@
      * compiler, with the values each can take (see bound.ts).
      */
     __domains?: Readonly<Record<string, BoundDomain>>;
-    /** Internal: for a pointer's copy of an element, how the element's row packs it. */
-    __packedAlong?: Packing;
     /**
      * Internal: every row and column a grid's cells can take for any input, from their coordinates'
      * types, null where they cannot be worked out (see gridExtents in bound-props.server.ts).
@@ -219,19 +170,11 @@
       ? __kindOf.choose(...__kindOf.values.map((value, n) => (absentRead(n) ? undefined : value)))
       : chosenView
   );
-  // This node's look: the variant's values for its kind, or for a pointer drawing it again.
+  // This node's look: the variant's values for its kind, a render at a place giving its own where
+  // the variant sets them (see placedKind).
   const design = designContext();
-  // A pointer drawing this node again gives its paint where it is, and its other props everywhere;
-  // a render at a place gives its own where the variant sets them (see placedKind).
   const placed = untrack(() => placedKind(placeContext(), __view));
-  // How a box sits in its slot is its own kind's, wherever a pointer draws it again.
-  const slotProps = new Set(['width', 'height', 'xAnchor', 'yAnchor']);
   const look = (prop: string): unknown => {
-    const over =
-      __over && !slotProps.has(prop) && (__over.active || !paintProps.has(prop))
-        ? __over
-        : undefined;
-    if (over) return lookUp(design, over.kind, over.placed, prop);
     // A prop the view binds takes the option its value maps to, where the design gives one.
     const domain = __domains?.[prop];
     const mapped = domain
@@ -239,8 +182,7 @@
       : undefined;
     return mapped ?? lookUp(design, __view, placed, prop);
   };
-  // The icon the view binds, as icon={this}: its value's, wherever a pointer draws it again; or,
-  // written bare, the one its kind's design gives.
+  // The icon the view binds, as icon={this}: its value's; or, written bare, the one its kind's design gives.
   const icon = $derived(
     __domains?.icon
       ? iconGlyph(boundLook(design, __view, 'icon', bound.__bound_icon, __domains.icon))
@@ -257,7 +199,7 @@
   // varies, or its value sizes, its own, in a slot that keeps the largest, so nothing around it
   // moves, placed by its kind's anchor. A parent packing its children along an axis keeps no slot
   // for them there: each takes its own size, and the parent the room of them all.
-  const packing = untrack(() => __packedAlong ?? packingContext());
+  const packing = untrack(() => packingContext());
   const packedAlong = packing?.axis;
   const varies = (axis: 'width' | 'height') =>
     Boolean(__domains?.[axis]) || look(axis) === 'varying';
@@ -274,143 +216,42 @@
   untrack(() => {
     if (packing) packing.anchor = packing.axis === 'width' ? xAnchor : yAnchor;
   });
-  // A pointer's kind may expand the element it is at by its expand on each side. In a row that
-  // packs, the box grows, taking room the row keeps for it (see packRoom); elsewhere it is paint, its
-  // fill spread and its stroke drawn further out.
-  const expandOf = (value: unknown) => (typeof value === 'number' ? value : 0);
-  const expanded = $derived(expandOf(look('expand')));
   // Paint round the box takes no room of its own, so the box sits in a room keeping its largest
-  // reach on each side in any state: its own kind's shadow and glow, and a pointer's at it, active
-  // or not, with the pointer's spread and its expansion where it is painted. So no paint lies over
-  // a neighbour or past the drawing's edge, and nothing moves as a pointer comes and goes.
-  const paintedReach = untrack(() => {
-    const own = paintReach(
-      lookUp(design, __view, placed, 'shadow'),
-      lookUp(design, __view, placed, 'glow')
-    );
-    if (!__over) return own;
-    const of = (prop: string) => lookUp(design, __over.kind, __over.placed, prop);
-    const spreads =
-      (packedAlong === undefined ? expandOf(of('expand')) : 0) + expandOf(of('spread'));
-    return widerReach(own, paintReach(of('shadow'), of('glow'), spreads));
-  });
-  const growth = $derived(packedAlong === undefined ? 0 : expanded);
-  // The box's fill spread and its stroke drawn further out: a pointer's spread, and its expansion
-  // where it is painted, one drawing for both.
-  const spread = $derived((packedAlong === undefined ? expanded : 0) + expandOf(look('spread')));
+  // reach on each side: its kind's shadow and glow. So no paint lies over a neighbour or past the
+  // drawing's edge.
+  const reach = untrack(() =>
+    paintReach(lookUp(design, __view, placed, 'shadow'), lookUp(design, __view, placed, 'glow'))
+  );
+  const reaches = reach.top > 0 || reach.right > 0 || reach.bottom > 0 || reach.left > 0;
+  const reachPadding = reaches
+    ? `${reach.top}px ${reach.right}px ${reach.bottom}px ${reach.left}px`
+    : undefined;
   // The id a participant's selection refers to this node by (see provideNodeIds).
   const nodeIds = nodeIdsContext();
-  const endSlot = endSlotContext();
-  const id = untrack(() =>
-    endSlot ? undefined : (__id ?? (__ref ? nodeIds?.claim(__ref) : undefined))
-  );
+  const id = untrack(() => (__ref ? nodeIds?.claim(__ref) : undefined));
   // The element of the state this node draws: a collection's item, or a component's root, which
   // draws the element its call was given (see Slot.svelte). A hidden copy draws none.
   const copy = copyContext();
   const slot = untrack(() =>
-    copy ? undefined : (__slot ?? (__component ? slotContext() : undefined))
+    copy || !__component ? undefined : slotContext()
   );
-  // The root's pointers that can point into the collection whose element this node draws, as
-  // those pointing elsewhere this step keep their room, outermost (written last) first: the node
-  // is then drawn inside them (see Pointing.svelte), once, however many nodes
-  // inside also draw the element.
   const element = untrack(() => elementSlot(slot));
   untrack(() => {
     if (element && slot) provideDrawn(slot);
   });
-  const pointers = untrack(() =>
-    element && wrappedContext() !== slot
-      ? pointersContext()
-          .filter((pointer) => reachesInto(types, pointer, element.collection))
-          .map((pointer) =>
-            pointsInto(types, pointer, element.collection)
-              ? pointer
-              : { ...pointer, position: Number.NaN }
-          )
-          .toSorted((a, b) => b.order - a.order)
-      : []
-  );
-  const position = element?.index ?? -1;
-  const length = untrack(() => (element ? (types?.lengthOf(element.collection) ?? 0) : 0));
-  // The value this node draws keeps its identity across steps, so it can be followed as it moves,
-  // or read through a position, its place's; the outermost node a pointer's view draws where the
-  // pointer is takes the pointer's.
-  const pointerIdentity = pointerIdentityContext();
-  if (pointerIdentity) providePointerIdentity(undefined);
-  // The element the outermost node of a pointer's view is drawn around, active or not.
-  const drawnAround = pointerAroundContext();
-  if (drawnAround) providePointerAround(undefined);
-  // The slot it is drawn in there, which every pointer sharing it draws at one size.
-  const pointerRoom = pointerRoomContext();
-  if (pointerRoom) providePointerRoom(undefined);
-  // A pointer view's outermost node, not the element its <Pointed> draws (see provideInPointerView).
-  const pointerViewRoot = inPointerViewContext();
-  if (pointerViewRoot) provideInPointerView(false);
+  // The value this node draws keeps its identity across steps, so it can be followed as it moves.
   // The places this node refers to, where a listing's token names them (see listing/places.ts):
-  // those of the pointers at the element it draws, the render at a place it is the outermost node
-  // of, or the pointer at a place whose view it is the outermost node of where the pointer is.
+  // the render at a place it is the outermost node of.
   const renderPlace = renderPlaceContext();
   if (renderPlace) provideRenderPlace(undefined);
   const listing = listingContext();
-  const ownPlaces = untrack(() => {
-    const place = placeContext();
-    return namedPlaces(listing, [
-      renderPlace,
-      drawnAround && pointerIdentity && place && !place.within ? place.at : undefined
-    ]);
-  });
+  const ownPlaces = untrack(() => namedPlaces(listing, [renderPlace]));
   const identity = untrack(() =>
-    slot === undefined
-      ? pointerIdentity
-      : endSlot
-        ? undefined
-        : movingIdentity(types, throughContext(), slot)
+    slot === undefined ? undefined : movingIdentity(types, throughContext(), slot)
   );
-  // The end slots, as far past each end as any step puts one of the pointers' positions: none
-  // where the trace never goes past.
-  const endsOf = (into: readonly Pointer[], count: number, collection?: string) => {
-    // A pointer reaching this collection at some step keeps its end slots here at every step; one
-    // left out past the ends keeps none.
-    const ends = into
-      .filter((pointer) => !pointer.inside)
-      .map((pointer) =>
-        types?.pastEnds(
-          collection && pointer.reaches?.has(collection) ? collection : pointer.collection,
-          pointer.path
-        )
-      );
-    const reachBefore = Math.max(0, ...ends.map((end) => end?.before ?? 0));
-    const reachAfter = Math.max(0, ...ends.map((end) => end?.after ?? 0));
-    return {
-      before: Array.from({ length: reachBefore }, (_, place) => place - reachBefore),
-      after: Array.from({ length: reachAfter }, (_, place) => count + place)
-    };
-  };
-  // An {#each} item's node keeps its collection's end slots, as hidden copies of itself beside the
-  // first item and the last, so that labels drawn with each element line up in them too; the
-  // element inside then keeps none.
   const eachItem = untrack(() =>
-    __itemOf === undefined || endSlot
-      ? undefined
-      : elementSlot(elementOf(types, __itemOf, __itemAt ?? 0))
+    __itemOf === undefined ? undefined : elementSlot(elementOf(types, __itemOf, __itemAt ?? 0))
   );
-  const itemPointers = untrack(() =>
-    eachItem
-      ? pointersContext().filter((pointer) => reachesInto(types, pointer, eachItem.collection))
-      : []
-  );
-  if (eachItem && itemPointers.length) provideItemEnds(eachItem.collection);
-  const itemLength = untrack(() => (eachItem ? (types?.lengthOf(eachItem.collection) ?? 0) : 0));
-  const itemEnds = untrack(() => endsOf(itemPointers, itemLength, eachItem?.collection));
-  const { before, after } = untrack(() =>
-    endsOf(itemEndsContext() === element?.collection ? [] : pointers, length, element?.collection)
-  );
-  // Inside an item's copy at an end slot, the element draws only the pointers there.
-  const atEnd =
-    endSlot && element?.collection === endSlot.collection ? endSlot.position : undefined;
-  // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
-  const inSequence = sequenceContext() !== false;
-  // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   // Hidden at this step with every render it holds, keeping its room, its children with it.
   const hiddenHere = untrack(
     () => __ref !== undefined && (hiddenSitesContext()?.has(__ref) ?? false)
@@ -419,7 +260,7 @@
   const hidden = hiddenHere ? true : hiddenContext();
   // A node only keeping its room refers to nothing.
   const places = untrack(() =>
-    hidden ? [] : namedPlaces(listing, [...ownPlaces, ...(__places ?? []), __code])
+    hidden ? [] : namedPlaces(listing, [...ownPlaces, __code])
   );
   const lightColour = untrack(() => lightOf(listing, places));
   const light = lightColour ? nodeLight(listing?.places?.look, lightColour) : {};
@@ -433,12 +274,7 @@
   const memory = layoutMemoryContext();
   // Inside a value of a union, a member's view takes the box the union's members share.
   const union = unionContext();
-  // A pointer view's outermost node holds the pointers nested inside it, so one view drawn for
-  // several pointers would take the largest nest's box for each: it keeps its own pointer's size by
-  // its id instead (see providePointerNodeIds).
   const box = untrack(() =>
-    !pointers.length &&
-    !pointerViewRoot &&
     __component &&
     memory &&
     (!memory.measuring || memory.probing)
@@ -460,58 +296,6 @@
   );
   const leastOf = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
-  // A pointer's transforms move and scale its whole drawing, the marks round the element with it:
-  // they are drawn on the outermost node its view draws around the element (the element itself,
-  // where the view is a <Pointed> alone), only where the pointer is, scaled from that node's
-  // anchors. They take no room, so that node's room keeps their reach in every state: an offset's
-  // distance, and a scale's growth of the node's kept size, which the page learns from the layout
-  // memory and the measuring pass works out from the same size (see data-sv-scale in reserve.ts).
-  const transformer = untrack(() => {
-    if (drawnAround === undefined) return undefined;
-    if (__over) return __over;
-    const kind = kindKey(__view.split('.')[0], 'Pointed');
-    return {
-      kind,
-      placed: placedKind(placeContext(), kind),
-      active: pointedContext()?.active ?? false
-    };
-  });
-  const transformOf = (prop: string): number => {
-    const value = transformer ? lookUp(design, transformer.kind, transformer.placed, prop) : 0;
-    return typeof value === 'number' ? value : 0;
-  };
-  const scaled = untrack(() => Math.max(1, transformOf('scale')));
-  const anchorsOf = () => ({ x: xAnchor, y: yAnchor });
-  const reach = untrack(() => {
-    const moved = addedReach(
-      paintedReach,
-      offsetReach(transformOf('offsetX'), transformOf('offsetY'))
-    );
-    return reserved && scaled > 1 && !memory?.measuring
-      ? addedReach(moved, scaleReach(scaled, anchorsOf(), reserved))
-      : moved;
-  });
-  const reaches =
-    scaled > 1 || reach.top > 0 || reach.right > 0 || reach.bottom > 0 || reach.left > 0;
-  const reachPadding = reaches
-    ? `${reach.top}px ${reach.right}px ${reach.bottom}px ${reach.left}px`
-    : undefined;
-  // Measuring knows no kept sizes yet, so the room says how it scales, and the layout model adds
-  // the scale's reach from the size its node keeps.
-  const scaleRoom = untrack(() =>
-    scaled > 1 && memory?.measuring ? `${scaled} ${anchorsOf().x} ${anchorsOf().y}` : undefined
-  );
-  const transform = $derived.by(() => {
-    if (!transformer?.active) return undefined;
-    const x = transformOf('offsetX');
-    const y = transformOf('offsetY');
-    const parts = [
-      x || y ? `translate(${x}px, ${y}px)` : '',
-      scaled > 1 ? `scale(${scaled})` : ''
-    ].filter(Boolean);
-    return parts.length ? parts.join(' ') : undefined;
-  });
-  const transformOrigin = $derived(transform ? anchorOrigin(anchorsOf()) : undefined);
   const unit = $derived(__type ? types?.unit(__type) : undefined);
   // A number type draws every value with its places, as 3.00, so values line up and keep one width.
   const decimals = $derived(__type ? types?.places?.(__type) : undefined);
@@ -522,23 +306,6 @@
         ? value.toFixed(decimals)
         : String(value)
   );
-  // Every prop as given, to draw this node again inside its pointers.
-  const given = $derived({
-    value,
-    layout,
-    children,
-    flow,
-    __view,
-    __ref,
-    __type,
-    __links,
-    __component,
-    __items,
-    __domains,
-    __again: true,
-    ...bound
-  });
-
   const collection = $derived(__items !== undefined);
   // A collection runs as a row, or across the collection around it, as rows in a column do. A
   // node joining links states its layout (the compiler refuses one that does not).
@@ -551,7 +318,7 @@
   // columns from there; an axis left out spans all its tracks, and a child with neither is at
   // (0, 0). The nodes inside it are no grid's children, unless it is a subgrid. A grid keeps the
   // tracks the page worked out over every step (see LayoutMemory), so it never moves as it fills in.
-  const gridAround = untrack(() => (__again ? undefined : gridContext()));
+  const gridAround = untrack(() => gridContext());
   const grid = gridAround && !('subgrid' in gridAround) ? gridAround : undefined;
   const inSubgrid = gridAround && 'subgrid' in gridAround ? gridAround : undefined;
   const cell = untrack(() =>
@@ -568,11 +335,11 @@
   // as a CSS subgrid does: item k at coordinate k from the cell's own (from 0 where it spans every
   // track), its gap and align its own, its box drawn as a band behind them. A collection among them
   // running along that axis is a subgrid too, its items going on numbering, so {values} drawn by
-  // its view puts values[k] at coordinate k. A node drawn round pointers, or with room round it for
-  // its paint, is no subgrid: its cell holds it whole.
+  // its view puts values[k] at coordinate k. A node with room round it for its paint is no subgrid:
+  // its cell holds it whole.
   const shownHere = untrack(() => look('shown') !== false && !leftOut);
   const subgrid = untrack((): 0 | 1 | undefined => {
-    if (!shownHere || pointers.length || reaches) return undefined;
+    if (!shownHere || reaches) return undefined;
     if (inSubgrid) {
       const along = inSubgrid.subgrid === 1 ? 'row' : 'column';
       return collection && arrangement === along ? inSubgrid.subgrid : undefined;
@@ -781,8 +548,6 @@
   untrack(() => {
     // A subgrid's items are its grid's cells, which need no end slots: a coordinate past the ends
     // extends the grid.
-    if (subgrid !== undefined) provideSequence(false);
-    else if (arrangement) provideSequence(arrangement === 'row' || arrangement === 'column');
     if (collection) provideCollectionLayout(arrangement);
   });
   // Packing applies as a step shows; while the page measures, children keep their slots, so this
@@ -799,30 +564,6 @@
     anchor: 'center'
   });
   untrack(() => providePacking(packs ? ownPacking : undefined));
-  // The room a packed collection keeps for its pointers' expansions: one for each pointer that can
-  // point into it, along it, and one across, at the largest expand any pointer's kind takes. While
-  // the page measures it is padding at its end, so the room it keeps holds them; as a step shows,
-  // that room is its least size and the expanded box takes it.
-  const packRoom = untrack(() => {
-    if (!collection || look('spacing') !== 'packed' || !__items) return undefined;
-    if (arrangement !== 'row' && arrangement !== 'column') return undefined;
-    const largest = Math.max(
-      0,
-      ...Object.entries(design)
-        .filter(([key, value]) => key.endsWith('.expand') && typeof value === 'number')
-        .map(([, value]) => value as number)
-    );
-    const path = types?.pathOf(__items);
-    const count = path
-      ? pointersContext().filter((pointer) => reachesInto(types, pointer, path)).length
-      : 0;
-    if (!largest || !count) return undefined;
-    const along = 2 * largest * count;
-    const across = 2 * largest;
-    return arrangement === 'row'
-      ? { width: along, height: across }
-      : { width: across, height: along };
-  });
   const trackCss = (sizes: readonly number[] | undefined) =>
     sizes?.length ? sizes.map((size) => `${size}px`).join(' ') : undefined;
   const measured = (prop: string, unit: string) => {
@@ -838,22 +579,6 @@
     const along = valueWidth === undefined ? (padding ?? '0') : '0';
     return `${across} ${along}`;
   });
-  // Its padding's four sides, top, right, bottom, left, each with pixels added where it grows.
-  const paddingSides = (padding: string | undefined, add: readonly number[]) => {
-    const [top = '0', right = top, bottom = top, left = right] = (padding ?? '0').split(/\s+/u);
-    const sides = [top, right, bottom, left].map((side, index) =>
-      add[index] ? `calc(${side} + ${add[index]}px)` : side
-    );
-    return add.some(Boolean) ? sides.join(' ') : padding;
-  };
-  const boxPadding = $derived.by(() => {
-    if (growth) return paddingSides(valuePadding, [growth, growth, growth, growth]);
-    if (packRoom && memory?.measuring)
-      return paddingSides(valuePadding, [0, packRoom.width, packRoom.height, 0]);
-    return valuePadding;
-  });
-  const grown = (least: string | undefined) =>
-    growth ? (least ? `calc(${least} + ${2 * growth}px)` : `${2 * growth}px`) : least;
   const sized = (length: number | undefined) => (length !== undefined ? `${length}px` : undefined);
   const least = (length: number | undefined, axis: 'width' | 'height') =>
     length !== undefined
@@ -861,7 +586,7 @@
       : leastOf(measured('minSize', 'em'), keepsSlot(axis) ? reserved?.[axis] : undefined);
   const strokeColour = $derived(colourCss(look('stroke')));
   // Its stroke width holds in every state, as strokeWidth is not paint: a stroke of no colour keeps
-  // its width, transparent, so a pointer colouring it moves nothing inside.
+  // its width, transparent, so a place colouring it moves nothing inside.
   const borderWidth = $derived(
     typeof look('strokeWidth') === 'number' ? (look('strokeWidth') as number) : 0
   );
@@ -875,33 +600,12 @@
       text: textColour
     })
   );
-  // An expansion painted round the box: its fill spread out, and its stroke drawn at the spread's
-  // edge, the border showing the fill beneath it. A solid stroke is a second shadow just outside the
-  // fill's, so both shrink together between steps; an outline's offset animates in whole pixels and
-  // would lag behind. A dashed or dotted stroke, which no shadow draws, stays an outline.
-  const spreadStroke = $derived(spread > 0 && strokeColour !== undefined && borderWidth > 0);
-  const strokeDashes = $derived(strokeStyleCss(look('strokeStyle')));
-  const spreadShadow = $derived(
-    spread > 0
-      ? [
-          fillColour ? `0 0 0 ${spread}px ${fillColour}` : undefined,
-          spreadStroke && !strokeDashes
-            ? `0 0 0 ${spread + borderWidth}px ${strokeColour}`
-            : undefined
-        ]
-          .filter(Boolean)
-          .join(', ') || undefined
-      : undefined
-  );
-  const spreadOutline = $derived(
-    spreadStroke && strokeDashes ? `${borderWidth}px ${strokeDashes} ${strokeColour}` : undefined
-  );
   const fillStyle = $derived(fillColour ? fillStyleCss(look('fillStyle')) : undefined);
   // Its own text's line: the value's or the text it writes, never its child nodes', and its case,
   // which its child nodes inherit unless they set their own.
   const decoration = $derived(decorationCss(look('decoration')));
   const textCase = $derived(caseCss(look('case')));
-  // Whether its own look draws a box, a stroke or a fill, whatever a pointer at it paints at a step:
+  // Whether its own look draws a box, a stroke or a fill, whatever a place paints at a step:
   // an arrow to an element whose node draws none meets the boxes inside it that do (see visible.ts).
   const framed = $derived.by(() => {
     const own = (prop: string) => lookUp(design, __view, placed, prop);
@@ -922,13 +626,8 @@
   // any of its renders reaches, keeps its tracks and puts the room where justify says; between,
   // around, and evenly spread the tracks over it instead.
   const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
-  // A packed row keeping room for its pointers' expansions puts that room where its items' kind
-  // places a box (see Packing): around them by default, so an expanded item grows about its centre,
-  // the items before it moving back as far as those after move on.
   const roomAt = $derived(
-    packs && packRoom
-      ? ownPacking.anchor
-      : justify === 'start'
+    justify === 'start'
         ? 'flex-start'
         : justify === 'end'
           ? 'flex-end'
@@ -963,31 +662,14 @@
   {@render children?.()}
 {/snippet}
 
-{#snippet pointed(props: Record<string, unknown>)}
-  <Node
-    {...given}
-    __id={id}
-    __slot={slot}
-    {...props}
-    __packedAlong={packing}
-    __places={[...ownPlaces, ...((props.__places as string[] | undefined) ?? [])]}
-  />
-{/snippet}
-
-{#snippet itemCopy()}
-  <Node {...given} {__text} __ref={undefined} />
-{/snippet}
-
 {#snippet nodeBox()}
   <div
     class="sv-node {typeof font === 'string' ? fontClass(font) : ''}"
     data-sv-node={id}
-    data-sv-kind={__over?.active ? __over.kind : __view}
-    data-sv-component={pointerViewRoot ? undefined : __component}
+    data-sv-kind={__view}
+    data-sv-component={__component}
     data-sv-slot={slot}
     data-sv-identity={identity}
-    data-sv-around={drawnAround}
-    data-sv-room={pointerRoom}
     data-sv-follower={__follower ? 'true' : undefined}
     data-sv-item={eachItem ? `${eachItem.collection}[${eachItem.index}]` : undefined}
     data-sv-hidden={hidden === undefined ? undefined : String(hidden)}
@@ -1010,27 +692,22 @@
     style:color={textColour}
     style:background-color={fillColour}
     style:background-image={fillStyle?.css}
-    style:box-shadow={[spreadShadow, effects.css, light.shadow].filter(Boolean).join(', ') ||
-      undefined}
-    style:outline={light.outline ?? spreadOutline}
-    style:outline-offset={light.outlineOffset ?? (spreadOutline ? `${spread}px` : undefined)}
+    style:box-shadow={[effects.css, light.shadow].filter(Boolean).join(', ') || undefined}
+    style:outline={light.outline}
+    style:outline-offset={light.outlineOffset}
     style:text-transform={textCase?.transform}
     style:font-variant-caps={textCase?.caps}
     style:text-decoration-line={__text ? decoration : undefined}
-    style:border-color={spreadStroke
-      ? 'transparent'
-      : (strokeColour ?? (borderWidth > 0 ? 'transparent' : undefined))}
+    style:border-color={strokeColour ?? (borderWidth > 0 ? 'transparent' : undefined)}
     style:border-style={strokeStyleCss(look('strokeStyle'))}
     style:border-width={`${borderWidth}px`}
     style:border-radius={measured('radius', 'px')}
-    style:padding={boxPadding}
+    style:padding={valuePadding}
     style:width={sized(valueWidth)}
     style:height={sized(valueHeight)}
-    style:min-width={subgrid === undefined ? grown(least(valueWidth, 'width')) : undefined}
-    style:min-height={subgrid === undefined ? grown(least(valueHeight, 'height')) : undefined}
+    style:min-width={subgrid === undefined ? least(valueWidth, 'width') : undefined}
+    style:min-height={subgrid === undefined ? least(valueHeight, 'height') : undefined}
     style:opacity={look('opacity') as number | undefined}
-    style:transform
-    style:transform-origin={transformOrigin}
     class:sv-subgrid={subgrid !== undefined}
     data-sv-subgrid={subgrid === undefined ? undefined : subgrid === 1 ? 'col' : 'row'}
     data-sv-row={subgrid !== undefined ? cellAttributes?.row : undefined}
@@ -1059,7 +736,7 @@
         direction={look('direction') as Direction | undefined}
         curve={look('curve') as 'straight' | 'curved' | undefined}
         layoutSeed={look('layoutSeed') as number | undefined}
-        kind={__over?.kind ?? __view}
+        kind={__view}
         {gap}
         scope={id ?? 'node'}
       >
@@ -1112,7 +789,7 @@
             ? 'center'
             : undefined}
         style:justify-content={justification}
-        style:width={collection && arrangement === 'row' && (packed || (packs && packRoom))
+        style:width={collection && arrangement === 'row' && packed
           ? 'max-content'
           : undefined}
         style:margin-inline-start={collection && arrangement === 'row' && roomAt !== 'flex-start'
@@ -1164,33 +841,11 @@
 {/snippet}
 
 {#snippet drawn()}
-  {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
-    {#each itemEnds.before as end (end)}
-      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-    {/each}
-  {/if}
-  {#if atEnd !== undefined}
-    {#if pointers.length}
-      <Pointing {pointers} position={atEnd} name={slot ?? ''} draw={pointed} placeholder />
-    {/if}
-  {:else if pointers.length}
-    {#if position === 0 && inSequence && before.length}
-      {#each before as end (end)}
-        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-      {/each}
-    {/if}
-    <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
-    {#if position === length - 1 && inSequence && after.length}
-      {#each after as end (end)}
-        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-      {/each}
-    {/if}
-  {:else if slotWidth || slotHeight || reaches}
+  {#if slotWidth || slotHeight || reaches}
     <!-- A box of its own size in the slot that keeps the largest it reaches (see varies), with room
       round it for the paint it reaches past it with (see reach). -->
     <div
       class="sv-room"
-      data-sv-scale={scaleRoom}
       style:padding={reachPadding}
       style:justify-content={xAnchor}
       style:align-items={yAnchor}
@@ -1201,11 +856,6 @@
     </div>
   {:else}
     {@render nodeBox()}
-  {/if}
-  {#if eachItem && eachItem.index === itemLength - 1 && inSequence && itemEnds.after.length}
-    {#each itemEnds.after as end (end)}
-      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-    {/each}
   {/if}
 {/snippet}
 
@@ -1290,7 +940,7 @@
   }
   /*
     A row or column is a grid of one row or one column, each child a track as large as itself, in
-    order, an end slot a track before the first or after the last like the rest.
+    order.
   */
   .items {
     display: grid;

@@ -723,7 +723,7 @@ export function sceneOf(
       node.colours = { ...node.colours, stroke: stroke.name };
     }
     if (color) {
-      // The node's own text and that of the nodes inside it, as a <Pointed>'s colour reaches them.
+      // The node's own text and that of the nodes inside it, as a link's target colour reaches them.
       const inside = new Set([node.id]);
       for (const each of nodes)
         if (each === node || (each.parent !== undefined && inside.has(each.parent))) {

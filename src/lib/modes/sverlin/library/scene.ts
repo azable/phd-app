@@ -53,7 +53,7 @@ export type SceneNode = {
   parent?: string;
   /** Its atomic type name, if typed. */
   type?: string;
-  /** Its kind of node, as Compared.Pointed: what its look is the variant's values for. */
+  /** Its kind of node, as Row.Under: what its look is the variant's values for. */
   kind?: string;
   /** How it arranges its items or children, if it does. */
   layout?: Layout;

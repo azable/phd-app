@@ -27,7 +27,6 @@ import type { Rule } from './css';
 import { layOut, type Box, type ModelLayout, type TextMeasure } from './layout';
 import type { Look, Styled, Styler } from './look';
 import { classesOf, isElement, type ModelElement } from './tree';
-import { scaleReach } from '../node/design';
 
 type Size = { width: number; height: number };
 
@@ -163,11 +162,6 @@ function sizer(options: ReserveOptions) {
           if (child.attributes['data-sv-node']) items.add(child.attributes['data-sv-node']);
         collections.set(collection, items);
       }
-      // The pointers sharing a slot round an element draw it at one size, as a collection's items
-      // keep one, so the element stays put whichever of them is drawn there (see providePointerRoom).
-      const room = element.attributes['data-sv-room'];
-      if (room && id)
-        collections.set(`room:${room}`, (collections.get(`room:${room}`) ?? new Set()).add(id));
       for (const child of elementsOf(element)) classify(child, inside);
     };
     classify(flow, false);
@@ -235,7 +229,7 @@ function sizer(options: ReserveOptions) {
           return { width: { px: size.width, percent: 0 }, height: { px: size.height, percent: 0 } };
         const tracks = gridTracks(at, element);
         if (tracks) return { gridTemplateColumns: tracks.columns, gridTemplateRows: tracks.rows };
-        const room = roomOf(at, element) ?? scaleRoomOf(at, element);
+        const room = roomOf(at, element);
         const own = at.styled.get(element)?.look.padding;
         return (
           room &&
@@ -301,18 +295,6 @@ function sizer(options: ReserveOptions) {
       rooms.set(key, room);
     }
     return room;
-  }
-  /**
-   * The room a pointer's scale needs round the node it scales (see transformer in Node.svelte):
-   * its growth of the size the node keeps, from its anchors, which the page adds itself once it
-   * knows the kept sizes.
-   */
-  function scaleRoomOf(at: Read, room: ModelElement): Sides | undefined {
-    const [scale, x, y] = room.attributes['data-sv-scale']?.split(' ') ?? [];
-    if (scale === undefined) return undefined;
-    const node = elementsOf(room).find((child) => child.attributes['data-sv-node'] !== undefined);
-    const size = node && leastOf(at, node);
-    return size ? scaleReach(Number(scale), { x, y }, size) : undefined;
   }
 
   /** What sets an element's room apart, for a row or column holding links. */
@@ -1134,8 +1116,6 @@ const unseenAttributes = new Set([
   'data-sv-identity',
   'data-sv-slot',
   'data-sv-item',
-  'data-sv-around',
-  'data-sv-room',
   'data-sv-pair',
   'data-sv-way',
   'data-sv-ref',

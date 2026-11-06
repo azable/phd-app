@@ -136,9 +136,7 @@ function withoutBase(design: AiDesign): AiDesign {
  * the assistant sends.
  */
 function writtenDesign({ options, variables }: AiDesign): AiDesign {
-  const known = new Set(variables.map(({ variable }) => variable));
-  const has = (key: string) => known.has(key);
-  const written = (key: string) => writtenKey(key, has);
+  const written = (key: string) => writtenKey(key);
   return {
     options: Object.fromEntries(Object.entries(options).map(([name, set]) => [written(name), set])),
     variables: variables.map((variable) => ({
@@ -155,7 +153,7 @@ export function designVariables(
   presentation:
     | Pick<
         BrowserBundlePresentation,
-        'variant' | 'origins' | 'views' | 'pointers' | 'listings' | 'roles'
+        'variant' | 'origins' | 'views' | 'listings' | 'roles'
       >
     | undefined,
   /** Each free layout's structure, by its kind (see SourceBuildFacts): only layers take layered. */
@@ -214,7 +212,6 @@ export function designVariables(
       return type.startsWith('@') ? type : (type.split('.').at(-1) ?? rest);
     };
     const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
-    const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
     const prop =
       key === 'listing.language' || key === 'listing.places'
         ? key
@@ -235,7 +232,7 @@ export function designVariables(
       // The forms of a layout whose links make no layers, which do not take layered.
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };
-    if (!view && !pointer && Object.hasOwn(known, set))
+    if (!view && Object.hasOwn(known, set))
       options[set] = baseOptions(set, known[set], variant);
     // A base's name, scales and palette are free within their form (see withBase).
     const ofBase =
@@ -251,11 +248,9 @@ export function designVariables(
       variable: key,
       options: view
         ? [...(presentation?.views?.[view] ?? []), 'none']
-        : pointer
-          ? [...(presentation?.pointers?.[pointer] ?? []), 'none']
-          : key === 'listing.language' && presentation?.listings?.length
-            ? [...presentation.listings, ...listingOptions['listing.language']]
-            : set,
+        : key === 'listing.language' && presentation?.listings?.length
+          ? [...presentation.listings, ...listingOptions['listing.language']]
+          : set,
       value,
       ...(origin ? { origin } : {}),
       ...(follows ? { follows } : {})

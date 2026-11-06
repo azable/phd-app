@@ -60,9 +60,7 @@ export type ImplicitRender = { start: number; end: number; type: string; argumen
 export function implicitRenders(
   html: unknown,
   typing: ViewTyping,
-  references: readonly LabelReference[],
-  /** The types drawn as pointers, around what their positions point at. */
-  pointerTypes: ReadonlySet<string> = new Set()
+  references: readonly LabelReference[]
 ): ImplicitRender[] {
   const { domain, steps } = typing;
   const { atoms, structures } = domain;
@@ -175,19 +173,12 @@ export function implicitRenders(
     }
     return undefined;
   };
-  // A union with one member drawn as a pointer, as a position or the end, marks where it points.
-  const pointed = (type: string | undefined) => {
-    const structure = type ? structures[type] : undefined;
-    if (structure?.kind !== 'union') return type;
-    const pointers = structure.members.filter((member) => pointerTypes.has(member));
-    return pointers.length === 1 ? pointers[0] : type;
-  };
   const found: ImplicitRender[] = [];
   const visit = (parts: readonly Part[] | undefined, scope: Scope) => {
     let local = new Map(scope);
     for (const part of parts ?? []) {
       if (part.type === 'MustacheTag' || part.type === 'ExpressionTag') {
-        const type = pointed(typeOf(part.expression, local));
+        const type = typeOf(part.expression, local);
         if (type && isType(type) && part.expression)
           found.push({
             start: part.start ?? 0,
@@ -268,21 +259,13 @@ export function markImplicit(html: unknown, renders: readonly ImplicitRender[]):
   visit(html as Part);
 }
 
-/**
- * The insertions that make each implicit render read `{@render Int(key)}` in the text compiled,
- * leaving the renders a removal takes out of the markup, as a root's pointers, as removed.
- */
+/** The insertions that make each implicit render read `{@render Int(key)}` in the text compiled. */
 export function implicitInsertions(
   renders: readonly ImplicitRender[],
-  removals: readonly Insertion[],
   /** The alias of a render at a place drawing its own choice of view, called in place of its type. */
   aliasAt: (start: number) => string | undefined = () => undefined
 ): Insertion[] {
-  const removed = (start: number) =>
-    removals.some(({ at, remove = 0 }) => at <= start && start < at + remove);
-  return renders
-    .filter(({ start }) => !removed(start))
-    .flatMap(({ start, end, type }) => [
+  return renders.flatMap(({ start, end, type }) => [
       { at: start + 1, text: `@render ${aliasAt(start) ?? type}(` },
       { at: end - 1, text: ')' }
     ]);

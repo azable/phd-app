@@ -77,8 +77,6 @@ import {
   eachScope,
   probeMarkup,
   branchInsertions,
-  pointerCalls,
-  unmarkedPointerWarnings,
   probeValues,
   positionReads,
   readsOf,
@@ -91,13 +89,13 @@ import {
   snippetPaths,
   steadyLengths,
   viewCallsOf,
+  flowWarnings,
   slotInsertions,
   viewsOf,
   withInsertions,
   type ComponentProbe,
   type Insertion,
   type Placement,
-  type PointerMark,
   type ComponentSignatures
 } from './components.server';
 import { callTypes } from './calls.server';
@@ -327,8 +325,6 @@ export type PreparedComponent = {
    * layout whose blocks flow as text, told to the assistant.
    */
   positionWarnings?: string[];
-  /** The pointers the root renders, whose scenes are checked for an element each marks. */
-  pointerMarks?: PointerMark[];
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
@@ -362,21 +358,19 @@ export type PreparedComponent = {
   /** The view's typed components, each after those it renders, as the page enumerates them. */
   components: ComponentProbe[];
   /**
-   * The design space, the views each type rendered by name chooses among (its pointer views apart),
-   * the kind of each tag (by its line:column), and the first variant.
+   * The design space, the views each type rendered by name chooses among, the kind of each tag (by
+   * its line:column), and the first variant.
    */
   design: {
     views: Record<string, string[]>;
-    /** The pointer views each position type rendered by name as a pointer chooses among. */
-    pointers: Record<string, string[]>;
     tags: Record<string, string[]>;
-    /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+    /** The variable each render of a type by name reads, as views.Int, by its line:column. */
     renders: Record<string, string>;
     /**
      * The places with a view choice of their own, by the alias they are drawn through: its variable,
-     * as views.Int:@swap.held, the type's it falls back to, its options, and whether it is a pointer.
+     * as views.Int:@swap.held, the type's it falls back to, and its options.
      */
-    places: Record<string, { key: string; base: string; options: string[]; pointer: boolean }>;
+    places: Record<string, { key: string; base: string; options: string[] }>;
     /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
     fallbacks: Record<string, Fallback>;
     /** Each kind of node's role, by its key, whose role levels its props follow (see buildVariant). */
@@ -1061,13 +1055,7 @@ function prepareViews(
       }
     };
     const authored = svelteSource.length;
-    const pointerTypes = (html: unknown) => {
-      const { components, pointers } = findComponents(html as Parameters<typeof findComponents>[0]);
-      return new Set(components.filter(({ name }) => pointers.has(name)).map(({ type }) => type));
-    };
-    let implicit = typing
-      ? implicitRenders(ast.html, typing, references, pointerTypes(ast.html))
-      : [];
+    let implicit = typing ? implicitRenders(ast.html, typing, references) : [];
     if (typing) {
       const unions = new Set(
         implicit
@@ -1083,7 +1071,7 @@ function prepareViews(
       if (added.text) {
         svelteSource += added.text;
         ast = parseView(svelteSource);
-        implicit = implicitRenders(ast.html, typing, references, pointerTypes(ast.html));
+        implicit = implicitRenders(ast.html, typing, references);
       }
     }
     markImplicit(ast.html, implicit);
@@ -1154,22 +1142,9 @@ function prepareViews(
       );
     const paths = snippetPaths(ast.html);
     // A view whose links sit outside its nodes joins the children of the node it is rendered in,
-    // which lays them out; a pointer view draws inside the element it marks, so its links join
-    // nothing there.
-    const linkProblems: InvalidSvelteSourceError[] = [];
+    // which lays them out.
     const linkedTypes = new Set<string>();
-    for (const { name, type, node } of found.components) {
-      const links = outerLinks(node);
-      if (!links.length) continue;
-      if (found.pointers.has(name))
-        linkProblems.push(
-          new InvalidSvelteSourceError(
-            `${name} is a pointer view, drawn inside the element it marks, so its <Link> joins nothing: write the link among the elements, in the node holding them, with labels at its ends, as <Link from={@insert.swap.from} to={@insert.swap.to} />.`,
-            { code: 'link_placement', start: sourcePosition(source, links[0]) }
-          )
-        );
-      else linkedTypes.add(type);
-    }
+    for (const { type, node } of found.components) if (outerLinks(node).length) linkedTypes.add(type);
     const {
       insertions,
       problems,
@@ -1235,7 +1210,6 @@ function prepareViews(
       ...(typed && 'failure' in typed ? problems.filter((problem) => !untyped(problem)) : problems),
       ...layoutProblems,
       ...kindLayoutProblems,
-      ...linkProblems,
       ...found.problems.map(
         ({ message, start }) =>
           new InvalidSvelteSourceError(message, {
@@ -1283,7 +1257,7 @@ function prepareViews(
       if (structure?.kind === 'ref' && structure.heap)
         viewProblems.push(
           new InvalidSvelteSourceError(
-            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in a layout, as {q.name} with q a ${type}, or mark its node with a pointer view, as <View of="${type}" name="Here"><Pointed /></View>.`,
+            `A ${type} refers to a ${structure.element ?? 'node'} and has no value of its own to show: read a field of its node through it in a layout, as {q.name} with q a ${type}, or point at its node with a link, as <View of="${type}" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>.`,
             { code: 'view_component', start: sourcePosition(source, start) }
           )
         );
@@ -1367,7 +1341,6 @@ function prepareViews(
       );
     const components = checkComponents(
       found.components,
-      found.pointers,
       viewing,
       stateNames,
       stateNames,
@@ -1455,43 +1428,27 @@ function prepareViews(
     );
     if (unknown)
       throw new InvalidSvelteSourceError(
-        `${unknown.name} is drawn, but no view, type, layout, or label is named so: define it, as <View of="Index" name="${unknown.name}"><Pointed /></View> for a pointer or <Layout name="${unknown.name}">…</Layout>, or draw one that exists.`,
+        `${unknown.name} is drawn, but no view, type, layout, or label is named so: define it, as <View of="Index" name="${unknown.name}"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View> for a pointer or <Layout name="${unknown.name}">…</Layout>, or draw one that exists.`,
         { code: 'view_component', start: sourcePosition(source, unknown.start) }
       );
-    // Each type rendered by name chooses among its views: its plain views, where it also has
-    // pointers, which are rendered by their own names.
-    // A view that draws its own type by name, itself or through views it renders, would draw
-    // itself without end were it chosen, so it is no option for its type.
+    // Each type rendered by name chooses among its views. A view that draws its own type by name,
+    // itself or through views it renders, would draw itself without end were it chosen, so it is
+    // no option for its type.
     const reads = new Map(found.components.map(({ name, node }) => [name, readsOf(node)]));
     const drawsItself = (view: string, type: string, seen = new Set<string>()): boolean =>
       !seen.has(view) &&
       [...(reads.get(view) ?? [])].some(
         (read) => read === type || (reads.has(read) && drawsItself(read, type, seen.add(view)))
       );
-    // A position type draws a mark outside a <Node>, through its pointer views (pointers.Index), and
-    // its number inside one, through its other views (views.Index): each a choice of its own. A
-    // render inside a node of a type with only pointer views is a pointer, refused there.
-    const optionsOf = (type: string) => {
-      const drawable = views[type].filter((view) => !drawsItself(view, type));
-      return {
-        plain: drawable.filter((view) => !found.pointers.has(view)),
-        marks: drawable.filter((view) => found.pointers.has(view))
-      };
-    };
+    const optionsOf = (type: string) => views[type].filter((view) => !drawsItself(view, type));
     const chosen: Record<string, string[]> = {};
-    const pointerChosen: Record<string, string[]> = {};
     const renderVariables: Record<string, string> = {};
-    for (const { name, start, inNode } of rendered) {
-      const { plain, marks } = optionsOf(name);
-      const asMark = marks.length > 0 && (!inNode || !plain.length);
-      if (asMark) pointerChosen[name] = marks;
-      else chosen[name] = plain;
+    for (const { name, start } of rendered) {
+      chosen[name] = optionsOf(name);
       const { line, column } = sourcePosition(source, start);
-      renderVariables[`${line}:${column + 1}`] = `${asMark ? 'pointers' : 'views'}.${name}`;
+      renderVariables[`${line}:${column + 1}`] = `views.${name}`;
     }
-    const endless = rendered.find(
-      ({ name }) => !(chosen[name]?.length || pointerChosen[name]?.length)
-    );
+    const endless = rendered.find(({ name }) => !chosen[name]?.length);
     if (endless)
       throw new InvalidSvelteSourceError(
         `Every view of ${endless.name} draws ${endless.name} itself, without end: add a view that draws its value with nodes, as <View of="${endless.name}" name="${endless.name}Cell"><Node value={this} /></View>.`,
@@ -1505,7 +1462,7 @@ function prepareViews(
       throw InvalidSvelteSourceError.combine(
         named.map(({ name, start }) => {
           const type = components[name];
-          const variable = `${found.pointers.has(name) ? 'pointers' : 'views'}.${type}`;
+          const variable = `views.${type}`;
           return new InvalidSvelteSourceError(
             `{@render ${name}(…)} names the view ${name}, but which view draws a value is the variant's: write the value in braces, as {…}, drawn by the view ${variable} chooses, and a place's own choice draws one render apart.`,
             { code: 'view_component', start: sourcePosition(source, start) }
@@ -1516,10 +1473,7 @@ function prepareViews(
     // choice of view, where its type has more than one of the kind it draws, and its own paint for
     // the kinds of the views it can draw, each falling back to the type's and the kinds' until a
     // variant sets them. A place drawing another view than its type's is drawn through an alias.
-    const placeChoices: Record<
-      string,
-      { key: string; base: string; options: string[]; pointer: boolean }
-    > = {};
+    const placeChoices: Record<string, { key: string; base: string; options: string[] }> = {};
     const placeKinds = new Map<
       string,
       { base: string; role: KindRole; unboxed?: Readonly<Record<string, string>> }
@@ -1535,8 +1489,8 @@ function prepareViews(
         )
         .map(([name]) => name)
     );
-    // place() in a pointer view names the place its pointer is rendered at (see sverlinPlace), or
-    // the design's label for it; the views calling it, whose places each get a label variable.
+    // place() in a view names the place it is rendered at (see sverlinPlace), or the design's label
+    // for it; the views calling it, whose places each get a label variable.
     const placeNames = placeCalls(ast.html, new Set(Object.keys(components)));
     const misplaced = placeNames.filter(({ problem }) => problem);
     if (misplaced.length)
@@ -1555,10 +1509,8 @@ function prepareViews(
     // Each grid coordinate whose values the build cannot work out (see gridExtents), warned of.
     const unknownCoordinates: { axis: string; start: number; end: number }[] = [];
     const placeSlots = new Map<number, string>();
-    const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
     const aliasOf = new Map<string, string>();
-    const labelMarks = new Map<string, { kinds: Record<string, string>; by?: string }>();
     // The places the root and its parts render at, which a listing's tokens can name.
     const rootPlaces = new Map<string, RenderedPlace>();
     // A type drawn only as links' labels, as a weight, starts its views as a label: plain text, as
@@ -1566,52 +1518,37 @@ function prepareViews(
     const linkLabelViews = new Set(
       [...Map.groupBy(sites, ({ name }) => name)]
         .filter(([type, at]) => views[type] && at.every(({ inLink }) => inLink))
-        .flatMap(([type]) => optionsOf(type).plain)
+        .flatMap(([type]) => optionsOf(type))
         .filter((view) => unlaid.some(({ key, role }) => key === view && role === 'value'))
     );
     for (const site of sites) {
-      const { name, start, inNode, at, label } = site;
-      if (!(chosen[name] || pointerChosen[name])) continue;
-      const { plain, marks } = optionsOf(name);
-      const asMark = marks.length > 0 && (!inNode || !plain.length);
-      const naming = (asMark ? marks : plain).some((view) => namingViews.has(view));
+      const { name, start, at } = site;
+      if (!chosen[name]) continue;
+      const options = optionsOf(name);
+      const naming = options.some((view) => namingViews.has(view));
       // A render with no name, as {j - 1}, has no place of its own: place() gives it as written.
       if (!at) {
         if (naming) {
           const place = `{ within: "", at: "", written: ${JSON.stringify(site.argument.replaceAll(viewThis, 'this'))} }`;
-          if (asMark) pointerPlaces.set(start, { place });
-          else placeSlots.set(start, place);
+          placeSlots.set(start, place);
         }
         continue;
       }
       if (naming && !site.within) labelledPlaces.add(at);
-      // A place drawn both as a pointer and as a value, as a caption's number, takes its pointer's
-      // paint.
-      if (!site.within && (asMark || !rootPlaces.has(at)))
-        rootPlaces.set(at, { type: name, pointer: asMark });
-      const options = asMark ? marks : plain;
-      const prefix = asMark ? 'pointers' : 'views';
+      if (!site.within && !rootPlaces.has(at)) rootPlaces.set(at, { type: name });
       const within = site.within ? `${site.within}.` : '';
       let alias: string | undefined;
       if (options.length > 1) {
-        const key = `${prefix}.${within}${name}${at}`;
+        const key = `views.${within}${name}${at}`;
         alias = aliasOf.get(key) ?? `__place${aliasOf.size + 1}`;
         aliasOf.set(key, alias);
-        placeChoices[alias] = { key, base: `${prefix}.${name}`, options, pointer: asMark };
+        placeChoices[alias] = { key, base: `views.${name}`, options };
         const { line, column } = sourcePosition(source, start);
         renderVariables[`${line}:${column + 1}`] = key;
       }
-      const chooser = asMark ? `__pointer_${alias ?? name}` : `__choice_${alias ?? name}`;
-      const place = `{ within: ${JSON.stringify(within)}, at: ${JSON.stringify(at)}, view: ${chooser} }`;
-      if (asMark)
-        pointerPlaces.set(start, {
-          ...(alias ? { view: `__pointerOf_${alias}`, choice: `__pointer_${alias}` } : {}),
-          place
-        });
-      else {
-        placeSlots.set(start, place);
-        if (alias) aliases.set(start, { alias, callee: site.callee });
-      }
+      const place = `{ within: ${JSON.stringify(within)}, at: ${JSON.stringify(at)}, view: __choice_${alias ?? name} }`;
+      placeSlots.set(start, place);
+      if (alias) aliases.set(start, { alias, callee: site.callee });
       for (const view of options)
         for (const kind of unlaid)
           if (kind.key === view || kind.key.startsWith(`${view}.`))
@@ -1626,16 +1563,6 @@ function prepareViews(
                     ? { unboxed: cardFieldPaint }
                     : {})
             });
-      // A label the root marks: its listing region's paint falls back to the mark's.
-      if (asMark && label && !within)
-        labelMarks.set(at.slice(2), {
-          kinds: Object.fromEntries(
-            options
-              .filter((view) => unlaid.some(({ key }) => key === kindKey(view, 'Pointed')))
-              .map((view) => [view, `${kindKey(view, 'Pointed')}${at}`])
-          ),
-          ...(options.length > 1 ? { by: `pointers.${name}${at}` } : {})
-        });
     }
     const caseInputsOf = caseInputs(source, blocks, extracted.cases, domain);
     const input = caseInputsOf[0]?.input ?? { state: {}, types: {} };
@@ -1869,7 +1796,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Pointed, Listing, Layout, When, OneOf), Math, at(p), count(n), spans(@label), and place() in a pointer view; a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Listing, Layout, When, OneOf), Math, at(p), count(n), spans(@label), and place(); a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -2104,121 +2031,17 @@ function prepareViews(
       ...Object.keys(during)
     ]);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
-    const viewNames = new Set([
-      ...Object.keys(components),
-      ...Object.keys(chosen),
-      ...Object.keys(pointerChosen)
-    ]);
-    // A pointer is a view with a <Pointed>, or a position type rendered by name as one, choosing
-    // among its pointer views (see withGeneratedScripts).
-    const pointerViews = new Set([...found.pointers, ...Object.keys(pointerChosen)]);
-    const choiceOf = (name: string) => ({
-      options: pointerChosen[name] ?? [],
-      value: `__pointer_${name}`,
-      view: `__pointerOf_${name}`
-    });
-    // A pointer's kind, for a position, as code: a link it points at takes its look.
-    const paints = [...found.pointed].map(
-      ([name, { parameter }]) =>
-        `const __paint_${name} = (${parameter}: any) => ({ __kind: ${JSON.stringify(kindKey(name, 'Pointed'))} });`
-    );
-    // A pointer view's kinds: its own, where nodes are around its <Pointed>, as a variant leaving
-    // it out takes the element drawn inside along, so the pointer is then not drawn at all; and its
-    // <Pointed>'s, which says whether it is drawn past its collection's ends.
-    const pointerKinds = (view: string) => {
-      const pointed = found.pointed.get(view)?.tag;
-      const root = found.components.find((component) => component.name === view)?.node;
-      return {
-        around: nodeAround(root, pointed) ? [view] : [],
-        pointed: kindKey(view, 'Pointed')
-      };
-    };
-    const pointers = pointerCalls(
+    const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
+    // A node with no layout whose blocks flow as text, told to the assistant.
+    const flowing = flowWarnings(
       ast.html,
       svelteSource,
-      viewState,
-      new Map(
-        [...pointerViews].map((name) => {
-          const choice = choiceOf(name);
-          const type = components[name] ?? components[choice.options[0] ?? ''];
-          const paint = found.pointers.has(name)
-            ? `__paint_${name}`
-            : `(position: number) => (({ ${choice.options.map((option) => `${option}: __paint_${option}`).join(', ')} }) as Record<string, (position: number) => object>)[${choice.value}]?.(position) ?? {}`;
-          // The scoped variables its view reads, or any view its type chooses among reads.
-          const reads = (found.pointers.has(name) ? [name] : choice.options).flatMap((option) =>
-            [...readsOf(found.components.find((view) => view.name === option)!.node)].filter(
-              (read) => scoped.has(read)
-            )
-          );
-          return [
-            name,
-            {
-              ...(domain.structures[type]?.kind === 'ref' &&
-              !(domain.structures[type] as { heap?: boolean }).heap
-                ? {
-                    into: (domain.structures[type] as { collection: string }).collection,
-                    ref: true
-                  }
-                : { into: viewing.atoms[type]?.index ?? '' }),
-              paint,
-              ...(found.pointers.has(name) ? {} : { view: choice.view }),
-              ...(chosen[name] ? { plainInNode: true } : {}),
-              kinds: found.pointers.has(name)
-                ? `() => (${JSON.stringify(pointerKinds(name))})`
-                : `() => (${JSON.stringify(Object.fromEntries(choice.options.map((option) => [option, pointerKinds(option)])))} as Record<string, { around: string[]; pointed: string }>)[${choice.value}]`,
-              ...(reads.length ? { reads: [...new Set(reads)] } : {})
-            }
-          ];
-        })
-      ),
-      scoped,
-      pointerPlaces,
-      // Each position type with a view drawing its number, for a bare one drawn beside its array.
-      new Map(
-        Object.entries(chosen).flatMap(([type, options]) => {
-          const into = viewing.atoms[type]?.index;
-          if (!into) return [];
-          const markViews = found.components
-            .filter((view) => view.type === type && found.pointers.has(view.name))
-            .map((view) => view.name);
-          return [[type, { into, numberView: options[0], markViews }] as const];
-        })
-      ),
       new Set(
         [...Object.keys(domain.structures), ...Object.keys(components)].filter(
           (name) => domain.structures[components[name] ?? name]?.kind === 'collection'
         )
       )
     );
-    if (pointers.problems.length)
-      throw InvalidSvelteSourceError.combine(
-        pointers.problems.map(
-          ({ message, start }) =>
-            new InvalidSvelteSourceError(message, {
-              code: 'view_component',
-              start: sourcePosition(source, start)
-            })
-        )
-      );
-    const pointerMarks = pointers.rendered.map(({ name, written, layout }): PointerMark => {
-      const own = found.pointers.has(name);
-      const views = own ? [name] : choiceOf(name).options;
-      const type = components[name] ?? components[views[0] ?? ''];
-      const structure = domain.structures[type] as { kind?: string; collection?: string };
-      const into =
-        structure?.kind === 'ref'
-          ? (structure.collection ?? '')
-          : (viewing.atoms[type]?.index ?? '');
-      const element = (domain.structures[into] as { element?: string } | undefined)?.element;
-      return {
-        written,
-        layout,
-        views,
-        ...(own ? {} : { choice: `pointers.${name}` }),
-        into,
-        ...(element ? { element } : {})
-      };
-    });
     // A type with a view is drawn, never called, rendered or not: {Index(k)} is refused too.
     const viewCalls = viewCallsOf(
       ast.html,
@@ -2289,7 +2112,7 @@ function prepareViews(
     const slotted = new Map<number, string[]>();
     const unresolvedEnds: { end: string; written: string; start: number }[] = [];
     const tagged = withInsertions(svelteSource, [
-      // place() reads the place its pointer view is drawn at, a name no source can declare.
+      // place() reads the place its view is drawn at, a name no source can declare.
       ...placeNames.map(({ start }) => ({
         at: start,
         text: 'sverlinPlace',
@@ -2315,10 +2138,8 @@ function prepareViews(
         text: ` __extent={${JSON.stringify(extent)}}`
       })),
       ...insertions,
-      ...pointers.removals,
       ...implicitInsertions(
         implicit,
-        pointers.removals,
         (start) =>
           [...aliases.values()].find(({ callee }) => callee.start === start && callee.end === start)
             ?.alias
@@ -2328,14 +2149,13 @@ function prepareViews(
         svelteSource,
         viewState,
         new Set([
-          ...Object.keys(components).filter((name) => !found.pointers.has(name)),
+          ...Object.keys(components),
           ...Object.keys(chosen)
         ]),
         new Set(Object.keys(components)),
         scoped,
         operators,
         slotted,
-        pointers.removals,
         placeSlots,
         referencesOf(master, domain),
         positions.targets,
@@ -2367,14 +2187,7 @@ function prepareViews(
       if (render) render.callee = alias;
     }
     const viewAliases = Object.fromEntries(
-      Object.entries(placeChoices).flatMap(([alias, { pointer, options }]) =>
-        pointer ? [] : [[alias, options]]
-      )
-    );
-    const pointerAliases = Object.fromEntries(
-      Object.entries(placeChoices).flatMap(([alias, { pointer, options }]) =>
-        pointer ? [[alias, options]] : []
-      )
+      Object.entries(placeChoices).map(([alias, { options }]) => [alias, options])
     );
     const generated = withGeneratedScripts(
       `${tagged}${probeMarkup(components)}{#snippet __sverlinNone()}{/snippet}`,
@@ -2389,9 +2202,6 @@ function prepareViews(
         layoutProp
       ],
       { ...chosen, ...viewAliases },
-      { ...pointerChosen, ...pointerAliases },
-      pointers.calls,
-      paints,
       linked.length ? endTypes : []
     );
     const compiled = (generate: Generate) =>
@@ -2458,16 +2268,15 @@ function prepareViews(
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
       ...(initialiserWarnings.length ? { initialiserWarnings } : {}),
-      ...(pointers.warnings.length || placeWarnings.length || unknownCoordinates.length
+      ...(flowing.length || placeWarnings.length || unknownCoordinates.length
         ? {
             positionWarnings: [
-              ...pointers.warnings,
+              ...flowing,
               ...placeWarnings,
               ...unknownCoordinateWarnings(unknownCoordinates, svelteSource)
             ]
           }
         : {}),
-      ...(pointerMarks.length ? { pointerMarks } : {}),
       pauses: { labels: labelNames, runs },
       paced: pacedSteps,
       storyboard,
@@ -2484,7 +2293,6 @@ function prepareViews(
       components: probes,
       design: {
         views: chosen,
-        pointers: pointerChosen,
         structures,
         tags: tagKinds,
         layouts: page.layouts.map(({ name, direction, root }) => {
@@ -2501,8 +2309,7 @@ function prepareViews(
               .filter((prop) => placeProps.has(prop) && !(unboxed && prop in unboxed))
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
           ),
-          // After the marks' places, which the regions' fall back to.
-          ...Object.entries(listingRegionFallbacks(regionLabels, labelMarks))
+          ...Object.entries(listingRegionFallbacks(regionLabels))
         ]),
         space: withoutBoundSizes(
           {
@@ -2511,7 +2318,6 @@ function prepareViews(
               chosen,
               listing,
               ownListings,
-              pointerChosen,
               {
                 kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
                 choices: Object.values(placeChoices)
@@ -2520,7 +2326,7 @@ function prepareViews(
             ),
             ...listingRegionSpace(regionLabels),
             ...placesSpace,
-            // A label for each place a pointer view naming its place is drawn at.
+            // A label for each place a view naming its place is drawn at.
             ...Object.fromEntries(
               [...labelledPlaces].map((at) => [placeLabelKey(at), [placeName(at)]])
             ),
@@ -2535,7 +2341,6 @@ function prepareViews(
               chosen,
               listing,
               ownListings,
-              pointerChosen,
               {
                 kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
                 choices: Object.values(placeChoices)
@@ -2665,19 +2470,10 @@ export async function bundlePresentation(
   const views = Object.fromEntries([
     ...Object.keys(design.views).map((type) => [type, values[viewKey(type)]]),
     // A place with a choice of its own draws through its alias (see places).
-    ...Object.entries(design.places ?? {}).flatMap(([alias, { key, base, pointer }]) =>
-      pointer ? [] : [[alias, values[key] ?? values[base]]]
-    )
-  ]);
-  // Each position type rendered as a pointer, the pointer view the variant chose for it.
-  const pointerViews = Object.fromEntries([
-    ...Object.keys(design.pointers ?? {}).map((type) => [
-      `__pointer_${type}`,
-      values[`pointers.${type}`]
-    ]),
-    ...Object.entries(design.places ?? {}).flatMap(([alias, { key, base, pointer }]) =>
-      pointer ? [[`__pointer_${alias}`, values[key] ?? values[base]]] : []
-    )
+    ...Object.entries(design.places ?? {}).map(([alias, { key, base }]) => [
+      alias,
+      values[key] ?? values[base]
+    ])
   ]);
   // Each scene's steps, paced as it pauses, in storyboard order; a frame is the input as given,
   // which its layout does not read. Each step keeps its run and where it is in it, for what its
@@ -2842,7 +2638,6 @@ export async function bundlePresentation(
       ...phase.state,
       ...ownApplied,
       ...views,
-      ...pointerViews,
       [layoutProp]: { [entry.scene.layout]: true },
       __types: { ...standIn.types, ...phase.types, ...ownTypes },
       __targets: { ...standIn.targets, ...phase.targets, ...ownTargets },
@@ -2918,17 +2713,11 @@ export async function bundlePresentation(
     throw new InvalidSvelteSourceError(layoutFailureMessage('its steps could not be drawn', []), {
       code: 'layout_failed'
     });
-  // What the view draws that shows nothing, told to the assistant: a pointer marking no element,
-  // and a paused step drawing the step before it again (its motion from it aside).
+  // What the view draws that shows nothing, told to the assistant: a paused step drawing the step
+  // before it again (its motion from it aside).
   const drawnSteps = laid.scenes.steps;
   warnings.push(
     ...drawnWarnings,
-    ...unmarkedPointerWarnings(
-      prepared.pointerMarks ?? [],
-      new Set(drawnSteps.flatMap(({ nodes }) => nodes.flatMap(({ kind }) => kind ?? []))),
-      new Set(scenes.map(({ layout }) => layout)),
-      values
-    ),
     ...repeatedStepWarnings(
       entries.map(({ scene, run, index }, at) => ({
         scene,
@@ -3361,42 +3150,26 @@ function withGeneratedScripts(
   source: string,
   props: readonly string[],
   choices: Record<string, string[]>,
-  pointerChoices: Record<string, string[]>,
-  pointers: readonly string[],
-  paints: readonly string[],
   ends: readonly string[] = []
 ): string {
   // A type rendered by name arrives as the name of the view the variant chose, and the view uses
-  // that view under the type's name; none draws nothing. A position type rendered as a pointer
-  // arrives as __pointer_Index, its pointer view under __pointerOf_Index; one drawn as none is no
-  // pointer.
+  // that view under the type's name; none draws nothing.
   const names = [
     ...props.map((name) => (choices[name] ? `${name}: __choice_${name}` : name)),
-    ...Object.keys(pointerChoices).map((name) => `__pointer_${name}`),
     '__probe'
   ].join(', ');
-  const chosen = [
-    ...Object.entries(choices).map(
+  const chosen = Object.entries(choices)
+    .map(
       ([name, options]) =>
         `const ${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__choice_${name}] ?? __sverlinNone);`
-    ),
-    ...Object.entries(pointerChoices).map(
-      ([name, options]) =>
-        `const __pointerOf_${name} = $derived(({ ${options.join(', ')} } as Record<string, any>)[__pointer_${name}]);`
     )
-  ].join(' ');
-  // The root's pointers are drawn around what they point at, from the start (see pointerCalls),
-  // those of a layout only where it is shown, the layout prop holding which (see layouts.server.ts).
-  const shownLayout = `.filter((pointer: any) => !pointer.layout || ${layoutProp}?.[pointer.layout])`;
-  const pointing = pointers.length
-    ? `import { providePointers as __sverlinPointers } from 'sverlin'; ${paints.join(' ')} __sverlinPointers([${pointers.join(', ')}]${shownLayout});`
-    : '';
+    .join(' ');
   // A link to an end draws it with the view its type chose (see Link.svelte).
   const ending = ends.length
     ? `import { provideEnds as __sverlinEnds } from 'sverlin'; __sverlinEnds({ ${ends.map((name) => `${name}: () => ${name}`).join(', ')} });`
     : '';
   // TypeScript, so the types of components' parameters are read and removed.
-  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${pointing} ${ending}</script>${source}`;
+  return `<script module>${prelude}</script><script lang="ts">let { ${names} }: Record<string, any> = $props(); ${chosen} ${ending}</script>${source}`;
 }
 
 /** An expression in markup, as Svelte's parser gives it (ESTree). */
@@ -3432,7 +3205,7 @@ type PropNames = Record<string, { names: string[]; numeric: boolean } | null>;
  * The props each library component takes in markup: what is drawn and how it is arranged. Its kind
  * is the snippet it is in, and how it looks the design's (see design.server.ts), so none are props.
  */
-export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
+export const libraryProps: Record<'Node' | 'Link', PropNames> = {
   Node: {
     value: null,
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
@@ -3446,7 +3219,6 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     width: null,
     height: null
   },
-  Pointed: {},
   Link: {
     from: null,
     to: null,
@@ -3510,7 +3282,7 @@ const designProps = new Set([
  * component is in, which a look belongs to.
  */
 function checkProps(
-  component: 'Node' | 'Link' | 'Pointed',
+  component: 'Node' | 'Link',
   attributes: readonly Attribute[],
   start: number,
   source: string,
@@ -3641,21 +3413,6 @@ function possibleValues(expression: Expression | undefined): (string | number)[]
   }
 }
 
-/** Whether a <Node> is around a tag in some markup. */
-function nodeAround(markup: unknown, target: unknown): boolean {
-  const walk = (node: unknown, inNode: boolean): boolean => {
-    if (!node || typeof node !== 'object') return false;
-    if (node === target) return inNode;
-    if (Array.isArray(node)) return node.some((child) => walk(child, inNode));
-    const part = node as { type?: string; name?: string };
-    const isNode = part.type === 'InlineComponent' && part.name === 'Node';
-    return Object.entries(part).some(
-      ([key, child]) => key !== 'parent' && walk(child, inNode || isNode)
-    );
-  };
-  return walk(markup, false);
-}
-
 /**
  * A grid's children are nodes, through {#each} and {#if} as anywhere, each placed by its row and
  * col (see the cell in library/node/Node.svelte), and those, with rowSpan and colSpan, place only a
@@ -3739,7 +3496,7 @@ const unsupportedMarkup: Record<string, string> = {
 };
 
 /**
- * Tag every <Node>, <Pointed>, and <Link> in the view with the snippet it is in, by its path (see
+ * Tag every <Node> and <Link> in the view with the snippet it is in, by its path (see
  * snippetPaths), as the hidden prop __view, which gives its kind; and every <Node> and <Link> with
  * the line and column (both from 1) of its tag in the authored source, as __ref, so a rendered node
  * or link can be traced back to the markup that drew it when a participant selects it for feedback.
@@ -3777,7 +3534,7 @@ function withNodeRefs(
   /** Each <Node> holding links, with the kind of the links written in it. */
   linkedNodes: { kind: string; node: unknown }[];
   flows: Map<string, 'x' | 'y'>;
-  /** The kind of each <Node>, <Pointed>, and <Link> tag, by its line:column, for the editor to show. */
+  /** The kind of each <Node> and <Link> tag, by its line:column, for the editor to show. */
   tagKinds: Record<string, string[]>;
   /** Each <Node> tag's kind, by where it starts, for what a presentation leaves out. */
   nodeKinds: Map<number, string>;
@@ -4037,11 +3794,19 @@ function withNodeRefs(
     }
     const library =
       tag.type === 'InlineComponent' &&
-      (tag.name === 'Node' || tag.name === 'Link' || tag.name === 'Pointed');
+      (tag.name === 'Node' || tag.name === 'Link');
     const element = tag.type === 'Element' || (tag.type === 'InlineComponent' && !library);
     const special = typeof tag.type === 'string' && Object.hasOwn(unsupportedMarkup, tag.type);
     // A view written as a tag, as <Cells values={values} />, the commonest unknown tag in the
     // 5 November benchmark's first tries: say how a view is drawn.
+    if (element && tag.name === 'Pointed') {
+      reject(
+        '<Pointed> is no longer part of the library: draw a pointer as a link from the variable to what it points at, a view of the position or reference holding <Link to={this} />, as <View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>, rendered where its label should stand, as a grid lane under the cells (<Node row={1} col={i}>{i}</Node>) or a node of a free layout.',
+        'view_markup',
+        tag.start
+      );
+      return;
+    }
     const viewType = element && tag.name ? viewTypes.get(tag.name) : undefined;
     if (viewType) {
       reject(
@@ -4085,14 +3850,6 @@ function withNodeRefs(
       );
       return;
     }
-    if (library && tag.name === 'Pointed' && view.includes('.')) {
-      reject(
-        "A <Pointed> is written in its pointer view itself, not in a snippet or a node of a kind of its own inside it, as the view's kind is the pointer's.",
-        'view_markup',
-        tag.start
-      );
-      return;
-    }
     if (library && tag.start !== undefined) {
       const kind = tag.name === 'Node' ? ownKind(tag, view) : view;
       // A caption token's node carries the place it names (see captionTokens in layout-tags).
@@ -4108,7 +3865,7 @@ function withNodeRefs(
         );
       else
         checkProps(
-          tag.name as 'Node' | 'Link' | 'Pointed',
+          tag.name as 'Node' | 'Link',
           bind(tag, kind, names),
           tag.start,
           source,
@@ -4234,7 +3991,6 @@ function withNodeRefs(
   };
   const roleOf = (entry: Entry): KindRole => {
     const { name, links, tag } = entry;
-    if (name === 'Pointed') return 'pointed';
     if (name === 'Link') return 'link';
     const attributes = tag.attributes ?? [];
     const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
@@ -4297,7 +4053,6 @@ function withNodeRefs(
     'bar',
     'value',
     'vertex',
-    'pointed',
     'link'
   ];
   const kinds = new Map<string, KindRole>();
@@ -4319,7 +4074,7 @@ function withNodeRefs(
   const tagKinds: Record<string, string[]> = {};
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
-  const apart = (of: KindRole) => (of === 'pointed' || of === 'link' ? of : 'node');
+  const apart = (of: KindRole) => (of === 'link' ? of : 'node');
   for (const entry of tags)
     if (laidOutFreely(entry)) childNodes(entry.tag.children, false, entry.links);
   for (const entry of tags) {
@@ -4341,14 +4096,11 @@ function withNodeRefs(
         );
     }
     const role = roleOf(entry);
-    const key = kindKey(
-      entry.view,
-      entry.name === 'Pointed' ? 'Pointed' : entry.name === 'Link' ? 'Link' : undefined
-    );
+    const key = kindKey(entry.view, entry.name === 'Link' ? 'Link' : undefined);
     const known = kinds.get(key);
     if (known && apart(known) !== apart(role))
       reject(
-        `${key} is the kind of a <${role === 'pointed' ? 'Pointed' : role === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
+        `${key} is the kind of a <${role === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
         'view_kinds',
         entry.start
       );
@@ -4413,7 +4165,7 @@ function withNodeRefs(
     const { line, column } = sourcePosition(source, start);
     const root = roots.get(start);
     const type = valueTypes.get(start);
-    const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
+    const ref = ` __ref="${line}:${column + 1}"`;
     const bound = domains.get(start);
     const chosen = chosenKinds.get(start);
     return {
@@ -4506,7 +4258,6 @@ function labelViewProblem(type: string, labels: readonly Label[] | undefined): s
  */
 function checkComponents(
   found: ReturnType<typeof findComponents>['components'],
-  pointers: ReadonlySet<string>,
   domain: DomainRegistry,
   stateNames: readonly string[],
   props: readonly string[],
@@ -4532,16 +4283,10 @@ function checkComponents(
         `${name} names a variable, another type, or a library component; choose another component name.`,
         at
       );
-    // A pointer is drawn only from the top of the view, where every variable is known.
     const state = [...readsOf(node)].find((read) => stateNames.includes(read));
-    if (state && !pointers.has(name))
+    if (state)
       throw new InvalidSvelteSourceError(
         `${name} reads ${state}, an input or algorithm variable; a component reads only its value and other views. Draw what needs ${state} where it is in scope, or make it part of ${type}.`,
-        at
-      );
-    if (pointers.has(name) && !domain.atoms[type]?.index && domain.structures[type]?.kind !== 'ref')
-      throw new InvalidSvelteSourceError(
-        `${name} has a <Pointed>, which stands for the element a position or reference points at, and ${type} is neither an index nor a reference type; a pointer views one, as in const Position = index(Values); or const Front = ref(Queue);.`,
         at
       );
     signatures[name] = type;

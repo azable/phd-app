@@ -130,74 +130,6 @@ export function stepsOf(
   });
   const distinct = [...firstDrawn.values()];
 
-  // Every collection or record each variable holds at any step, by identity, so a pointer through a
-  // variable, as c into row = paths[r], keeps room in every row it can point into.
-  const held = new Map<string, Set<number>>();
-  for (const { __identities: identities = {} } of states as StepState[])
-    for (const [path, identity] of Object.entries(identities))
-      if (!/[[.]/u.test(path)) held.set(path, (held.get(path) ?? new Set()).add(identity));
-
-  // Every collection a position at a path points into at any step, the indices left out, as a
-  // position stored in a record points into whichever collection it came from.
-  const reached = new Map<string, Set<string>>();
-  const anyIndex = (path: string) => path.replace(/\[\d+\]/gu, '[]');
-  for (const step of states as StepState[])
-    for (const [path, target] of Object.entries(step.__targets ?? {}))
-      reached.set(anyIndex(path), (reached.get(anyIndex(path)) ?? new Set()).add(target));
-
-  // How far before the start and past the end of each collection variable any step records a
-  // position bound to it, by the position's path (its indices left out) and over all of them, so a
-  // pointer keeps end slots only as far as the positions it draws go. A variable out of scope at a
-  // step only stands in there, so it records nothing.
-  const pastEnds = new Map<string, { before: number; after: number }>();
-  const endsKey = (collection: string, path?: string) =>
-    `${path === undefined ? '' : anyIndex(path)}>${collection}`;
-  // The view keeps room at most this far past either end, as each place is an empty slot; a pointer
-  // further out points nowhere, drawing nothing, as one outside its collection does.
-  const maximumPastEnd = 4;
-  for (const step of states as StepState[])
-    for (const [path, target] of Object.entries(step.__targets ?? {})) {
-      const standsIn = (at: string) => step.__absent?.includes(at.split(/[.[]/u)[0]) ?? false;
-      if (standsIn(path) || standsIn(target)) continue;
-      const position = valueAt(step, path);
-      const collection = valueAt(step, target);
-      if (typeof position !== 'number' || !Array.isArray(collection)) continue;
-      for (const key of [endsKey(target, path), endsKey(target)]) {
-        const ends = pastEnds.get(key) ?? { before: 0, after: 0 };
-        pastEnds.set(key, {
-          before: Math.min(maximumPastEnd, Math.max(ends.before, -position)),
-          after: Math.min(maximumPastEnd, Math.max(ends.after, position - collection.length + 1))
-        });
-      }
-    }
-
-  // The positions any step records at the same element as each other, by their paths (indices left
-  // out), so pointers never at one element together can share one slot (see sharedSlots). A path
-  // here with itself has two of its positions together, as edges[0].to and edges[1].to.
-  const together = new Map<string, Set<string>>();
-  const recorded = new Set<string>();
-  for (const step of states as StepState[]) {
-    const at = new Map<string, string[]>();
-    for (const [path, target] of Object.entries(step.__targets ?? {})) {
-      const standsIn = (name: string) => step.__absent?.includes(name.split(/[.[]/u)[0]) ?? false;
-      if (standsIn(path) || standsIn(target)) continue;
-      const position = valueAt(step, path);
-      if (typeof position !== 'number') continue;
-      recorded.add(anyIndex(path));
-      const element = `${step.__identities?.[target] ?? target}#${position}`;
-      at.set(element, [...(at.get(element) ?? []), anyIndex(path)]);
-    }
-    for (const paths of at.values())
-      paths.forEach((path, i) => {
-        for (const other of paths.filter((_, j) => j !== i))
-          together.set(path, (together.get(path) ?? new Set()).add(other));
-      });
-  }
-  const apart = (a: string, b: string) =>
-    recorded.has(anyIndex(a)) &&
-    recorded.has(anyIndex(b)) &&
-    !(together.get(anyIndex(a))?.has(anyIndex(b)) ?? false);
-
   /** A type's unit, or that of the nearest type it refines. */
   function unitOf(typeName: string): string | undefined {
     for (let name: string | undefined = typeName; name && atoms[name]; name = atoms[name].parent)
@@ -306,11 +238,6 @@ export function stepsOf(
             variablesOf: (typeName: string) =>
               Object.keys(state).filter((name) => types[name] === typeName),
             typeAt: (path: string) => types[path],
-            heldBy: (name: string) => held.get(name),
-            reachedFrom: (path: string) => reached.get(anyIndex(path)),
-            pastEnds: (collection: string, path?: string) =>
-              pastEnds.get(endsKey(collection, path)) ?? { before: 0, after: 0 },
-            apart,
             lengthOf: (path: string) => {
               const collection = containers.get(path);
               return Array.isArray(collection) ? collection.length : undefined;

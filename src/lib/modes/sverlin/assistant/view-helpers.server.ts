@@ -181,12 +181,12 @@ const declaredInputs = (block: string) =>
 
 /**
  * The type the source draws most as values: the type of its first value view, that is a view
- * drawing no pointer. None where the source has no such view.
+ * drawing no link from a variable. None where the source has no such view.
  */
 export function mainViewType(source: string): string | undefined {
   const views = [...source.matchAll(/<View of="([A-Za-z_]\w*)" name="(\w+)">([\s\S]*?)<\/View>/gu)];
   const pointers = new Set(
-    views.filter(([, , , body]) => body.includes('<Pointed')).map(([, type]) => type)
+    views.filter(([, , , body]) => body.includes('<Link to={this}')).map(([, type]) => type)
   );
   return views.map(([, type]) => type).find((type) => !pointers.has(type));
 }

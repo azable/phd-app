@@ -36,8 +36,6 @@ export type ModeBuildResult =
         variant?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
         views?: Record<string, string[]>;
-        // Each position type's pointer views, the options of its pointers variable.
-        pointers?: Record<string, string[]>;
         // The source's own listings, the first options of its listing.language variable.
         listings?: string[];
         // The kind of each tag, by its line:column.

@@ -17,7 +17,7 @@ import { guardedChoice, pictureTree } from './variant-guard';
  */
 export type DesignSource = Pick<
   BrowserBundlePresentation,
-  'variant' | 'origins' | 'views' | 'pointers' | 'listings'
+  'variant' | 'origins' | 'views' | 'listings'
 > &
   SourceBuildFacts;
 

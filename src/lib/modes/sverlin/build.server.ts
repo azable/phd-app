@@ -76,7 +76,6 @@ export async function buildBatch(
           variant: bundle.variant,
           origins: bundle.origins,
           views: prepared.design.views,
-          pointers: prepared.design.pointers,
           listings: prepared.ownListings,
           kinds: prepared.design.tags,
           roles: prepared.design.roles,

@@ -34,7 +34,6 @@ export const linearSearchSource = `<script domain>
     <Node kind="Tally">{'•'.repeat(this)}</Node>
   </Node>
 </View>
-<View of="Index" name="IndexText"><Node value={this} /></View>
 <View of="Values" name="Row">
   <Node layout="row">
     {#each this as value, k}
@@ -45,22 +44,30 @@ export const linearSearchSource = `<script domain>
     {/each}
   </Node>
 </View>
-<View of="Index" name="Highlight"><Pointed /></View>
+<View of="Index" name="Arrow">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Name">{place()}</Node>
+  </Node>
+</View>
 <Layout name="Title"><Node>Linear search</Node></Layout>
 <Layout name="Caption" of="target"><Node>Find {target} by checking each cell in order.</Node></Layout>
 <View of="@check.equal" name="Ask"><Node>is {this.left} equal to {this.right}?</Node></View>
-<Layout name="Checking" of="i, @check.equal"><Node>Checking index {i}: {@check.equal}</Node></Layout>
-<Layout name="Result" of="target, found"><Node>Found {target} at index {found}.</Node></Layout>
+<Layout name="Checking" of="i, @check.equal">
+  <Node layout="row"><Node>Checking index</Node><Node kind="Number" value={i} />{@check.equal}</Node>
+</Layout>
+<Layout name="Result" of="target, found">
+  <Node layout="row"><Node>Found {target} at index</Node><Node kind="Number" value={found} /></Node>
+</Layout>
 
-<Layout name="Main" of="values, i, found, target, @check.equal">
+<Layout name="Main" of="values, i, found, target, @check.equal, @run">
   <Node>
     <Title />
     <Caption target={target} />
     {values}
-    {i}
-    {found}
+    <Node kind="Marks" layout="row"><Node>{i}</Node><Node>{found}</Node></Node>
     <Checking i={i} />
-    <Result target={target} found={found} />
+    <When of="@run"><Result target={target} found={found} /></When>
   </Node>
 </Layout>
 

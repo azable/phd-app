@@ -58,7 +58,7 @@ export const designValueSchema = v.union([
   v.boolean()
 ]);
 
-/** A variant: every variable of a source's design space, by key, as Compared.Pointed.fill. */
+/** A variant: every variable of a source's design space, by key, as IntCell.fill. */
 export const designValuesSchema = v.record(v.pipe(v.string(), v.maxLength(200)), designValueSchema);
 export type DesignValues = v.InferOutput<typeof designValuesSchema>;
 
@@ -122,8 +122,6 @@ export const browserBundlePresentationSchema = v.strictObject({
   origins: v.optional(v.record(v.string(), designOriginSchema)),
   /** The views each type rendered by name could draw, the options of its views variable. */
   views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
-  /** The pointer views each position type rendered as a pointer could draw, its pointers variable's. */
-  pointers: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
   /** The source's own listings, the first options of its listing.language variable. */
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
@@ -132,7 +130,7 @@ export const browserBundlePresentationSchema = v.strictObject({
   roles: v.optional(
     v.record(v.pipe(v.string(), v.maxLength(200)), v.pipe(v.string(), v.maxLength(40)))
   ),
-  /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+  /** The variable each render of a type by name reads, as views.Int, by its line:column. */
   renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */
   leftOut: v.optional(v.array(v.pipe(v.string(), v.maxLength(20)))),

@@ -52,8 +52,7 @@ export function choiceEdits(
     };
   // Compared as the app keeps them: the document writes its keys in the written form.
   const kept = keptValues(
-    Object.fromEntries(entries.filter(([, value]) => value !== null)) as DesignValues,
-    (key) => Object.hasOwn(shown, key)
+    Object.fromEntries(entries.filter(([, value]) => value !== null)) as DesignValues
   );
   return {
     chosen: Object.fromEntries(
@@ -88,18 +87,18 @@ export function choiceRows(
 }
 
 // The variables of a type's views, by their key's first part, as `views.Int`.
-const viewCategories: Record<string, string> = { views: 'view', pointers: 'pointer' };
+const viewCategories: Record<string, string> = { views: 'view' };
 
 /**
  * A variable's key in words: its kind's and prop's names split into words, its place as “for …”
- * and a value of the data as “when …”: `Highlight.Pointed:pair.left.fill` is “Highlight pointed
+ * and a value of the data as “when …”: `Mark.Link:pair.left.targetFill` is “Mark link target
  * fill for pair.left”, `Card=true.fill` “Card fill when true”, and `views.Int:swap.held` “Int view
  * for swap.held”. Whether something is shown is said by its value (`choiceValue`), not its name.
  */
 export function choiceName(key: string): string {
   const caption = placeCaption.exec(key);
   if (caption) return sentence(`caption for ${caption[1]}`);
-  const view = /^(views|pointers)\.(@[\w$.]+?|[\w$.]+?)(?::(@?[\w$.]+))?$/u.exec(key);
+  const view = /^(views)\.(@[\w$.]+?|[\w$.]+?)(?::(@?[\w$.]+))?$/u.exec(key);
   if (view) {
     const [, category, type, place] = view;
     const name = `${words(type)} ${viewCategories[category]}`;
