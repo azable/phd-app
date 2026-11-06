@@ -1023,31 +1023,21 @@ describe('submitProjectFeedback', () => {
       expect(asksForGraphics('Who is it for? Students new to graphs.')).toBe(false);
     });
 
-    it('scores the fills, and offers the combination the designing model chose, with why', async () => {
+    it('scores the fills of one group, and offers its shortlist with no choice to make', async () => {
       decide.mockClear();
-      const choosing = {
-        id: 'test-helpers',
-        generateReply: async ({ attempt }: { attempt: { purpose: string } }) => ({
-          output:
-            attempt.purpose === 'choosing'
-              ? {
-                  combinations: [
-                    { picks: [{ group: 'g1', option: 'g1o1' }], why: 'a dot reads at any size' }
-                  ]
-                }
-              : proposal('<View of="Int" name="IntDot"><Node value={this} /></View>')
-        })
-      } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
-      const { appendedEvents } = await claimedWithHelpers(false, choosing);
+      const { appendedEvents } = await claimedWithHelpers();
       const candidates = appendedEvents.find(
         (event) => event.type === 'visualization.view-candidates'
       );
       if (candidates?.type !== 'visualization.view-candidates') throw new Error('no candidates');
-      expect(candidates.payload.stages).toMatchObject({ scoring: 'on', choosing: 'on' });
+      expect(candidates.payload.stages).toMatchObject({
+        scoring: 'on',
+        choosing: 'skipped',
+        skipped: expect.stringContaining('one hole group')
+      });
       expect(candidates.payload.candidates).toEqual([
         expect.objectContaining({
           name: 'IntDot',
-          why: 'a dot reads at any size',
           score: expect.closeTo(0.7),
           facts: expect.stringContaining('text')
         })
@@ -1055,12 +1045,86 @@ describe('submitProjectFeedback', () => {
       const purposes = appendedEvents.flatMap((event) =>
         event.type === 'ai.generation-requested' ? [event.payload.purpose] : []
       );
-      // Five helpers, a scoring call for each fill kept, and one choosing call.
+      // Five helpers and a scoring call for each fill kept; one group has nothing to combine.
       expect(purposes.filter((purpose) => purpose === 'helper')).toHaveLength(5);
       expect(purposes.filter((purpose) => purpose === 'scoring')).toHaveLength(5);
-      expect(purposes.filter((purpose) => purpose === 'choosing')).toHaveLength(1);
+      expect(purposes.filter((purpose) => purpose === 'choosing')).toHaveLength(0);
       expect(decide).toHaveBeenCalledTimes(5);
       expect(JSON.stringify(decide.mock.calls[0][0])).toContain('data:image/png;base64,');
+    });
+
+    it('offers the combination of two groups the designing model chose, with why', async () => {
+      decide.mockClear();
+      const title = '<Layout name="Title"><Node>Searching</Node></Layout>';
+      const caption = '<Layout name="Caption" of="target"><Node>Look for {target}.</Node></Layout>';
+      const choosing = {
+        id: 'test-helpers',
+        generateReply: async ({
+          attempt,
+          messages
+        }: {
+          attempt: { purpose: string };
+          messages: { content: string }[];
+        }) => {
+          const input = messages.at(-1)?.content ?? '';
+          return {
+            output:
+              attempt.purpose === 'choosing'
+                ? {
+                    combinations: [
+                      {
+                        picks: [
+                          { group: 'g1', option: /g1o\d+/u.exec(input)?.[0] },
+                          { group: 'g2', option: /g2o\d+/u.exec(input)?.[0] }
+                        ],
+                        why: 'a short title over its caption'
+                      }
+                    ]
+                  }
+                : {
+                    proposals: [
+                      {
+                        name: 'Short',
+                        description: 'shorter words',
+                        fills: [
+                          { hole: 'title', markup: title },
+                          { hole: 'caption', markup: caption }
+                        ],
+                        aimedAspect: '3:2'
+                      }
+                    ]
+                  }
+          };
+        }
+      } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+      const { appendedEvents } = await claimedWithHelpers(false, choosing, (source) => [
+        {
+          ...generation(undefined, 'Other words follow.'),
+          viewHelpers: {
+            skeleton: source
+              .replace(
+                /<Layout name="Title">.*?<\/Layout>/u,
+                '<Hole name="title" kind="layout" of="Title" />'
+              )
+              .replace(
+                /<Layout name="Caption" of="target">.*?<\/Layout>/u,
+                '<Hole name="caption" kind="layout" of="Caption" />'
+              )
+          }
+        }
+      ]);
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      if (candidates?.type !== 'visualization.view-candidates') throw new Error('no candidates');
+      expect(candidates.payload.stages).toMatchObject({ choosing: 'on' });
+      expect(candidates.payload.candidates).toEqual([
+        expect.objectContaining({ why: 'a short title over its caption', group: 'g1+g2' })
+      ]);
+      const purposes = appendedEvents.flatMap((event) =>
+        event.type === 'ai.generation-requested' ? [event.payload.purpose] : []
+      );
+      expect(purposes.filter((purpose) => purpose === 'choosing')).toHaveLength(1);
     });
 
     it('ranks by the app’s measures alone with scoring and choosing switched off', async () => {

@@ -532,6 +532,9 @@ export async function runViewHelpers(
     group: `g${Number(each.group) + 1}`,
     ...(scores.has(each.id) ? { score: scores.get(each.id) } : {})
   }));
+  // With one group nothing goes together, so its shortlist is the answer (project f9cbf444's one
+  // group of Int waited 8.9 s for the choice).
+  if (listed.size === 1) skip('choosing', 'one hole group: its shortlist is the choice');
   if (stages.choosing === 'on' && shortlisted.length) {
     const started = performance.now();
     const shortlistedGroups: ShortlistedGroup[] = [...listed].map(([group, members]) => ({

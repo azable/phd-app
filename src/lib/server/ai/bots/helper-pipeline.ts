@@ -9,8 +9,9 @@
  *    layout in the whole picture, and keeps a shortlist of each hole group; switched off, the
  *    app's own measures alone rank the shortlist;
  * 3. choosing: the designing model reads the shortlists and picks which fills go together, and the
- *    app builds only those combinations; switched off, each shortlisted fill is offered by itself
- *    with the other holes as they were, as the helpers' candidates were before.
+ *    app builds only those combinations; switched off, or for a round of one hole group, which has
+ *    nothing to combine, each shortlisted fill is offered by itself with the other holes as they
+ *    were, as the helpers' candidates were before.
  *
  * With `helpers` off no turn runs any stage, whatever its condition says, and turns behave as they
  * did before the helpers existed.
