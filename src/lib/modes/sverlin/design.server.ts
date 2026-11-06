@@ -897,6 +897,11 @@ function drawOne(
   // A bound prop's hue and the way its options run are drawn afresh; a length's unit stays near.
   if (['@hue', '@order'].some((end) => key.endsWith(end))) return pick(options);
   if (colourProps.has(prop)) {
+    // An exact colour draws another of the base's palette (see paletteKey).
+    if (typeof value === 'string' && exactColour.test(value))
+      return pick(
+        options.filter((option) => typeof option === 'string' && exactColour.test(option))
+      );
     const parts = typeof value === 'string' ? colourParts(value) : undefined;
     if (!parts) return value;
     return pick(

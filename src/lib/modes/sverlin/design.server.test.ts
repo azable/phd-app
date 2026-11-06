@@ -603,6 +603,20 @@ describe('design tokens and tag groups', () => {
     expect(() => build({ chosen: { 'palette.accent': 'orange' } })).toThrow(
       /a palette colour is exact/u
     );
+    // A random variant draws an exact colour from the palette, never off it.
+    const palette = { 'palette.a': '#E69F00', 'palette.b': '#56B4E9', 'palette.c': '#009E73' };
+    const exact = build({ chosen: { ...palette, 'IntCell.fill': '#E69F00' } });
+    for (const seed of [1, 2, 3]) {
+      const drawn = buildVariant(
+        levelled.space,
+        levelled.starter,
+        { base: exact, randomise: true },
+        seed,
+        levelled.fallbacks,
+        levelled.roles
+      ).values;
+      expect(Object.values(palette)).toContain(drawn['IntCell.fill']);
+    }
   });
 
   it('records the base’s name, and leaves out a base’s value the source has no use for', () => {
