@@ -2462,7 +2462,11 @@ describe('kinds named by nodes', () => {
   });
 
   it.each([
-    ['a computed kind', '<Node kind={"Header"}>a</Node>', /written as it is, not computed/],
+    [
+      'a kind built from text',
+      '<Node kind={"Head" + "er"}>a</Node>',
+      /every result is a name written in the source/
+    ],
     ['a kind not in one capitalised word', '<Node kind="header">a</Node>', /is no kind/],
     [
       "a layout's name",

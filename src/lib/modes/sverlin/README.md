@@ -1183,11 +1183,16 @@ what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
 included, as `CurrentCaption` and `NeighbourCaption` inside two pointer views,
 never `Caption` in both; a layout is not named as a type, and a tag names a
 layout, so every kind is known before the view runs. A `kind` is written as it
-is, one capitalised word, never computed; nodes of one view or layout naming the
-same kind are one kind, and it is named apart from every view and layout. Name a
-kind after what the node is, never after a type: with a type `Distance`, write
-`kind="DistanceLabel"`, not `kind="Distance"`. A kind written on several nodes,
-as each header cell, is one kind, so they look alike.
+is, one capitalised word, or as an expression whose every result is such a word
+written in the source, or `undefined` for the view's or layout's own kind, as
+`kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}`: the node takes the kind
+its expression gives at each step, so one node, not an `{#if}` doubling it,
+marks a cell; the nodes inside it keep the kind around it, and a kind built from
+text, as `kind={'At' + name}`, is refused. Nodes of one view or layout naming
+the same kind are one kind, and it is named apart from every view and layout.
+Name a kind after what the node is, never after a type: with a type `Distance`,
+write `kind="DistanceLabel"`, not `kind="Distance"`. A kind written on several
+nodes, as each header cell, is one kind, so they look alike.
 
 Every kind of node has these props, each with a fixed set of options:
 
@@ -1857,8 +1862,10 @@ kind's (see Design). Props starting with `__` are reserved for the library.
   0, as `row={i} col={j}`; only a grid's children take them, and each takes
   both.
 - `kind`: a kind of its own within its view or layout, written as it is, as
-  `kind="Header"`, for the node and the nodes inside it (see Design). A layout's
-  root node is its frame and takes none.
+  `kind="Header"`, for the node and the nodes inside it (see Design), or chosen
+  at each step by an expression of names written in the source, as
+  `kind={k === j ? 'AtJ' : undefined}` (see Design). A layout's root node is its
+  frame and takes none.
 - A look, inside a view, as an expression of its value, as `fill={this.seen}`,
   or an icon, as `icon={this}` (see Props bound to a view's value); anywhere
   else a look is its kind's, and a bare `icon` draws its kind's icon.

@@ -176,6 +176,7 @@ import type { Arrangement, Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { drawingMarker, drawingProblems } from './drawings.server';
 import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
+import { kindChoice, kindResults } from './kind-expressions.server';
 import {
   inputDeclarations,
   caseAdvice,
@@ -1848,6 +1849,7 @@ function prepareViews(
         definesType(viewing, name) ||
         operators.has(name) ||
         name === 'Math' ||
+        name === 'undefined' ||
         name === 'at' ||
         name === 'count' ||
         name === layoutProp ||
@@ -3783,6 +3785,9 @@ function withNodeRefs(
   // nodes inside it, as a snippet Header inside Table would make it; the prop goes before Svelte.
   const kindProps: Insertion[] = [];
   const localKinds: { name: string; start: number }[] = [];
+  // Each node whose kind is an expression, by its tag's start: the kind around it, the expression
+  // as written, and every name it can give, each a kind of its own (see kind-expressions.server.ts).
+  const chosenKinds = new Map<number, { base: string; written: string; names: string[] }>();
   const ownKind = (tag: Tag, view: string): string => {
     const attribute = tag.attributes?.find(({ name }) => name === 'kind') as
       | (Attribute & { end?: number })
@@ -3792,9 +3797,33 @@ function withNodeRefs(
     kindProps.push({ at: start, text: '', remove: (attribute.end ?? start) - start });
     const [part] = Array.isArray(attribute.value) ? attribute.value : [];
     const name = Array.isArray(attribute.value) && attribute.value.length === 1 ? part : undefined;
+    if (name?.type === 'MustacheTag') {
+      const expression = name.expression as Tag & { end?: number };
+      const results = kindResults(expression as never);
+      const names = [...new Set((results ?? []).filter((each) => each !== undefined))];
+      const wrong = names.find((each) => !/^[A-Z][A-Za-z0-9]*$/u.test(each) || paths.has(each));
+      if (!results || !names.length || wrong !== undefined || view === 'root') {
+        reject(
+          wrong !== undefined
+            ? `kind={…} gives "${wrong}", which is no kind: each name is one capitalised word saying what the node is, never a view's or layout's name, as kind={k === j ? 'AtJ' : undefined}.`
+            : "A <Node>'s kind is a name written as it is, as kind=\"Header\", or an expression whose every result is a name written in the source, or undefined for no kind of its own, as kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}: every kind is known before the view runs.",
+          'view_kinds',
+          start
+        );
+        return view;
+      }
+      for (const each of names) localKinds.push({ name: each, start });
+      chosenKinds.set(tag.start ?? start, {
+        base: view,
+        written: source.slice(expression.start ?? 0, expression.end ?? 0),
+        names
+      });
+      // The node's own kind is chosen at each step; the nodes inside it keep the kind around it.
+      return view;
+    }
     if (name?.type !== 'Text') {
       reject(
-        'A <Node>\'s kind is written as it is, not computed, as kind="Header": every kind is known before the view runs.',
+        'A <Node>\'s kind is written as it is, as kind="Header", or as an expression whose every result is a name written in the source: every kind is known before the view runs.',
         'view_kinds',
         start
       );
@@ -4297,7 +4326,19 @@ function withNodeRefs(
       });
     }
     const { line, column } = sourcePosition(source, entry.start);
-    tagKinds[`${line}:${column + 1}`] = [key];
+    // A kind chosen by an expression is each of its names, all with the node's role.
+    const chosen = chosenKinds.get(entry.start);
+    const alternatives = chosen?.names.map((each) => `${chosen.base}.${each}`) ?? [];
+    for (const alternative of alternatives) {
+      const knownAlternative = kinds.get(alternative);
+      kinds.set(
+        alternative,
+        knownAlternative && plainest.indexOf(knownAlternative) < plainest.indexOf(role)
+          ? knownAlternative
+          : role
+      );
+    }
+    tagKinds[`${line}:${column + 1}`] = [key, ...alternatives];
   }
   const insertions = tags.map((entry): Insertion => {
     const { start, name, links, view } = entry;
@@ -4306,9 +4347,10 @@ function withNodeRefs(
     const type = valueTypes.get(start);
     const ref = name === 'Pointed' ? '' : ` __ref="${line}:${column + 1}"`;
     const bound = domains.get(start);
+    const chosen = chosenKinds.get(start);
     return {
       at: start + name.length + 1,
-      text: ` __view="${view}"${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
+      text: `${chosen ? kindChoice(chosen.base, chosen.written) : ` __view="${view}"`}${ref}${bound ? ` __domains={${JSON.stringify(bound)}}` : ''}${links ? ' __links' : ''}${isField(entry) ? ' __field' : ''}${root ? ` __component="${root}"` : ''}${type ? ` __type="${type}"` : ''}`
     };
   });
   // A kind arranging no children has no gap, align, or justify to bind.

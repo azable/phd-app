@@ -112,6 +112,42 @@ describe('marks as grid cells', () => {
   });
 });
 
+describe('kinds from expressions', () => {
+  const kinded = sort(`    {#each values as v, k}
+      <Node kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined} row={0} col={k}>{v}</Node>
+    {/each}
+    <Node row={1} col={j}>{j}</Node>`);
+
+  it('gives each cell the kind its expression names at that step, or the layout’s own', async () => {
+    const { steps, built } = await drawnSteps(kinded, {
+      chosen: { 'Main.AtJ.fill': 'amber-100', 'Main.Sorted.fill': 'neutral-100' }
+    });
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/no variable/u));
+    // At @insert.init#1, i = j = 1: cell 0 is sorted, cell 1 is at j, the rest the layout's.
+    const kinds = steps[1].nodes
+      .filter((node) => node.parent && /^Main(\.|$)/u.test(node.kind ?? '') && node.box.y < 200)
+      .map((node) => node.kind);
+    expect(kinds).toContain('Main.AtJ');
+    expect(kinds).toContain('Main.Sorted');
+    const atJ = steps[1].nodes.find((node) => node.kind === 'Main.AtJ');
+    expect(atJ?.colours?.fill).toBe('amber-100');
+  });
+
+  it('refuses a kind built from text at run time', async () => {
+    await expect(
+      drawnSteps(
+        kinded.replace("kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}", "kind={'At' + k}")
+      )
+    ).rejects.toThrow(/every result is a name written in the source/u);
+  });
+
+  it('refuses a name that is no kind', async () => {
+    await expect(drawnSteps(kinded.replace("'AtJ'", "'at j'"))).rejects.toThrow(
+      /gives "at j", which is no kind/u
+    );
+  });
+});
+
 describe('typed grid coordinates', () => {
   it('places cells by a position, an expression over one, a loop index and a literal, with no warning', async () => {
     const { built } = await drawnSteps(

@@ -76,10 +76,10 @@ break, so the participant can read it in the source panel.
 An invariant of the algorithm can divide the picture into parts, for example the
 sorted part of insertion sort, or the cells a binary search still considers.
 Draw each part as a kind of its own, for example
-`{#if k < sorted}`…`{:else}`…`{/if}`, so the design can grey out the other part.
-A scene that pauses at the top-level loop, between passes, shows the invariant
-grow. Where the participant has not asked for this, offer it as an alternative
-to compare with the plain picture.
+`kind={k < sorted ? 'Sorted' : undefined}`, so the design can grey out the other
+part. A scene that pauses at the top-level loop, between passes, shows the
+invariant grow. Where the participant has not asked for this, offer it as an
+alternative to compare with the plain picture.
 
 Some features suit common needs. Offer them as alternatives where they fit:
 
