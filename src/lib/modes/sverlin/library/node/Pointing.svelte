@@ -12,7 +12,10 @@
 
   import Pointing from './Pointing.svelte';
   import {
+    nodeIdsContext,
+    provideInPointerView,
     providePointed,
+    providePointerNodeIds,
     providePlace,
     provideHidden,
     providePointerAround,
@@ -55,7 +58,8 @@
       active,
       placeholder,
       outer,
-      render: inside.length ? next : draw
+      render: inside.length ? next : draw,
+      ids: nodeIdsContext()
     })
   );
   provideHidden(!active);
@@ -64,6 +68,8 @@
   // The pointer view draws no element of its own; its <Pointed> draws the one it points at.
   provideSlot(undefined);
   untrack(() => providePlace(pointer.place));
+  untrack(() => providePointerNodeIds(pointer.order));
+  provideInPointerView(true);
 </script>
 
 {#snippet next(props: Record<string, unknown>)}

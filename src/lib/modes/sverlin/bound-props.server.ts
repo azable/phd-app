@@ -532,6 +532,45 @@ export function countCalls(
 }
 
 /**
+ * Each `place()` in the markup, by where its name is, with the view it is in and why it cannot be
+ * given, if it cannot: it names the place a pointer view is rendered at (see sverlinPlace in
+ * library/type-context.ts), so it is called with nothing, only in a view holding a <Pointed>.
+ */
+export function placeCalls(
+  markup: unknown,
+  pointerViews: ReadonlySet<string>
+): { start: number; view?: string; problem?: string }[] {
+  const calls: { start: number; view?: string; problem?: string }[] = [];
+  const visit = (node: unknown, view: string | undefined): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => visit(child, view));
+    const part = node as Node;
+    if (part.type === 'SnippetBlock') {
+      const name = (part.expression as Node | undefined)?.name as string | undefined;
+      return visit(part.children, name);
+    }
+    if (part.type === 'CallExpression' && (part.callee as Node | undefined)?.name === 'place') {
+      const args = (part.arguments as unknown[] | undefined) ?? [];
+      const problem = args.length
+        ? 'place() takes nothing: it gives the name of the place the pointer view is rendered at.'
+        : view === undefined || !pointerViews.has(view)
+          ? `place() names the place a pointer view is rendered at, so it is written only in a view holding a <Pointed>${view ? `, and ${view} holds none` : ''}: to write a name elsewhere, write it as text.`
+          : undefined;
+      calls.push({
+        start: (part.callee as Node).start as number,
+        ...(view ? { view } : {}),
+        ...(problem ? { problem } : {})
+      });
+      return;
+    }
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'metadata') visit(child, view);
+  };
+  visit(markup, undefined);
+  return calls;
+}
+
+/**
  * Each grid's rows and columns for any input, by where its tag starts: every row and every col its
  * cells can take, from the types of what their coordinates read, an {#each} index running from 0 to
  * its collection's max - 1. Null where a coordinate's values cannot be worked out, so that grid

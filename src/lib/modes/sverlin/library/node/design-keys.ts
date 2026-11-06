@@ -78,6 +78,9 @@ function keptParts(key: string): KeptKey | undefined {
  * writes its pointer apart.
  */
 export function writtenKey(key: string, has?: (key: string) => boolean): string {
+  // A place's label (see placeLabelKey), label@lo, is written :lo.label.
+  const label = /^label@([\w$.]+)$/u.exec(key);
+  if (label) return `:${label[1]}.label`;
   const parts = keptParts(key);
   if (!parts) return key;
   if ('view' in parts) {
@@ -106,6 +109,8 @@ const writtenKind =
  * view goes to the pointer where only the pointer is in the design, as `{Index}:lo` at a mark.
  */
 export function keptKey(key: string, has?: (key: string) => boolean): string {
+  const label = /^:([\w$.]+)\.label$/u.exec(key);
+  if (label) return `label@${label[1]}`;
   const view = writtenView.exec(key);
   if (view) {
     const [, type, pointer, place] = view;

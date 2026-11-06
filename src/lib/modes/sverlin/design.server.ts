@@ -16,6 +16,8 @@ import {
   listingPropOptions,
   listingRegionProps,
   optionsOf,
+  isPlaceLabel,
+  placeLabelLength,
   placePaint,
   placeProps,
   groupKey,
@@ -485,8 +487,12 @@ export function starterVariant(
   };
 }
 
+// A place's label is any short text (see placeLabelKey), every other variable one of its options.
 const fits = (space: DesignSpace, key: string, value: unknown) =>
-  Object.hasOwn(space, key) && space[key].includes(value as DesignValue);
+  Object.hasOwn(space, key) &&
+  (isPlaceLabel(key)
+    ? typeof value === 'string' && value.trim().length > 0 && value.length <= placeLabelLength
+    : space[key].includes(value as DesignValue));
 
 /** Explain a chosen value the space cannot take. */
 function unfit(space: DesignSpace, key: string, value: unknown): string {
@@ -743,7 +749,8 @@ function randomised(
   const groups = new Map<string, string[]>();
   const frames = framedKinds(space);
   for (const [key, value] of Object.entries(values)) {
-    if (frames.has(kindOf(key))) continue;
+    // A place's label is words the participant chose, never drawn.
+    if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
     const group =
       slotProps.has(propOf(key)) && !key.includes('@')
         ? key
@@ -768,7 +775,7 @@ function drawOne(
 ): DesignValue {
   const prop = propOf(key);
   // A role level naming a token keeps naming it: the token is drawn instead.
-  if (isToken(value)) return value;
+  if (isToken(value) || isPlaceLabel(key)) return value;
   const options = space[key].filter((option) => !isToken(option));
   const pick = (candidates: readonly DesignValue[]) =>
     candidates.length

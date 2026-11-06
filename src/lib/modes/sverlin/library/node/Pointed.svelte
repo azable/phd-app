@@ -17,9 +17,11 @@
     pointerAroundContext,
     provideCopy,
     provideHidden,
+    provideInPointerView,
     providePointed,
     providePointerIdentity,
-    provideWrapped
+    provideWrapped,
+    restoreNodeIds
   } from '../type-context';
 
   let {
@@ -59,6 +61,9 @@
   if (pointed?.placeholder) provideCopy();
   leaveComponentBox();
   if (pointed) provideWrapped(pointed.slot);
+  // The element keeps the id it has outside the pointer views around it.
+  restoreNodeIds(pointed?.ids);
+  provideInPointerView(false);
 </script>
 
 {#if pointed?.render}{@render pointed.render(merged)}{/if}

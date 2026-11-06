@@ -385,9 +385,9 @@ export function readsOf(snippet: SvelteNode): Set<string> {
  */
 export function unknownReadOf(
   markup: unknown,
-  known: (name: string) => boolean
+  known: (name: string, start: number) => boolean
 ): { name: string; start: number } | undefined {
-  return freeReads(markup).find(({ name }) => !known(name));
+  return freeReads(markup).find(({ name, start }) => !known(name, start));
 }
 
 /**

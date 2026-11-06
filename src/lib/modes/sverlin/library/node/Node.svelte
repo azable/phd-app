@@ -41,6 +41,8 @@
     elementSlot,
     pointedContext,
     pointerAroundContext,
+    inPointerViewContext,
+    provideInPointerView,
     pointerIdentityContext,
     placeContext,
     pointersContext,
@@ -306,6 +308,9 @@
   // The element the outermost node of a pointer's view is drawn around, active or not.
   const drawnAround = pointerAroundContext();
   if (drawnAround) providePointerAround(undefined);
+  // A pointer view's outermost node, not the element its <Pointed> draws (see provideInPointerView).
+  const pointerViewRoot = inPointerViewContext();
+  if (pointerViewRoot) provideInPointerView(false);
   // The places this node refers to, where a listing's token names them (see listing/places.ts):
   // those of the pointers at the element it draws, the render at a place it is the outermost node
   // of, or the pointer at a place whose view it is the outermost node of where the pointer is.
@@ -397,8 +402,15 @@
   const memory = layoutMemoryContext();
   // Inside a value of a union, a member's view takes the box the union's members share.
   const union = unionContext();
+  // A pointer view's outermost node holds the pointers nested inside it, so one view drawn for
+  // several pointers would take the largest nest's box for each: it keeps its own pointer's size by
+  // its id instead (see providePointerNodeIds).
   const box = untrack(() =>
-    !pointers.length && __component && memory && (!memory.measuring || memory.probing)
+    !pointers.length &&
+    !pointerViewRoot &&
+    __component &&
+    memory &&
+    (!memory.measuring || memory.probing)
       ? ((union ? memory.components.get(unionBoxKey(__component, union)) : undefined) ??
         memory.components.get(__component))
       : undefined
@@ -736,7 +748,7 @@
     class="sv-node {typeof font === 'string' ? fontClass(font) : ''}"
     data-sv-node={id}
     data-sv-kind={__over?.active ? __over.kind : __view}
-    data-sv-component={__component}
+    data-sv-component={pointerViewRoot ? undefined : __component}
     data-sv-slot={slot}
     data-sv-identity={identity}
     data-sv-around={drawnAround}

@@ -535,6 +535,18 @@ export type Place = { within: string; at: string; view?: string };
  * A kind's own variables at a place, as `IntCell@swap.held` or `Highlight.Pointed@left`: for the
  * kinds of the view the place draws, its nested snippets' included; none for another kind.
  */
+/**
+ * The design variable labelling a pointer's place, as `label@lo` for `@lo` (written `:lo.label`),
+ * which place() in its view gives: any short text, the place's own name to start.
+ */
+export const placeLabelKey = (at: string): string => `label${at}`;
+
+/** Whether a variable is a place's label, which takes any short text rather than an option. */
+export const isPlaceLabel = (key: string): boolean => /^label@[\w$.]+$/u.test(key);
+
+/** The longest label a place takes, a word or two under a mark. */
+export const placeLabelLength = 24;
+
 export function placedKind(place: Place | undefined, kind: string): string | undefined {
   return place?.view && (kind === place.view || kind.startsWith(`${place.view}.`))
     ? `${place.within}${kind}${place.at}`

@@ -262,7 +262,12 @@ A view of an array or record draws its parts through their types' views:
 A node whose only child is an `{#each}` holds an array: its items sit on equal
 tracks, as large as the largest, in a row unless it sets `layout`, and an array
 inside another runs across it, as rows in a column. Put a title for an array in
-a node around it, not beside the `{#each}`. Every view is measured for every
+a node around it, not beside the `{#each}`. Draw an array of the state with a
+view of its type and write its `layout`, as
+`<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>`
+with `{values}` in the page, rather than a layout looping over the variable: the
+design can then offer another view of it, as bars, and pointers into it mark its
+items as before. A layout's loop still works. Every view is measured for every
 input its type allows, so its box keeps one size and nothing moves between steps
 or inputs: with every value of its type where there are few, else the widest,
 and with each `{#if}`, `<When>`, and `<OneOf>` in it going each way, whatever
@@ -349,12 +354,31 @@ pointer that marks nothing at any step.
 - A pointer view may read the input and algorithm variables, so its label can
   follow the state. A pointer at an element drawn as a link, as the edge being
   examined, gives the link its kind's stroke and width.
-- A view knows nothing of the place it draws, so a name written into a pointer
-  view, as `i` under the mark, is right only where the variant chooses that view
-  for that place, and a randomised variant can choose it elsewhere. Prefer one
-  pointer view that names nothing; where views of one type must say different
-  things, each place's view is chosen by what it says, as `{Position}:j` (see
-  Places).
+- A pointer view names its pointer with `{place()}`, the place it is rendered
+  at: `lo` for `{lo}`, `pair.left` for a field in a part. So one view captions
+  every pointer,
+  `<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node></View>`,
+  and a source declares one, not one for each name. The design labels a place in
+  the participant's words, as `:lo.label` "low", any text of up to 24
+  characters, which `place()` gives instead. `place()` is written only in a view
+  holding a `<Pointed>`. An element's position, as `{edges[e].to}`, has no
+  place, so `place()` gives nothing there, and the build warns. A name written
+  into a pointer view, as `i` under the mark, is right only where the variant
+  chooses that view for that place, and a randomised variant can choose it
+  elsewhere; write `{place()}` instead.
+- A pointer view's layout places its marks round the element: a column puts them
+  under it, which suits a row of cells. For an array drawn in a column, give the
+  type a second pointer view whose marks run across, as
+  `<View of="Index" name="Side"><Node layout="row"><Pointed /><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node></View>`,
+  its tip's icon `arrow-left` in the design, and choose it with the column's
+  view of the array.
+
+<!-- Why place(): in a model test on 6 November (GPT-6.1 Terra low and Sol medium,
+five algorithms each), every output in the pointer form without it declared one
+pointer view per pointer only to type its label; given place(), 8 of 10 used one
+view for all pointers. Two outputs also chose a type's number view ({Position})
+where no position drew as a number, which the build leaves out with a warning. -->
+
 - A reference follows its element as it moves: `{tracked}`, with
   `const tracked = Tracked(values[3]);`, marks that value wherever a sort takes
   it.
@@ -494,15 +518,17 @@ Binary search, stopping where it finds the target:
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark">
+  <Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node>
+</View>
+<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Title"><Node>Binary search for {target}</Node></Layout>
-<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
 <Layout name="Range"><Node>between {lo} and {hi}</Node></Layout>
 
 <Layout name="Stacked">
   <Node>
     <Title />
-    <Cells />
+    {values}
     <Range />
     {lo}
     {mid}
@@ -518,9 +544,11 @@ Binary search, stopping where it finds the target:
 ```
 
 Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; in the root
-they and `mid` are marks, drawn by `Mark` unless a variant draws one apart
-through its place. The loop ends at `break` with `mid` on the target; a search
-for a value not there ends with `lo` past `hi`.
+they and `mid` are marks, drawn by `Mark`, each captioned with its own name by
+`{place()}`: one view for every pointer. The list is drawn by `Cells`, a view of
+its type, so a variant could offer another, as bars. The loop ends at `break`
+with `mid` on the target; a search for a value not there ends with `lo` past
+`hi`.
 
 ## Atomic types
 
@@ -852,10 +880,10 @@ place:
   <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
 <Layout name="Swapping"><Node>out of order, so they swap</Node></Layout>
-<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Board">
   <Node layout="column">
-    <Cells />
+    {values}
     <Node layout="stack">
       <Node when="@sweep.pair.test">{@sweep.pair.test}</Node>
       <Node when="@sweep.pair.swap"><Swapping /></Node>
@@ -1662,11 +1690,11 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Pointed /></View>
 <Layout name="Key"><Node>key {key}</Node></Layout>
-<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Board">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Key /><Cells /></Node>
+    <Node layout="column"><Key />{values}</Node>
   </Node>
 </Layout>
 

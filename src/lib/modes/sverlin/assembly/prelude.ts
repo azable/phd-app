@@ -11,5 +11,6 @@ import {
   SverlinBranch,
   SverlinChain,
   SverlinSlot,
-  SverlinUnion
+  SverlinUnion,
+  sverlinPlace
 } from 'sverlin';
