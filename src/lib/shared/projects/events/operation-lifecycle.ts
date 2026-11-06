@@ -15,10 +15,20 @@ export const projectOperationKindSchema = v.picklist([
   'rebuild',
   'resample',
   'presentation-refill',
+  'prepare-answers',
   'prefer',
   'save',
   'restore',
   'view-helpers'
+]);
+
+/**
+ * Kinds the system runs in the background, which participant work cancels and rebases over: a
+ * refill of presentations ahead of time, and the helper rounds prepared for a question's answers.
+ */
+export const backgroundOperationKinds: ReadonlySet<string> = new Set([
+  'presentation-refill',
+  'prepare-answers'
 ]);
 
 const operationPayloadSchema = v.object({ kind: projectOperationKindSchema });

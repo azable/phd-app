@@ -1,6 +1,10 @@
 /** Participant-facing conversational projection of the complete immutable Timeline. */
 
-import type { ProjectEvent, ProjectEventOf } from '$lib/shared/projects/events';
+import {
+  backgroundOperationKinds,
+  type ProjectEvent,
+  type ProjectEventOf
+} from '$lib/shared/projects/events';
 import { isSverlinPresentation } from '$lib/shared/presentations';
 import {
   structureKnownPresentationReferences,
@@ -303,7 +307,10 @@ export function participantTimeline(
         });
       }
       const failure = related.findLast(({ type }) => type === 'operation.failed');
-      if (failure?.type === 'operation.failed' && failure.payload.kind !== 'presentation-refill') {
+      if (
+        failure?.type === 'operation.failed' &&
+        !backgroundOperationKinds.has(failure.payload.kind)
+      ) {
         const failed = failedSource(related);
         items.push({
           id: `error-${failure.id}`,

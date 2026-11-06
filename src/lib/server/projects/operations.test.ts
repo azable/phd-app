@@ -482,59 +482,62 @@ describe('ProjectOperationExecutor', () => {
     });
   });
 
-  it('cancels and safely rebases over a background refill before accepting participant work', async () => {
-    const repository = new MemoryProjectRepository();
-    const projectId = randomUUID();
-    const refillId = randomUUID();
-    const participantId = randomUUID();
-    await repository.create(rootDocument(projectId, randomUUID()), 'owner');
-    const executor = new ProjectOperationExecutor(
-      repository,
-      { acquire: async () => ({ release: async () => undefined }) },
-      async ({ projectId: id, expectedHead, operationId, command, signal }) => {
-        if (command.type === 'presentation-refill') {
-          await new Promise<void>((_resolve, reject) => {
-            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-          });
-        }
-        const appended = await repository.append(id, expectedHead, [
-          {
-            type: 'project.renamed',
-            actor: { kind: 'user' },
-            operationId,
-            createdAt: new Date().toISOString(),
-            payload: { previousTitle: 'Initial', title: 'Participant change' }
+  it.each([{ type: 'presentation-refill', target: 4 }, { type: 'prepare-answers' }] as const)(
+    'cancels and safely rebases over background work ($type) before accepting participant work',
+    async (background) => {
+      const repository = new MemoryProjectRepository();
+      const projectId = randomUUID();
+      const refillId = randomUUID();
+      const participantId = randomUUID();
+      await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+      const executor = new ProjectOperationExecutor(
+        repository,
+        { acquire: async () => ({ release: async () => undefined }) },
+        async ({ projectId: id, expectedHead, operationId, command, signal }) => {
+          if (command.type === background.type) {
+            await new Promise<void>((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            });
           }
-        ]);
-        return { document: appended.document, appendedEvents: appended.events };
-      }
-    );
+          const appended = await repository.append(id, expectedHead, [
+            {
+              type: 'project.renamed',
+              actor: { kind: 'user' },
+              operationId,
+              createdAt: new Date().toISOString(),
+              payload: { previousTitle: 'Initial', title: 'Participant change' }
+            }
+          ]);
+          return { document: appended.document, appendedEvents: appended.events };
+        }
+      );
 
-    const refill = await executor.accept({
-      projectId,
-      operationId: refillId,
-      expectedHead: 1,
-      command: { type: 'presentation-refill', target: 4 },
-      actor: 'system'
-    });
-    expect(refill.acceptedEventId).toBe(2);
-    const participant = await executor.accept({
-      projectId,
-      operationId: participantId,
-      expectedHead: 2,
-      command: { type: 'initial-build', seed: 1 }
-    });
-    await terminal(repository, projectId, participantId);
+      const refill = await executor.accept({
+        projectId,
+        operationId: refillId,
+        expectedHead: 1,
+        command: background,
+        actor: 'system'
+      });
+      expect(refill.acceptedEventId).toBe(2);
+      const participant = await executor.accept({
+        projectId,
+        operationId: participantId,
+        expectedHead: 2,
+        command: { type: 'initial-build', seed: 1 }
+      });
+      await terminal(repository, projectId, participantId);
 
-    const document = await repository.load(projectId);
-    expect(projectOperation(document, refillId)?.terminalEvent).toMatchObject({
-      type: 'operation.failed',
-      payload: { failureKind: 'cancelled' }
-    });
-    expect(document.events[1].actor).toEqual({ kind: 'system' });
-    expect(participant.acceptedEventId).toBe(4);
-    expect(projectOperation(document, participantId)?.status).toBe('completed');
-  });
+      const document = await repository.load(projectId);
+      expect(projectOperation(document, refillId)?.terminalEvent).toMatchObject({
+        type: 'operation.failed',
+        payload: { failureKind: 'cancelled' }
+      });
+      expect(document.events[1].actor).toEqual({ kind: 'system' });
+      expect(participant.acceptedEventId).toBe(4);
+      expect(projectOperation(document, participantId)?.status).toBe('completed');
+    }
+  );
 
   it('gives capacity held by another project refill to participant work', async () => {
     const repository = new MemoryProjectRepository();

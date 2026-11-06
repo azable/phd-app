@@ -6,6 +6,7 @@ import {
   fillSkeleton,
   holeGroups,
   holesOf,
+  representationFamilies,
   representationSkeleton,
   skeletonFor
 } from './skeleton.server';
@@ -144,5 +145,23 @@ describe('skeletons', () => {
     await expect(async () =>
       bundlePresentation(prepareSvelteComponent(skeleton), 1, {})
     ).rejects.toThrow();
+  });
+});
+
+describe('whole-picture families', () => {
+  const domain = (body: string) => `<script domain>\n${body}\n</script>`;
+
+  it('gives each helper a different representation fitting what the domain holds', () => {
+    const array = representationFamilies(source);
+    const linked = representationFamilies(
+      domain("const Node = record({ name: type('text') });\nconst Next = ref(Node);")
+    );
+    const plain = representationFamilies(domain("const Int = type('integer');"));
+    for (const families of [array, linked, plain])
+      expect(new Set(families).size).toBe(families.length);
+    expect(array[0]).toMatch(/row of cells/);
+    expect(array[1]).toMatch(/bars/);
+    expect(linked[0]).toMatch(/node-and-arrow/);
+    expect(plain.some((family) => /trace table/.test(family))).toBe(true);
   });
 });

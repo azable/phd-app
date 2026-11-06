@@ -26,7 +26,12 @@ import { cutText } from '$lib/shared/text';
 import { sqlClient } from '$lib/server/db';
 
 import { chosenVariantRequests, queueProjectFeedback, queueProjectPreference } from './commands';
-import { runQueuedAssistantTurn } from '$lib/server/ai/turns/entry';
+import {
+  pendingBackgroundWork,
+  runBackgroundWork,
+  runQueuedAssistantTurn
+} from '$lib/server/ai/turns/entry';
+import { backgroundOperationKinds } from '$lib/shared/projects/events';
 import { preferenceAnswer } from './presentations';
 import { runProjectCommand } from './command-lock';
 import { conditionHelperCounts, projectViewHelpers } from './view-helpers-config';
@@ -52,11 +57,13 @@ import {
 export type InitialBuildCommand = { type: 'initial-build'; seed: number };
 export type PresentationRefillCommand = { type: 'presentation-refill'; target: number };
 export type AssistantTurnCommand = { type: 'assistant-turn'; requestEventIds: number[] };
+export type PrepareAnswersCommand = { type: 'prepare-answers' };
 export type ProjectOperationCommand =
   | ProjectCommand
   | InitialBuildCommand
   | PresentationRefillCommand
-  | AssistantTurnCommand;
+  | AssistantTurnCommand
+  | PrepareAnswersCommand;
 
 export type AcceptedProjectOperation = {
   projectId: string;
@@ -144,12 +151,12 @@ export class ProjectOperationExecutor {
         deadlineAt
       });
     }
-    const expectedHead =
-      kind === 'presentation-refill'
-        ? options.expectedHead
-        : await this.preemptRefill(options.projectId, options.expectedHead);
-    if (kind !== 'presentation-refill' && this.#active.size >= this.capacity) {
-      await this.preemptAnyRefill();
+    const background = backgroundOperationKinds.has(kind);
+    const expectedHead = background
+      ? options.expectedHead
+      : await this.preemptBackground(options.projectId, options.expectedHead);
+    if (!background && this.#active.size >= this.capacity) {
+      await this.preemptAnyBackground();
     }
     if (this.#active.size >= this.capacity) throw new ProjectOperationCapacityError();
     const reserved = new AbortController();
@@ -171,7 +178,7 @@ export class ProjectOperationExecutor {
         'operation.accepted',
         options.operationId,
         kind,
-        options.actor ?? (kind === 'presentation-refill' ? 'system' : 'user')
+        options.actor ?? (background ? 'system' : 'user')
       );
       const accepted = await this.appendAccepted(
         options.projectId,
@@ -317,7 +324,7 @@ export class ProjectOperationExecutor {
     deadlineAt?: number;
     kind: 'feedback' | 'prefer';
   }): Promise<AcceptedProjectOperation> {
-    await this.preemptRefill(options.projectId, options.expectedHead).catch(async (cause) => {
+    await this.preemptBackground(options.projectId, options.expectedHead).catch(async (cause) => {
       if (!(cause instanceof Error) || cause.name !== 'ProjectConflictError') throw cause;
       const latest = await this.repository.load(options.projectId);
       if (options.expectedHead > latest.events.length) throw cause;
@@ -434,7 +441,10 @@ export class ProjectOperationExecutor {
       }
       if (activeProjectOperation(document)) continue;
       const requests = pendingAssistantTurnRequests(document);
-      if (requests.length === 0) continue;
+      if (requests.length === 0) {
+        if (pendingBackgroundWork(document)) await this.startBackgroundWork(projectId, document);
+        continue;
+      }
       const deadlineAt = requests
         .map((event) => event.payload.deadlineAt)
         .filter((value): value is string => value !== undefined)
@@ -455,6 +465,23 @@ export class ProjectOperationExecutor {
         }
         console.error(`Could not start queued assistant turn for ${projectId}.`, cause);
       }
+    }
+  }
+
+  /** Start a project's background work between turns, which participant work cancels. */
+  private async startBackgroundWork(projectId: string, document: ProjectDocument): Promise<void> {
+    try {
+      await this.accept({
+        projectId,
+        operationId: randomUUID(),
+        expectedHead: document.events.length,
+        command: { type: 'prepare-answers' },
+        actor: 'system'
+      });
+    } catch (cause) {
+      // Nothing waits for it: with no room now, the next operation's end tries again.
+      if (!(cause instanceof ProjectOperationCapacityError))
+        console.error(`Could not start background work for ${projectId}.`, cause);
     }
   }
 
@@ -510,20 +537,20 @@ export class ProjectOperationExecutor {
     });
   }
 
-  private async preemptRefill(projectId: string, expectedHead: number): Promise<number> {
-    const refill = [...this.#active.entries()].find(
-      ([, active]) => active.projectId === projectId && active.kind === 'presentation-refill'
+  private async preemptBackground(projectId: string, expectedHead: number): Promise<number> {
+    const running = [...this.#active.entries()].find(
+      ([, active]) => active.projectId === projectId && backgroundOperationKinds.has(active.kind)
     );
-    if (!refill) return expectedHead;
-    const [operationId, active] = refill;
-    await this.cancelRefill(operationId, active);
+    if (!running) return expectedHead;
+    const [operationId, active] = running;
+    await this.cancelBackground(operationId, active);
     const document = await this.repository.load(projectId);
     if (expectedHead > document.events.length) {
       const conflict = new Error('The project changed before this operation was accepted.');
       conflict.name = 'ProjectConflictError';
       throw conflict;
     }
-    // Only the cancelled refill's own events may have come since, besides what never conflicts.
+    // Only the cancelled operation's own events may have come since, besides what never conflicts.
     const others = document.events
       .slice(expectedHead)
       .filter((event) => event.operationId !== operationId);
@@ -535,14 +562,14 @@ export class ProjectOperationExecutor {
     return document.events.length;
   }
 
-  private async preemptAnyRefill(): Promise<void> {
-    const refill = [...this.#active.entries()].find(
-      ([, active]) => active.kind === 'presentation-refill'
+  private async preemptAnyBackground(): Promise<void> {
+    const running = [...this.#active.entries()].find(([, active]) =>
+      backgroundOperationKinds.has(active.kind)
     );
-    if (refill) await this.cancelRefill(...refill);
+    if (running) await this.cancelBackground(...running);
   }
 
-  private async cancelRefill(
+  private async cancelBackground(
     operationId: string,
     active: {
       promise: Promise<void>;
@@ -788,6 +815,8 @@ async function executeProjectCommand(options: {
       });
     case 'presentation-refill':
       return replenishProjectPresentations({ ...common, target: options.command.target });
+    case 'prepare-answers':
+      return runBackgroundWork(common);
     case 'prefer':
       return queueProjectPreference({
         ...common,

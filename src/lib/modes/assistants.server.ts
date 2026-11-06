@@ -70,12 +70,25 @@ export type AssistantTurn = (
   inReplyTo?: readonly EventId[]
 ) => Promise<ProjectDocument>;
 
-const turns = import.meta.glob<{ runAssistantTurn: AssistantTurn }>(
-  './*/assistant/turn.server.ts',
-  {
-    eager: true
-  }
-);
+/**
+ * Work a mode's assistant does in the background between turns, as a prepare-answers operation the
+ * participant's next action cancels: whether a project has some, and doing it.
+ */
+export type BackgroundWork = {
+  pending(document: ProjectDocument): boolean;
+  run(
+    document: ProjectDocument,
+    operationId: string,
+    dependencies: ProjectCommandDependencies
+  ): Promise<ProjectDocument>;
+};
+
+const turns = import.meta.glob<{
+  runAssistantTurn: AssistantTurn;
+  backgroundWork?: BackgroundWork;
+}>('./*/assistant/turn.server.ts', {
+  eager: true
+});
 
 /** Each mode's authoring turn. */
 export const modeTurns = Object.fromEntries(
@@ -85,6 +98,14 @@ export const modeTurns = Object.fromEntries(
     return [mode, turn];
   })
 ) as Record<VisualizationMode, AssistantTurn>;
+
+/** Each mode's background work between turns, where it has some. */
+export const modeBackgroundWork = Object.fromEntries(
+  Object.keys(modeCatalog).flatMap((mode) => {
+    const work = turns[`./${mode}/assistant/turn.server.ts`]?.backgroundWork;
+    return work ? [[mode, work]] : [];
+  })
+) as Partial<Record<VisualizationMode, BackgroundWork>>;
 
 for (const pathname of Object.keys(modules)) {
   const id = pathname.split('/').at(-3) ?? '';

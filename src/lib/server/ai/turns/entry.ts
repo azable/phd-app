@@ -27,7 +27,7 @@ import {
 } from '$lib/server/ai/turns/comparisons';
 import { releaseHeldQuestion } from '$lib/server/ai/turns/replies';
 import { handleParticipantIntake } from '$lib/server/ai/turns/intake';
-import { modeTurns } from '$lib/modes/assistants.server';
+import { modeBackgroundWork, modeTurns } from '$lib/modes/assistants.server';
 import { designingSignal, runWithEscalation, struggleSignal } from '$lib/server/ai/turns/struggle';
 
 /** Process one durable claim while allowing new participant interactions to append concurrently. */
@@ -164,6 +164,29 @@ export async function runQueuedAssistantTurn(
         claim.payload.interactionEventIds
       )
   );
+  return {
+    document,
+    appendedEvents: document.events.filter(
+      (event) => event.id > projectHead(before).id && event.operationId === options.operationId
+    )
+  };
+}
+
+/** Whether the project's mode has background work to do between turns (see BackgroundWork). */
+export function pendingBackgroundWork(document: ProjectDocument): boolean {
+  return modeBackgroundWork[projectSnapshotAt(document).mode]?.pending(document) ?? false;
+}
+
+/** Do the project's background work, as a prepare-answers operation participant work cancels. */
+export async function runBackgroundWork(
+  options: { projectId: string; operationId: string },
+  dependencies: ProjectCommandDependencies = defaultProjectCommandDependencies
+): Promise<ProjectCommandResult> {
+  const before = await dependencies.repository.load(options.projectId);
+  const work = modeBackgroundWork[projectSnapshotAt(before).mode];
+  const document = work
+    ? await work.run(before, options.operationId, rebasingDependencies(dependencies))
+    : before;
   return {
     document,
     appendedEvents: document.events.filter(
