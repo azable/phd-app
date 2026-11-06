@@ -324,7 +324,7 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     expect(await widest(4, '[1, 2, 3, 4]')).toBeLessThan(four);
   }, 60_000);
 
-  it('keeps each grid column and row at its largest, and refuses two cells at one coordinate', async () => {
+  it('keeps each grid column and row at its largest, and warns of two cells at one coordinate', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/lcs-grid.sverlin', 'utf8');
     const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
@@ -335,10 +335,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
     expect(tracks.rows).toHaveLength(6);
     expect(Math.min(...tracks.columns, ...tracks.rows)).toBeGreaterThan(0);
     const twice = source.replace('row={i + 1} col={j + 1}', 'row={i} col={j + 1}');
-    await expect(bundlePresentation(prepareSvelteComponent(twice), 1)).rejects.toMatchObject({
-      code: 'draw_failed',
-      message: expect.stringMatching(/Two cells of a grid are at row 0, col 2/u)
-    });
+    const drawnTwice = await bundlePresentation(prepareSvelteComponent(twice), 1);
+    expect(drawnTwice.warnings).toContainEqual(
+      expect.stringMatching(/^Two cells of a grid cover row 0, col 2 at one step/u)
+    );
   }, 60_000);
   it('gives a grid in a view one set of tracks, its widest over every value, that every copy shares', async () => {
     const source = `<script domain>
