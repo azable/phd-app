@@ -141,12 +141,12 @@ export const noReach: Reach = { top: 0, right: 0, bottom: 0, left: 0 };
 
 /**
  * How far paint round a box reaches past it on each side, in pixels: a shadow its blur less its
- * offset toward that side, a glow its blur and spread, an expansion its spread. A shadow's blur
+ * offset toward that side, a glow its blur and spread. A shadow's blur
  * fades over its blur radius (CSS blurs by half of it as a standard deviation), so that much is
  * kept.
  */
-export function paintReach(shadow: unknown, glow: unknown, spread = 0): Reach {
-  const reach = { top: spread, right: spread, bottom: spread, left: spread };
+export function paintReach(shadow: unknown, glow: unknown): Reach {
+  const reach = { top: 0, right: 0, bottom: 0, left: 0 };
   const drawn = shadowOf(shadow);
   if (drawn) {
     const { x, y, blur } = shadows[drawn];
@@ -161,73 +161,6 @@ export function paintReach(shadow: unknown, glow: unknown, spread = 0): Reach {
       reach[side] = Math.max(reach[side], halo);
   }
   return reach;
-}
-
-/** The larger reach on each side. */
-export const widerReach = (a: Reach, b: Reach): Reach => ({
-  top: Math.max(a.top, b.top),
-  right: Math.max(a.right, b.right),
-  bottom: Math.max(a.bottom, b.bottom),
-  left: Math.max(a.left, b.left)
-});
-
-/** Two reaches one beyond the other, as paint round a box the box is then moved with. */
-export const addedReach = (a: Reach, b: Reach): Reach => ({
-  top: a.top + b.top,
-  right: a.right + b.right,
-  bottom: a.bottom + b.bottom,
-  left: a.left + b.left
-});
-
-/**
- * A pointer's transforms of what it is at, all paint, taking no room: its whole drawing scaled
- * from its anchors and moved, the marks round the element with it, and the box spread.
- */
-export const transformProps = ['scale', 'spread', 'offsetX', 'offsetY'] as const;
-
-/** How far an offset moves a drawing past its room on each side, negative being up or left. */
-export function offsetReach(offsetX: unknown, offsetY: unknown): Reach {
-  const x = typeof offsetX === 'number' ? offsetX : 0;
-  const y = typeof offsetY === 'number' ? offsetY : 0;
-  return {
-    top: Math.max(0, -y),
-    right: Math.max(0, x),
-    bottom: Math.max(0, y),
-    left: Math.max(0, -x)
-  };
-}
-
-/**
- * How far a drawing scaled from its anchors grows past its box of the size given on each side:
- * all of it away from an anchor at the start or end, half each way from the centre, rounded up to
- * whole pixels so the room holds it.
- */
-export function scaleReach(
-  scale: unknown,
-  anchors: { x: string; y: string },
-  size: { width: number; height: number }
-): Reach {
-  const factor = typeof scale === 'number' && scale > 1 ? scale - 1 : 0;
-  const grown = (length: number, anchor: string): [number, number] => {
-    const total = Math.ceil(factor * length);
-    if (anchor === 'start' || anchor === 'flex-start') return [0, total];
-    if (anchor === 'end' || anchor === 'flex-end') return [total, 0];
-    return [Math.ceil(total / 2), Math.ceil(total / 2)];
-  };
-  const [left, right] = grown(size.width, anchors.x);
-  const [top, bottom] = grown(size.height, anchors.y);
-  return { top, right, bottom, left };
-}
-
-/** Where a drawing scaled from its anchors stays put, as a CSS transform-origin. */
-export function anchorOrigin(anchors: { x: string; y: string }): string {
-  const at = (anchor: string, start: string, end: string) =>
-    anchor === 'start' || anchor === 'flex-start'
-      ? start
-      : anchor === 'end' || anchor === 'flex-end'
-        ? end
-        : 'center';
-  return `${at(anchors.x, 'left', 'right')} ${at(anchors.y, 'top', 'bottom')}`;
 }
 
 /** A drawn fill's style, as the image over its colour, or undefined for solid. */
@@ -279,8 +212,7 @@ const basisSteps = [-1, -0.5, 0, 0.5, 1];
 /**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
  * pixels; whether a box takes its slot's width and height or its own, and where its own sits in
- * the slot; whether a row or column places its children in their slots or packs them; how a pointer
- * scales, spreads and moves what it is at; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
+ * the slot; whether a row or column places its children in their slots or packs them; a box's shadow, glow and fill style and its text's decoration and case; a free layout's
  * form, the way it runs, its arrows' curve, and the seed its spacing and nudges are drawn from; and
  * how a link runs, as its layout's arrows or its own way, and the heads at its ends; and how a link
  * from a variable paints the element it reaches, none leaving it as it is.
@@ -304,15 +236,9 @@ export const propOptions = {
   yAnchor: ['start', 'center', 'end'],
   gap: spacing,
   spacing: ['slots', 'packed'],
-  expand: [0, 2, 4, 8],
-  scale: [1, 1.1, 1.2, 1.3],
-  spread: [0, 2, 4, 6],
-  offsetX: [-12, -8, -4, 0, 4, 8, 12],
-  offsetY: [-12, -8, -4, 0, 4, 8, 12],
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
-  overflow: ['shown', 'hidden'],
   shadow: ['none', 'soft', 'lifted', 'hard'],
   glow: ['none', 'on'],
   fillStyle: ['solid', 'hatched'],
@@ -375,7 +301,7 @@ export const placePaint = ['fill', 'stroke', 'color'] as const;
 
 /**
  * How a link from a variable (see Link.svelte) paints the element it reaches while it is drawn,
- * none leaving that paint as it is: paint only, as a <Pointed>'s, so no box changes size.
+ * none leaving that paint as it is: paint only, so no box changes size.
  */
 export const targetProps = [
   'targetFill',
@@ -449,7 +375,6 @@ export type KindRole =
   | 'text'
   | 'code'
   | 'icon'
-  | 'pointed'
   | 'link';
 
 const nodeProps: readonly DesignProp[] = [
@@ -477,9 +402,6 @@ const nodeProps: readonly DesignProp[] = [
   'case'
 ];
 
-/** How a box sits in its slot, which a <Pointed> drawn round its element does not have. */
-const slotProps: ReadonlySet<DesignProp> = new Set(['width', 'height', 'xAnchor', 'yAnchor']);
-
 /** The starter's slot: every box as large as its slot, so equal boxes line up. */
 const uniformSlot = {
   width: 'uniform',
@@ -488,7 +410,7 @@ const uniformSlot = {
   yAnchor: 'center'
 } satisfies Partial<Record<DesignProp, string>>;
 
-/** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
+/** The props a kind of node has: a layout's own, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
   value: nodeProps,
@@ -497,12 +419,6 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   text: nodeProps,
   code: nodeProps,
   icon: [...nodeProps, 'icon'],
-  pointed: [
-    ...nodeProps.filter((prop) => prop !== 'shown' && !slotProps.has(prop)),
-    'overflow',
-    'expand',
-    ...transformProps
-  ],
   link: [
     'shown',
     'stroke',
@@ -535,17 +451,13 @@ export const starterFreeLayout: Record<string, string | number> = {
 
 /**
  * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
- * step to step or render to render, a pointer at a node, a place, a listing's lit region, sets
- * only paint; every other prop is its kind's in every slot and at every step, so slots keep one
- * size. A pointer's paint shows only where it is, its other props in every slot it can point at.
- * `expand` is paint, taking room only in a packed row, which keeps room for it; a pointer's
- * transforms (transformProps) are paint, drawn over the room kept for their reach; a link's target
- * paint (targetProps) is paint on the element it reaches, its width drawn inside that box.
+ * step to step or render to render, a link from a variable reaching a node, a place, a listing's
+ * lit region, sets only paint; every other prop is its kind's in every slot and at every step, so
+ * slots keep one size. A link's target paint (targetProps) is paint on the element it reaches, its
+ * width drawn inside that box.
  */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
-  'expand',
-  ...transformProps,
   'stroke',
   'strokeStyle',
   'opacity',
@@ -600,7 +512,7 @@ export const placeName = (at: string): string =>
   at.startsWith(':@') ? at.slice(at.lastIndexOf('.') + 1).replace(/^:?@/u, '') : at.slice(1);
 
 /**
- * A kind's own variables at a place, as `IntCell:swap.held` or `Highlight.Pointed:left`: for the
+ * A kind's own variables at a place, as `IntCell:swap.held` or `Mark.Link:left`: for the
  * kinds of the view the place draws, its nested snippets' included; none for another kind.
  */
 
@@ -628,13 +540,13 @@ export function lookUp(
 
 /**
  * The kind a node is of: the snippet it is in, by its path (`Row.Under` for a snippet inside
- * `Row`), and for a pointer view's <Pointed> or a <Link>, that part, as `Compared.Pointed`.
+ * `Row`), and for a <Link>, that part, as `Mark.Link`.
  */
-export function kindKey(view: string, part?: 'Pointed' | 'Link'): string {
+export function kindKey(view: string, part?: 'Link'): string {
   return part ? `${view}.${part}` : view;
 }
 
-/** A variant: each variable's value, by key, as Compared.Pointed.fill or views.Int. */
+/** A variant: each variable's value, by key, as IntCell.fill or views.Int. */
 export type DesignValues = Readonly<Record<string, string | number | boolean>>;
 
 /** The starter's box and text styling, every kind of node's: today's look. */
@@ -646,7 +558,7 @@ const plainStyle = {
   case: 'normal'
 } satisfies Partial<Record<DesignProp, string>>;
 
-/** The starter's value for each prop of a kind: plain containers and text, framed values and pointers. */
+/** The starter's value for each prop of a kind: plain containers and text, framed values. */
 export const starterLooks: Record<KindRole, Record<string, string | number | boolean>> = {
   container: {
     shown: true,
@@ -780,27 +692,6 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     ...uniformSlot,
     icon: 'circle-dot'
   },
-  pointed: {
-    fill: 'amber-100',
-    stroke: 'amber-500',
-    strokeWidth: 1.5,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 20,
-    weight: 'bold',
-    padding: 0.375,
-    radius: 8,
-    minSize: 2.5,
-    ...plainStyle,
-    overflow: 'shown',
-    expand: 0,
-    scale: 1,
-    spread: 0,
-    offsetX: 0,
-    offsetY: 0
-  },
   link: {
     shown: true,
     stroke: 'neutral-500',
@@ -810,7 +701,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     route: 'layout',
     head: 'arrow',
     headSize: 9,
-    // A link from a variable paints what it reaches as a pointer's <Pointed> starts.
+    // A link from a variable paints what it reaches, pale fill and a darker stroke.
     targetFill: 'amber-100',
     targetStroke: 'amber-500',
     targetStrokeWidth: 1.5,
@@ -841,8 +732,8 @@ export const isToken = (name: unknown): name is DesignToken =>
   typeof name === 'string' && Object.hasOwn(tokenProps, name);
 
 /**
- * Each token's starter value, today's look: text black in the first font on white values, pointers
- * amber, and the padding, corners and line width framed values and pointers share.
+ * Each token's starter value, today's look: text black in the first font on white values, the paint
+ * links from variables give amber, and the padding, corners and line width framed values share.
  */
 export const starterTokens: Record<DesignToken, string | number> = {
   $text: 'black',
@@ -857,21 +748,21 @@ export const starterTokens: Record<DesignToken, string | number> = {
 
 /**
  * The tags whose kinds a group sets together, as `<Node>.padding` for every kind a <Node> makes
- * that has padding: <Node> for every node role, <Pointed> for pointer marks, <Link> for links.
+ * that has padding: <Node> for every node role, <Link> for links.
  * The listing's own group, <Listing>, names its settings (see listingAlias).
  */
-export type DesignTag = '<Node>' | '<Pointed>' | '<Link>';
+export type DesignTag = '<Node>' | '<Link>';
 
 /** The tag making each role's kinds. */
 export const tagOf = (role: KindRole): DesignTag =>
-  role === 'pointed' ? '<Pointed>' : role === 'link' ? '<Link>' : '<Node>';
+  role === 'link' ? '<Link>' : '<Node>';
 
 /** The variable setting a prop for every kind of a tag, as `<Node>.padding`. */
 export const groupKey = (tag: DesignTag, prop: string): string => `${tag}.${prop}`;
 
 /** A group's tag and prop, as `<Node>` and padding for `<Node>.padding`. */
 export function groupOf(key: string): { tag: DesignTag; prop: DesignProp } | undefined {
-  const match = /^(<Node>|<Pointed>|<Link>)\.([A-Za-z]+)$/u.exec(key);
+  const match = /^(<Node>|<Link>)\.([A-Za-z]+)$/u.exec(key);
   return match ? { tag: match[1] as DesignTag, prop: match[2] as DesignProp } : undefined;
 }
 

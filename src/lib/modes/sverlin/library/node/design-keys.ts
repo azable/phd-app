@@ -11,16 +11,12 @@
  * | `views.Int`                   | `{Int}`                       |
  * | `views.Int:target`            | `{Int}:target`                |
  * | `views.@insert.key`           | `{@insert.key}`               |
- * | `pointers.Index`              | `{Index}.pointer`             |
- * | `pointers.Index:@scan.next`   | `{Index}:@scan.next`          |
  *
- * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.Pointed:@scan.next.fill`,
+ * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.Link:@scan.next.targetFill`,
  * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
  * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
- * `<…>` groups, `listing.lit@insert.key.fill` and `listing.syntax` (or `<Listing>.syntax`). A
- * place's view and pointer share `{Type}:place`, as a place is drawn one way or the other; where a
- * design has both, the pointer's is written `{Type}.pointer:place`. People read the keys nested
- * (see nestedDesign).
+ * `<…>` groups, `listing.lit@insert.key.fill` and `listing.syntax` (or `<Listing>.syntax`). People
+ * read the keys nested (see nestedDesign).
  */
 
 import { baseKey, listingAlias, placeCaption } from './design';
@@ -28,11 +24,11 @@ import { baseKey, listingAlias, placeCaption } from './design';
 /** A place as kept and written: a variable or field (`lo`, `pair.left`), or a label (`@scan.next`). */
 const placePattern = String.raw`@?[\w$.]+?`;
 const viewKey = new RegExp(
-  String.raw`^(views|pointers)\.(@[\w$.]+?|[\w$.]+?)(?::(${placePattern}))?$`,
+  String.raw`^views\.(@[\w$.]+?|[\w$.]+?)(?::(${placePattern}))?$`,
   'u'
 );
 const writtenView = new RegExp(
-  String.raw`^\{(@[\w$.]+|[A-Z][\w$.]*)\}(\.pointer)?(?::(${placePattern}))?$`,
+  String.raw`^\{(@[\w$.]+|[A-Z][\w$.]*)\}(?::(${placePattern}))?$`,
   'u'
 );
 /** A kind's key: kind, place, value, prop and an ordered prop's part (see bound.ts). */
@@ -90,75 +86,46 @@ export const isPlacedOrValued = (key: string): boolean => {
   return parts ? parts.place !== undefined || parts.value !== undefined : false;
 };
 
-/**
- * A kept key as written: a view choice in braces, every other key as it is. `has` tells whether
- * the design has a key, so a place drawn both ways writes its pointer apart.
- */
-export function writtenKey(key: string, has?: (key: string) => boolean): string {
+/** A kept key as written: a view choice in braces, every other key as it is. */
+export function writtenKey(key: string): string {
   const view = viewKey.exec(key);
   if (!view) return key;
-  const [, choice, type, place] = view;
-  const braced = `{${type}}`;
-  if (choice === 'views') return place ? `${braced}:${place}` : braced;
-  if (!place) return `${braced}.pointer`;
-  const both = has?.(`views.${type}:${place}`);
-  return both ? `${braced}.pointer:${place}` : `${braced}:${place}`;
+  const [, type, place] = view;
+  return place ? `{${type}}:${place}` : `{${type}}`;
 }
 
 /**
  * A key as the app keeps it: a view choice from braces, the listing's group, `<Listing>.syntax`, as
- * `listing.syntax`, every other key as it is. Where `has` is given, a place's view goes to the
- * pointer where only the pointer is in the design, as `{Index}:lo` at a mark.
+ * `listing.syntax`, every other key as it is.
  */
-export function keptKey(key: string, has?: (key: string) => boolean): string {
+export function keptKey(key: string): string {
   const view = writtenView.exec(key);
-  if (view) {
-    const [, type, pointer, place] = view;
-    const at = place ? `:${place}` : '';
-    if (pointer) return `pointers.${type}${at}`;
-    return placedView(`views.${type}${at}`, has);
-  }
-  return placedView(listingAlias(key), has);
-}
-
-/** A place's view key, moved to the pointer's where the design has only the pointer there. */
-function placedView(key: string, has: ((key: string) => boolean) | undefined): string {
-  if (!has || !key.startsWith('views.') || !viewKey.exec(key)?.[3] || has(key)) return key;
-  const pointer = `pointers.${key.slice('views.'.length)}`;
-  return has(pointer) ? pointer : key;
+  if (!view) return listingAlias(key);
+  const [, type, place] = view;
+  return `views.${type}${place ? `:${place}` : ''}`;
 }
 
 /** A variant's values with their keys as written. */
-export function writtenValues<T>(
-  values: Readonly<Record<string, T>>,
-  has: (key: string) => boolean = (key) => Object.hasOwn(values, key)
-): Record<string, T> {
-  return Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [writtenKey(key, has), value])
-  );
+export function writtenValues<T>(values: Readonly<Record<string, T>>): Record<string, T> {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [writtenKey(key), value]));
 }
 
 /**
  * A message's kept keys as written, as a build's refusal names them for the assistant: each word
  * that is a view choice, as `views.Int` written `{Int}`.
  */
-export function writtenText(text: string, has?: (key: string) => boolean): string {
+export function writtenText(text: string): string {
   return text.replace(/[\w$@:.{}<>-]+/gu, (word) => {
     const end = /\.+$/u.exec(word)?.[0] ?? '';
     const key = word.slice(0, word.length - end.length);
-    const written = writtenKey(key, has);
+    const written = writtenKey(key);
     return written !== key ? written + end : word;
   });
 }
 
 /** A variant's values with their keys as the app keeps them. */
-export function keptValues<T>(
-  values: Readonly<Record<string, T>>,
-  has?: (key: string) => boolean
-): Record<string, T> {
-  return Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [keptKey(key, has), value])
-  );
+export function keptValues<T>(values: Readonly<Record<string, T>>): Record<string, T> {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [keptKey(key), value]));
 }
 
 /**
@@ -173,7 +140,7 @@ export function keptValues<T>(
  * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
  * | `listing.lit.fill`             | `"listing": { "lit": { "fill": … } }`         |
  * | `listing.lit@insert.key.fill`  | `… "lit": { "@insert.key": { "fill": … } }`   |
- * | `Here.Pointed.fill`            | `"Here": { "Pointed": { "fill": … } }`        |
+ * | `Here.Link.targetFill`         | `"Here": { "Link": { "targetFill": … } }`     |
  * | `IntCell:target.stroke`        | `"IntCell": { ":target": { "stroke": … } }`   |
  * | `Card=true.stroke`             | `"Card": { "=true": { "stroke": … } }`        |
  * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |

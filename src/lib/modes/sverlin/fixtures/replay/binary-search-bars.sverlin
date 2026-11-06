@@ -75,29 +75,29 @@
   </Node>
 </View>
 
-<View of="Index" name="IndexNumber">
-  <Node value={this} />
-</View>
-
 <View of="Index" name="Lower">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="LowerLabel">lo</Node>
   </Node>
 </View>
 
 <View of="Index" name="Middle">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="MiddleLabel">mid</Node>
   </Node>
 </View>
 
 <View of="Index" name="Upper">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="UpperLabel">hi</Node>
   </Node>
+</View>
+
+<View of="Index" name="IndexNumber">
+  <Node value={this} />
 </View>
 
 <View of="SearchStatus" name="StatusWord">
@@ -114,12 +114,24 @@
   <Node>Binary search for {target}</Node>
 </Layout>
 
-<Layout name="ArrayLine" of="values">
-  <Node>{values}</Node>
+<Layout name="ArrayLine" of="values, lo, mid, hi">
+  <Node layout="column">
+    {values}
+    <Node kind="Marks" layout="row">
+      <Node>{lo}</Node>
+      <Node>{mid}</Node>
+      <Node>{hi}</Node>
+    </Node>
+  </Node>
 </Layout>
 
 <Layout name="RangeNote" of="lo, hi">
-  <Node>Active range: index {lo} through {hi}</Node>
+  <Node layout="row">
+    <Node>Active range: index</Node>
+    <Node kind="Bound" value={lo} />
+    <Node>through</Node>
+    <Node kind="Bound" value={hi} />
+  </Node>
 </Layout>
 
 <Layout name="Explanation"
@@ -128,7 +140,10 @@
   <Node layout="column">
     <OneOf>
       <When of="@probe.equal">
-        <Node>Compare {target} with {values[mid]} at index {mid}.</Node>
+        <Node layout="row">
+          <Node>Compare {target} with {values[mid]} at index</Node>
+          <Node kind="Number" value={mid} />
+        </Node>
       </When>
       <When of="@probe.right">
         <Node>The target is larger, so move lo to the right.</Node>
@@ -137,7 +152,10 @@
         <Node>The target is smaller, so move hi to the left.</Node>
       </When>
       <When of="@probe.found">
-        <Node>Found {target} at index {mid}.</Node>
+        <Node layout="row">
+          <Node>Found {target} at index</Node>
+          <Node kind="Number" value={mid} />
+        </Node>
       </When>
       <When of="@missing">
         <Node>{target} is not in the array.</Node>
@@ -154,7 +172,7 @@
       @probe.right, @probe.left, @probe.found, @missing">
   <Node layout="column">
     <Title target={target} />
-    <ArrayLine values={values} />
+    <ArrayLine values={values} lo={lo} mid={mid} hi={hi} />
     <RangeNote lo={lo} hi={hi} />
     <Explanation
       values={values}
@@ -178,9 +196,6 @@
       hi={hi}
       result={result}
     />
-    {lo}
-    {mid}
-    {hi}
   </Node>
 </Layout>
 

@@ -2,7 +2,6 @@ import { parse } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 
 import {
-  pointerCalls,
   readsOf,
   scopedReadsOf,
   slotInsertions,
@@ -26,86 +25,6 @@ function slotted(view: string, state = ['values', 'target', 'edges', 'vertices']
     )
   );
 }
-
-/** The root's pointer calls, and the view without them. */
-function hoisted(view: string) {
-  const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
-    filename: 'Main.svelte'
-  });
-  const found = pointerCalls(
-    ast.html,
-    view,
-    new Set(['i', 'edges', 'e']),
-    new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]])
-  );
-  return { ...found, view: withInsertions(view, found.removals) };
-}
-
-describe('pointers', () => {
-  it('are drawn around what they point at, so their calls move to the script', () => {
-    expect(hoisted('<Node>A</Node>{@render Arrow(i)}{@render Arrow(edges[e].to)}')).toMatchObject({
-      view: '<Node>A</Node>',
-      calls: [
-        '{ view: () => Arrow, value: () => i, path: "i", into: "Values", paint: __paint_Arrow }',
-        '{ view: () => Arrow, value: () => edges[e].to, of: () => edges[e], at: () => "to", into: "Values", paint: __paint_Arrow }'
-      ],
-      problems: []
-    });
-  });
-
-  it('leave the slot of a render written right beside them whole, either side', () => {
-    const slottedWithout = (view: string) => {
-      const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
-        filename: 'Main.svelte'
-      });
-      const { removals } = pointerCalls(
-        ast.html,
-        view,
-        new Set(['i', 'target']),
-        new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]])
-      );
-      const slots = slotInsertions(
-        ast.html,
-        view,
-        new Set(['i', 'target']),
-        new Set(['Int']),
-        new Set(),
-        new Set(),
-        new Set(),
-        new Map(),
-        removals
-      );
-      return unsited(withInsertions(view, [...removals, ...slots]));
-    };
-    const slot = '<SverlinSlot path="target">{@render Int(target)}</SverlinSlot>';
-    expect(slottedWithout('{@render Int(target)}{@render Arrow(i)}')).toBe(slot);
-    expect(slottedWithout('{@render Arrow(i)}{@render Int(target)}')).toBe(slot);
-  });
-
-  it('are rendered at the top of the view, with a position from the state', () => {
-    const messages = (view: string) => hoisted(view).problems.map(({ message }) => message);
-    expect(messages('{#each edges as edge}{@render Arrow(i)}{/each}')[0]).toMatch(
-      /at the top of the view/
-    );
-    expect(messages('{#snippet V(this: Values)}{@render Arrow(this)}{/snippet}')[0]).toMatch(
-      /at the top of the view/
-    );
-    expect(messages('{@render Arrow(i + 1)}')[0]).toMatch(/a position from the state/);
-  });
-
-  it('point nowhere where the {#if} branches around them are not taken', () => {
-    expect(
-      hoisted('{#if i > 0}{@render Arrow(i)}{:else if e}{@render Arrow(e)}{:else}A{/if}')
-    ).toMatchObject({
-      view: '{#if i > 0}{:else if e}{:else}A{/if}',
-      calls: [
-        '{ view: () => Arrow, value: () => i, path: "i", shown: () => (i > 0), into: "Values", paint: __paint_Arrow }',
-        '{ view: () => Arrow, value: () => e, path: "e", shown: () => !(i > 0) && (e), into: "Values", paint: __paint_Arrow }'
-      ],
-      problems: []
-    });
-  });
-});
 
 describe('element slots', () => {
   it('names a variable by its name, and an element by its array and index', () => {
@@ -188,7 +107,7 @@ describe('element slots', () => {
 });
 
 describe('scope', () => {
-  it('names the variables out of scope at some step that a view or pointer reads', () => {
+  it('names the variables out of scope at some step that a view reads', () => {
     const view =
       '{@render Int(values[i])}{#each row as v}{@render Int(v)}{/each}{@render Int(target)}';
     const ast = parse(`${viewThisValues(view).source}<script lang="ts"></script>`, {
@@ -206,18 +125,6 @@ describe('scope', () => {
     ).toBe(
       '<SverlinSlot of={values} at={i} reads={["i"]}>{@render Int(values[i])}</SverlinSlot>{#each row as v, __k1}<SverlinSlot of={row} at={__k1} reads={["row"]}>{@render Int(v)}</SverlinSlot>{/each}<SverlinSlot path="target">{@render Int(target)}</SverlinSlot>'
     );
-    const pointers = parse('{@render Arrow(edges[e].to)}<script lang="ts"></script>', {
-      filename: 'Main.svelte'
-    });
-    expect(
-      pointerCalls(
-        pointers.html,
-        '{@render Arrow(edges[e].to)}',
-        new Set(['edges', 'e']),
-        new Map([['Arrow', { into: 'Values', paint: '__paint_Arrow' }]]),
-        new Set(['e'])
-      ).calls[0]
-    ).toContain('reads: ["e"], ');
   });
 
   it('counts a name a block declares as declared only inside that block', () => {

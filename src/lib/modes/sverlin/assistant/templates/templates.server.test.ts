@@ -78,7 +78,7 @@ describe('templates', () => {
       const resolve = (value: unknown) =>
         colourCss(typeof value === 'string' && value.startsWith('$') ? values[value] : value);
       const page = '#ffffff';
-      for (const role of ['$Value', '$Vertex', '$Pointed', '$Text', '$Container']) {
+      for (const role of ['$Value', '$Vertex', '$Text', '$Container']) {
         const text = resolve(values[`${role}.color`])!;
         const fill = resolve(values[`${role}.fill`]) ?? page;
         expect(contrast(text, fill), `${name} ${role} text`).toBeGreaterThanOrEqual(4.5);
@@ -86,6 +86,12 @@ describe('templates', () => {
         if (stroke) expect(contrast(stroke, page), `${name} ${role}`).toBeGreaterThanOrEqual(3);
       }
       expect(contrast(resolve(values['$Link.stroke'])!, page)).toBeGreaterThanOrEqual(3);
+      // What a link from a variable reaches: text on its fill, and its stroke on the page.
+      const target = resolve(values['$Link.targetFill']) ?? page;
+      const text = resolve(values['$Text.color'])!;
+      expect(contrast(text, target), `${name} target text`).toBeGreaterThanOrEqual(4.5);
+      const edge = resolve(values['$Link.targetStroke'])!;
+      expect(contrast(edge, page), `${name} target stroke`).toBeGreaterThanOrEqual(3);
     }
   );
 });

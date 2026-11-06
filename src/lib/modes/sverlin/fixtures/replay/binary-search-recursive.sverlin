@@ -54,26 +54,26 @@
     <Node kind="BarLabel" value={this} />
   </Node>
 </View>
-<View of="Index" name="IndexText">
-  <Node value={this} />
-</View>
 <View of="Index" name="LowMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="LowLabel">lo</Node>
   </Node>
 </View>
 <View of="Index" name="MidMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="MidLabel">mid</Node>
   </Node>
 </View>
 <View of="Index" name="HighMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="HighLabel">hi</Node>
   </Node>
+</View>
+<View of="Index" name="IndexText">
+  <Node value={this} />
 </View>
 <View of="@probe.equal" name="EqualityQuestion">
   <Node>
@@ -84,15 +84,23 @@
 <Layout name="Title" of="target">
   <Node>Binary search for {target}</Node>
 </Layout>
-<Layout name="Cells" of="values">
-  <Node>
-    {#each values as value}
-      {value}
+<Layout name="Cells" of="values, lo, mid, hi">
+  <Node layout="grid">
+    <Node kind="Lane" row={-1} col={mid}>{mid}</Node>
+    {#each values as value, k}
+      <Node row={0} col={k}>{value}</Node>
     {/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={hi}>{hi}</Node>
   </Node>
 </Layout>
 <Layout name="Range" of="lo, hi">
-  <Node>Remaining range: index {lo} to {hi}</Node>
+  <Node layout="row">
+    <Node>Remaining range: index</Node>
+    <Node kind="Bound" value={lo} />
+    <Node>to</Node>
+    <Node kind="Bound" value={hi} />
+  </Node>
 </Layout>
 <Layout name="Status" of="target, mid, @probe.equal, @probe.right,
     @probe.left, @probe.found, @missing">
@@ -108,7 +116,10 @@
         <Node>The middle value is too large, so search left.</Node>
       </When>
       <When of="@probe.found">
-        <Node>Found {target} at index {mid}.</Node>
+        <Node layout="row">
+          <Node>Found {target} at index</Node>
+          <Node kind="Number" value={mid} />
+        </Node>
       </When>
       <When of="@missing">
         <Node>{target} is not in the array.</Node>
@@ -124,14 +135,11 @@
     <Node layout="row">
       <Listing />
       <Node layout="column">
-        <Cells values={values} />
+        <Cells values={values} lo={lo} mid={mid} hi={hi} />
         <Range lo={lo} hi={hi} />
         <Status target={target} mid={mid} />
       </Node>
     </Node>
-    {lo}
-    {mid}
-    {hi}
   </Node>
 </Layout>
 

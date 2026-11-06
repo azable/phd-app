@@ -620,8 +620,8 @@ export async function runSverlinAssistantTurn(
         softReturned = true;
         return reject('helpers', [helpersProblem], candidate);
       }
-      // A new or changed picture shown alone, where its source offers another form of a view, a
-      // pointer or a free layout's arrangement, goes back once to offer a comparison; one the
+      // A new or changed picture shown alone, where its source offers another form of a view or a
+      // free layout's arrangement, goes back once to offer a comparison; one the
       // participant directs is made as asked.
       const alternatives =
         !aloneByFlow &&
@@ -898,18 +898,16 @@ export function comparisonRequests(
 
 /**
  * What a built picture's source offers that a comparison could show, as one message, or undefined:
- * a type drawn by one of several views, a pointer drawn by one of several pointer views, and a free
- * layout's arrangement; none the participant has already answered, as Cells or bars asked again
+ * a type drawn by one of several views, and a free layout's arrangement; none the participant has already answered, as Cells or bars asked again
  * when they asked for something else.
  */
 export function unofferedAlternatives(
   bundle: {
     views?: Record<string, string[]>;
-    pointers?: Record<string, string[]>;
     variant?: Record<string, unknown>;
   },
   answered: ReadonlySet<string> = new Set(),
-  shown: { views?: Record<string, string[]>; pointers?: Record<string, string[]> } = {}
+  shown: { views?: Record<string, string[]> } = {}
 ): string | undefined {
   // Only forms new in this version: one the shown version already offered was the assistant's to
   // compare then, and asking again on every later change cost a model call a turn (9c06eb82).
@@ -919,10 +917,6 @@ export function unofferedAlternatives(
       .filter(([type, views]) => !same(shown.views?.[type], views))
       .filter(([type, views]) => views.length > 1 && !answered.has(`views.${type}`))
       .map(([type, views]) => `${type} as ${views.join(' or ')} (views.${type})`),
-    ...Object.entries(bundle.pointers ?? {})
-      .filter(([type, views]) => !same(shown.pointers?.[type], views))
-      .filter(([type, views]) => views.length > 1 && !answered.has(`pointers.${type}`))
-      .map(([type, views]) => `the ${type} pointer as ${views.join(' or ')} (pointers.${type})`),
     ...Object.keys(bundle.variant ?? {})
       .filter((key) => key.endsWith('.layoutSeed') && shown.views === undefined)
       .map((key) => key.slice(0, -'.layoutSeed'.length))
@@ -954,15 +948,12 @@ export function typeNamedIn(text: string, source: string): string | undefined {
   });
 }
 
-/** The view and pointer choices the version shown offers, none before a first version. */
-export function shownForms(document: ProjectDocument): {
-  views?: Record<string, string[]>;
-  pointers?: Record<string, string[]>;
-} {
+/** The view choices the version shown offers, none before a first version. */
+export function shownForms(document: ProjectDocument): { views?: Record<string, string[]> } {
   const shown =
     projectSnapshotAt(document).activePresentationSet?.presentations[0]?.payload.presentation;
   return shown?.format === 'browser-bundle-v1'
-    ? { views: shown.views ?? {}, pointers: shown.pointers ?? {} }
+    ? { views: shown.views ?? {} }
     : {};
 }
 
@@ -1080,7 +1071,7 @@ export function comparisonBriefProblem({ brief }: Comparisons[number]): string |
 /** The values a decision's patch sets, as kept (see design-patch.server.ts), as a build chooses them. */
 export function designValues(values: unknown): DesignValues {
   // Keys as written or kept, kept (see design-keys.ts): {Int} is views.Int, <Listing>.syntax
-  // listing.syntax; the build sends a place's view to its pointer where only that is in the design.
+  // listing.syntax.
   return Object.fromEntries(
     designPatch(values).set.map(({ variable, value }) => [keptKey(variable), value])
   ) as DesignValues;

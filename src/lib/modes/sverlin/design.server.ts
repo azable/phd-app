@@ -70,7 +70,7 @@ import { designOnlyWarning } from './padding-warnings.server';
 export type DesignValue = string | number | boolean;
 
 /**
- * A kind of node: its key, the snippet it is in (as Compared.Pointed), what it is, giving its props,
+ * A kind of node: its key, the snippet it is in (as Mark.Link), what it is, giving its props,
  * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
  * (see structure.server.ts) and the flow its node sets; and, for a link's kind, whether every link
  * of it is a two-way line, whose head starts as none.
@@ -189,7 +189,7 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
       )
     ),
     ...Object.fromEntries(
-      (['<Node>', '<Pointed>', '<Link>'] as const).flatMap((tag) => {
+      (['<Node>', '<Link>'] as const).flatMap((tag) => {
         const reached = roles.filter((role) => tagOf(role) === tag);
         return [...new Set(reached.flatMap(groupProps))].map((prop) => [
           groupKey(tag, prop),
@@ -330,7 +330,7 @@ function withBase(
   const governed = Object.fromEntries(
     Object.entries(space).map(([key, options]) => [
       key,
-      key.startsWith('views.') || key.startsWith('pointers.') || framing(key)
+      key.startsWith('views.') || framing(key)
         ? options
         : baseOptions(propOf(key), options, values)
     ])
@@ -449,41 +449,20 @@ export function listingRegionSpace(labels: readonly string[]): DesignSpace {
   );
 }
 
-/**
- * The variable each region's paint falls back to: its label's mark where the root draws the label
- * as a pointer (`marks`, by label, the kind the place draws, or its views by the choice naming one),
- * so its code looks as its cell does; else the listing's own lit look.
- */
-export function listingRegionFallbacks(
-  labels: readonly string[],
-  marks: ReadonlyMap<string, { kinds: Readonly<Record<string, string>>; by?: string }>
-): Record<string, Fallback> {
+/** The variable each region's paint falls back to: the listing's own lit look. */
+export function listingRegionFallbacks(labels: readonly string[]): Record<string, Fallback> {
   return Object.fromEntries(
     labels.flatMap((label) =>
-      listingRegionProps.map((prop): [string, Fallback] => {
-        const own = `listing.lit.${prop}`;
-        const mark = marks.get(label);
-        const kinds = Object.entries(mark?.kinds ?? {});
-        const fallback: Fallback = !mark
-          ? own
-          : mark.by
-            ? {
-                by: mark.by,
-                of: Object.fromEntries(kinds.map(([view, kind]) => [view, `${kind}.${prop}`])),
-                otherwise: own
-              }
-            : kinds.length
-              ? `${kinds[0][1]}.${prop}`
-              : own;
-        return [`listing.lit@${label}.${prop}`, fallback];
-      })
+      listingRegionProps.map((prop): [string, Fallback] => [
+        `listing.lit@${label}.${prop}`,
+        `listing.lit.${prop}`
+      ])
     )
   );
 }
 
 /**
- * Every variable of a source: each type's views, each position type's pointer views where it is
- * rendered as a pointer, a listing's if the view places one (its languages the source's own listings
+ * Every variable of a source: each type's views, a listing's if the view places one (its languages the source's own listings
  * first, then the library's), each kind's props, each place's, and each
  * layout's frame, after the kinds, as a layout's kind holds the nodes its body writes too.
  */
@@ -492,16 +471,12 @@ export function designSpace(
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
   ownListings: readonly string[] = [],
-  pointers: Readonly<Record<string, readonly string[]>> = {},
   places: DesignPlaces = { kinds: [], choices: [] },
   layouts: readonly string[]
 ): DesignSpace {
   return {
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [viewKey(type), [...options, 'none']])
-    ),
-    ...Object.fromEntries(
-      Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, [...options, 'none']])
     ),
     ...(listing
       ? {
@@ -555,20 +530,12 @@ export function starterVariant(
   views: Readonly<Record<string, readonly string[]>>,
   listing = false,
   ownListings: readonly string[] = [],
-  pointers: Readonly<Record<string, readonly string[]>> = {},
   places: DesignPlaces = { kinds: [], choices: [] },
   layouts: readonly string[]
 ): Record<string, DesignValue> {
-  // A pointer view's icon marks where it points, so it starts as an arrow up at the element.
-  const pointerViews = new Set(
-    kinds.flatMap(({ key }) => (key.endsWith('.Pointed') ? [key.slice(0, -'.Pointed'.length)] : []))
-  );
   return {
     ...Object.fromEntries(
       Object.entries(views).map(([type, options]) => [viewKey(type), options[0]])
-    ),
-    ...Object.fromEntries(
-      Object.entries(pointers).map(([type, options]) => [`pointers.${type}`, options[0]])
     ),
     // The source's first listing is the one it starts with.
     ...(listing
@@ -580,12 +547,7 @@ export function starterVariant(
     ...(kinds.length ? starterTokens : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [
-          `${kind.key}.${prop}`,
-          prop === 'icon' && pointerViews.has(kind.key.split('.')[0])
-            ? 'arrow-up'
-            : starterLook(kind, prop)
-        ])
+        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLook(kind, prop)])
       )
     ),
     // A place starts as its type and kinds do.
@@ -619,16 +581,12 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       return `The design has no variable ${key}: the steps a scene shows are its pause, in the source, as <Scene name="…" pause="@${key.slice('pause@'.length)}">.`;
     // A view choice, a type's or a place's, is one variable, not a kind and a prop.
     if (key.startsWith('views.') || key.startsWith('pointers.')) {
-      const choices = Object.keys(space).filter(
-        (other) => other.startsWith('views.') || other.startsWith('pointers.')
-      );
-      // A position draws as a mark only in the root of a layout a scene shows (see Pointers).
-      const type = /^pointers\.(@?[^:@]+)/u.exec(key)?.[1];
-      const unmarked =
-        type && !Object.hasOwn(space, `pointers.${type}`)
-          ? ` No ${type} draws as a pointer: a position draws as a mark only where it is rendered in a page layout's root itself, outside other nodes; inside a node it draws as its number (views.${type}), and in a layout another layout draws by its tag it draws nothing.`
-          : '';
-      return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.${unmarked}`;
+      const choices = Object.keys(space).filter((other) => other.startsWith('views.'));
+      // A pointer is a view of its type drawing a link, chosen as any view is.
+      const pointer = key.startsWith('pointers.')
+        ? ` A pointer is drawn by a view of its type holding <Link to={this} />, chosen as views.${key.slice('pointers.'.length)}.`
+        : '';
+      return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.${pointer}`;
     }
     const kind = keyKind(key);
     // A place sets only its paint and whether it is shown: every other prop holds for its kind.
@@ -649,7 +607,6 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
               /^[A-Z]/u.test(other) &&
               other.includes('.') &&
               !other.startsWith('views.') &&
-              !other.startsWith('pointers.') &&
               !other.startsWith('listing.')
           )
           .map((other) => other.slice(0, other.lastIndexOf('.')))
@@ -704,7 +661,7 @@ export function buildVariant(
   // Keys come written or as kept (see design-keys.ts): `{Int}` and <Listing>.syntax are views.Int
   // and listing.syntax here; every other key is the same in both.
   const aliased = (entries: Record<string, unknown> | undefined) =>
-    keptValues(entries ?? {}, (key) => Object.hasOwn(offered, key));
+    keptValues(entries ?? {});
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
   // Every design names its base and holds every role's look (see withStarterBase).
@@ -724,7 +681,7 @@ export function buildVariant(
     { ...base, ...chosenValues }
   );
   const has = (key: string) => Object.hasOwn(space, key);
-  if (baseProblems.length) throw new DesignValueError(writtenText(baseProblems.join(' '), has));
+  if (baseProblems.length) throw new DesignValueError(writtenText(baseProblems.join(' ')));
   const asGiven = Object.entries(chosenValues);
   const chosen = asGiven.filter(([key]) => has(key));
   // A style's prop outside what its heirs share names them, as a group's names the kinds it reaches.
@@ -746,7 +703,7 @@ export function buildVariant(
       ([key, value]) =>
         groupUnfit(space, roles, key, value) ?? styleUnfit(key, value) ?? unfit(space, key, value)
     );
-  if (problems.length) throw new DesignValueError(writtenText(problems.join(' '), has));
+  if (problems.length) throw new DesignValueError(writtenText(problems.join(' ')));
   const isLevel = (key: string) =>
     isToken(key) ||
     groupOf(key) !== undefined ||
@@ -754,7 +711,7 @@ export function buildVariant(
     key.endsWith('.inherit');
   const following = Object.keys(starter).filter((key) => follows(roles, key));
   const asked =
-    request.randomise === true ? [] : (request.randomise ?? []).map((key) => keptKey(key, has));
+    request.randomise === true ? [] : (request.randomise ?? []).map((key) => keptKey(key));
   const named = asked.filter((key) => Object.hasOwn(space, key));
   const dropped = [
     ...asGiven
@@ -762,7 +719,7 @@ export function buildVariant(
       .filter(([key]) => !Object.hasOwn(space, key) && !isBaseKey(key))
       .map(([key, value]) => unfit(space, key, value)),
     ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
-  ].map((why) => writtenText(`${why} The value is left out.`, has));
+  ].map((why) => writtenText(`${why} The value is left out.`));
   const values: Record<string, DesignValue> = { ...starter };
   const origins: Record<string, DesignOrigin> = Object.fromEntries(
     Object.keys(starter).map((key) => [key, 'starter' as const])
@@ -778,8 +735,7 @@ export function buildVariant(
       // has no step for, which was no one's choice. A look only, never sending a version back.
       dropped.push(
         writtenText(
-          `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`,
-          has
+          `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`
         )
       );
   }
@@ -811,7 +767,7 @@ export function buildVariant(
       values[key] = value;
       origins[key] = (from ? origins[from] : undefined) ?? 'starter';
     }
-    if (unfits.length) throw new DesignValueError(writtenText(unfits.join(' '), has));
+    if (unfits.length) throw new DesignValueError(writtenText(unfits.join(' ')));
   };
   const drawn =
     request.randomise === true
@@ -860,11 +816,11 @@ export function buildVariant(
 }
 
 /**
- * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card=true.fill,
- * views for a choice of views (views.Int, pointers.Index).
+ * The prop a variable sets, as fill for IntCell.fill or for a bound prop's Card=true.fill, views
+ * for a choice of views (views.Int).
  */
 function propOf(key: string): string {
-  if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
+  if (key.startsWith('views.')) return 'views';
   // A token draws with the kinds of its prop that hold its value, so they stay alike.
   if (isToken(key)) return tokenProps[key];
   return keyProp(key);
@@ -896,7 +852,8 @@ const slotProps = new Set<string>(['width', 'height', 'xAnchor', 'yAnchor', 'spa
  * A fresh value for every variable, keeping the variant's equalities: variables of one prop that
  * share a value draw one new value together, so every white fill becomes one colour. Colours keep
  * their shade, so text stays as readable against its fill; lengths stay within two steps; nothing
- * shown or left out changes, nor anything that is none or 0.
+ * shown or left out changes, nor anything that is none or 0, nor a grid's basis, whose numbers
+ * drawn apart could lay every cell on one line.
  */
 function randomised(
   space: DesignSpace,
@@ -910,6 +867,7 @@ function randomised(
     // palette are what the drawn values are chosen from.
     if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
     if (key === baseKey || key.startsWith('scale.') || paletteKey.test(key)) continue;
+    if ((gridProps as readonly string[]).includes(propOf(key))) continue;
     const group =
       slotProps.has(propOf(key)) && !isPlacedOrValued(key)
         ? key

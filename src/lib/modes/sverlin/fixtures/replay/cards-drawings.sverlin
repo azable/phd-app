@@ -59,14 +59,18 @@
 </View>
 <View of="Card" name="CardFace"><Node layout="column">{this.rank}{this.suit}</Node></View>
 <View of="Hand" name="Row"><Node layout="row">{#each this as card}{card}{/each}</Node></View>
-<View of="Index" name="Mark"><Pointed /></View>
+<View of="Index" name="Mark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 
 <Layout name="Board" of="hand, i, j, key">
   <Node>
     <Node>Insertion sort on a hand of cards, by rank</Node>
     {hand}
-    {i}
-    {j}
+    <Node kind="Marks" layout="row"><Node>{i}</Node><Node>{j}</Node></Node>
     <Node kind="KeyRow" layout="row"><Node kind="KeyCaption">key</Node>{key}</Node>
   </Node>
 </Layout>

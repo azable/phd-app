@@ -16,7 +16,6 @@ import { isDuringKey, viewThis } from './label-values';
 import { layoutNameOf } from './layouts.server';
 import { countArgument } from './bound-props.server';
 import { siteOf } from './left-out';
-import { kindKey } from './library/node/design';
 
 /** Each component's type, by name. */
 export type ComponentSignatures = Record<string, string>;
@@ -74,10 +73,6 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
   roots: Map<number, string>;
   /** The <Node> tags whose value is their component's own, by where they start, with its type. */
   valueTypes: Map<number, string>;
-  /** The components that are pointers: views of an index type drawn around what they point at. */
-  pointers: Set<string>;
-  /** Each pointer's <Pointed>, and the name its snippet gives its position. */
-  pointed: Map<string, { tag: SvelteNode; parameter: string }>;
   problems: ComponentProblem[];
 } {
   const components: { name: string; start: number; type: string; node: SvelteNode }[] = [];
@@ -114,38 +109,10 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
     else return typed[0];
     return undefined;
   };
-  const pointers = new Set<string>();
-  const pointedTags = new Map<string, { tag: SvelteNode; parameter: string }>();
-  const pointedIn = (node: SvelteNode): SvelteNode[] =>
-    (node.children ?? []).flatMap((child) => [
-      ...(child.type === 'InlineComponent' && child.name === 'Pointed' ? [child] : []),
-      ...pointedIn(child),
-      ...((child as { else?: SvelteNode }).else
-        ? pointedIn((child as { else: SvelteNode }).else)
-        : [])
-    ]);
   for (const node of html?.children ?? []) {
-    const pointed = pointedIn(node);
     const type = node.type === 'SnippetBlock' && node.expression?.name ? typeOf(node) : undefined;
-    if (!type) {
-      for (const tag of pointed)
-        problems.push({
-          message:
-            '<Pointed> stands for the element a position points at, so it belongs in a view of an index type, as in <View of="Position" name="Arrow"><Node layout="column"><Pointed /><Node>i</Node></Node></View>.',
-          start: tag.start ?? 0
-        });
-      continue;
-    }
+    if (!type) continue;
     const name = node.expression?.name as string;
-    if (pointed.length > 1)
-      problems.push({
-        message: `${name} has ${pointed.length} <Pointed>; a pointer draws the element it points at once, so it has one.`,
-        start: pointed[1].start ?? 0
-      });
-    else if (pointed.length) {
-      pointers.add(name);
-      pointedTags.set(name, { tag: pointed[0], parameter: node.parameters?.[0]?.name ?? '_' });
-    }
     components.push({ name, start: node.start ?? 0, type, node });
     const parameter = node.parameters?.[0]?.name;
     if (parameter) for (const start of ownValueNodes(node, parameter)) valueTypes.set(start, type);
@@ -198,7 +165,7 @@ export function findComponents(html: { children?: SvelteNode[] } | undefined): {
       if (key !== 'parent' && key !== 'expression') snippets(child);
   };
   snippets(html?.children);
-  return { components, roots, valueTypes, pointers, pointed: pointedTags, problems };
+  return { components, roots, valueTypes, problems };
 }
 
 /** The starts of the <Node> tags in a component that show its value, as `<Node value={this} />` does. */
@@ -822,295 +789,41 @@ export function withInsertions(source: string, insertions: readonly Insertion[])
   return result;
 }
 
-/** A pointer the root renders at a position, as written, and the page layout it is in, if named. */
-export type RenderedPointer = { name: string; written: string; layout?: string };
-
 /**
- * A rendered pointer as its scenes are checked: the pointer views it can draw, the variant's
- * choice among them where its type chooses, the collection type it points into and that type's
- * element type.
+ * A warning for each node with no layout holding two blocks and no words of its own: its children
+ * flow as text, wrapping against each other with no gap (as a goal and its cells did on 5
+ * November). A block is a layout drawn by tag, a collection drawn by its type or a view of it, an
+ * {#each}, or a node with a layout.
  */
-export type PointerMark = Omit<RenderedPointer, 'name'> & {
-  views: readonly string[];
-  choice?: string;
-  into: string;
-  element?: string;
-};
-
-/**
- * The warning for each pointer that marks nothing at any step a scene showing its layout draws: no
- * node takes its <Pointed>'s kind or its own, so no element of its collection is drawn whole, by a
- * view of the element's type, for it to mark. One the variant draws as none, or hides, is left out
- * on purpose.
- */
-export function unmarkedPointerWarnings(
-  pointers: readonly PointerMark[],
-  kinds: ReadonlySet<string>,
-  shownLayouts: ReadonlySet<string>,
-  values: Readonly<Record<string, unknown>>
-): string[] {
-  const drawn = (kind: string) =>
-    [...kinds].some((each) => each === kind || each.startsWith(`${kind}@`));
-  return pointers.flatMap(({ written, layout, views, choice, into, element }) => {
-    if (layout !== undefined && !shownLayouts.has(layout)) return [];
-    const chosen = choice === undefined ? views : views.filter((view) => view === values[choice]);
-    const marking = chosen.filter((view) => values[`${view}.shown`] !== false);
-    if (!marking.length) return [];
-    if (marking.some((view) => drawn(kindKey(view, 'Pointed')) || drawn(view))) return [];
-    const viewed = marking.join(' or ');
-    const whole = element
-      ? `, drawn whole by a view of ${element} (as {item} with <View of="${element}">), not only by its fields`
-      : '';
-    return [
-      `${written} draws ${viewed}, a pointer into ${into}, but it marks nothing at any step: a pointer marks the element where the view draws it${whole}, and no element of ${into} is drawn so. Draw the elements of ${into} with their own view where the layout shows them, or point at a collection the view draws.`
-    ];
-  });
-}
-
-/**
- * The root's pointers, as in {@render Index(i)}: drawn around the element the position points at,
- * not where they are written, so each call is removed from the markup and registered in the root's
- * script (see providePointers in library/type-context.ts). A pointer is rendered at the top of the
- * root, outside blocks other than {#if}, with a position from the state: a variable, an element, or
- * a field. Inside {#if}, it points nowhere at steps where its branch is not taken.
- */
-export function pointerCalls(
+export function flowWarnings(
   markup: unknown,
   source: string,
-  stateNames: ReadonlySet<string>,
-  /**
-   * Each pointer view, with the collection type its index type points into, the code of a
-   * function giving its <Pointed>'s props for a position, which links it points at take, the code of
-   * a function giving its base kinds (see providePointers), and the scoped variables its view reads;
-   * for a position type rendered by name, the code naming the pointer view its variant chose, and
-   * whether a render of it inside a <Node> draws its number instead.
-   */
-  pointers: ReadonlyMap<
-    string,
-    {
-      into: string;
-      ref?: boolean;
-      paint: string;
-      kinds?: string;
-      reads?: readonly string[];
-      view?: string;
-      plainInNode?: boolean;
-    }
-  >,
-  /** The state variables out of scope at some step, which a pointer reading one names. */
-  scoped: ReadonlySet<string> = new Set(),
-  /**
-   * The renders at a place, by where each starts: the code of its place (see Place), and, where it
-   * has a choice of its own, of the pointer view it draws and of the choice, which its paint and
-   * kinds then follow in place of its type's.
-   */
-  places: ReadonlyMap<number, { view?: string; choice?: string; place: string }> = new Map(),
-  /**
-   * Each position type, rendered by name, with the collection it points into, the view drawing its
-   * number, and its pointer views: one drawn as its number, bare, beside its array, is warned of.
-   */
-  positions: ReadonlyMap<
-    string,
-    { into: string; numberView?: string; markViews: readonly string[] }
-  > = new Map(),
   /** The renders drawing a collection, by name: its type's and its views'. */
   collections: ReadonlySet<string> = new Set()
-): {
-  removals: Insertion[];
-  calls: string[];
-  problems: ComponentProblem[];
-  warnings: string[];
-  rendered: RenderedPointer[];
-} {
-  type Part = Record<string, unknown> & {
-    type?: string;
-    name?: string;
-    start?: number;
-    end?: number;
-  };
-  const removals: Insertion[] = [];
-  const calls: string[] = [];
-  const problems: ComponentProblem[] = [];
+): string[] {
+  type Part = Record<string, unknown> & { type?: string; name?: string; start?: number; end?: number };
   const warnings: string[] = [];
-  const rendered: RenderedPointer[] = [];
-  const warned = new Set<number>();
   const text = (node: Part) => source.slice(node.start, node.end);
-  // The layout a pointer is rendered in, so a presentation showing another neither draws it nor
-  // keeps room for it.
-  let layout: string | undefined;
-  // The layout drawn by tag a pointer is written in, where a position draws nothing.
-  let drawnByTag: string | undefined;
-  // What each type's render draws, as values for {@render Values(values)}: the first of each.
-  const renders = new Map<string, string>();
+  // The layouts drawn by tag, each a snippet rendered with no arguments by now.
+  const parts = new Set<string>();
   const gather = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(gather);
     const part = node as Part;
-    if (part.type === 'RenderTag') {
-      const call = part.expression as Part;
-      const name = (call?.callee as Part | undefined)?.name;
-      const [argument] = (call?.arguments as Part[] | undefined) ?? [];
-      if (typeof name === 'string' && argument && !renders.has(name))
-        renders.set(name, text(argument));
-    }
     if (isPart(part)) parts.add(String((part.expression as Part | undefined)?.name));
     for (const [key, child] of Object.entries(part)) if (key !== 'parent') gather(child);
   };
-  // The layouts drawn by tag, each a snippet rendered with no arguments by now.
-  const parts = new Set<string>();
   gather(markup);
-  const visit = (
-    node: unknown,
-    where: 'top' | 'block' | 'component',
-    conditions: readonly string[] = [],
-    inNode = false,
-    // Whether the node around holds words of its own, as at {i}, which a number reads in.
-    words = false,
-    // Whether a grid cell, placed by row or col, is around it: a position there draws through the
-    // view the design chooses for it, as a mark in its own cell (see Grid in the guide).
-    inCell = false
-  ): void => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      for (const item of node) visit(item, where, conditions, inNode, words, inCell);
-      return;
-    }
-    const part = node as Part;
-    if (part.type === 'RenderTag') {
-      const call = part.expression as Part;
-      const name = (call?.callee as Part | undefined)?.name;
-      const numbered = typeof name === 'string' ? positions.get(name) : undefined;
-      if (numbered && inNode && !words && !inCell && !warned.has(part.start ?? 0)) {
-        // A bare position, in no words, in a source drawing its array, was likely meant as a mark.
-        const [argument] = (call.arguments as Part[] | undefined) ?? [];
-        // Its collection drawn in the source, as a render of the collection's type.
-        const drawn = renders.get(numbered.into);
-        if (drawn && argument) {
-          warned.add(part.start ?? 0);
-          const written = `{${text(argument)}}`;
-          warnings.push(
-            `${written} draws as its number${numbered.numberView ? ` (${numbered.numberView})` : ''}, not on the element of ${drawn} it points to, because it is inside a node within the layout's root. To mark the element, put ${written} directly in the root's node; to show the number, put it in words, as <Node>at ${written}</Node>.${numbered.markViews.length ? ` ${numbered.markViews.join(', ')}, a pointer view of its type, is drawn only from the root.` : ''}`
-          );
-        }
-      }
-      if (typeof name !== 'string' || !pointers.has(name)) return;
-      if (inNode && pointers.get(name)?.plainInNode) return;
-      const [argument] = (call.arguments as Part[] | undefined) ?? [];
-      const position =
-        argument?.type === 'Identifier' && stateNames.has(argument.name ?? '')
-          ? `path: ${JSON.stringify(argument.name)}`
-          : argument?.type === 'MemberExpression'
-            ? `of: () => ${text(argument.object as Part)}, at: () => ${
-                argument.computed
-                  ? text(argument.property as Part)
-                  : JSON.stringify((argument.property as Part).name)
-              }`
-            : undefined;
-      const start = part.start ?? 0;
-      if (where !== 'top' || inNode)
-        problems.push({
-          message:
-            drawnByTag && !inNode
-              ? `${text(argument ?? part)} is in ${drawnByTag}, a layout another draws by its tag, where a position draws nothing: write it in the root of the page layout a scene shows, outside nodes, as {i}, and it marks the element wherever ${drawnByTag} draws it.`
-              : `${name} is a pointer, drawn around the element its position points at, so it is rendered at the top of the view, outside blocks other than {#if}, as {i} for a position i${
-                  inNode && pointers.get(name)?.view
-                    ? `; or, to show the position as a number here, add a view that draws it, as <View of="${name}" name="${name}Text"><Node value={this} /></View>`
-                    : ''
-                }.`,
-          start
-        });
-      else if (!position)
-        problems.push({
-          message: `${name} is a pointer, and points at the element its position names, so it is given a position from the state, such as i or edges[e].to.`,
-          start
-        });
-      else {
-        const found = pointers.get(name);
-        const place = places.get(start);
-        const own = (code: string | undefined) =>
-          code && place?.choice
-            ? code.replaceAll(`[__pointer_${name}]`, `[${place.choice}]`)
-            : code;
-        const pointer = found && { ...found, paint: own(found.paint)!, kinds: own(found.kinds) };
-        const reads = [...new Set([...stateReadsOf(argument, scoped), ...(pointer?.reads ?? [])])];
-        calls.push(
-          `{ ${layout ? `layout: ${JSON.stringify(layout)}, ` : ''}view: () => ${place?.view ?? pointer?.view ?? name}, value: () => ${text(argument)}, ${position}, ${reads.length ? `reads: ${JSON.stringify(reads)}, ` : ''}${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}${pointer?.ref ? 'ref: true, ' : ''}${place ? `place: ${place.place}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
-        );
-        removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
-        rendered.push({ name, written: `{${text(argument)}}`, layout });
-      }
-      return;
-    }
-    // A pointer at each position a label has given so far, as {#each spans(@check.at) as p}
-    // {@render Checked(p)}{/each}, written {#each ϟcheckˑat as p} by then (see label-values.ts).
-    const listed = part.type === 'EachBlock' && where === 'top' ? listPointer(part) : undefined;
-    if (listed) {
-      const pointer = pointers.get(listed.view);
-      calls.push(
-        `{ ${layout ? `layout: ${JSON.stringify(layout)}, ` : ''}view: () => ${pointer?.view ?? listed.view}, value: () => undefined, path: ${JSON.stringify(listed.list)}, list: () => ${listed.list}, ${conditions.length ? `shown: () => ${conditions.join(' && ')}, ` : ''}into: ${JSON.stringify(pointer?.into)}, paint: ${pointer?.paint}${pointer?.kinds ? `, kinds: ${pointer.kinds}` : ''} }`
-      );
-      const start = part.start ?? 0;
-      removals.push({ at: start, text: '', remove: (part.end ?? start) - start });
-      return;
-    }
-    const named = where === 'top' ? layoutNameOf(part) : undefined;
-    if (named !== undefined) {
-      layout = named;
-      visit(part.children, where, conditions, inNode, words, inCell);
-      layout = undefined;
-      return;
-    }
-    if (part.type === 'IfBlock' && where === 'top') {
-      const test = `(${text(part.expression as Part)})`;
-      visit(part.children, where, [...conditions, test], inNode, words, inCell);
-      visit(part.else, where, [...conditions, `!${test}`], inNode, words, inCell);
-      return;
-    }
-    // A layout drawn by tag is a snippet with no parameters by now; a view's takes its value.
-    if (
-      part.type === 'SnippetBlock' &&
-      where === 'top' &&
-      !(part.parameters as unknown[] | undefined)?.length
-    ) {
-      drawnByTag = (part.expression as Part | undefined)?.name;
-      for (const [key, child] of Object.entries(part))
-        if (key !== 'parent' && key !== 'expression') visit(child, 'component', conditions, inNode);
-      drawnByTag = undefined;
-      return;
-    }
-    const inner =
-      part.type === 'SnippetBlock'
-        ? 'component'
-        : where === 'top' &&
-            typeof part.type === 'string' &&
-            part.type.endsWith('Block') &&
-            part.type !== 'ElseBlock' &&
-            part.type !== 'Fragment'
-          ? 'block'
-          : where;
-    const isNode = part.type === 'InlineComponent' && part.name === 'Node';
-    const inside = inNode || isNode;
-    const worded = isNode
-      ? ((part.children as Part[] | undefined) ?? []).some(
-          (child) => child.type === 'Text' && String(child.data ?? '').trim()
-        )
-      : words;
-    if (isNode && !worded) blocksFlowing(part);
-    const cell =
-      inCell ||
-      (isNode &&
-        ((part.attributes as Part[] | undefined) ?? []).some(
-          (attribute) => attribute.name === 'row' || attribute.name === 'col'
-        ));
-    for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'expression')
-        visit(child, inner, conditions, inside, worded, cell);
-  };
-  // A node with no layout places its children as text, so two blocks in it, holding no words of
-  // its own, wrap against each other with no gap (as a goal and its cells did on 5 November).
+  // The page layout, or the layout drawn by tag, the node is in, for the warning to name.
+  let layout: string | undefined;
+  let drawnByTag: string | undefined;
   const blocksFlowing = (node: Part) => {
     const attributes = (node.attributes as Part[] | undefined) ?? [];
     if (attributes.some((attribute) => attribute.name === 'layout')) return;
+    const words = ((node.children as Part[] | undefined) ?? []).some(
+      (child) => child.type === 'Text' && String(child.data ?? '').trim()
+    );
+    if (words) return;
     const blocks = ((node.children as Part[] | undefined) ?? []).flatMap((child) => {
       const callee = ((child.expression as Part | undefined)?.callee as Part | undefined)?.name;
       if (child.type === 'RenderTag' && typeof callee === 'string')
@@ -1136,33 +849,35 @@ export function pointerCalls(
       `${written ? `${where}, a node with no layout,` : where} holds ${blocks.join(', ')} and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.`
     );
   };
-  /** An {#each} over a label's values so far whose only content is a pointer at each. */
-  const listPointer = (each: Part): { view: string; list: string } | undefined => {
-    const list = each.expression as Part | undefined;
-    const item = each.context as Part | undefined;
-    if (list?.type !== 'Identifier' || !list.name?.startsWith('ϟ') || item?.type !== 'Identifier')
-      return undefined;
-    const content =
-      ((each.body as Part | undefined)?.nodes as Part[] | undefined) ??
-      (each.children as Part[] | undefined) ??
-      [];
-    const parts = content.filter(
-      (child) => !(child.type === 'Text' && !String(child.data ?? '').trim())
-    );
-    const [only] = parts;
-    const call = only?.type === 'RenderTag' ? (only.expression as Part) : undefined;
-    const view = (call?.callee as Part | undefined)?.name;
-    const [argument] = (call?.arguments as Part[] | undefined) ?? [];
-    return parts.length === 1 &&
-      typeof view === 'string' &&
-      pointers.has(view) &&
-      argument?.type === 'Identifier' &&
-      argument.name === item.name
-      ? { view, list: list.name }
-      : undefined;
+  const visit = (node: unknown, top: boolean): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach((child) => visit(child, top));
+    const part = node as Part;
+    const named = top ? layoutNameOf(part) : undefined;
+    if (named !== undefined) {
+      layout = named;
+      visit(part.children, top);
+      layout = undefined;
+      return;
+    }
+    if (
+      part.type === 'SnippetBlock' &&
+      top &&
+      !(part.parameters as unknown[] | undefined)?.length
+    ) {
+      drawnByTag = (part.expression as Part | undefined)?.name;
+      for (const [key, child] of Object.entries(part))
+        if (key !== 'parent' && key !== 'expression') visit(child, false);
+      drawnByTag = undefined;
+      return;
+    }
+    if (part.type === 'InlineComponent' && part.name === 'Node') blocksFlowing(part);
+    const inner = top && part.type !== 'SnippetBlock';
+    for (const [key, child] of Object.entries(part))
+      if (key !== 'parent' && key !== 'expression') visit(child, inner);
   };
-  visit(markup, 'top');
-  return { removals, calls, problems, warnings, rendered };
+  visit(markup, true);
+  return warnings;
 }
 
 /**
@@ -1187,8 +902,6 @@ export function slotInsertions(
   operators: ReadonlySet<string> = new Set(),
   /** Filled with each slotted render's variables, by where it starts, for what is left out. */
   rendered: Map<number, string[]> = new Map(),
-  /** Spans of the source drawn as pointers instead, and removed (see pointerCalls). */
-  removed: readonly Insertion[] = [],
   /** The code of the place of each render at one, by where it starts (see Place). */
   places: ReadonlyMap<number, string> = new Map(),
   /**
@@ -1390,15 +1103,8 @@ export function slotInsertions(
     }
     const part = node as Part;
     // A field read through a reference, in what this part reads, reads its node.
-    const at = part.start ?? 0;
-    if (
-      (references.size || atTargets.size) &&
-      !removed.some((cut) => cut.at <= at && at < cut.at + (cut.remove ?? 0))
-    )
-      follow(part.expression, locals);
+    if (references.size || atTargets.size) follow(part.expression, locals);
     if (part.type === 'RenderTag') {
-      const start = part.start ?? 0;
-      if (removed.some(({ at, remove = 0 }) => at <= start && start < at + remove)) return;
       const call = part.expression as Part;
       const callee = call?.callee as Part | undefined;
       const given = (call?.arguments as Part[] | undefined) ?? [];

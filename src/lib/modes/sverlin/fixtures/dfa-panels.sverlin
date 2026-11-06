@@ -71,14 +71,21 @@
   </Node>
 </View>
 
+<View of="StateRef" name="ActiveState">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="ActiveLabel">active</Node>
+  </Node>
+</View>
+
 <View of="StateRef" name="StateRefName">
   <Node>{at(this).name}</Node>
 </View>
 
-<View of="StateRef" name="ActiveState">
+<View of="WordIndex" name="InputPosition">
   <Node layout="column">
-    <Pointed />
-    <Node kind="ActiveLabel">active</Node>
+    <Link to={this} />
+    <Node kind="InputLabel">read</Node>
   </Node>
 </View>
 
@@ -86,25 +93,21 @@
   <Node value={this} />
 </View>
 
-<View of="WordIndex" name="InputPosition">
-  <Node layout="column">
-    <Pointed />
-    <Node kind="InputLabel">read</Node>
-  </Node>
-</View>
-
 <Layout name="Title">
   <Node>DFA for binary strings ending in 01</Node>
 </Layout>
 
-<Layout name="WordLine" of="word">
+<Layout name="WordLine" of="word, pos">
   <Node layout="column">
     <Node kind="WordLabel">input word</Node>
-    <Node>{#each word as symbol}{symbol}{/each}</Node>
+    <Node layout="grid">
+      {#each word as symbol, k}<Node row={0} col={k}>{symbol}</Node>{/each}
+      <Node kind="Lane" row={1} col={pos}>{pos}</Node>
+    </Node>
   </Node>
 </Layout>
 
-<Layout name="Graph" of="states, delta">
+<Layout name="Graph" of="states, delta, current">
   <Node layout="free">
     {#each states as state, k}
       <Node layout="column">
@@ -114,6 +117,7 @@
       <Link from={k} to={delta[k].zero}>0</Link>
       <Link from={k} to={delta[k].one}>1</Link>
     {/each}
+    <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
 
@@ -125,10 +129,10 @@
     {#each states as state, k}
       <Node kind="RowHeader" row={k + 1} col={0}>{state}</Node>
       <Node kind="TransitionCell" row={k + 1} col={1}>
-        {delta[k].zero}
+        {at(delta[k].zero).name}
       </Node>
       <Node kind="TransitionCell" row={k + 1} col={2}>
-        {delta[k].one}
+        {at(delta[k].one).name}
       </Node>
     {/each}
   </Node>
@@ -163,9 +167,9 @@
 >
   <Node layout="column">
     <Title />
-    <WordLine word={word} />
+    <WordLine word={word} pos={pos} />
     <Node layout="row">
-      <Graph states={states} delta={delta} />
+      <Graph states={states} delta={delta} current={current} />
       <Table states={states} delta={delta} />
       <Node layout="column">
         <Listing />
@@ -176,8 +180,6 @@
         />
       </Node>
     </Node>
-    {current}
-    {pos}
   </Node>
 </Layout>
 

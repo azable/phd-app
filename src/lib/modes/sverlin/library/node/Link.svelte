@@ -15,7 +15,6 @@
     drawnContext,
     provideSlot,
     elementOf,
-    elementSlot,
     endsContext,
     hiddenContext,
     keyedRef,
@@ -23,8 +22,6 @@
     linkEnd,
     nodeIdsContext,
     placeContext,
-    pointersContext,
-    pointsInto,
     slotContext,
     typeContext
   } from '../type-context';
@@ -39,7 +36,6 @@
     children,
     __view = 'root',
     __ref,
-    __component,
     __fromPath,
     __fromOf,
     __fromAt,
@@ -62,8 +58,6 @@
     __view?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
-    /** Internal: set by the compiler on a typed component's root, naming the component. */
-    __component?: string;
     /** Internal: where a position at an end comes from, as a slot's (see Slot.svelte). */
     __fromPath?: string;
     __fromOf?: unknown;
@@ -114,41 +108,17 @@
         : linkEnd(types, from, { path: fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
     to: linkEnd(types, to, { path: toPath, of: __toOf, at: __toAt, in: __toIn })
   }));
-  // The link's look is the variant's values for its kind; one a component draws for an element, as
-  // an edge, takes the stroke of the kind of the root's pointer at it, as for the current edge, the
-  // pointer written last winning.
+  // The link's look is the variant's values for its kind, a render at a place giving its own.
   const design = designContext();
   // Each step mounts afresh, so the props are read once.
   const kind = untrack(() => kindKey(__view, 'Link'));
   const placed = untrack(() => placedKind(placeContext(), kind));
-  const pointer = untrack(() => {
-    const element = __component ? elementSlot(slotContext()) : undefined;
-    if (!element) return undefined;
-    return Object.assign(
-      {},
-      ...pointersContext()
-        .filter(
-          (pointer) =>
-            pointsInto(types, pointer, element.collection) && pointer.position === element.index
-        )
-        .toSorted((a, b) => a.order - b.order)
-        .map((pointer) => {
-          const own = pointer.paint?.(pointer.position) as { __kind?: string } | undefined;
-          return own?.__kind
-            ? { __kind: own.__kind, __placed: placedKind(pointer.place, own.__kind) }
-            : {};
-        })
-    ) as { __kind?: string; __placed?: string };
-  });
-  const look = (prop: string, over = true) =>
-    (over && pointer?.__kind
-      ? lookUp(design, pointer.__kind, pointer.__placed, prop)
-      : undefined) ?? lookUp(design, kind, placed, prop);
+  const look = (prop: string) => lookUp(design, kind, placed, prop);
   // How it runs is its kind's: as its layout's arrows run, a curve of its own, or a wire; and its
   // heads, drawn at the ends it points to, its kind's shape and size.
-  const route = $derived(look('route', false));
-  const head = $derived(look('head', false) as string | undefined);
-  const headSize = $derived(look('headSize', false) as number | undefined);
+  const route = $derived(look('route'));
+  const head = $derived(look('head') as string | undefined);
+  const headSize = $derived(look('headSize') as number | undefined);
   const nodeIds = nodeIdsContext();
   // A link from a node's field is known by the nodes it joins, not their places in the heap, which
   // shift as nodes come and go: so another node's link never takes over its route.
@@ -177,11 +147,11 @@
   const line = untrack(
     () => !!joined.pair && (layoutMemoryContext()?.lines.has(joined.pair) ?? false)
   );
-  const unseen = untrack(() => hidden || look('shown', false) === false);
+  const unseen = untrack(() => hidden || look('shown') === false);
   // The paint a link from a variable gives the element it reaches, as `name|css`, so the scene keeps
-  // the colour's name as a <Pointed>'s does; none where its kind leaves the element as it is.
+  // the colour's name as a place's paint does; none where its kind leaves the element as it is.
   const target = (prop: string) => {
-    const name = look(prop, false);
+    const name = look(prop);
     const css = typeof name === 'string' && name !== 'none' ? colourCss(name) : undefined;
     return css ? `${name}|${css}` : undefined;
   };
@@ -217,11 +187,11 @@
     data-directed={line ? 'false' : 'true'}
     data-sv-pair={joined.pair || undefined}
     data-sv-way={joined.forward ? 'forward' : 'back'}
-    data-stroke-style={strokeStyleCss(look('strokeStyle', false))}
+    data-stroke-style={strokeStyleCss(look('strokeStyle'))}
     data-stroke={colourCss(look('stroke'))}
     data-stroke-width={look('strokeWidth')}
     data-shown={unseen ? 'false' : undefined}
-    data-opacity={look('opacity', false)}
+    data-opacity={look('opacity')}
     data-route={route === 'layout' ? undefined : route}
     data-head={head}
     data-head-size={headSize}
@@ -229,7 +199,7 @@
     data-target-fill={reach ? target('targetFill') : undefined}
     data-target-stroke={reach ? target('targetStroke') : undefined}
     data-target-color={reach ? target('targetColor') : undefined}
-    data-target-stroke-width={reach ? look('targetStrokeWidth', false) : undefined}
+    data-target-stroke-width={reach ? look('targetStrokeWidth') : undefined}
   ></span>
   {#if children}<LinkLabel link={id ?? ''} hidden={unseen}>{@render children()}</LinkLabel>{/if}
 {/if}

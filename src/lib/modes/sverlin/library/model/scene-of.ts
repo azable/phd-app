@@ -209,6 +209,10 @@ export function sceneOf(
   // links from variables met on the way, and those a free layout laid out as its own.
   const placedBoxes = new Map<ModelElement, PlacedBox>();
   const slotted = new Map<string, PlacedBox & { element: ModelElement }>();
+  // The node an {#each} draws each item in, by its element, for an element no node inside draws as
+  // a value, as a bar whose height is the value: a link from a variable reaches that node.
+  const items = new Map<string, PlacedBox & { element: ModelElement }>();
+  const elementAt = (slot: string) => slotted.get(slot) ?? items.get(slot);
   const described = new Map<ModelElement, SceneNode>();
   const reaching: Reaching[] = [];
   const laidOut = new Set<string>();
@@ -286,6 +290,8 @@ export function sceneOf(
     placedBoxes.set(element, placed);
     const slot = attributes['data-sv-slot'];
     if (slot && !hidden && !slotted.has(slot)) slotted.set(slot, { element, ...placed });
+    const item = attributes['data-sv-item'];
+    if (item && !hidden && !items.has(item)) items.set(item, { element, ...placed });
     if (element.tag === 'svg') {
       if (owner?.node && !hidden) {
         const shapes = svgShapes(
@@ -403,7 +409,7 @@ export function sceneOf(
       const marker = [...descendants(follower)].find(
         (inner) => inner.attributes['data-sv-reach'] === 'true'
       );
-      const target = slotted.get(marker?.attributes['data-to'] ?? '');
+      const target = elementAt(marker?.attributes['data-to'] ?? '');
       const child =
         target &&
         arranged.elements.find(
@@ -649,10 +655,10 @@ export function sceneOf(
       if (hidden || style.shown === false) continue;
       const to = attribute('data-to') ?? '';
       if (id && laidOut.has(id)) {
-        paintTarget(described.get(slotted.get(to)?.element as ModelElement), attribute);
+        paintTarget(described.get(elementAt(to)?.element as ModelElement), attribute);
         continue;
       }
-      const reached = slotted.get(to) ?? ghostOf(to, attribute);
+      const reached = elementAt(to) ?? ghostOf(to, attribute);
       if (!reached) continue;
       paintTarget(described.get(reached.element), attribute);
       // A follower's arrow runs up from the top of its label to just under its child, at its
@@ -717,7 +723,7 @@ export function sceneOf(
       node.colours = { ...node.colours, stroke: stroke.name };
     }
     if (color) {
-      // The node's own text and that of the nodes inside it, as a <Pointed>'s colour reaches them.
+      // The node's own text and that of the nodes inside it, as a link's target colour reaches them.
       const inside = new Set([node.id]);
       for (const each of nodes)
         if (each === node || (each.parent !== undefined && inside.has(each.parent))) {
@@ -743,9 +749,9 @@ export function sceneOf(
     const collection = match[1];
     const index = Number(match[2]);
     if (index < -1) return undefined;
-    const near = slotted.get(`${collection}[${index < 0 ? 0 : index - 1}]`);
+    const near = elementAt(`${collection}[${index < 0 ? 0 : index - 1}]`);
     if (!near) return undefined;
-    const beyond = slotted.get(`${collection}[${index < 0 ? 1 : index - 2}]`);
+    const beyond = elementAt(`${collection}[${index < 0 ? 1 : index - 2}]`);
     const step = beyond
       ? { x: near.left - beyond.left, y: near.top - beyond.top }
       : { x: near.width * 1.25, y: 0 };

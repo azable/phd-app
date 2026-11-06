@@ -103,14 +103,14 @@
 
 <View of="TextIndex" name="TextMarker">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="TextMarkerLabel">i</Node>
   </Node>
 </View>
 
 <View of="StateIndex" name="StateMarker">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="StateMarkerLabel">current state</Node>
   </Node>
 </View>

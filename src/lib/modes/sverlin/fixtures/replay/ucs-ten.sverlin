@@ -105,13 +105,13 @@
 </View>
 <View of="VertexPos" name="CurrentMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="CurrentLabel">current</Node>
   </Node>
 </View>
 <View of="VertexPos" name="GoalMark">
   <Node layout="column">
-    <Pointed />
+    <Link to={this} />
     <Node kind="GoalLabel">goal</Node>
   </Node>
 </View>
@@ -120,7 +120,7 @@
   <Node>Uniform cost search from S to {at(goal).name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, edges">
+<Layout name="Graph" of="vertices, edges, current, goal">
   <Node layout="free">
     {#each vertices as vertex}
       {vertex}
@@ -130,6 +130,8 @@
         {edge.weight}
       </Link>
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{goal}</Node>
   </Node>
 </Layout>
 
@@ -171,15 +173,13 @@
 >
   <Node layout="column">
     <Title goal={goal} />
-    <Graph vertices={vertices} edges={edges} />
+    <Graph vertices={vertices} edges={edges} current={current} goal={goal} />
     <StatusLine
       current={current}
       settledCost={settledCost}
       next={next}
       candidate={candidate}
     />
-    {current}
-    {goal}
   </Node>
 </Layout>
 

@@ -50,9 +50,13 @@
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Weight" name="WeightText"><Node value={this} /></View>
 <View of="Flag" name="FlagWord"><Node>{this ? 'done' : 'open'}</Node></View>
+<View of="VertexIndex" name="CurrentMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="VertexIndex" name="IndexText"><Node value={this} /></View>
-<View of="VertexIndex" name="CurrentMark"><Pointed /></View>
-<View of="EdgeIndex" name="EdgeMark"><Pointed /></View>
 
 <View of="Vertex" name="VertexCard">
   <Node layout="column">
@@ -70,7 +74,7 @@
   <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
 </View>
 
-<Layout name="Graph" of="vertices, edges">
+<Layout name="Graph" of="vertices, edges, current">
   <Node layout="free">
     {#each vertices as vertex}
       {vertex}
@@ -78,24 +82,23 @@
     {#each edges as edge}
       {edge}
     {/each}
+    <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
 
 <Layout name="Title"><Node>Dijkstra's shortest paths</Node></Layout>
 <Layout name="Status" of="current, @round.visit.edge.relax.check">
   <Node layout="column">
-    <Node>Nearest chosen: {current}</Node>
+    <Node>Nearest chosen: {at(current).name}</Node>
     {@round.visit.edge.relax.check}
   </Node>
 </Layout>
 
-<Layout name="Main" of="current, e, vertices, edges, @round.visit.edge.relax.check">
+<Layout name="Main" of="current, vertices, edges, @round.visit.edge.relax.check">
   <Node>
     <Title />
-    <Graph vertices={vertices} edges={edges} />
+    <Graph vertices={vertices} edges={edges} current={current} />
     <Status current={current} />
-    {current}
-    {e}
   </Node>
 </Layout>
 
@@ -116,5 +119,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} e={e} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} vertices={vertices} edges={edges} /></Scene>
 </Storyboard>

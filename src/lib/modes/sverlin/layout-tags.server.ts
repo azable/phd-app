@@ -39,7 +39,6 @@ type Problem = { message: string; start: number };
 const reserved = new Set([
   'Node',
   'Link',
-  'Pointed',
   'Listing',
   'Layout',
   'When',

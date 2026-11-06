@@ -36,7 +36,7 @@ export type DesignForAssistant = {
     presentation:
       | Pick<
           BrowserBundlePresentation,
-          'variant' | 'origins' | 'views' | 'pointers' | 'listings' | 'roles'
+          'variant' | 'origins' | 'views' | 'listings' | 'roles'
         >
       | undefined,
     structures?: Readonly<Record<string, string>>

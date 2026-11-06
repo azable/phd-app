@@ -17,7 +17,7 @@ describe('starter catalog', () => {
     expect((await compileSvelteComponent(blank.source)).labels).toEqual(['main']);
     expect(
       (await compileSvelteComponent(getProjectTemplate('linear-search').source)).labels
-    ).toHaveLength(10);
+    ).toHaveLength(11);
   });
 
   it('rejects unknown templates and mode-incompatible examples', () => {

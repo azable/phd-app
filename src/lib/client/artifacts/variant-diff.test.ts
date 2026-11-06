@@ -101,13 +101,13 @@ describe('variant diff', () => {
 
 describe('choices in words', () => {
   it('names a variable by its kind, prop and place', () => {
-    expect(choiceName('Highlight.Pointed:pair.left.fill')).toBe(
-      'Highlight pointed fill for pair.left'
+    expect(choiceName('Highlight.Link:pair.left.targetFill')).toBe(
+      'Highlight link target fill for pair.left'
     );
     expect(choiceName('IntCell:i.stroke')).toBe('Int cell stroke for i');
     expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');
     expect(choiceName('views.Int:swap.held')).toBe('Int view for swap.held');
-    expect(choiceName('pointers.Index')).toBe('Index pointer');
+    expect(choiceName('views.Index')).toBe('Index view');
     expect(choiceName('listing.language')).toBe('Listing language');
   });
 
@@ -143,7 +143,7 @@ describe("a developer's edit of the choices", () => {
   it('reads the keys as written against the variant as kept, so a renamed key is no change', () => {
     const kept = {
       'views.Int': 'IntCell',
-      'pointers.Index:lo': 'LoMark',
+      'views.Index:lo': 'LoMark',
       'IntCell:target.stroke': 'violet-500',
       'Card=true.stroke': 'amber-500'
     };
@@ -151,7 +151,7 @@ describe("a developer's edit of the choices", () => {
     const edited = JSON.parse(variantDocument(kept)) as Record<string, string>;
     edited['{Index}:lo'] = 'HiMark';
     expect(choiceEdits(kept, JSON.stringify(edited))).toEqual({
-      chosen: { 'pointers.Index:lo': 'HiMark' },
+      chosen: { 'views.Index:lo': 'HiMark' },
       unset: []
     });
   });

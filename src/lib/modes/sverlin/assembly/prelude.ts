@@ -7,7 +7,6 @@ import {
   Link,
   Listing,
   Node,
-  Pointed,
   SverlinBranch,
   SverlinChain,
   SverlinSlot,

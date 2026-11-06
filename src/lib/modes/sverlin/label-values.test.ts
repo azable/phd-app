@@ -137,7 +137,7 @@ describe('labels read in the view', () => {
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Checked"><Pointed /></View>
+<View of="Index" name="Checked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 `;
     const prepared = prepare(`{#each spans(@check.at) as p}{p}{/each}`, search);
     expect(Object.keys(prepared.labelled ?? {})).toEqual(['ϟcheckˑat']);

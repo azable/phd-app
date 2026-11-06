@@ -103,14 +103,20 @@
 <View of="Weight" name="WeightText">
   <Node value={this} />
 </View>
+<View of="VertexRef" name="CurrentMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="VertexRef" name="VertexName">
   <Node>{at(this).name}</Node>
 </View>
-<View of="VertexRef" name="CurrentMark">
-  <Pointed />
-</View>
 <View of="FrontierIndex" name="ChosenEntryMark">
-  <Pointed />
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
 </View>
 <View of="Vertex" name="VertexCard">
   <Node layout="column" fill={this.settled}>
@@ -140,29 +146,33 @@
     {#each edges as edge}
       <Link from={edge.from} to={edge.to}>{edge.weight}</Link>
     {/each}
+    <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
 
 <Layout name="FrontierLine">
-  <Node layout="row">
-    <Node kind="FrontierTitle">frontier</Node>
-    {frontier}
+  <Node layout="column">
+    <Node layout="row">
+      <Node kind="FrontierTitle">frontier</Node>
+      {frontier}
+    </Node>
+    <Node>{best}</Node>
   </Node>
 </Layout>
 
 <Layout name="Status">
   <Node layout="stack">
     <Node when="@init">
-      Start {start} enters the frontier at cost 0.
+      Start {at(start).name} enters the frontier at cost 0.
     </Node>
     <Node when="@search.settle">
-      Expand {current} at cost {entry.cost}; this cost is final.
+      Expand {at(current).name} at cost {entry.cost}; this cost is final.
     </Node>
     <Node when="@search.edges.consider.relax">
-      A cheaper route reaches {next}: record cost {candidate}.
+      A cheaper route reaches {at(next).name}: record cost {candidate}.
     </Node>
     <Node when="@search.goal">
-      Goal {goal} is expanded at cost {entry.cost}; it is optimal.
+      Goal {at(goal).name} is expanded at cost {entry.cost}; it is optimal.
     </Node>
   </Node>
 </Layout>
@@ -171,7 +181,7 @@
   <Node layout="column">
     <Node kind="Header" layout="row">
       <Node kind="Heading">
-        Uniform-cost search: {start} to {goal}
+        Uniform-cost search: {at(start).name} to {at(goal).name}
       </Node>
       <Node kind="Legend">
         filled = expanded · number = best cost
@@ -182,8 +192,6 @@
       <FrontierLine />
       <Status />
     </Node>
-    {current}
-    {best}
   </Node>
 </Layout>
 

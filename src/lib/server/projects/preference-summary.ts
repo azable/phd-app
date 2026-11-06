@@ -27,7 +27,7 @@ type DesignValue = string | number | boolean;
  * shown and the listing before forms and layouts, before shape, lettering and colour.
  */
 export function choiceFamily(variable: string): { family: ChoiceFamily; impact: number } {
-  if (variable.startsWith('views.') || variable.startsWith('pointers.'))
+  if (variable.startsWith('views.'))
     return { family: 'views', impact: 1 };
   if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
@@ -60,6 +60,9 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
     case 'stroke':
     case 'color':
     case 'opacity':
+    case 'targetFill':
+    case 'targetStroke':
+    case 'targetColor':
       return { family: 'colour', impact: 0.15 };
     default:
       return { family: 'spacing', impact: 0.1 };

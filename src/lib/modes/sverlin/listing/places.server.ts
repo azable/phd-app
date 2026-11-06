@@ -10,7 +10,7 @@ import type { Lit } from './light.server';
 import { isLabelPlace, type MappingProblem, type Token } from './mapped.server';
 
 /** What the root renders at a place: the type rendered, and whether it is drawn as a pointer. */
-export type RenderedPlace = { type: string; pointer: boolean };
+export type RenderedPlace = { type: string };
 
 /**
  * The tokens naming a place the root renders nowhere, each refused with the places it does; a
@@ -65,9 +65,9 @@ export function touchedPlaces(
 const unseen = new Set(['none', 'white', undefined]);
 
 /**
- * The colour a place lights in: the fill of its mark, the <Pointed> of the pointer view drawn there
- * (Mark.Pointed:i.fill) or the view a value there is drawn with (IntCell:key.fill), or its stroke
- * where the fill is none or white; for a label's place nothing draws, its region's lit paint
+ * The colour a place lights in: the target paint of the link a view drawn there points with
+ * (Arrow.Link:i.targetFill), or the fill of the view a value there is drawn with (IntCell:key.fill),
+ * or its stroke where the fill is none or white; for a label's place nothing draws, its region's lit paint
  * (listing.lit@insert.front.fill); else the listing's lit fill. Its line, which outlines its
  * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
  * then darkens it as far as it needs, see lineColour in ../library/listing/places.ts).
@@ -78,20 +78,22 @@ export function placePaint(
   values: Readonly<Record<string, unknown>>,
   part: 'light' | 'line' = 'light'
 ): string {
-  const prefix = rendered?.pointer ? 'pointers' : 'views';
   const view =
-    rendered &&
-    (values[`${prefix}.${rendered.type}${place}`] ?? values[`${prefix}.${rendered.type}`]);
-  const kind =
-    typeof view === 'string' && view !== 'none'
-      ? rendered?.pointer
-        ? `${view}.Pointed`
-        : view
-      : undefined;
+    rendered && (values[`views.${rendered.type}${place}`] ?? values[`views.${rendered.type}`]);
+  const kind = typeof view === 'string' && view !== 'none' ? view : undefined;
+  const valueOf = (key: string, name: string) =>
+    (values[`${key}${place}.${name}`] ?? values[`${key}.${name}`]) as string | undefined;
+  // A view pointing with a link lights its place as the link paints what it reaches.
+  const target = (name: string) =>
+    kind === undefined
+      ? undefined
+      : valueOf(`${kind}.Link`, `target${name[0].toUpperCase()}${name.slice(1)}`);
   const prop = (name: string) =>
     kind === undefined
       ? undefined
-      : ((values[`${kind}${place}.${name}`] ?? values[`${kind}.${name}`]) as string | undefined);
+      : unseen.has(target(name))
+        ? valueOf(kind, name)
+        : target(name);
   const seen = (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])
     .map(prop)
     .find((paint) => !unseen.has(paint));

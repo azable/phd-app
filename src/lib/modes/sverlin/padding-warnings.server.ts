@@ -44,7 +44,8 @@ function named(kinds: readonly string[]): string {
 /**
  * The padding warnings of a build's drawn steps, for kinds whose padding the design sets above 0
  * and which show no box at any step: one for those whose nodes arrange others (a layout), one for
- * the rest, where no pointer paints them, no links end at them (a vertex) and they are not small.
+ * the rest, where no links end at them (a vertex) and they are not small; a link from a variable
+ * painting one at a step shows its box there.
  * A page's layout (`pages`) sets the page's margin with its padding, which its nodes written
  * without a kind take too, so its warning says to give them a kind.
  */
@@ -55,11 +56,6 @@ export function paddingWarnings(
   pages: ReadonlySet<string>
 ): string[] {
   const nodes = steps.flatMap((step) => step.nodes);
-  // The ids a pointer's paint is drawn at: the element there has the pointer's kind at that step
-  // and its own at the others, so its own kind shows a box where the pointer is.
-  const painted = new Set(
-    nodes.filter(({ kind }) => kind?.endsWith('.Pointed')).map(({ id }) => id)
-  );
   const byKind = new Map<string, SceneNode[]>();
   for (const node of nodes)
     if (node.kind && !node.kind.startsWith('listing'))
@@ -76,8 +72,8 @@ export function paddingWarnings(
     const padding = values[`${kind}.padding`];
     if (typeof padding !== 'number' || padding <= 0) continue;
     const role = roles[kind];
-    if (role === 'pointed' || role === 'vertex' || role === 'bar') continue;
-    if (drawn.some((node) => boxed(node) || painted.has(node.id))) continue;
+    if (role === 'vertex' || role === 'bar') continue;
+    if (drawn.some(boxed)) continue;
     const written = `${kind} (padding ${padding})`;
     if (pages.has(kind)) pageKinds.push(written);
     else if (drawn.some(({ layout }) => layout)) arranging.push(written);

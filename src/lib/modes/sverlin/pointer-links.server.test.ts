@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import bfsVisitOrder from './fixtures/links/bfs-visit-order.sverlin?raw';
-import linearSearch from './fixtures/links/linear-search.sverlin?raw';
-import listReverse from './fixtures/links/list-reverse.sverlin?raw';
+import bfsVisitOrder from './fixtures/bfs-visit-order.sverlin?raw';
+import linearSearch from './fixtures/linear-search.sverlin?raw';
+import listReverse from './fixtures/list-markers.sverlin?raw';
 import type { SceneBox, SceneNode, SceneStep } from './library';
 import { drawnSteps } from './testing/scenes';
 

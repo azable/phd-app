@@ -17,7 +17,7 @@ import { plainMessageText } from './events/message-content';
 
 /**
  * The families design choices are explored by, the ones that change the picture most first: the
- * views drawn (views, pointers, the listing shown), what is shown, the arrangement (layouts, forms,
+ * views drawn (views, the listing shown), what is shown, the arrangement (layouts, forms,
  * directions), shape, lettering, and colour.
  */
 export type ChoiceFamily =
@@ -77,10 +77,10 @@ export type BriefAttribute = {
   tags?: Record<string, BriefSteer>;
 };
 
-/** Variables for how a step's comparison is marked: pointers, and kinds or labels naming one. */
-const comparisonMarks = /^pointers\.|\.Pointed\.|compar/i;
-/** Variables for how a position is labelled: its pointer views, as `i`, `A[i]` or a word. */
-const positionLabels = /^pointers\./;
+/** Variables for how a step's comparison is marked: links' target paint, and kinds or labels naming one. */
+const comparisonMarks = /\.Link\.target|compar/i;
+/** Variables for how a position is labelled: its place's caption, as `i`, `A[i]` or a word. */
+const positionLabels = /^:[^.]*\.label$/;
 
 /**
  * The attributes, in the order they are asked. Intake's questions come first. Stage 3s's first

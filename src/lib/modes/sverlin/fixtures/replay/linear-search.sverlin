@@ -36,34 +36,15 @@ LINEAR-SEARCH(A, target)
   <Node value={this} />
 </View>
 
-<View of="Values" name="Cells">
-  <Node>
-    {#each this as value}
-      {value}
-    {/each}
-  </Node>
-</View>
-
-<View of="Values" name="IndexedCells">
-  <Node>
-    {#each this as value, k}
-      <Node layout="column">
-        {value}
-        <Node kind="IndexLabel">{k}</Node>
-      </Node>
-    {/each}
+<View of="Index" name="ScanMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="PointerLabel">i</Node>
   </Node>
 </View>
 
 <View of="Index" name="IndexNumber">
   <Node value={this} />
-</View>
-
-<View of="Index" name="ScanMark">
-  <Node layout="column">
-    <Pointed />
-    <Node kind="PointerLabel">i</Node>
-  </Node>
 </View>
 
 <View of="@scan.check" name="Comparison">
@@ -76,8 +57,13 @@ LINEAR-SEARCH(A, target)
   <Node kind="Title">Linear search for {target}</Node>
 </Layout>
 
-<Layout name="SearchRow" of="values">
-  <Node>{values}</Node>
+<Layout name="SearchRow" of="values, i">
+  <Node layout="grid">
+    {#each values as value, k}
+      <Node row={0} col={k}>{value}</Node>
+    {/each}
+    <Node kind="Lane" row={1} col={i}>{i}</Node>
+  </Node>
 </Layout>
 
 <Layout name="Status" of="target, i, @scan.check, @scan.found, @missing">
@@ -87,7 +73,10 @@ LINEAR-SEARCH(A, target)
         {@scan.check}
       </When>
       <When of="@scan.found">
-        <Node kind="Outcome">Found {target} at index {i}.</Node>
+        <Node kind="Outcome" layout="row">
+          <Node>Found {target} at index</Node>
+          <Node kind="Number" value={i} />
+        </Node>
       </When>
       <When of="@missing">
         <Node kind="Outcome">{target} is not in the array.</Node>
@@ -105,11 +94,10 @@ LINEAR-SEARCH(A, target)
     <Node layout="row">
       <Listing />
       <Node layout="column">
-        <SearchRow values={values} />
+        <SearchRow values={values} i={i} />
         <Status target={target} i={i} />
       </Node>
     </Node>
-    {i}
   </Node>
 </Layout>
 

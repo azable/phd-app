@@ -22,8 +22,18 @@
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Position" name="CompareMark"><Pointed /></View>
-<View of="Position" name="SwapMark"><Pointed /></View>
+<View of="Position" name="CompareMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
+<View of="Position" name="SwapMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
 <View of="@pass.pair.compare" name="Ask">
   <Node>compare {this.left} and {this.right}</Node>
 </View>
@@ -35,6 +45,12 @@
 <Layout name="Board" of="values, @pass.pair.swap, @pass.pair.compare">
   <Node layout="column">
     {values}
+    <Node kind="Marks" layout="row">
+      <Node>{@pass.pair.compare.left}</Node>
+      <Node>{@pass.pair.compare.right}</Node>
+      <Node>{@pass.pair.swap.from}</Node>
+      <Node>{@pass.pair.swap.to}</Node>
+    </Node>
     <When of="@pass.pair.swap">
       <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
     </When>
@@ -47,12 +63,6 @@
   <Node>
     <Title />
     <Board values={values} />
-    {@pass.pair.compare.left}
-    {@pass.pair.compare.right}
-    <When of="@pass.pair.swap">
-      {@pass.pair.swap.from}
-      {@pass.pair.swap.to}
-    </When>
   </Node>
 </Layout>
 
@@ -60,8 +70,6 @@
   <Node layout="row">
     <Node><Title /></Node>
     <Board values={values} />
-    {@pass.pair.compare.left}
-    {@pass.pair.compare.right}
   </Node>
 </Layout>
 

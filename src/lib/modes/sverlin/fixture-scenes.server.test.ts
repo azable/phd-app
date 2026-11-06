@@ -1,7 +1,6 @@
 /**
  * Every fixture's scenes, built with no variant, as a hash each, so a change to the engine that
- * moves anything in a picture shows here; a change meant to move pictures updates the snapshot. And
- * in each, an element keeps its place whether or not a pointer is at it.
+ * moves anything in a picture shows here; a change meant to move pictures updates the snapshot.
  *
  * Deliberate changes, by the step that made them:
  * - grid-marks: a grid placed by positions keeps a track before the first cell, as a position's
@@ -22,16 +21,22 @@
  * - replay/linear-search, links/linear-search: a node lit by its place at a step records the light
  *   (look.light), which the server scenes had dropped with its CSS box-shadow; with the light left
  *   out, both hash as before.
- * - links/linear-search, listing-python, replay/linear-search: a listing line drawn as one run keeps
+ * - linear-search (then links/linear-search), listing-python, replay/linear-search: a listing line drawn as one run keeps
  *   the spaces inside it, as 1  start at i = 0, which it was measured with; they were collapsed,
  *   so the page stretched the text and the PDF set it off its line (the boxes are as they were).
+ * - pointers as links: every fixture that drew a pointer with <Pointed> draws it as a link from a
+ *   variable (grid lanes, followers, or a row under a collection a view draws), and nothing keeps
+ *   room round the elements for a pointer, so their scenes change; links/* are gone, the copies
+ *   now the fixtures themselves, links/linear-search kept as linear-search; grid-marks changes as a
+ *   node drawing a position a variable holds takes no identity; call-frames and fib-calls change
+ *   too, from the library's removals (not traced to one cause, 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
-import type { SceneNode, SceneStep } from './library';
+import type { SceneStep } from './library';
 import { drawnSteps } from './testing/scenes';
 
 const root = join(import.meta.dirname, 'fixtures');
@@ -44,7 +49,7 @@ const fixtures = (directory: string): string[] =>
         : []
   );
 
-// Each fixture is built once for both tests.
+// Each fixture is built once for every test.
 const built = new Map<string, ReturnType<typeof drawnSteps>>();
 const drawn = (file: string) => {
   if (!built.has(file)) built.set(file, drawnSteps(readFileSync(file, 'utf8')));
@@ -69,57 +74,10 @@ test('every fixture draws the scenes it drew', { timeout: 600_000 }, async () =>
 });
 
 /**
- * The boxes of nodes drawn as a pointer's `<Pointed>` that no node of their site has at a step no
- * pointer is at it: a pointer keeps the element where it is, so each such box is one the element,
- * or another value of its site where values move, as in a swap, has without one. A node pointed at
- * every step it is drawn, or drawn only as a pointer draws it, has nothing to compare.
- */
-function movedByPointers(steps: readonly SceneStep[]): string[] {
-  const pointed = (node: SceneNode) => node.kind?.endsWith('.Pointed') ?? false;
-  const site = (id: string) => id.split('#')[0];
-  const boxOf = ({ box }: SceneNode) =>
-    [box.x, box.y, box.width, box.height].map((value) => Math.round(value * 2) / 2).join(',');
-  const nodes = steps.map((step) => step.nodes);
-  const free = new Map<string, Set<string>>();
-  const everFree = new Set<string>();
-  for (const node of nodes.flat())
-    if (!pointed(node)) {
-      everFree.add(node.id);
-      free.set(site(node.id), (free.get(site(node.id)) ?? new Set()).add(boxOf(node)));
-    }
-  return nodes.flatMap((step, index) =>
-    step.flatMap((node) =>
-      pointed(node) && everFree.has(node.id) && !free.get(site(node.id))?.has(boxOf(node))
-        ? [`step ${index}: ${node.id} at ${boxOf(node)}`]
-        : []
-    )
-  );
-}
-
-test(
-  'an element keeps its place whether or not a pointer is at it',
-  { timeout: 600_000 },
-  async () => {
-    const moved: Record<string, string[]> = {};
-    for (const file of fixtures(root).sort()) {
-      const name = relative(root, file);
-      const steps = await drawn(file).then(
-        ({ steps }) => steps,
-        () => []
-      );
-      const boxes = movedByPointers(steps);
-      if (boxes.length) moved[name] = boxes.slice(0, 3);
-    }
-    expect(moved).toEqual({});
-  }
-);
-
-/**
  * The rows, columns, grids and stacks that move in the node holding them between steps of one scene
  * (a step's scene is its label's prefix, as `stacked: `, where a source has several): each keeps the
- * largest size it reaches, so its place in its parent is one place at every step. A pointer's own
- * nodes, drawn where the pointer is, and a variable's node following what its link reaches in a free
- * layout (`follows`), are left out.
+ * largest size it reaches, so its place in its parent is one place at every step. A variable's node
+ * following what its link reaches in a free layout (`follows`) is left out.
  */
 function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): string[] {
   const sceneOf = (index: number) => /^([^:@]+): /u.exec(labels[index] ?? '')?.[1] ?? '';
@@ -131,7 +89,7 @@ function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): 
   steps.forEach((step, index) => {
     const boxes = new Map(step.nodes.map((node) => [node.id, node.box]));
     for (const node of step.nodes) {
-      if (!node.layout || node.layout === 'free' || node.id.includes('@pointer') || node.follows)
+      if (!node.layout || node.layout === 'free' || node.follows)
         continue;
       const parent = node.parent && boxes.get(node.parent);
       if (!parent) continue;

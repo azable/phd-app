@@ -27,16 +27,25 @@
       @left[:hi[hi] = mid - 1]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="Arrow"><Pointed /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<View of="Index" name="Arrow">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="Caption">{place()}</Node>
+  </Node>
+</View>
+<Layout name="Cells" of="values, lo, hi, mid">
+  <Node layout="grid">
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={mid}>{mid}</Node>
+    <Node kind="Lane" row={3} col={hi}>{hi}</Node>
+  </Node>
+</Layout>
 <Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
 <Layout name="Main" of="lo, hi, mid, target, values">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Goal target={target} /><Cells values={values} /></Node>
-    {lo}
-    {hi}
-    {mid}
+    <Node layout="column"><Goal target={target} /><Cells values={values} lo={lo} hi={hi} mid={mid} /></Node>
   </Node>
 </Layout>
 

@@ -21,23 +21,27 @@
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="IndexNumber"><Node value={this} /></View>
-
 <View of="Index" name="LowerMark">
-  <Node layout="column"><Pointed /><Node kind="LowerLabel">lo</Node></Node>
+  <Node layout="column"><Link to={this} /><Node kind="LowerLabel">lo</Node></Node>
 </View>
 
 <View of="Index" name="UpperMark">
-  <Node layout="column"><Pointed /><Node kind="UpperLabel">hi</Node></Node>
+  <Node layout="column"><Link to={this} /><Node kind="UpperLabel">hi</Node></Node>
 </View>
 
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<View of="Index" name="IndexNumber"><Node value={this} /></View>
+
+<Layout name="Cells" of="values, lo, hi">
+  <Node layout="grid">
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={hi}>{hi}</Node>
+  </Node>
+</Layout>
 
 <Layout name="Main" of="target, lo, hi, values">
   <Node>
-    <Node layout="row"><Node>Searching for {target}</Node><Cells values={values} /></Node>
-    {lo}
-    {hi}
+    <Node layout="row"><Node>Searching for {target}</Node><Cells values={values} lo={lo} hi={hi} /></Node>
   </Node>
 </Layout>
 

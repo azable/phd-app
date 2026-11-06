@@ -1,5 +1,5 @@
 /**
- * CodeMirror markers for what a presentation drew: inside each <Node>, <Pointed>, and <Link> tag, a
+ * CodeMirror markers for what a presentation drew: inside each <Node> and <Link> tag, a
  * chip naming its kind, which opens under the tag its kind's values in each shown presentation's
  * variant (and inside a <Listing />, its language and fills), and the layout it arranged from the seed as ghost props, written as the view would write
  * them; in an editable editor, clicking a layout value writes it as a prop. After each render of a
@@ -30,7 +30,7 @@ export type GhostProp = {
   name: string;
   values: { label?: string; text: string; color?: string; title: string }[];
   differs: boolean;
-  /** The design variable its row shows, as `Highlight.Pointed:@left.fill`, which links reveal. */
+  /** The design variable its row shows, as `Mark.Link:@left.targetFill`, which links reveal. */
   key?: string;
 };
 
@@ -48,16 +48,14 @@ export type DrawnPresentation = {
   label?: string;
   seed: number;
   /**
-   * Its variant, where each value came from, the views each type rendered by name could draw, the
-   * pointer views each position type rendered as a pointer could, and the kind of each tag, by its
-   * line:column.
+   * Its variant, where each value came from, the views each type rendered by name could draw, and
+   * the kind of each tag, by its line:column.
    */
   variant?: DesignValues;
   origins?: Readonly<Record<string, string>>;
   views?: Readonly<Record<string, readonly string[]>>;
-  pointers?: Readonly<Record<string, readonly string[]>>;
   kinds?: Readonly<Record<string, readonly string[]>>;
-  /** The variable each render of a type by name reads, views.Int or pointers.Index, by its line:column. */
+  /** The variable each render of a type by name reads, views.Int, by its line:column. */
   renders?: Readonly<Record<string, string>>;
   /** The <Node> tags it left out, by their line:column. */
   leftOut?: readonly string[];
@@ -102,18 +100,11 @@ export function unchosenViews(
 ): UnchosenView[] {
   const doc = state.doc.toString();
   const blocks = snippetBlocks(doc);
-  // By variable, as views.Int or pointers.Index, every view it could choose.
+  // By variable, as views.Int, every view it could choose.
   const options = new Map<string, Set<string>>();
-  for (const { views = {}, pointers = {} } of presentations)
-    for (const [prefix, choices] of [
-      ['views', views],
-      ['pointers', pointers]
-    ] as const)
-      for (const [type, names] of Object.entries(choices))
-        options.set(
-          `${prefix}.${type}`,
-          new Set([...(options.get(`${prefix}.${type}`) ?? []), ...names])
-        );
+  for (const { views = {} } of presentations)
+    for (const [type, names] of Object.entries(views))
+      options.set(`views.${type}`, new Set([...(options.get(`views.${type}`) ?? []), ...names]));
   const renderedElsewhere = (name: string, view: { from: number }) =>
     [...doc.matchAll(new RegExp(`(?<![\\w$])${name.replaceAll('$', '\\$')}(?![\\w$])`, 'gu'))].some(
       ({ index }) =>
@@ -242,7 +233,7 @@ function variable(
 }
 
 /**
- * The ghost props of every <Node>, <Pointed>, and <Link> tag in the document: its kind's values in
+ * The ghost props of every <Node> and <Link> tag in the document: its kind's values in
  * each shown presentation's variant, a tag of several kinds, as across sources, naming each by its kind.
  */
 export function tagGhosts(
@@ -359,7 +350,7 @@ function typeRenders(
     if (line < 1 || line > state.doc.lines) continue;
     const index = state.doc.line(line).from + column - 1;
     if (doc[index] !== '{' || doc.startsWith('{@render', index)) continue;
-    const type = /^(?:views|pointers)\.(?:[\w$]+\.)*([\w$]+?)(?:@.*)?$/u.exec(read)?.[1];
+    const type = /^views\.(?:[\w$]+\.)*([\w$]+?)(?:@.*)?$/u.exec(read)?.[1];
     const end = braceEnd(doc, index);
     if (!type || end === undefined) continue;
     found.push({ index, type, argument: doc.slice(index + 1, end - 1).trim() });
@@ -370,7 +361,7 @@ function typeRenders(
 /**
  * A place's own values, as each shown presentation's variant has them, after the render drawn there,
  * as {@render Index(@left)}: its own view choice, where it has one, and the paint of the kinds of
- * the view it draws with, as `Highlight.Pointed:@left.fill`. A place is named by the argument as
+ * the view it draws with, as `Mark.Link:@left.targetFill`. A place is named by the argument as
  * written, inside a typed view after that view's path (`Ask.IntCell@g.a`), as the build names it.
  */
 export function placeGhosts(
@@ -412,16 +403,13 @@ export function placeGhosts(
             ])
           ];
     const views = new Set(
-      presentations.flatMap(({ views = {}, pointers = {} }) => [
-        ...(views[type] ?? []),
-        ...(pointers[type] ?? [])
-      ])
+      presentations.flatMap(({ views = {} }) => views[type] ?? [])
     );
     const choices = keys.filter((key) => {
       const at = key.indexOf(':');
       const head = key.slice(0, at);
       return (
-        /^(?:views|pointers)\./u.test(head) &&
+        /^views\./u.test(head) &&
         key.slice(at + 1) === place &&
         prefixes.some((prefix) => head.slice(head.indexOf('.') + 1) === `${prefix}${type}`)
       );
@@ -501,7 +489,7 @@ export function viewMarkers(
   const doc = state.doc.toString();
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('views.') || key.startsWith('pointers.'))
+      Object.keys(variant).filter((key) => key.startsWith('views.'))
     )
   );
   const markers: DrawnMarker[] = [];
@@ -533,13 +521,13 @@ export function viewMarkers(
 }
 
 /**
- * Where a <Node>, <Pointed>, <Link>, or <Listing> tag's props end, before its closing > or />, or
+ * Where a <Node>, <Link>, or <Listing> tag's props end, before its closing > or />, or
  * undefined if none is there.
  */
 function closingAt(state: EditorState, line: number, column: number): number | undefined {
   if (line < 1 || line > state.doc.lines) return undefined;
   const from = state.doc.line(line).from + column - 1;
-  if (!/^<(?:Node|Pointed|Link|Listing)\b/u.test(state.doc.sliceString(from, from + 9)))
+  if (!/^<(?:Node|Link|Listing)\b/u.test(state.doc.sliceString(from, from + 9)))
     return undefined;
   const end = from + tagEnd(state.doc.sliceString(from, from + 4000));
   if (state.doc.sliceString(end - 1, end) !== '>') return undefined;

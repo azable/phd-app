@@ -12,10 +12,10 @@ import { comparisonOutcome } from '$lib/shared/projects/events/visualization-pre
 
 import { settledFromEvidence } from './preference-model';
 
-/** A change that hides something: a kind not shown, a type or pointer view of none, no listing. */
+/** A change that hides something: a kind not shown, a type's view of none, no listing. */
 export function hides(variable: string, value: unknown): boolean {
   if (variable.endsWith('.shown')) return value === false;
-  if (variable.startsWith('views.') || variable.startsWith('pointers.')) return value === 'none';
+  if (variable.startsWith('views.')) return value === 'none';
   return variable === 'listing.language' && value === 'none';
 }
 
@@ -78,7 +78,7 @@ function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): 
     if (!body) {
       // A type rendered by name draws its view, or nothing when its view is none.
       if (hidden.types.has(name)) return 0;
-      const view = variant[`views.${name}`] ?? variant[`pointers.${name}`];
+      const view = variant[`views.${name}`];
       if (view === 'none') return 0;
       return typeof view === 'string' && tree.snippets.has(view) && !path.includes(view)
         ? size(view, path)

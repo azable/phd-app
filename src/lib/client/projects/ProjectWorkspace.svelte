@@ -392,7 +392,6 @@
               seed: presentation.seed,
               ...(presentation.variant ? { variant: presentation.variant } : {}),
               ...(presentation.views ? { views: presentation.views } : {}),
-              ...(presentation.pointers ? { pointers: presentation.pointers } : {}),
               ...(presentation.kinds ? { kinds: presentation.kinds } : {}),
               ...(presentation.renders ? { renders: presentation.renders } : {}),
               ...(presentation.leftOut ? { leftOut: presentation.leftOut } : {}),

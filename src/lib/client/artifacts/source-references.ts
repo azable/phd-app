@@ -1,7 +1,7 @@
 /**
  * What text in a message refers to in a source: the regions an inline code span names, as a view,
  * layout or kind (`Highlight`, `Title`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
- * (`Highlight.Pointed:@left.fill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
+ * (`Mark.Link:@left.targetFill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
  * is there; and the regions build problems are about.
  *
  * @packageDocumentation
@@ -16,7 +16,7 @@ export type SourceRange = { from: number; to: number };
 
 /**
  * What a build of the source records that references need: the variable each render of a type by
- * name reads (`views.Index`, `pointers.Index`), by the line:column of its tag, and a variant's
+ * name reads (`views.Index`), by the line:column of its tag, and a variant's
  * values, which say the view each choice draws with.
  */
 export type ReferenceDesign = {
@@ -24,7 +24,7 @@ export type ReferenceDesign = {
   variant?: Readonly<Record<string, unknown>>;
 };
 
-/** The props a kind's variable can set, the last part of a key such as `Highlight.Pointed.fill`. */
+/** The props a kind's variable can set, the last part of a key such as `Mark.Link.targetFill`. */
 const props = new Set([
   'shown',
   'fill',
@@ -42,7 +42,13 @@ const props = new Set([
   'gap',
   'align',
   'justify',
-  'overflow',
+  'route',
+  'head',
+  'headSize',
+  'targetFill',
+  'targetStroke',
+  'targetStrokeWidth',
+  'targetColor',
   'shadow',
   'glow',
   'fillStyle',
@@ -63,7 +69,7 @@ export function referenceRanges(
   text: string,
   design?: ReferenceDesign
 ): SourceRange[] {
-  const written = keptReference(text, design);
+  const written = keptReference(text);
   if (!written) return [];
   const line = /^(?:lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?|(\d+):(\d+))$/u.exec(written);
   if (line) {
@@ -73,7 +79,7 @@ export function referenceRanges(
       : lineRange(source, Number(first), Number(last ?? first));
   }
   const variable = new RegExp(
-    String.raw`^(views|pointers)\.(${name}(?:\.${name})*)(?::(.+))?$`,
+    String.raw`^(views)\.(${name}(?:\.${name})*)(?::(.+))?$`,
     'u'
   ).exec(written);
   if (variable) {
@@ -99,21 +105,21 @@ export function referenceRanges(
 
 /**
  * The design variable a reference names whose value the editor shows in a row of its own, which a
- * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Highlight.Pointed:left.fill`), a
- * place's view choice (`pointers.Index:found`), or a page-frame or listing setting, as the variant
+ * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Mark.Link:left.targetFill`), a
+ * place's view choice (`views.Index:found`), or a page-frame or listing setting, as the variant
  * of a build of the source (`design`) has it. A type's own view choice (`views.Index`) has no row:
  * the view markers after its renders show it.
  */
 export function ghostKey(text: string, design?: ReferenceDesign): string | undefined {
-  const written = keptReference(text, design);
+  const written = keptReference(text);
   if (!design?.variant || !Object.hasOwn(design.variant, written)) return undefined;
-  return /^(?:views|pointers)\.[^:]+$/u.test(written) ? undefined : written;
+  return /^views\.[^:]+$/u.test(written) ? undefined : written;
 }
 
 /**
  * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
- * `@insert.compare.left` as `@…compare.left`, `Highlight.Pointed:@insert.compare.left.fill` as
- * `Highlight.Pointed:@…compare.left.fill`, a kind's place keeping its prop; `head` before the
+ * `@insert.compare.left` as `@…compare.left`, `Mark.Link:@insert.compare.left.targetFill` as
+ * `Mark.Link:@…compare.left.targetFill`, a kind's place keeping its prop; `head` before the
  * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
  * fewer, or text that names no label.
  */
@@ -128,7 +134,7 @@ export function elidedName(
   if (!match) return undefined;
   const [, head, path] = match;
   const parts = path.split('.');
-  const prop = head.includes('.') && !/^(?:views|pointers)\./u.test(head) ? 1 : 0;
+  const prop = head.includes('.') && !/^views\./u.test(head) ? 1 : 0;
   const cut = parts.length - prop - 2;
   if (cut <= 0) return undefined;
   return { head, hidden: `${parts.slice(0, cut).join('.')}.`, tail: parts.slice(cut).join('.') };
@@ -136,7 +142,7 @@ export function elidedName(
 
 /**
  * Text split into its code and the rest, as an error message names code without marking it: a
- * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index:found`,
+ * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`views.Index:found`,
  * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
  */
 export function codeIn(
@@ -180,8 +186,8 @@ function codeAt(text: string, at: number): string[] {
   if (text[at] === '{') {
     const braces = balanced(text, at, '{', '}');
     if (!braces) return [];
-    // A type's view as written, as `{Int}:target` or `{Index}.pointer` (see design-keys.ts).
-    const after = /^(?:\.pointer)?(?::@?[\w$.]+)?/u.exec(text.slice(at + braces.length))?.[0] ?? '';
+    // A type's view as written, as `{Int}:target` (see design-keys.ts).
+    const after = /^(?::@?[\w$.]+)?/u.exec(text.slice(at + braces.length))?.[0] ?? '';
     return after ? [braces + after, braces] : [braces];
   }
   const rest = text.slice(at);
@@ -206,10 +212,9 @@ function codeAt(text: string, at: number): string[] {
  * A reference as the app keeps its keys: `{Int}` as views.Int, every other key as written (see
  * design-keys.ts), where the assistant writes them so.
  */
-function keptReference(text: string, design?: ReferenceDesign): string {
+function keptReference(text: string): string {
   const written = text.trim();
-  const variant = design?.variant;
-  return keptKey(written, variant ? (key) => Object.hasOwn(variant, key) : undefined);
+  return keptKey(written);
 }
 
 /** From an opener to the closer that matches it, or nothing where it is never closed. */
@@ -292,8 +297,8 @@ function matches(source: string, pattern: RegExp, group = 0): SourceRange[] {
 }
 
 /**
- * A kind or its variable, as `Row.Under`, `Highlight.Pointed.fill`, `IntCell:swap.held.fill` or
- * `Mark.Pointed:@scan.next.fill`: the path of views, layouts and kinds, and the place after `:`
+ * A kind or its variable, as `Row.Under`, `Mark.Link.targetFill`, `IntCell:swap.held.fill` or
+ * `Mark.Link:@scan.next.targetFill`: the path of views, layouts and kinds, and the place after `:`
  * (a label's keeping its `@`), less a prop at the end.
  */
 function kindKey(text: string): { segments: string[]; place?: string } | undefined {
@@ -345,9 +350,9 @@ function labelRanges(source: string, label: string): SourceRange[] {
   ]);
 }
 
-/** A view's or layout's declaration, or a declaration in a script; for `.Pointed`, its marks. */
+/** A view's or layout's declaration, or a declaration in a script; for `.Link`, its links. */
 function kindRanges(source: string, segments: string[]): SourceRange[] {
-  const part = segments.at(-1) === 'Pointed' || segments.at(-1) === 'Link' ? segments.at(-1) : '';
+  const part = segments.at(-1) === 'Link' ? 'Link' : '';
   const snippet = part ? segments.at(-2) : segments.at(-1);
   if (!snippet) return [];
   const declared = matches(
@@ -390,10 +395,10 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
   ];
 }
 
-/** A view choice's parts: `views` or `pointers`, the type it draws, and its place, if any. */
+/** A view choice's parts: `views`, the type it draws, and its place, if any. */
 function choice(key: string): { kind: string; type: string; place?: string } | undefined {
   const parsed = new RegExp(
-    String.raw`^(views|pointers)\.(?:${name}\.)*(${name})(?::(.+))?$`,
+    String.raw`^(views)\.(?:${name}\.)*(${name})(?::(.+))?$`,
     'u'
   ).exec(key);
   return parsed ? { kind: parsed[1], type: parsed[2], place: parsed[3] } : undefined;
@@ -403,7 +408,7 @@ function choice(key: string): { kind: string; type: string; place?: string } | u
  * The renders a build records as reading a view choice, each tag whole, and the declaration of the
  * view the variant chooses. A type's choice (`views.Index`) also names the renders of the type at
  * places of their own that draw with its view, as they do until a variant sets theirs apart; a
- * place's choice (`pointers.Index:found`) names only its own.
+ * place's choice (`views.Index:found`) names only its own.
  */
 function choiceRanges(source: string, key: string, design: ReferenceDesign): SourceRange[] {
   const wanted = choice(key);

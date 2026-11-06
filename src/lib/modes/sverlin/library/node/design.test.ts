@@ -7,11 +7,7 @@ import {
   fillStyleCss,
   listingRegionProps,
   paintProps,
-  anchorOrigin,
-  offsetReach,
   paintReach,
-  scaleReach,
-  transformProps,
   placeProps,
   propOptions,
   roleProps,
@@ -27,7 +23,7 @@ describe('style props', () => {
     expect(propOptions.fillStyle).toEqual(['solid', 'hatched']);
     expect(propOptions.decoration).toEqual(['none', 'underline', 'strike']);
     expect(propOptions.case).toEqual(['normal', 'uppercase', 'small-caps']);
-    for (const role of ['container', 'value', 'text', 'pointed'] as const) {
+    for (const role of ['container', 'value', 'text'] as const) {
       for (const prop of styleProps) expect(roleProps[role]).toContain(prop);
       expect(styleProps.map((prop) => starterLooks[role][prop])).toEqual([
         'none',
@@ -40,7 +36,7 @@ describe('style props', () => {
     for (const prop of styleProps) expect(roleProps.link).not.toContain(prop);
   });
 
-  it('paint, only where a pointer is, but for case, which sizes text', () => {
+  it('paint, but for case, which sizes text', () => {
     for (const prop of ['shadow', 'glow', 'fillStyle', 'decoration'])
       expect(paintProps.has(prop)).toBe(true);
     expect(paintProps.has('case')).toBe(false);
@@ -97,56 +93,13 @@ describe('style props', () => {
 });
 
 describe('paint reach', () => {
-  it('reaches past a box by a shadow’s blur less its offset, a glow’s halo and a spread', () => {
+  it('reaches past a box by a shadow’s blur less its offset, and a glow’s halo', () => {
     expect(paintReach('none', 'none')).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     // lifted: no x offset, 4 down, blur 12.
     expect(paintReach('lifted', 'none')).toEqual({ top: 8, right: 12, bottom: 16, left: 12 });
     // hard: a block 3 right and 3 down, unblurred, reaches only those two sides.
     expect(paintReach('hard', 'none')).toEqual({ top: 0, right: 3, bottom: 3, left: 0 });
     // A glow's blur and spread on every side, the larger of each side kept.
-    expect(paintReach('hard', 'on', 4)).toEqual({ top: 10, right: 10, bottom: 10, left: 10 });
-    expect(paintReach('none', 'none', 8)).toEqual({ top: 8, right: 8, bottom: 8, left: 8 });
-  });
-});
-
-describe('transforms', () => {
-  it('are a pointer’s paint, starting at none', () => {
-    for (const prop of transformProps) {
-      expect(paintProps).toContain(prop);
-      expect(roleProps.pointed).toContain(prop);
-      expect(roleProps.value).not.toContain(prop);
-    }
-    expect(transformProps.map((prop) => starterLooks.pointed[prop])).toEqual([1, 0, 0, 0]);
-  });
-
-  it('reach as far as an offset moves a drawing, on its side', () => {
-    expect(offsetReach(0, -8)).toEqual({ top: 8, right: 0, bottom: 0, left: 0 });
-    expect(offsetReach(4, 12)).toEqual({ top: 0, right: 4, bottom: 12, left: 0 });
-    expect(offsetReach(undefined, undefined)).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
-  });
-
-  it('reach as far as a scale grows a box, away from its anchors', () => {
-    const size = { width: 40, height: 30 };
-    // 1.2 grows 40 by 8 and 30 by 6: from the bottom, all upward; from the centre, half each way.
-    expect(scaleReach(1.2, { x: 'center', y: 'flex-end' }, size)).toEqual({
-      top: 6,
-      right: 4,
-      bottom: 0,
-      left: 4
-    });
-    expect(scaleReach(1.2, { x: 'start', y: 'start' }, size)).toEqual({
-      top: 0,
-      right: 8,
-      bottom: 6,
-      left: 0
-    });
-    expect(scaleReach(1, { x: 'center', y: 'center' }, size)).toEqual({
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0
-    });
-    expect(anchorOrigin({ x: 'center', y: 'flex-end' })).toBe('center bottom');
-    expect(anchorOrigin({ x: 'flex-start', y: 'center' })).toBe('left center');
+    expect(paintReach('hard', 'on')).toEqual({ top: 10, right: 10, bottom: 10, left: 10 });
   });
 });

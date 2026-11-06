@@ -181,7 +181,7 @@ describe('moot comparisons', () => {
     expect(mootComparison(settled, about('views.Int'))).toBe(true);
     // The answer hid the Answer part, so how it looks is no longer open.
     expect(mootComparison(settled, about('Board.Answer.fill'))).toBe(true);
-    expect(mootComparison(settled, about('Highlight.Pointed.fill'))).toBe(false);
+    expect(mootComparison(settled, about('Highlight.Link.targetFill'))).toBe(false);
     expect(mootComparison(answer({ 'listing.language': 'none' }), about('listing.color'))).toBe(
       true
     );

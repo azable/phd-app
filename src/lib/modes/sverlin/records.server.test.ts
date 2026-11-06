@@ -44,7 +44,6 @@ export const mergeSort = (
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
-<View of="Index" name="Mark"><Pointed /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 ${views}
 ${layout}

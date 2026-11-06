@@ -27,7 +27,7 @@
     const around = adjacency[current];]
     for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
       const neighbour = around[slot];
-      if (@check[!vertices[@next[neighbour]].seen]) @add{
+      if (@check[!vertices[@neighbour[neighbour]].seen]) @add{
         vertices[neighbour].seen = true;
         queue.push(neighbour);
       }
@@ -44,7 +44,7 @@ BFS(start)
     @first[slot = the first neighbour of current]
     while @another[slot is a neighbour]
       @look[neighbour = neighbour slot
-      if @check[@next[neighbour] has not been seen]
+      if @check[@neighbour[neighbour] has not been seen]
         @add[mark neighbour as seen
         add neighbour to the queue]]
       @step[slot = the next neighbour]]
@@ -52,7 +52,12 @@ BFS(start)
 
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Seen" name="SeenWord"><Node>{this ? 'seen' : 'unseen'}</Node></View>
-<View of="VertexRef" name="VertexNumber"><Node value={this} /></View>
+<View of="VertexRef" name="RefArrow">
+  <Node layout="column">
+    <Node kind="Caption">{place()}</Node>
+    <Link to={this} />
+  </Node>
+</View>
 
 <View of="Vertex" name="VertexCard">
   <Node layout="column">
@@ -62,20 +67,18 @@ BFS(start)
 </View>
 
 <View of="Queue" name="QueueItems">
-  <Node>{#each this as item}{item}{/each}</Node>
+  <Node>{#each this as item}<Node kind="Entry">{at(item).name}</Node>{/each}</Node>
 </View>
 
 <View of="VisitOrder" name="OrderItems">
-  <Node>{#each this as item}{item}{/each}</Node>
+  <Node>{#each this as item}<Node kind="Entry">{at(item).name}</Node>{/each}</Node>
 </View>
-
-<View of="VertexRef" name="PositionMark"><Pointed /></View>
 
 <Layout name="Title">
   <Node>Breadth-first search from A</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, adjacency">
+<Layout name="Graph" of="vertices, adjacency, current, @visit.look.check.neighbour">
   <Node layout="free">
     {#each vertices as vertex, k}
       <Node layout="column">
@@ -86,6 +89,8 @@ BFS(start)
         <Link from={k} to={neighbour} />
       {/each}
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{@visit.look.check.neighbour}</Node>
   </Node>
 </Layout>
 
@@ -104,14 +109,14 @@ BFS(start)
 </Layout>
 
 <Layout name="CurrentInfo" of="current">
-  <Node>removing vertex {current} and exploring its neighbours</Node>
+  <Node>removing vertex {at(current).name} and exploring its neighbours</Node>
 </Layout>
 
-<Layout name="NeighbourInfo" of="@visit.look.check.next">
-  <Node>checking neighbour {@visit.look.check.next}</Node>
+<Layout name="NeighbourInfo" of="neighbour">
+  <Node>checking neighbour {at(neighbour).name}</Node>
 </Layout>
 
-<Layout name="StatePanel" of="queue, order, current, @visit.look.check.next">
+<Layout name="StatePanel" of="queue, order, current, neighbour">
   <Node layout="column">
     <QueueLine queue={queue} />
     <OrderLine order={order} />
@@ -120,22 +125,20 @@ BFS(start)
   </Node>
 </Layout>
 
-<Layout name="Lesson" of="vertices, adjacency, queue, order, current, @visit.look.check.next">
+<Layout name="Lesson" of="vertices, adjacency, queue, order, current, neighbour, @visit.look.check.neighbour">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Graph vertices={vertices} adjacency={adjacency} />
+      <Graph vertices={vertices} adjacency={adjacency} current={current} />
       <StatePanel queue={queue} order={order} current={current} />
     </Node>
   </Node>
 </Layout>
 
-<Layout name="Main" of="current, vertices, adjacency, queue, order, @visit.look.check.next">
+<Layout name="Main" of="current, neighbour, vertices, adjacency, queue, order, @visit.look.check.neighbour">
   <Node>
     <Title />
     <Lesson vertices={vertices} adjacency={adjacency} queue={queue} order={order} current={current} />
-    {current}
-    {@visit.look.check.next}
   </Node>
 </Layout>
 
@@ -156,5 +159,5 @@ BFS(start)
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.neighbour, @visit.look.add"><Main current={current} vertices={vertices} adjacency={adjacency} queue={queue} order={order} /></Scene>
 </Storyboard>
