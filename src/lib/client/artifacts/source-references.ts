@@ -9,6 +9,7 @@
 
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { labelCode, labelDeclarations } from '$lib/modes/sverlin/listing/source-lines';
 
 /** A region of a source, by offsets into its text. */
 export type SourceRange = { from: number; to: number };
@@ -318,6 +319,23 @@ function kindKey(text: string): { segments: string[]; place?: string } | undefin
  * by the labels around it, so `@rise.compare.left` is never `@fall.compare.left`; and where the view
  * reads it.
  */
+/**
+ * A place a token names, as a listing's `:i[…]` or `:@front[…]`: a variable's declaration and its
+ * renders, or a label's declarations and reads, by the name the token writes.
+ */
+export function placeRanges(source: string, place: string): SourceRange[] {
+  const written = place.replace(/^:/u, '');
+  if (written.startsWith('@')) {
+    const label = written.slice(1);
+    return labelRanges(source, labelCode(source, label)?.full ?? label);
+  }
+  const variable = written.split('.')[0];
+  return sorted([
+    ...matches(source, new RegExp(String.raw`\b(?:let|const)\s+(${escape(variable)})\b`, 'gu'), 1),
+    ...placeRenders(source, written)
+  ]);
+}
+
 function labelRanges(source: string, label: string): SourceRange[] {
   return sorted([
     ...labelDeclarations(source)
@@ -325,53 +343,6 @@ function labelRanges(source: string, label: string): SourceRange[] {
       .map(({ from, to }) => ({ from, to })),
     ...matches(source, new RegExp(String.raw`@${escape(label)}(?![\w$.[{])`, 'gu'))
   ]);
-}
-
-/**
- * Every label declared in the algorithm block and the listings, `@name[` or `@name{` (a listing's
- * only `@name[`), each with its full name and where its `@name` is. A `[` or `{` opening no label
- * closes with its own match, as in `values[i]` or `A[i]`; strings and comments in the algorithm are
- * skipped.
- */
-function labelDeclarations(source: string): { full: string; from: number; to: number }[] {
-  const found: { full: string; from: number; to: number }[] = [];
-  const blocks = /<script\s+(?:algorithm|(listing="[^"]*"))\s*>([\s\S]*?)<\/script>/gu;
-  for (const block of source.matchAll(blocks)) {
-    const listing = Boolean(block[1]);
-    const body = block[2];
-    const offset = (block.index ?? 0) + block[0].indexOf(body, block[0].indexOf('>'));
-    const open: (string | undefined)[] = [];
-    const names = () => open.filter((name): name is string => name !== undefined);
-    for (let at = 0; at < body.length; at++) {
-      const char = body[at];
-      if (!listing && (char === '"' || char === "'" || char === '`')) {
-        for (at++; at < body.length && body[at] !== char; at++) if (body[at] === '\\') at++;
-        continue;
-      }
-      if (!listing && body.startsWith('//', at)) {
-        at = body.indexOf('\n', at);
-        if (at < 0) break;
-        continue;
-      }
-      if (!listing && body.startsWith('/*', at)) {
-        at = body.indexOf('*/', at);
-        if (at < 0) break;
-        at++;
-        continue;
-      }
-      const declared = char === '@' ? /^@([A-Za-z_$][\w$]*)([[{])/u.exec(body.slice(at)) : null;
-      if (declared && (!listing || declared[2] === '[')) {
-        const full = [...names(), declared[1]].join('.');
-        found.push({ full, from: offset + at, to: offset + at + 1 + declared[1].length });
-        open.push(declared[1]);
-        at += declared[0].length - 1;
-        continue;
-      }
-      if (char === '[' || (!listing && char === '{')) open.push(undefined);
-      else if ((char === ']' || (!listing && char === '}')) && open.length) open.pop();
-    }
-  }
-  return found;
 }
 
 /** A view's or layout's declaration, or a declaration in a script; for `.Pointed`, its marks. */

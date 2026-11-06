@@ -272,6 +272,9 @@ export type AiSelectedElement = {
   stepLabel: string;
   elementId: string;
   label: string;
+  /** The place of the token the participant clicked in it, as `:i` for a listing's `:i[…]`. */
+  place?: string;
+  /** Its tag in the source; for a listing's line, the listing's lines and the labels round it. */
   source: ElementLocation;
   /**
    * The free layouts around the element: the one placing it and the one placing its children. Each
@@ -880,7 +883,12 @@ function selectedElement(
   const presentation = event.payload.presentation;
   if (presentation.format !== 'browser-bundle-v1') return [];
   const locate = modeBuilders[presentation.mode]?.locateElement;
-  const source = locate?.(presentation.source.text, reference.element.id);
+  const listingName = presentation.variant?.['listing.language'];
+  const source = locate?.(
+    presentation.source.text,
+    reference.element.id,
+    typeof listingName === 'string' ? listingName : undefined
+  );
   if (!source) return [];
   return [
     {
@@ -889,6 +897,7 @@ function selectedElement(
       stepLabel: presentationStepLabels(presentation)[reference.step] ?? '',
       elementId: reference.element.id,
       label: reference.element.label,
+      ...(reference.element.place ? { place: reference.element.place } : {}),
       source,
       layouts: (reference.element.layouts ?? []).map(({ seed, ...layout }) => {
         const located = locate?.(presentation.source.text, layout.node);
