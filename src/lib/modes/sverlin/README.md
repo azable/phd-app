@@ -430,6 +430,16 @@ view for all pointers. -->
   `@scan#1`, then `@next#1`, then `@more#2`. The header's labels sit beside the
   body's, not inside it: inside `@visit`, they are `visit.start`, `visit.more`
   and `visit.next`, never `visit.scan.start`, and a listing marks them so.
+- Label finely, and choose the level in the view: each operation a learner may
+  step through has a label of its own, and labels nest to group them, as
+  `@swap{@save[const moved = values[j];] @move[values[j] = values[j + 1];] @put[values[j + 1] = moved;]}`
+  or `@halves[@left[sort(a, b, lo, mid);] @right[sort(a, b, mid, hi);]]`. A
+  scene pausing at `@swap` alone steps and lights the group as one, its listing
+  region lighting over the regions inside it, and one pausing at the inner
+  labels steps each, so nesting changes no picture until a scene pauses inside.
+  The build warns of a label holding two or more statements not each labelled,
+  and of a listing region over two or more lines with no region of their own
+  (label.clumped).
 - A label inside another takes its name as a prefix: `@shift[…]` inside
   `@insert{` is `insert.shift`. A label around statements in a row runs from the
   first to the last, the labels inside it included:
@@ -1715,6 +1725,13 @@ the scenes' pauses decide whether to pause there.
   other references. A token naming a place nothing renders is refused. Write
   code inside a sentence as a token, never as plain text; code that refers to
   nothing in the algorithm stays text.
+- Mark every mention of a variable the view draws, in the listing past its
+  heading and in a caption's or sentence's words, as a token, as `:i[i]` in
+  `@next[:i[i] = :i[i] + 1]`, and every line that runs with the region of its
+  label, so each lights with its place and its step. The build warns of each it
+  finds plain (listing.plain-variable, view.caption-name, view.plain-code,
+  listing.line-without-region), and tells a variable a region's code changes
+  that its text marks by no name, as `:values[A]` (listing.unmarked-read).
 - A token can name a label, a moment of the run, as its place `:@name`:
   `<Node kind="Note">The loop stops when :@front[A[j] > key] is false.</Node>`,
   or in the listing, `while @front[j ≥ 0 and :@front[A[j] > key]]`. The label is
