@@ -367,13 +367,51 @@
    * The paint round a node's box, behind it, as its CSS box-shadow draws it (see boxEffects): its
    * glow, a halo grown by its spread and blurred, and its shadow, an offset copy, soft and lifted
    * a blurred black and hard a solid block in its stroke colour or its text's. A CSS blur radius is
-   * twice the deviation a blur filter takes.
+   * twice the deviation a blur filter takes. Its place's light, as nodeLight draws it in CSS (see
+   * listing/places.ts): a 3px band round its box, a 3px line under it, or a 2px ring 3px off it.
    */
   function effectsOf(node: DrawnNode) {
     const { box, look } = node;
     const radius = look.radius ?? 0;
-    const drawn: { box: SceneBox; radius: number; fill: string; opacity: number; blur: number }[] =
-      [];
+    const drawn: {
+      box: SceneBox;
+      radius: number;
+      fill: string;
+      stroke?: { colour: string; width: number };
+      opacity: number;
+      blur: number;
+    }[] = [];
+    const grown = (by: number): SceneBox => ({
+      x: box.x - by,
+      y: box.y - by,
+      width: box.width + 2 * by,
+      height: box.height + 2 * by
+    });
+    if (look.light?.look === 'fill')
+      drawn.push({
+        box: grown(3),
+        radius: radius + 3,
+        fill: look.light.colour,
+        opacity: 1,
+        blur: 0
+      });
+    else if (look.light?.look === 'underline')
+      drawn.push({
+        box: { x: box.x + 1, y: box.y + box.height, width: Math.max(box.width - 2, 0), height: 3 },
+        radius: 0,
+        fill: look.light.colour,
+        opacity: 1,
+        blur: 0
+      });
+    else if (look.light?.look === 'outline')
+      drawn.push({
+        box: grown(4),
+        radius: radius + 4,
+        fill: 'none',
+        stroke: { colour: look.light.colour, width: 2 },
+        opacity: 1,
+        blur: 0
+      });
     if (look.glow) {
       const { spread, blur, alpha } = glowHalo;
       drawn.push({
@@ -504,6 +542,8 @@
             height={effect.box.height}
             rx={effect.radius}
             fill={effect.fill}
+            stroke={effect.stroke?.colour}
+            stroke-width={effect.stroke?.width}
             opacity={node.opacity * effect.opacity}
             style:filter={effect.blur ? `blur(${effect.blur}px)` : undefined}
             pointer-events="none"

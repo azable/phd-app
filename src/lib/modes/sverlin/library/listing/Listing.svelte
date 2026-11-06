@@ -6,7 +6,9 @@
   its last, never its indentation. The text is the same at every step, so the box keeps one size;
   only the lighting moves, its padding and stroke taking no room. Each line is a node of its own,
   which participants can select. A token naming a place (listing.places) is a region of its own,
-  lit in its place's colour at a step touching the place (see places.ts).
+  lit in its place's colour at a step touching the place (see places.ts). A region whose label a
+  token names (:@insert.front) is a reference to that label's place too, so hovering the token
+  outlines it; it lights as a region does.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -26,30 +28,47 @@
 
   type Paint = { fill: unknown; stroke: unknown; color: unknown };
   type Kind = 'keyword' | 'string' | 'comment' | 'number';
-  /** Text, as a token naming a place where it is one (see listing/places.ts), and its syntax. */
-  type Leaf = { text: string; place?: string; kind?: Kind; lit?: boolean };
+  /**
+   * Text, as a token naming a place where it is one (see listing/places.ts), or in the region of a
+   * label a token names, and its syntax.
+   */
+  type Leaf = { text: string; place?: string; region?: string; kind?: Kind; lit?: boolean };
   type Piece = Leaf | { paint: Paint; outer: boolean; pieces: Piece[] };
   type Character = {
     text: string;
     lit: boolean;
     chain: readonly string[];
     place?: string;
+    region?: string;
     kind?: Kind;
   };
 
   const regions = listing?.regions ?? [];
   const tokens = listing?.places?.tokens ?? [];
   const tokenAt = (at: number) => tokens.find(({ start, end }) => start <= at && at < end)?.place;
+  // The innermost region holding an offset whose label a token names, as its place.
+  const regionPlaceAt = (at: number) =>
+    regions
+      .filter(({ start, end }) => start <= at && at < end)
+      .map(({ label }) => `:@${label}`)
+      .findLast((place) => listing?.places?.paints[place] !== undefined);
   const syntax = listing?.syntax;
   const kindAt = (at: number) =>
     syntax?.spans.find(({ start, end }) => start <= at && at < end)?.kind;
   // Text split where tokens and syntax spans start and end, each a leaf of its own.
   const leavesOf = (characters: readonly Character[]): Leaf[] => {
     const leaves: Leaf[] = [];
-    for (const { text, place, kind, lit } of characters) {
+    for (const { text, place, region, kind, lit } of characters) {
       const last = leaves.at(-1);
-      if (last && last.place === place && last.kind === kind) last.text += text;
-      else leaves.push({ text, ...(place ? { place } : {}), ...(kind ? { kind, lit } : {}) });
+      if (last && last.place === place && last.region === region && last.kind === kind)
+        last.text += text;
+      else
+        leaves.push({
+          text,
+          ...(place ? { place } : {}),
+          ...(region ? { region } : {}),
+          ...(kind ? { kind, lit } : {})
+        });
     }
     return leaves;
   };
@@ -126,6 +145,7 @@
         lit: at >= first && at < last && litAt(offset + at),
         chain: chainOf(offset + at),
         place: tokenAt(offset + at),
+        region: regionPlaceAt(offset + at),
         kind: kindAt(offset + at)
       }));
       offset += text.length + 1;
@@ -166,6 +186,10 @@
         data-sv-kind="listing-token"
         style={[tokenStyle(piece.place), syntaxStyle(piece)].filter(Boolean).join(';')}
         >{piece.text}</span
+      >{:else if piece.region}<span
+        data-sv-place={piece.region}
+        data-sv-syntax={piece.kind}
+        style={syntaxStyle(piece)}>{piece.text}</span
       >{:else if piece.kind}<span data-sv-syntax={piece.kind} style={syntaxStyle(piece)}
         >{piece.text}</span
       >{:else}{piece.text}{/if}{/each}{/snippet}

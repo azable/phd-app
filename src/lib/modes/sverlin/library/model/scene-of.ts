@@ -21,6 +21,7 @@ import {
   type SceneBox,
   type SceneFrame,
   type SceneLink,
+  type SceneLook,
   type SceneMark,
   type SceneNode,
   type SceneStep,
@@ -44,6 +45,18 @@ const transparent = (colour: string | undefined) =>
   ['transparent', 'none'].includes(colour) ||
   /^rgba\(.*,\s*0\)$/u.test(colour) ||
   /\/\s*0\)$/u.test(colour);
+
+/**
+ * A node's place light, written as data-sv-light="look|colour" (see Node.svelte), as its CSS
+ * box-shadow or outline, which the scene does not read, would be lost.
+ */
+function lightOfNode(written: string | undefined): Pick<SceneLook, 'light'> {
+  const split = written?.indexOf('|') ?? -1;
+  if (!written || split < 0) return {};
+  const look = written.slice(0, split);
+  if (look !== 'fill' && look !== 'underline' && look !== 'outline') return {};
+  return { light: { look, colour: written.slice(split + 1) } };
+}
 
 /** A node round what is walked; described, unless it is hidden. */
 type Open = { element: ModelElement; node?: SceneNode };
@@ -492,7 +505,10 @@ export function sceneOf(
         ...(attributes['data-sv-glow']
           ? { glow: stroke ?? paint.background ?? 'rgba(0, 0, 0, 0)' }
           : {}),
-        ...(attributes['data-sv-fill-style'] === 'hatched' ? { fillStyle: 'hatched' as const } : {})
+        ...(attributes['data-sv-fill-style'] === 'hatched'
+          ? { fillStyle: 'hatched' as const }
+          : {}),
+        ...lightOfNode(attributes['data-sv-light'])
       },
       ...(colours && Object.keys(colours).length ? { colours } : {}),
       ...(attributes['data-sv-place'] ? { places: attributes['data-sv-place'].split(' ') } : {}),

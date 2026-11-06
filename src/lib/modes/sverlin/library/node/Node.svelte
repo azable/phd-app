@@ -418,10 +418,8 @@
   const places = untrack(() =>
     hidden ? [] : namedPlaces(listing, [...ownPlaces, ...(__places ?? []), __code])
   );
-  const light = untrack(() => {
-    const colour = lightOf(listing, places);
-    return colour ? nodeLight(listing?.places?.look, colour) : {};
-  });
+  const lightColour = untrack(() => lightOf(listing, places));
+  const light = lightColour ? nodeLight(listing?.places?.look, lightColour) : {};
   // Left out of the presentation, as its kind's shown false leaves it out (see left-out.ts).
   const leftOut = untrack(() => __ref !== undefined && (leftOutContext()?.has(__ref) ?? false));
   // A node keeps a least size so that changing content never moves anything around it. A typed
@@ -1000,6 +998,7 @@
     data-sv-fill-style={fillStyle?.style}
     data-sv-decoration={decoration ? look('decoration') : undefined}
     data-sv-place={places.length ? places.join(' ') : undefined}
+    data-sv-light={lightColour ? `${listing?.places?.look ?? 'fill'}|${lightColour}` : undefined}
     class:cell={holdsOne}
     class:math={__math !== undefined}
     style:font-size={measured('textSize', 'px')}

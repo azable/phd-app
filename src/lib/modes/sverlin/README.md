@@ -1742,26 +1742,41 @@ the scenes' pauses decide whether to pause there.
   pseudocode's `j` is the algorithm's `j - 1`. Tokens and regions nest either
   way, as `:x[A[@left[j - 1]]]`, a region inside a token keeping its prefix; a
   token inside another, an unclosed one, or one naming a place nothing renders
-  is an error. When a step's own code, not code kept lit from earlier, overlaps
-  a token, the step touches its place: every token naming it and its references
-  in the picture light together, in the colour of the place's mark, its pointer
-  view's `<Pointed>` fill (`Mark.Pointed:i.fill`) or its value's view's
-  (`IntCell:key.fill`), or its stroke where the fill is none or white. In the
-  picture, a place is the element a pointer at it points at, or the outermost
-  node of a value rendered there or of a pointer view with nodes around its
-  `<Pointed>`, a caption's number included. Hovering any reference outlines the
-  others, dashed in the place's stroke (its fill where it has none), drawn in a
-  darker shade of its hue where it would show at less than 3:1 on the page, so a
-  pale fill still outlines. `listing.places`, there only where a listing has
-  tokens, says how places light: `fill` (the start: the token filled, a 3px band
-  round the node), `underline`, `outline` (a ring), or `none`, which lights
-  nothing and links nothing on hover; none takes room.
+  (a label's place apart, see below) is an error. When a step's own code, not
+  code kept lit from earlier, overlaps a token, the step touches its place:
+  every token naming it and its references in the picture light together, in the
+  colour of the place's mark, its pointer view's `<Pointed>` fill
+  (`Mark.Pointed:i.fill`) or its value's view's (`IntCell:key.fill`), or its
+  stroke where the fill is none or white. In the picture, a place is the element
+  a pointer at it points at, or the outermost node of a value rendered there or
+  of a pointer view with nodes around its `<Pointed>`, a caption's number
+  included. Hovering any reference outlines the others, dashed in the place's
+  stroke (its fill where it has none), drawn in a darker shade of its hue where
+  it would show at less than 3:1 on the page, so a pale fill still outlines.
+  `listing.places`, there only where a listing has tokens, says how places
+  light: `fill` (the start: the token filled, a 3px band round the node),
+  `underline`, `outline` (a ring), or `none`, which lights nothing and links
+  nothing on hover; none takes room.
 - A token can also go in the text of a layout or a view, for example
   `<Node kind="Note">Lift :i[A[i]] into :key[key].</Node>`. It means the same as
   in the listing. It is drawn as inline code, a kind of its own named `Code`
   (here `Board.Note.Code`) that starts in monospace. It lights at the same steps
   as the listing's tokens for its place, and hovering it outlines the place's
-  other references. A token naming a place nothing renders is refused.
+  other references. A token naming a place nothing renders is refused. Write
+  code inside a sentence as a token, never as plain text; code that refers to
+  nothing in the algorithm stays text.
+- A token can name a label, a moment of the run, as its place `:@name`:
+  `<Node kind="Note">The loop stops when :@front[A[j] > key] is false.</Node>`,
+  or in the listing, `while @front[j ≥ 0 and :@front[A[j] > key]]`. The label is
+  named as a region names it: by its full name, by the end of it that no other
+  label shares, or in the listing inside the regions of the labels around it. It
+  needs no render, and is drawn as code. It lights where the label's region
+  lights as the step's own code, not as code kept lit from earlier, in the
+  region's paint (`listing.lit@insert.front.fill`, else the lit fill) unless the
+  layout draws the label, whose place then paints as a variable's does; hovering
+  it outlines the label's region and its other tokens. Like a place's token, it
+  lights only where the presentation shows a listing. A name no label has is
+  refused, naming the nearest label.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes

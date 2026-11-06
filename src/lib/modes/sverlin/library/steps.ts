@@ -55,6 +55,8 @@ export type ListingPlaces = {
   tokens: { place: string; start: number; end: number }[];
   paints: Record<string, string>;
   lines?: Record<string, string>;
+  /** A label's place as a text's token writes it, as :@front, by its full name, :@insert.front. */
+  aliases?: Record<string, string>;
 };
 
 /**
@@ -270,7 +272,8 @@ export function stepsOf(
                         look: listing.places.look,
                         tokens: listing.places.tokens,
                         paints: listing.places.paints,
-                        ...(listing.places.lines ? { lines: listing.places.lines } : {})
+                        ...(listing.places.lines ? { lines: listing.places.lines } : {}),
+                        ...(listing.places.aliases ? { aliases: listing.places.aliases } : {})
                       },
                       touched: listing.places.touched[stepOf(step)] ?? []
                     }

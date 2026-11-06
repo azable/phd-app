@@ -37,6 +37,11 @@ export type SceneLook = {
    */
   shadow?: Shadow;
   glow?: string;
+  /**
+   * Its place's light at the step, where the step touches a place it draws (see
+   * listing/places.ts): a 3px band round it, a line under it, or a ring off it, in a CSS colour.
+   */
+  light?: { look: 'fill' | 'underline' | 'outline'; colour: string };
   /** Its fill's style, where it is not solid. */
   fillStyle?: 'hatched';
 };

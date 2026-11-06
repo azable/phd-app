@@ -49,7 +49,7 @@ import {
   written as asWritten
 } from './label-values';
 import type { Listing, PlaceToken } from './listing/listing';
-import { mappedListing, type RegionMap } from './listing/mapped.server';
+import { isLabelPlace, labelNamed, mappedListing, type RegionMap } from './listing/mapped.server';
 import { syntaxSpans } from './listing/syntax';
 import {
   placeLightsText,
@@ -400,8 +400,13 @@ export type PreparedComponent = {
       tokens?: readonly PlaceToken[];
     }
   >;
-  /** What the root renders at each place a listing's token names (see listing/places.server.ts). */
-  tokenPlaces?: Record<string, RenderedPlace>;
+  /**
+   * What the root renders at each place a listing's token names (see listing/places.server.ts); a
+   * label's place, as :@insert.front, is there too, rendering nothing where no render draws it.
+   */
+  tokenPlaces?: Record<string, RenderedPlace | undefined>;
+  /** Each label's place as a text's token writes it, as :@front, by its full name, :@insert.front. */
+  labelAliases?: Record<string, string>;
   /**
    * The operators the root renders at labels, as {@render Greater(@inner)}, by key, each with an
    * application from some step, which stands in hidden where a step has none or several of them.
@@ -900,6 +905,8 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
     ...scene,
     position: sourcePosition(written, scene.start)
   }));
+  const captionAt = (place: string) =>
+    sourcePosition(written, laid.captions.find((caption) => caption.place === place)?.start ?? 0);
   return {
     ...withColumnShifts(laid.shifts, () =>
       prepareViews(tags.source, tags.views, laid.layouts, scenes, unshown, {
@@ -907,13 +914,12 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
         unrendered: (place, rendered) =>
           new InvalidSvelteSourceError(
             `The token ${place}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.join(', ')}` : ''}.`,
-            {
-              code: 'view_markup',
-              start: sourcePosition(
-                written,
-                laid.captions.find((caption) => caption.place === place)?.start ?? 0
-              )
-            }
+            { code: 'view_markup', start: captionAt(place) }
+          ),
+        unlabelled: (place, problem) =>
+          new InvalidSvelteSourceError(
+            `The token ${place}[…] names a label, a moment of the run, but ${problem}`,
+            { code: 'view_markup', start: captionAt(place) }
           )
       })
     ),
@@ -931,7 +937,12 @@ function prepareViews(
   captions: {
     places: readonly string[];
     unrendered: (place: string, rendered: readonly string[]) => InvalidSvelteSourceError;
-  } = { places: [], unrendered: (place) => new InvalidSvelteSourceError(place) }
+    unlabelled: (place: string, problem: string) => InvalidSvelteSourceError;
+  } = {
+    places: [],
+    unrendered: (place) => new InvalidSvelteSourceError(place),
+    unlabelled: (place) => new InvalidSvelteSourceError(place)
+  }
 ): PreparedComponent {
   let viewProblems: InvalidSvelteSourceError[] = [];
   let listingAlone = (): InvalidSvelteSourceError[] => [];
@@ -1989,10 +2000,17 @@ function prepareViews(
     for (const entry of Object.values(labelled))
       entry.sample = seen.flatMap((step) => step.labelled?.[entry.label] ?? [])[0];
     const written = listingsFrom(source, traced, algorithm, listingBlocks, [...rootPlaces.keys()]);
-    // A caption's token names a place the root renders, as a listing's does.
-    for (const place of new Set(captions.places))
-      if (!rootPlaces.has(place))
+    // A caption's token names a place the root renders, as a listing's does, or a label, a moment
+    // of the run, by its full name or the end of it, as a listing's region does.
+    const labelAliases: Record<string, string> = {};
+    for (const place of new Set(captions.places)) {
+      if (isLabelPlace(place)) {
+        const named = labelNamed(place.slice(2), traced.labels);
+        if ('full' in named) labelAliases[place] = `:@${named.full}`;
+        else written.problems.push(captions.unlabelled(place, named.problem));
+      } else if (!rootPlaces.has(place))
         written.problems.push(captions.unrendered(place, [...rootPlaces.keys()].sort()));
+    }
     if (listing && !listingBlocks.length)
       written.problems.push(
         new InvalidSvelteSourceError(
@@ -2048,9 +2066,11 @@ function prepareViews(
     // from (see placePaint).
     const tokenPlaces = Object.fromEntries([
       ...Object.values(listings ?? {}).flatMap(({ tokens = [] }) =>
-        tokens.map(({ place }) => [place, rootPlaces.get(place) as RenderedPlace])
+        tokens.map(({ place }) => [place, rootPlaces.get(place)])
       ),
-      ...captions.places.map((place) => [place, rootPlaces.get(place) as RenderedPlace])
+      ...captions.places
+        .map((place) => labelAliases[place] ?? place)
+        .map((place) => [place, rootPlaces.get(place)])
     ]);
     const placesSpace: DesignSpace = Object.keys(tokenPlaces).length
       ? { 'listing.places': [...listingPlacesOptions] }
@@ -2553,6 +2573,7 @@ function prepareViews(
       },
       ...(listings ? { listings } : {}),
       ...(Object.keys(tokenPlaces).length ? { tokenPlaces } : {}),
+      ...(Object.keys(labelAliases).length ? { labelAliases } : {}),
       ...(appliedNames.length ? { applied } : {}),
       ...(Object.keys(appliedIn).length ? { appliedIn } : {}),
       ...(Object.keys(labelled).length ? { labelled } : {}),
@@ -3029,11 +3050,12 @@ function neverDrawnLabelNodes(
 
 /**
  * The listing a variant shows, in its language, and what each step lights in it: the code it
- * finished and the code it keeps as run alike; and, where its tokens name places and the variant
- * lights them (listing.places), the places each step touches and the colour each lights in.
+ * finished and the code it keeps as run alike; and, where its tokens, or a text's, name places and
+ * the variant lights them (listing.places), the places each step touches and the colour each lights
+ * in, a label's place lighting with its region (see touchedPlaces).
  */
 export function shownListing(
-  prepared: Pick<PreparedComponent, 'listings' | 'tokenPlaces'>,
+  prepared: Pick<PreparedComponent, 'listings' | 'tokenPlaces' | 'labelAliases'>,
   values: Readonly<Record<string, DesignValue>>,
   lit: Readonly<Record<string, readonly Lit[]>>
 ): StepListing {
@@ -3044,6 +3066,11 @@ export function shownListing(
   const look = values['listing.places'] as ListingPlacesLook | undefined;
   const tokens = listed.tokens ?? [];
   const placed = prepared.tokenPlaces ?? {};
+  // Every label's place a token names, in the listing or a text, lights with its region.
+  const labelPlaces = [
+    ...new Set([...tokens.map(({ place }) => place), ...Object.keys(placed)].filter(isLabelPlace))
+  ];
+  const lighting = [...new Set([...tokens.map(({ place }) => place), ...labelPlaces])];
   const syntax = values['listing.syntax'];
   return {
     text: listed.text,
@@ -3063,24 +3090,19 @@ export function shownListing(
     lit: steps.map(({ current, earlier }) =>
       [...current, ...earlier].map(([start, end]): [number, number] => [start, end])
     ),
-    ...(tokens.length && look && look !== 'none'
+    ...((tokens.length || labelPlaces.length) && look && look !== 'none'
       ? {
           places: {
             look,
             tokens: tokens.map(({ place, start, end }) => ({ place, start, end })),
             paints: Object.fromEntries(
-              [...new Set(tokens.map(({ place }) => place))].map((place) => [
-                place,
-                placePaint(place, placed[place], values)
-              ])
+              lighting.map((place) => [place, placePaint(place, placed[place], values)])
             ),
             lines: Object.fromEntries(
-              [...new Set(tokens.map(({ place }) => place))].map((place) => [
-                place,
-                placePaint(place, placed[place], values, 'line')
-              ])
+              lighting.map((place) => [place, placePaint(place, placed[place], values, 'line')])
             ),
-            touched: touchedPlaces(tokens, steps)
+            ...(prepared.labelAliases ? { aliases: prepared.labelAliases } : {}),
+            touched: touchedPlaces(tokens, steps, { places: labelPlaces, regions: listed.regions })
           }
         }
       : {})

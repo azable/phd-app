@@ -34,19 +34,66 @@ export type RegionMap = { label: string; text: string; sources: { text: string; 
 
 const regionOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\[/u;
 /**
- * A place token opening at `index`, `:mid[` or, as older sources write it, `$mid[`. A `:` opens
- * one only where no name, closing bracket or `:` comes just before it, so `x := y`, `a : b` and
- * `{key:values[0]}` hold none.
+ * A place token opening at `index`, `:mid[`, `:@front[` for a label's place, or, as older sources
+ * write it, `$mid[`. A `:` opens one only where no name, closing bracket or `:` comes just before
+ * it, so `x := y`, `a : b` and `{key:values[0]}` hold none.
  */
 export function placeTokenAt(text: string, index: number): RegExpExecArray | null {
   const mark = text[index];
   if (mark !== '$' && mark !== ':') return null;
   if (mark === ':' && index > 0 && /[\w$)\]}:]/u.test(text[index - 1])) return null;
-  return /^[$:]([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
+  const token = /^[$:](@?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
+  return token && (mark === ':' || !token[1].startsWith('@')) ? token : null;
 }
 
 /** A place token anywhere in a text, as maths must hold none. */
-export const placeTokenIn = /(?:\$|(?<![\w$)\]}:]):)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u;
+export const placeTokenIn = /(?:\$|(?<![\w$)\]}:]):@?)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u;
+
+/** Whether a place is a label's, as :@front, a moment of the run rather than a variable. */
+export const isLabelPlace = (place: string): boolean => place.startsWith(':@');
+
+/**
+ * The label a name as written means, as regions resolve theirs: the label with that full name, else
+ * the one whose full name ends with it, or with its last parts, the fewest dropped from the front;
+ * or why none does: several end with it, or none, naming the nearest by its own name.
+ */
+export function labelNamed(
+  written: string,
+  labels: readonly Label[]
+): { full: string } | { problem: string } {
+  const parts = written.split('.');
+  for (let dropped = 0; dropped < parts.length; dropped++) {
+    const name = parts.slice(dropped).join('.');
+    const exact = labels.find(({ full }) => full === name);
+    const ending = exact ? [exact] : labels.filter(({ full }) => full.endsWith(`.${name}`));
+    if (ending.length === 1) return { full: ending[0].full };
+    if (ending.length > 1) {
+      const names = ending.map(({ full }) => `@${full}`);
+      return {
+        problem: `@${name} could be ${names.slice(0, -1).join(', ')} or ${names.at(-1)}: write the full name of the one it means, as ${names[0]}.`
+      };
+    }
+  }
+  const own = parts.at(-1) ?? written;
+  const nearest = [...labels].sort(
+    (a, b) => editDistance(a.name, own) - editDistance(b.name, own)
+  )[0];
+  return {
+    problem: `no label is named @${written}${nearest ? `; the nearest is @${nearest.full}` : ''}.`
+  };
+}
+
+/** How many single-character edits turn one text into another (Levenshtein). */
+function editDistance(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, at) => at);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++)
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length];
+}
 /**
  * The text a listing shows, without its region and token marks and the indentation its lines
  * share; its regions, each named with the names of those around it; and its tokens, which nest with
@@ -72,7 +119,7 @@ export function readRegions(body: string): {
   let at = lines.slice(0, first).reduce((total, line) => total + line.length + 1, 0);
   // A line of marks alone would show blank: openings join the next line, which takes their
   // indentation, and closings join the line before.
-  const opensOnly = /^\s*(?:[@$:][A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
+  const opensOnly = /^\s*(?:(?:[@$]|:@?)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
   const closesOnly = /^\s*\]+\s*$/u;
   kept.forEach((line, index) => {
     const joined = (index > 0 && opensOnly.test(kept[index - 1])) || closesOnly.test(line);
@@ -139,8 +186,10 @@ export function readRegions(body: string): {
           block: 'listing',
           at: characters[index].at
         });
+      // A label's token is named inside the regions around it, as a region is.
+      const around = token[1].startsWith('@') ? prefix() : undefined;
       open.push({
-        place: `:${token[1]}`,
+        place: around ? `:@${around}.${token[1].slice(1)}` : `:${token[1]}`,
         start: text.length,
         at: characters[index].at,
         inside: Boolean(outer)
@@ -356,6 +405,17 @@ export function mappedListing(
   const { root, labels, code } = algorithm;
   const resolved = resolveRegions(regions, labels);
   problems.push(...resolved.problems);
+  for (const token of tokens) {
+    if (!isLabelPlace(token.place)) continue;
+    const named = labelNamed(token.place.slice(2), labels);
+    if ('full' in named) token.place = `:@${named.full}`;
+    else
+      problems.push({
+        message: `The token ${token.place}[…] names a label, a moment of the run, but ${named.problem}`,
+        block: 'listing',
+        at: token.at
+      });
+  }
   const own = new Map<AnyNode, string[]>();
   for (const { full, nodes } of labels)
     for (const node of nodes) own.set(node, [...(own.get(node) ?? []), full]);

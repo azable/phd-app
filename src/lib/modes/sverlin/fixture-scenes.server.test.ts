@@ -19,6 +19,9 @@
  * - replay/ucs-ten: a union's members start with one look, so ∞ (UnknownCost) starts boxed like the
  *   costs it stands beside (CostValue).
  * - links/*: their words are centred as above, once both changes were merged.
+ * - replay/linear-search, links/linear-search: a node lit by its place at a step records the light
+ *   (look.light), which the server scenes had dropped with its CSS box-shadow; with the light left
+ *   out, both hash as before.
  */
 
 import { createHash } from 'node:crypto';
