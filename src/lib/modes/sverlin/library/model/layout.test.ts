@@ -148,6 +148,13 @@ describe('layout', () => {
     expect(boxes.get(b)).toEqual({ x: 50, y: 0, width: 20, height: 30 });
   });
 
+  it('keeps the spaces inside a text whose spaces are preserved, as wide as measured', () => {
+    const line = div({ 'white-space': 'pre', 'font-size': '16px' }, '1  start  at');
+    const [text] = lay(div({ width: '200px' }, line)).texts.get(line) ?? [];
+    expect(text.text).toBe('1  start  at');
+    expect(text.box.width).toBe(12 * 8);
+  });
+
   it('stretches a column flex item across, unless aligned', () => {
     const a = div({ height: '10px' });
     const b = div({ width: '20px', height: '10px', 'align-self': 'flex-end' });

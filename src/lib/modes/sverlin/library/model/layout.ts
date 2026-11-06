@@ -889,8 +889,8 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
             }
             if (part) line.x += textWidth(part, item.look);
           });
-          if (first !== undefined)
-            pieces.push(textPiece(item, item.text.replace(/\s+/gu, ' ').trim(), first, last));
+          // Its spaces are kept as measured, so the text fills its box as drawn.
+          if (first !== undefined) pieces.push(textPiece(item, item.text.trim(), first, last));
           line.space = false;
           continue;
         }
