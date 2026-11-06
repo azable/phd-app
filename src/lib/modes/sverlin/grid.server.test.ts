@@ -73,3 +73,26 @@ describe('the grid', () => {
     ).rejects.toThrow(/page's grid: its only prop is layout="grid"/u);
   });
 });
+
+describe('typed grid coordinates', () => {
+  it('places cells by a position, an expression over one, a loop index and a literal, with no warning', async () => {
+    const { built } = await drawnSteps(
+      sort(`${valuesRow}
+    <Node row={1} col={i}>{i}</Node>
+    <Node row={2} col={j + 1}>{j}</Node>
+    <Node row={3} col={2}>key</Node>`)
+    );
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/cannot work out/u));
+  });
+
+  it('warns of a coordinate whose values the build cannot work out, and still places it', async () => {
+    const { steps, built } = await drawnSteps(
+      sort(`${valuesRow}
+    <Node row={1} col={values.length - 1}>last</Node>`)
+    );
+    expect(built.warnings).toContainEqual(
+      expect.stringMatching(/^col=\{values\.length - 1\} takes values the build cannot work out/u)
+    );
+    expect(steps[1].nodes.some((node) => node.runs?.some((run) => run.text === 'last'))).toBe(true);
+  });
+});

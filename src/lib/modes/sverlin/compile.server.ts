@@ -1532,6 +1532,8 @@ function prepareViews(
     const namingViews = new Set(placeNames.flatMap(({ view }) => (view ? [view] : [])));
     const labelledPlaces = new Set<string>();
     const placeWarnings: string[] = [];
+    // Each grid coordinate whose values the build cannot work out (see gridExtents), warned of.
+    const unknownCoordinates: { axis: 'row' | 'col'; start: number; end: number }[] = [];
     const placeSlots = new Map<number, string>();
     const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
@@ -2285,7 +2287,8 @@ function prepareViews(
           ast.html,
           domain,
           variableTypes(master),
-          new Map(found.components.map(({ name, type }) => [name, type]))
+          new Map(found.components.map(({ name, type }) => [name, type])),
+          unknownCoordinates
         )
       ].map(([start, extent]) => ({
         at: start + '<Node'.length,
@@ -2435,8 +2438,14 @@ function prepareViews(
       ...(listingWarnings.length ? { listingWarnings } : {}),
       ...(inputWarnings.length ? { inputWarnings } : {}),
       ...(initialiserWarnings.length ? { initialiserWarnings } : {}),
-      ...(pointers.warnings.length || placeWarnings.length
-        ? { positionWarnings: [...pointers.warnings, ...placeWarnings] }
+      ...(pointers.warnings.length || placeWarnings.length || unknownCoordinates.length
+        ? {
+            positionWarnings: [
+              ...pointers.warnings,
+              ...placeWarnings,
+              ...unknownCoordinateWarnings(unknownCoordinates, svelteSource)
+            ]
+          }
         : {}),
       ...(pointerMarks.length ? { pointerMarks } : {}),
       pauses: { labels: labelNames, runs },
@@ -2943,6 +2952,25 @@ export async function bundlePresentation(
     leftOut: leftOut.nodes,
     ...(warnings.length ? { warnings } : {})
   };
+}
+
+/**
+ * A warning for each grid coordinate whose values the build cannot work out (see gridExtents): the
+ * node is still placed, but the grid keeps only the tracks the run's cells reach on that axis, so it
+ * cannot keep room for a value another input brings or line the axis up with an array.
+ */
+function unknownCoordinateWarnings(
+  unknown: readonly { axis: 'row' | 'col'; start: number; end: number }[],
+  source: string
+): string[] {
+  return [
+    ...new Set(unknown.map(({ axis, start, end }) => `${axis}={${source.slice(start, end)}}`))
+  ]
+    .slice(0, 5)
+    .map(
+      (written) =>
+        `${written} takes values the build cannot work out, so the grid keeps only the tracks this run's cells reach on that axis: it cannot keep room for a place another input brings, or line the axis up with an array. Place it by a position (an index(...) value, or an expression over one), a loop's index, or a whole number.`
+    );
 }
 
 /**

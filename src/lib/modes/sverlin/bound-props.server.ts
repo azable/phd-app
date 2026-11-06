@@ -573,14 +573,16 @@ export function placeCalls(
 /**
  * Each grid's rows and columns for any input, by where its tag starts: every row and every col its
  * cells can take, from the types of what their coordinates read, an {#each} index running from 0 to
- * its collection's max - 1. Null where a coordinate's values cannot be worked out, so that grid
- * keeps only the tracks the run's cells reach.
+ * its collection's max - 1, a position (index(...)) from −1 to its array's max, and an expression
+ * over them. Null where a coordinate's values cannot be worked out, so that grid keeps only the
+ * tracks the run's cells reach; each such coordinate is added to `unknown`, to be warned of.
  */
 export function gridExtents(
   markup: unknown,
   domain: DomainRegistry,
   variables: Scope,
-  views: Scope
+  views: Scope,
+  unknown: { axis: 'row' | 'col'; start: number; end: number }[] = []
 ): Map<number, [number[] | null, number[] | null]> {
   const atoms: Record<string, AtomType> = { ...domain.atoms };
   const extended: DomainRegistry = { ...domain, atoms };
@@ -621,9 +623,14 @@ export function gridExtents(
           ? { type: 'Literal', value: Number(part.data) }
           : undefined;
     const values = expression && valuesOf(expression, scope, extended);
-    return values?.length && values.every((value) => typeof value === 'number')
-      ? (values as number[])
-      : undefined;
+    const known = values?.length && values.every((value) => typeof value === 'number');
+    if (!known && part?.type === 'MustacheTag')
+      unknown.push({
+        axis: name as 'row' | 'col',
+        start: (part.expression as Node).start as number,
+        end: (part.expression as Node).end as number
+      });
+    return known ? (values as number[]) : undefined;
   };
   const isGrid = (node: Node) =>
     node.type === 'InlineComponent' &&
