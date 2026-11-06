@@ -197,6 +197,27 @@ export function pageLayouts(
     }
     const rootStart = root.start ?? start;
     let direction: FrameLayout = 'column';
+    // A grid as the page's root stays a node, placed in a column frame of its own, so its cells
+    // keep their rows and columns, as the page's lanes and keys need.
+    const gridRoot = (root.attributes ?? []).some((attribute) => {
+      const [value] = Array.isArray(attribute.value) ? (attribute.value as Part[]) : [];
+      return (
+        attribute.type === 'Attribute' &&
+        attribute.name === 'layout' &&
+        value?.type === 'Text' &&
+        value.data === 'grid'
+      );
+    });
+    if (gridRoot) {
+      for (const attribute of root.attributes ?? [])
+        if (attribute.type !== 'Attribute' || attribute.name !== 'layout')
+          problems.push({
+            message: `The root <Node> of the layout ${name} is the page's grid: its only prop is layout="grid", and its looks are the layout's, as ${name}.gap. Place what it holds by row and col.`,
+            start: attribute.start ?? rootStart
+          });
+      layouts.push({ name, direction, root: rootStart });
+      continue;
+    }
     for (const attribute of root.attributes ?? []) {
       const [value] = Array.isArray(attribute.value) ? (attribute.value as Part[]) : [];
       if (

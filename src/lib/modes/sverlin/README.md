@@ -91,10 +91,11 @@ layout, a view, or a node with a `kind`.
   one root `<Node>`, the frame (see Page frame), which holds values, layout
   tags, with `{#if}` and `{#each}` around them, a `<Listing />`, and nodes
   arranging them, and is selectable as the whole page. Its only prop is
-  `layout`, `row` or `column` (the start), how it arranges what it holds. A
-  layout's name is its nodes' kind, so a layout drawn on several pages looks
-  alike on each, and it is measured over every value its inputs' types allow.
-  Draw the layouts in the root rather than one layout holding the whole page.
+  `layout`, `row` or `column` (the start), how it arranges what it holds, or
+  `grid`, placing each thing it holds by `row` and `col` (see Grid). A layout's
+  name is its nodes' kind, so a layout drawn on several pages looks alike on
+  each, and it is measured over every value its inputs' types allow. Draw the
+  layouts in the root rather than one layout holding the whole page.
 
 ```svelte
 <Layout name="Side">
