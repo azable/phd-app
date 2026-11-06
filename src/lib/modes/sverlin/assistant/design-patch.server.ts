@@ -62,29 +62,27 @@ export function readDesignPatch(values: unknown): DesignPatch | { problem: strin
 /**
  * A patch naming a template as its base, as `"...": "$textbook"`, with the template written out in
  * full under the values it sets itself, so the design holds every base value (see templates.ts).
- * A base of the model's own, named otherwise, must write its values; a name that is neither, as a
- * mistyped template's, is a problem naming the templates.
+ * A base of the model's own, named otherwise, must write some base values, and starts from
+ * `$starter`'s, written out under them as a template's are, so it too holds every role's look; a
+ * name that is neither, as a mistyped template's, is a problem naming the templates.
  */
 function withTemplate(patch: DesignPatch): DesignPatch | { problem: string } {
   const base = patch.set.find(({ variable }) => variable === baseKey);
   if (!base) return patch;
   const template = templateOf(base.value);
-  if (!template) {
-    const own = patch.set.some(({ variable }) => variable !== baseKey && isBaseKey(variable));
-    return own
-      ? patch
-      : {
-          problem: `"..." names ${JSON.stringify(base.value)}, which is no template (${Object.keys(
-            templates
-          )
-            .map((name) => `$${name}`)
-            .join(
-              ', '
-            )}), and the values write no base of their own: name a template, or write the base's tokens, role styles ($Value, …) and scales with a name of your own.`
-        };
-  }
+  const own = patch.set.some(({ variable }) => variable !== baseKey && isBaseKey(variable));
+  if (!template && !own)
+    return {
+      problem: `"..." names ${JSON.stringify(base.value)}, which is no template (${Object.keys(
+        templates
+      )
+        .map((name) => `$${name}`)
+        .join(
+          ', '
+        )}), and the values write no base of their own: name a template, or write the base's tokens, role styles ($Value, …) and scales with a name of your own.`
+    };
   const written = new Set(patch.set.map(({ variable }) => variable));
-  const fromTemplate = Object.entries(templateValues(template))
+  const fromTemplate = Object.entries(templateValues(template ?? 'starter'))
     .filter(([variable]) => !written.has(variable))
     .map(([variable, value]) => ({ variable, value }));
   return { set: [...fromTemplate, ...patch.set], remove: patch.remove };

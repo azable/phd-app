@@ -61,7 +61,7 @@ describe('templates', () => {
     expect(told.levels?.$text).toBeUndefined();
   });
 
-  it('starter draws every fixture as a design with no base does', async () => {
+  it('starter, named by the model, draws every fixture as the base the app writes in', async () => {
     for (const source of [bfs, dijkstra, pseudocode, bars]) {
       const plain = await drawnSteps(source);
       const based = await drawnSteps(source, { chosen: chosenFor('starter') });

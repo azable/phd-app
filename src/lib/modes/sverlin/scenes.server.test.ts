@@ -9,7 +9,8 @@ import { expect, it } from 'vitest';
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import { UnavailableScenesError } from '../server';
 import { buildBatch } from './build.server';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import bars from './fixtures/bars.sverlin?raw';
 import { versionScenes } from './scenes.server';
 

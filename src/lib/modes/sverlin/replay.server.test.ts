@@ -7,7 +7,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import replay from './fixtures/replay/replay.json';
 import type { DesignValues } from './library/node/design';
 

@@ -37,6 +37,7 @@ import {
   groupProps,
   inheritKey,
   levelFor,
+  missingRoleLooks,
   propOptions,
   roleProps,
   starterFrame,
@@ -54,6 +55,7 @@ import {
   type KindRole
 } from './library/node/design';
 import { keptKey, keptValues, writtenText } from './library/node/design-keys';
+import { starterBase, starterBaseName } from './library/node/starter-base';
 import { designOnlyWarning } from './padding-warnings.server';
 
 /** A value a variable can take. */
@@ -227,7 +229,8 @@ function inheritance(
 
 /**
  * The space with the styles the variant names (see isStyle): each style's props, taking the options
- * every kind inheriting it has for the prop, or, where none inherits it yet, any kind's; and each
+ * every kind inheriting it has for the prop, or, where none inherits it yet, any kind's, or, where
+ * no kind has the prop, the prop's own; and each
  * kind's inherit taking the styles as options beside its role's kinds.
  */
 function withStyles(
@@ -253,7 +256,10 @@ function withStyles(
     const [first = [], ...rest] = holders.map((kind) => space[`${kind}.${prop}`]);
     const options = heirs.length
       ? first.filter((option) => rest.every((options) => options.includes(option)))
-      : [...new Set([first, ...rest].flat())];
+      : holders.length
+        ? [...new Set([first, ...rest].flat())]
+        : // No kind has the prop, as a base's $second where the source draws no box: its own options.
+          ((propOptions as Record<string, readonly DesignValue[]>)[prop] ?? []);
     // A style's prop may name a token of that prop whose every value it can take, as a group's.
     const fitting = tokens.filter(
       (token) =>
@@ -372,6 +378,22 @@ export type VariantRequest = {
   base?: Readonly<Record<string, unknown>>;
   randomise?: true | readonly string[];
 };
+
+/** Whether values name their base, flat (`base`) or as written at the top (`...`). */
+const namesBase = (values: Readonly<Record<string, unknown>> | undefined) =>
+  !!values && (Object.hasOwn(values, baseKey) || Object.hasOwn(values, '...'));
+
+/**
+ * A request as a design enters the app: one naming its base as it is; one naming none and building
+ * on no variant, as a demo example's, a new project's or a test's, with the starter base written in
+ * under its chosen values, so the variant built records `"...": "$starter"` and every base value. A
+ * request building on a variant that names no base is left to be refused (see buildVariant).
+ */
+export function withStarterBase(request: VariantRequest): VariantRequest {
+  if (namesBase(request.chosen) || namesBase(request.base)) return request;
+  if (request.base && Object.keys(request.base).length) return request;
+  return { ...request, chosen: { ...starterBase, ...request.chosen } };
+}
 
 /** A value the design space has no place for, or a variable it does not have. */
 export class DesignValueError extends Error {
@@ -677,6 +699,16 @@ export function buildVariant(
     keptValues(entries ?? {}, (key) => Object.hasOwn(offered, key));
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
+  // Every design names its base and holds every role's look (see withStarterBase).
+  if (!namesBase({ ...base, ...chosenValues }))
+    throw new DesignValueError(
+      'The design names no base: write "...": "$starter", or another template, at its top.'
+    );
+  const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
+  if (missing.length)
+    throw new DesignValueError(
+      `The design's base sets no ${missing.join(', ')}: a base sets every role's look its kinds follow; start from a template, as "...": "$starter", and change what differs.`
+    );
   // The styles the base and the chosen values name join the space (see withStyles), and the base's
   // scales and palette set its options (see withBase).
   const { space, problems: baseProblems } = withBase(
@@ -743,9 +775,12 @@ export function buildVariant(
         )
       );
   }
-  // A kind's prop set apart from its level stays its own; every other follows its level.
+  // A kind's prop set apart from its level stays its own; every other follows its level. Before
+  // the chosen values, a level the variant built on does not set is the starter base's, which the
+  // starter's kinds start from, so a kind the starter sets apart (a two-way line's head) stays so.
+  const starting = { ...starterBase, ...values };
   const own = new Set(
-    following.filter((key) => values[key] !== levelFor(values, roles, key)!.value)
+    following.filter((key) => values[key] !== levelFor(starting, roles, key)!.value)
   );
   // Each kind following a level takes the level's value; one that cannot is the level's error
   // where the level was chosen, and otherwise keeps its own value, as a base kept where it fits.
@@ -785,7 +820,12 @@ export function buildVariant(
   // one inheriting it follows the value chosen.
   for (const [key, value] of chosen) {
     values[key] = value as DesignValue;
-    origins[key] = 'chosen';
+    // The starter base's own values, written in under a design naming `$starter` (see
+    // withStarterBase), are the starter's, chosen by no one.
+    origins[key] =
+      chosenValues[baseKey] === starterBaseName && starterBase[key] === value
+        ? 'starter'
+        : 'chosen';
     if (follows(roles, key)) own.add(key);
   }
   // A kind chosen to inherit something follows it where only its starter look set it apart, as a

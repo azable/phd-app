@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import search from './fixtures/search-at.sverlin?raw';
 
 // Project 84017f9e's shape: the lists a run of merge sort makes, typed into the case as strings and

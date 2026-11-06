@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, frameSettings, prepareSvelteComponent } from './compile.server';
+import { frameSettings, prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import layouts from './fixtures/bubble-layouts.sverlin?raw';
 
 /** The fixture's view with its page layouts replaced. */

@@ -9,7 +9,8 @@
 import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import costsVariant from './fixtures/dijkstra-costs.json';
 import costs from './fixtures/dijkstra-costs.sverlin?raw';
 import replay from './fixtures/replay/replay.json';

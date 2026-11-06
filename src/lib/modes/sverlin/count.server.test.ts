@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import dotsFixture from './fixtures/count-dots.sverlin?raw';
 
 /** The dots fixture with its count's largest value, and its view, replaced. */

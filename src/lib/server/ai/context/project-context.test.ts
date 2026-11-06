@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
-import { buildVariant } from '$lib/modes/sverlin/design.server';
+import { buildVariant as buildOnBase, type VariantRequest } from '$lib/modes/sverlin/design.server';
+import { onStarterBase } from '$lib/modes/sverlin/testing/scenes';
 import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
 import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
 import { propOptions } from '$lib/modes/sverlin/library/node/design';
@@ -16,6 +17,16 @@ import {
   projectAiTimelineEntry,
   projectConversationMessages
 } from '$lib/server/ai/context/project-context';
+
+// Each request on the starter base where it names none, as every design in the app names one.
+const buildVariant = (
+  offered: Parameters<typeof buildOnBase>[0],
+  start: Parameters<typeof buildOnBase>[1],
+  request: VariantRequest,
+  ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
+    ? R
+    : never
+) => buildOnBase(offered, start, onStarterBase(request), ...rest);
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const sha256 = 'a'.repeat(64);

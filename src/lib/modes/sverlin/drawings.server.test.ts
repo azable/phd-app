@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import { layoutTags } from './layout-tags.server';
 
 const blocks = `<script domain>

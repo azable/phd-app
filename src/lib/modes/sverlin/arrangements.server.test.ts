@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { rankedArrangements } from './assistant/arrangements.server';
 
 import { arrangementDesigns } from './arrangements.server';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bfsUndirected from './fixtures/bfs-undirected.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';

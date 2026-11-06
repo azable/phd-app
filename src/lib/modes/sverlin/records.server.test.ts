@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import levelsFixture from './fixtures/merge-sort-levels.sverlin?raw';
 import stackFixture from './fixtures/merge-sort-stack.sverlin?raw';
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, listingMapsOf, prepareSvelteComponent } from '../compile.server';
+import { listingMapsOf, prepareSvelteComponent } from '../compile.server';
+import { bundlePresentation } from '../testing/scenes';
 import { readRegions } from './mapped.server';
 
 const blocks = (algorithm: string, listing: string) => `<script domain>

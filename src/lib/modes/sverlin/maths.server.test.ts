@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import { serverMeasure } from './fonts/measure.server';
 import { fontList, fontValues } from './library/fonts';
 import { readRegions } from './listing/mapped.server';

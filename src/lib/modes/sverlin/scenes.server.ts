@@ -8,6 +8,7 @@ import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import { buildLimit } from '../build-limit.server';
 import { UnavailableScenesError } from '../server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { withStarterBase } from './design.server';
 import type { ServerScenes } from './layout.server';
 
 // Every step of each version recently asked for, by presentation, the newest kept: a version's
@@ -42,7 +43,11 @@ async function rebuilt(presentation: BrowserBundlePresentation): Promise<ServerS
   const { source, seed, variant, javascript, labels } = presentation;
   // A rebuild waits its turn with the builds, as it takes as long as one.
   const bundle = await buildLimit.run(() =>
-    bundlePresentation(prepareSvelteComponent(source.text), seed, variant ? { base: variant } : {})
+    bundlePresentation(
+      prepareSvelteComponent(source.text),
+      seed,
+      withStarterBase(variant ? { base: variant } : {})
+    )
   );
   if (bundle.javascript !== javascript.text)
     throw new UnavailableScenesError(

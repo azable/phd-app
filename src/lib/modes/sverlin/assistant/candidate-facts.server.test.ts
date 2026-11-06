@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import insertion from '../fixtures/insertion-decisions.sverlin?raw';
 import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
+import { withStarterBase } from '../design.server';
 import { candidateFacts, factsText, pausedLabels } from './candidate-facts.server';
 
 describe('what the app measures of a candidate', () => {
@@ -13,7 +14,11 @@ describe('what the app measures of a candidate', () => {
   });
 
   it('measures a build, checks the constraints it can, and says which it cannot', async () => {
-    const built = await bundlePresentation(prepareSvelteComponent(insertion), 1, {});
+    const built = await bundlePresentation(
+      prepareSvelteComponent(insertion),
+      1,
+      withStarterBase({})
+    );
     const result = candidateFacts(built, insertion, [
       'every label runs',
       `at most ${built.labels.length} steps`,
