@@ -7,7 +7,13 @@
  * fit, as Frame.svelte draws it: placed at the frame's padding, its least size the frame's inside.
  */
 
-import { arrangeChildren, followerReach, rowOf, type ArrangementProps } from '../node/arrangement';
+import {
+  arrangeChildren,
+  followerReach,
+  rowOf,
+  shownIn,
+  type ArrangementProps
+} from '../node/arrangement';
 import { lineColour } from '../listing/places';
 import { shadows, type Shadow } from '../node/design';
 import { headDrawing, headTrim } from '../node/heads';
@@ -376,7 +382,8 @@ export function sceneOf(
     // A child drawing a variable whose link reaches an element of this layout goes under the whole
     // child the element is in, below all it draws there, as a vertex's caption, so its arrow
     // crosses none of it; followers under one child at a step go side by side, centred on the
-    // element, in the room the layout kept there (see followers in arrangement.ts).
+    // element, in the room the layout kept there (see followers in arrangement.ts). One reaching
+    // nothing waits in the row under the layout, drawing what its variable holds (see withRest).
     const gap = (props.gap ?? 0) * (styledOf(host)?.look.fontSize || 16);
     const reach = followerReach(gap);
     const placing = arranged.followers.map((follower) => {
@@ -415,6 +422,14 @@ export function sceneOf(
             right: under.left + under.width,
             bottom: under.top + under.height
           });
+        x += own.width + gap;
+      }
+    }
+    if (arranged.rest) {
+      let x = left + arranged.rest.x;
+      for (const { follower, target, layout, own } of placing) {
+        if (target || !shownIn(model.hostReader(at, host), follower)) continue;
+        walk(follower, { ...next, layout, x: x - own.x, y: top + arranged.rest.y - own.y });
         x += own.width + gap;
       }
     }

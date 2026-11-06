@@ -2300,12 +2300,22 @@ for a link in `Arrow`.
   over an earlier one at the same element. A position one past either end of its
   array reaches a ghost: an empty dashed box one step on from the element at
   that end, so the link visibly moves off the edge, as a search reporting not
-  found. A variable out of scope draws no link. In a free layout, the node
-  holding such a variable follows what it reaches: it is not placed by the
-  layout but drawn under the child holding that element, centred on it, the
-  layout's gap below, and every child it ever reaches keeps room for it there at
+  found. A variable out of scope draws no link. In a free layout, a node among
+  its children, outside every `{#each}`, that draws variables or labels by their
+  bare names, as `<Node kind="Var">{cur}</Node>`, is the variable's label, not a
+  vertex: it keeps its own look and is never placed by the layout. It follows
+  what its variable's link reaches, drawn under the child holding that element,
+  below all that child draws (a vertex's caption included), two of the layout's
+  gaps lower, centred on the element; its arrow runs straight up from it to just
+  under the child, crossing none of it. Labels under one child at a step sit
+  side by side. Every child a label ever reaches keeps room for it there at
   every step, so nothing moves as it comes and goes, as a pointer's label keeps
-  its slot.
+  its slot. At a step where its variable reaches no element, as `prev` holding a
+  list's end, the label waits in a row under the layout, at its left, drawing
+  what the variable holds there (`∅`, by the end's view) with no arrow: a `∅`
+  under an element would read as pointing at it, and a reference's end has no
+  place among the nodes for a ghost. The layout keeps that row at every step
+  where any label ever waits, so nothing moves.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
