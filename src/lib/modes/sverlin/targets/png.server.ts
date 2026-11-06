@@ -6,12 +6,11 @@
  * changes nothing else.
  */
 
+import { createCanvas } from '@napi-rs/canvas';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 import type { SceneFrame, SceneStep } from '../library';
 import { serverPdf, serverScene } from './pdf.server';
-
-type NodeCanvas = { toBuffer(mime: 'image/png'): Buffer };
 
 /**
  * A PNG of each step of `scenes`, `width` pixels wide (as the step shows on the stage), as data
@@ -24,21 +23,15 @@ export async function scenePictures(
   const pdf = await serverPdf(
     serverScene(scenes, { presentationId: 'pictures', seed: 0, labels: [] })
   );
-  const loading = getDocument({
-    data: new Uint8Array(await pdf.arrayBuffer()),
-    isEvalSupported: false
-  });
+  const loading = getDocument({ data: new Uint8Array(await pdf.arrayBuffer()) });
   const document = await loading.promise;
   try {
     const pictures: string[] = [];
     for (let number = 1; number <= document.numPages; number++) {
       const page = await document.getPage(number);
       const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
-      const { canvas } = document.canvasFactory.create(
-        Math.round(viewport.width),
-        Math.round(viewport.height)
-      ) as { canvas: HTMLCanvasElement & NodeCanvas };
-      await page.render({ canvas, viewport }).promise;
+      const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
+      await page.render({ canvas: canvas as unknown as HTMLCanvasElement, viewport }).promise;
       pictures.push(`data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`);
       page.cleanup();
     }
