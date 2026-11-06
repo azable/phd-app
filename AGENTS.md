@@ -165,6 +165,12 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   `src/lib/modes/sverlin/assembly/entry.ts` for keeping a box's largest size)
   and extend it; a parallel implementation needs its reason stated in the
   review.
+- While the language is a work in progress, do not keep old forms readable:
+  when a form is replaced, the build refuses the old one with a message giving
+  the new form, its translation code is deleted, and stored projects are
+  cleared (`pnpm run db:clear-projects`) rather than migrated; replay fixtures
+  are rewritten to the new form. Suggest this to the developer and wait for
+  their agreement before removing a form or clearing projects.
 - A new mode should add one folder plus one catalogue registration, not another
   cross-cutting assistant/mode mapping. Prefer project intake, operations,
   attempts, persistence, and workspace controls that are mode-neutral; where a
