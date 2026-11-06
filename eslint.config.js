@@ -56,6 +56,26 @@ export default defineConfig(
       '@typescript-eslint/explicit-module-boundary-types': 'error'
     }
   },
+  // A mode's engine never depends on the assistant that works for it. Placed before the narrower
+  // rules below, which replace these options for their own files and repeat the pattern.
+  {
+    files: ['src/lib/modes/*/**/*.{ts,js,svelte}'],
+    ignores: ['src/lib/modes/*/assistant/**', 'src/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/assistant/**', '$lib/server/ai/**'],
+              message:
+                "A mode's engine cannot import AI code: the assistant uses the engine, not the reverse."
+            }
+          ]
+        }
+      ]
+    }
+  },
   {
     files: ['src/lib/shared/**/*.{ts,js}', 'src/lib/studies/**/*.{ts,js}'],
     rules: {
@@ -103,6 +123,11 @@ export default defineConfig(
             {
               group: ['$lib/server/**', '$env/**', 'node:*'],
               message: 'Browser-safe mode contracts and playback cannot import server code.'
+            },
+            {
+              group: ['**/assistant/**'],
+              message:
+                "A mode's engine cannot import AI code: the assistant uses the engine, not the reverse."
             }
           ]
         }
@@ -117,7 +142,7 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: ['$lib/**', '$app/**', '$env/**', 'node:*'],
+              group: ['$lib/**', '$app/**', '$env/**', 'node:*', '**/assistant/**'],
               message:
                 'Sandbox library and assembly files are bundled alone; import only svelte and library files.'
             }
@@ -136,6 +161,30 @@ export default defineConfig(
             {
               group: ['$lib/client/**'],
               message: 'Server modules cannot depend on browser-only code.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  // Mode-neutral server code reaches a mode only through the registries (modes/catalog,
+  // modes/server, modes/assistants.server) and its browser-safe contract; tests may use any part.
+  {
+    files: ['src/lib/server/**/*.{ts,js}'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/client/**'],
+              message: 'Server modules cannot depend on browser-only code.'
+            },
+            {
+              group: ['$lib/modes/*/**', '!$lib/modes/*/contract'],
+              message:
+                'Reach a mode through modes/catalog, modes/server or modes/assistants.server, not its own files.'
             }
           ]
         }
