@@ -22,6 +22,9 @@
  * - replay/linear-search, links/linear-search: a node lit by its place at a step records the light
  *   (look.light), which the server scenes had dropped with its CSS box-shadow; with the light left
  *   out, both hash as before.
+ * - links/linear-search, listing-python, replay/linear-search: a listing line drawn as one run keeps
+ *   the spaces inside it, as 1  start at i = 0, which it was measured with; they were collapsed,
+ *   so the page stretched the text and the PDF set it off its line (the boxes are as they were).
  */
 
 import { createHash } from 'node:crypto';
