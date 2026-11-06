@@ -384,7 +384,7 @@ export async function runViewHelpers(
   // 1. Helpers: every group's calls at once, then each proposal built and measured.
   const replies = await call(prompts);
   await record(replies);
-  const callsMs = performance.now() - roundStarted;
+  let callsMs = performance.now() - roundStarted;
   const proposed = replies.flatMap((reply) =>
     reply.ok
       ? parseProposals(reply.result.output).map((proposal) => ({
@@ -405,6 +405,9 @@ export async function runViewHelpers(
   let longest = 0;
   // Each proposal is built in turn within one budget for the round: one that would end past it,
   // judged by the longest so far, is not started (as arrangements.server.ts bounds its layouts).
+  // In turn, not at once: on one CPU, as the Render host has (render.yaml), five bfs-undirected
+  // views took 4.2–5.0 s built one, two, three or five at a time (2026-11-07), and each build at
+  // once holds its own isolate's memory.
   const built = async (proposal: Proposal, group: number): Promise<ViewCandidate> => {
     if (performance.now() - buildsStarted + longest > helperBuildBudgetMs)
       return { kept: false, name: proposal.name, reason: 'not built within the round’s time' };
@@ -432,7 +435,9 @@ export async function runViewHelpers(
     .filter(({ candidate }) => !candidate.kept)
     .slice(0, viewHelperCalls);
   const late = deadline !== undefined && deadline - Date.now() < viewHelperTimeoutMs;
+  let retryCallsMs = 0;
   if (retried.length && !late && !waitSignal?.aborted) {
+    const retryStarted = performance.now();
     const again = await call(
       retried.map(({ candidate, proposal, prompt, group }) => ({
         group,
@@ -450,6 +455,7 @@ export async function runViewHelpers(
         }
       }))
     );
+    retryCallsMs = performance.now() - retryStarted;
     await record(again);
     for (const [index, reply] of again.entries()) {
       const fixed = reply.ok ? parseProposals(reply.result.output)[0] : undefined;
@@ -460,7 +466,10 @@ export async function runViewHelpers(
       checked[at] = { ...checked[at], candidate: result };
     }
   }
-  const buildsMs = performance.now() - buildsStarted;
+  // A retry's calls count as calls, so builds is the app's own time (project f9cbf444's 10.4 s of
+  // builds held a 6.3 s retry call).
+  const buildsMs = performance.now() - buildsStarted - retryCallsMs;
+  callsMs += retryCallsMs;
   const kept = checked.filter(({ candidate }) => candidate.kept);
   const stages: Stages = {
     scoring: pipeline.scoring.enabled ? 'on' : 'off',
