@@ -64,7 +64,7 @@ describe('design values written as one JSON string', () => {
   it('takes out of a variant what a patch removes, one value or every value under a kind', () => {
     const variant = {
       'Goal.fill': 'amber-200',
-      'Goal@target.stroke': 'red-500',
+      'Goal:target.stroke': 'red-500',
       'Goal.radius': 4,
       'GoalMark.fill': 'blue-100',
       'views.Int': 'IntCell'
@@ -77,7 +77,7 @@ describe('design values written as one JSON string', () => {
         (key) => writtenKey(key)
       );
     expect(without(['Goal.fill'])).toEqual({
-      'Goal@target.stroke': 'red-500',
+      'Goal:target.stroke': 'red-500',
       'Goal.radius': 4,
       'GoalMark.fill': 'blue-100',
       'views.Int': 'IntCell'

@@ -3358,7 +3358,7 @@ describe('assistant edits', () => {
     expect(origins(first)['Highlight.Pointed.fill'].origin).not.toBe('chosen');
     // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
     const follows = (key: string) =>
-      /^views\.(\w+\.)?Int@/u.test(key) || /^Highlight\.Pointed@\w+\.fill$/u.test(key);
+      /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.Pointed:@?\w+\.fill$/u.test(key);
     for (const [key, { value, origin }] of Object.entries(origins(first)))
       if (key !== 'views.Int' && key !== 'Highlight.Pointed.fill' && !follows(key))
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
@@ -3454,7 +3454,7 @@ describe('several variants from chat', () => {
     // With no presentation named, the turn builds on the newest (viewedPresentation).
     const viewed = presented(before.events).at(-1)!.payload.presentation;
     // Each pair differs only in what its comparison sets, and the variables that follow them.
-    const following = [/^views\.(\w+\.)?Int(@.*)?$/u, /^Highlight\.Pointed(@\w+)?\.fill$/u];
+    const following = [/^views\.(\w+\.)?Int(:.*)?$/u, /^Highlight\.Pointed(:@?\w+)?\.fill$/u];
     for (const index of [0, 1]) {
       const [left, right] = shown.slice(index * 2, index * 2 + 2).map(({ payload }) => payload);
       expect(left.displaySetId).toBe(right.displaySetId);

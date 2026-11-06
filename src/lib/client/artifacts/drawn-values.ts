@@ -22,6 +22,7 @@ import {
   placeProps,
   propOptions
 } from '$lib/modes/sverlin/library/node/design';
+import { isOwnOfKind } from '$lib/modes/sverlin/library/node/design-keys';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /** One prop of a tag, its kind's variable, and the value each visible presentation gave it. */
@@ -29,7 +30,7 @@ export type GhostProp = {
   name: string;
   values: { label?: string; text: string; color?: string; title: string }[];
   differs: boolean;
-  /** The design variable its row shows, as `Highlight.Pointed@left.fill`, which links reveal. */
+  /** The design variable its row shows, as `Highlight.Pointed:@left.fill`, which links reveal. */
   key?: string;
 };
 
@@ -123,14 +124,14 @@ export function unchosenViews(
     const chosen = presentations.map(({ variant }) => variant?.[key]);
     if (!chosen.every((name) => typeof name === 'string')) continue;
     const picked = [...new Set(chosen)].join(' and ');
-    // A place's own choice of the type, as views.Int@swap.held or views.Ask.Int@g.a, draws its view.
+    // A place's own choice of the type, as views.Int:swap.held or views.Ask.Int:g.a, draws its view.
     const [prefix, type] = [key.slice(0, key.indexOf('.')), key.slice(key.indexOf('.') + 1)];
     const atPlaces = presentations.flatMap(({ variant = {} }) =>
       Object.entries(variant).flatMap(([other, value]) =>
         other.startsWith(`${prefix}.`) &&
-        other.includes('@') &&
+        other.includes(':') &&
         other
-          .slice(prefix.length + 1, other.indexOf('@'))
+          .slice(prefix.length + 1, other.indexOf(':'))
           .split('.')
           .at(-1) === type
           ? [value]
@@ -269,7 +270,7 @@ export function tagGhosts(
         ...new Set(
           presentations.flatMap(({ variant = {} }) =>
             // A place's variables are its render's (see placeGhosts), not its kind's tag's.
-            Object.keys(variant).filter((key) => key.startsWith(`${kind}.`) && !key.includes('@'))
+            Object.keys(variant).filter((key) => key.startsWith(`${kind}.`) && isOwnOfKind(key))
           )
         )
       ]
@@ -294,7 +295,7 @@ export function tagGhosts(
 }
 
 /** A render's argument that makes it a place: a label, a variable, or a field, as written. */
-const placeArgument = /^@?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
+const placeArgument = /^(@?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/u;
 
 /**
  * Each view and layout of a source (and snippet, in sources written before layouts), from its
@@ -330,7 +331,7 @@ function braceEnd(doc: string, from: number): number | undefined {
 /**
  * Each render of a type in the editor's text, where its tag starts, the type, and what is written
  * between its brackets: written {@render Flag(seen)}, or as a value in braces, {seen}, whose type
- * the build records with where it reads (`views.Flag`, or a place's `views.Flag@seen`).
+ * the build records with where it reads (`views.Flag`, or a place's `views.Flag:seen`).
  */
 function typeRenders(
   state: EditorState,
@@ -369,7 +370,7 @@ function typeRenders(
 /**
  * A place's own values, as each shown presentation's variant has them, after the render drawn there,
  * as {@render Index(@left)}: its own view choice, where it has one, and the paint of the kinds of
- * the view it draws with, as `Highlight.Pointed@left.fill`. A place is named by the argument as
+ * the view it draws with, as `Highlight.Pointed:@left.fill`. A place is named by the argument as
  * written, inside a typed view after that view's path (`Ask.IntCell@g.a`), as the build names it.
  */
 export function placeGhosts(
@@ -379,7 +380,7 @@ export function placeGhosts(
   const keys = [
     ...new Set(
       presentations.flatMap(({ variant = {} }) =>
-        Object.keys(variant).filter((key) => key.includes('@'))
+        Object.keys(variant).filter((key) => /^[^:]+:/u.test(key) && !key.startsWith(':'))
       )
     )
   ];
@@ -417,7 +418,7 @@ export function placeGhosts(
       ])
     );
     const choices = keys.filter((key) => {
-      const at = key.indexOf('@');
+      const at = key.indexOf(':');
       const head = key.slice(0, at);
       return (
         /^(?:views|pointers)\./u.test(head) &&
@@ -440,7 +441,7 @@ export function placeGhosts(
       })
     );
     const kindOf = (key: string) => {
-      const at = key.indexOf('@');
+      const at = key.indexOf(':');
       const rest = key.slice(at + 1);
       const dot = rest.lastIndexOf('.');
       if (dot < 0 || rest.slice(0, dot) !== place || !placeProps.has(rest.slice(dot + 1)))
@@ -467,7 +468,7 @@ export function placeGhosts(
       ...choices.map((key) => variable(presentations, key, choices.length > 1 ? key : 'view')),
       ...paint.map(({ key, kind, prop }) => variable(presentations, key, `${kind}.${prop}`))
     ];
-    if (props.length) ghosts.push({ at: end, props, kinds: [`@${place}`], place: `@${place}` });
+    if (props.length) ghosts.push({ at: end, props, kinds: [`:${place}`], place: `:${place}` });
   }
   return ghosts;
 }

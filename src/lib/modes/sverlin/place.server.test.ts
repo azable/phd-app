@@ -67,9 +67,9 @@ describe('place() in a pointer view', () => {
       search('{place()}', `${asView}\n${own('ArrowB')}\n${own('ArrowC')}`, '{values}'),
       {
         chosen: {
-          'pointers.Index@lo': 'Arrow',
-          'pointers.Index@hi': 'ArrowB',
-          'pointers.Index@mid': 'ArrowC'
+          'pointers.Index:lo': 'Arrow',
+          'pointers.Index:hi': 'ArrowB',
+          'pointers.Index:mid': 'ArrowC'
         }
       }
     );
@@ -103,10 +103,29 @@ describe('place() in a pointer view', () => {
     );
   });
 
-  it('writes a place label as :lo.label and keeps it as label@lo', () => {
-    expect(writtenKey('label@lo')).toBe(':lo.label');
-    expect(keptKey(':lo.label')).toBe('label@lo');
-    expect(keptKey(':pair.left.label')).toBe('label@pair.left');
-    expect(writtenKey('label@pair.left')).toBe(':pair.left.label');
+  it("captions a label's place by the label's last name, or the design's caption for :@…", async () => {
+    // The probe's comparison labels the position it reads, @probed, drawn as a pointer.
+    const source = search('{place()}', asView, '{values}{@probe.low.probed}')
+      .replace('if (@low[values[mid] < target])', 'if (@low[values[@probed[mid]] < target])')
+      .replace('of="lo, hi, mid, values"', 'of="lo, hi, mid, values, @probe.low.probed"')
+      .replace('pause="@range, @probe.mid"', 'pause="@range, @probe.mid, @probe.low"');
+    const named = await drawnSteps(source);
+    const atCheck = named.steps.find((step) => captions(step).includes('probed'));
+    expect(atCheck).toBeDefined();
+    expect(captions(atCheck!)).not.toContain('probe.low.probed');
+    const { space } = prepareSvelteComponent(source).design;
+    expect(space[':@probe.low.probed.label']).toEqual(['probed']);
+    expect(space['Arrow.Pointed:@probe.low.probed.fill']).toBeDefined();
+    const labelled = await drawnSteps(source, {
+      chosen: { ':@probe.low.probed.label': 'checked' }
+    });
+    expect(labelled.steps.some((step) => captions(step).includes('checked'))).toBe(true);
+  });
+
+  it('writes a place label as :lo.label and keeps it as :lo.label', () => {
+    expect(writtenKey(':lo.label')).toBe(':lo.label');
+    expect(keptKey(':lo.label')).toBe(':lo.label');
+    expect(keptKey(':pair.left.label')).toBe(':pair.left.label');
+    expect(writtenKey(':pair.left.label')).toBe(':pair.left.label');
   });
 });

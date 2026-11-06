@@ -7,9 +7,11 @@
 import {
   flatDesign,
   keptValues,
+  kindKeyParts,
   nestedDesign,
   writtenValues
 } from '$lib/modes/sverlin/library/node/design-keys';
+import { placeCaption } from '$lib/modes/sverlin/library/node/design';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /**
@@ -89,35 +91,31 @@ export function choiceRows(
 const viewCategories: Record<string, string> = { views: 'view', pointers: 'pointer' };
 
 /**
- * A variable's key in words: its kind's and prop's names split into words, and its place, after
- * `@`, as “for …”: `Highlight.Pointed@pair.left.fill` is “Highlight pointed fill for pair.left”,
- * and `views.Int@swap.held` “Int view for swap.held”.
- * Whether something is shown is said by its value (`choiceValue`), not its name.
+ * A variable's key in words: its kind's and prop's names split into words, its place as “for …”
+ * and a value of the data as “when …”: `Highlight.Pointed:pair.left.fill` is “Highlight pointed
+ * fill for pair.left”, `Card=true.fill` “Card fill when true”, and `views.Int:swap.held` “Int view
+ * for swap.held”. Whether something is shown is said by its value (`choiceValue`), not its name.
  */
 export function choiceName(key: string): string {
-  const at = key.indexOf('@');
-  const head = at < 0 ? key : key.slice(0, at);
-  const tail = at < 0 ? undefined : key.slice(at + 1);
-  const [category, type, ...rest] = head.split('.');
-  if (category in viewCategories && type && !rest.length) {
+  const caption = placeCaption.exec(key);
+  if (caption) return sentence(`caption for ${caption[1]}`);
+  const view = /^(views|pointers)\.(@[\w$.]+?|[\w$.]+?)(?::(@?[\w$.]+))?$/u.exec(key);
+  if (view) {
+    const [, category, type, place] = view;
     const name = `${words(type)} ${viewCategories[category]}`;
-    return sentence(tail ? `${name} for ${tail}` : name);
+    return sentence(place ? `${name} for ${place}` : name);
   }
   // A group, as `<Node>.padding`, sets every kind of its tag: “Every node padding”.
-  const tag = /^<(\w+)>$/u.exec(category);
-  if (tag && type && !rest.length && tail === undefined)
-    return sentence(`every ${words(tag[1])} ${words(type)}`);
-  // A kind's prop: the key's last part, after the place where there is one.
-  const parts = tail === undefined ? head.split('.') : [...head.split('.'), tail];
-  let place: string | undefined;
-  if (tail !== undefined) {
-    const dot = tail.lastIndexOf('.');
-    place = dot < 0 ? undefined : tail.slice(0, dot);
-    parts[parts.length - 1] = dot < 0 ? tail : tail.slice(dot + 1);
-  }
-  const named = parts.filter((part, index) => !(index === parts.length - 1 && part === 'shown'));
-  const name = named.map(words).join(' ') || key;
-  return sentence(place ? `${name} for ${place}` : name);
+  const tag = /^<(\w+)>\.(\w+)$/u.exec(key);
+  if (tag) return sentence(`every ${words(tag[1])} ${words(tag[2])}`);
+  const parts = kindKeyParts(key);
+  if (!parts) return sentence(key.split('.').map(words).join(' ') || key);
+  const named = [...parts.kind.split('.'), ...(parts.prop === 'shown' ? [] : [parts.prop])];
+  if (parts.part) named.push(parts.part);
+  const name = named.map(words).join(' ');
+  const where = parts.place ? ` for ${parts.place}` : '';
+  const when = parts.value !== undefined ? ` when ${parts.value}` : '';
+  return sentence(`${name}${where}${when}`);
 }
 
 /** A variable's value as written, whether something is shown as shown or hidden. */

@@ -54,7 +54,8 @@ const kindsOf = (space: Record<string, unknown>) =>
             !key.startsWith('$') &&
             key !== 'layout' &&
             !key.startsWith('Main.') &&
-            !key.includes('@')
+            !/[:=@]/u.test(key) &&
+            !/\.(from|hue|order|unit)$/u.test(key)
         )
         .map((key) => key.slice(0, key.lastIndexOf('.')))
     )
@@ -321,14 +322,14 @@ describe('single-component Svelte compilation', () => {
     expect(design.space['views.Int']).toEqual(['IntCell', 'none']);
     // Each render with an argument is a place: its own choice where its type has several views of
     // the kind it draws, and its own paint for the kinds of each.
-    expect(design.space['pointers.Position@i']).toEqual(['Arrow', 'Mark', 'none']);
-    expect(design.starter['pointers.Position@i']).toBe('Arrow');
-    expect(design.space['Arrow.Pointed@i.fill']).toBeDefined();
-    expect(design.space['Arrow.Name@i.color']).toBeDefined();
-    expect(design.space['Arrow.Pointed@i.padding']).toBeUndefined();
-    expect(design.space['IntCell@v.fill']).toBeDefined();
-    expect(design.space['views.Int@v']).toBeUndefined();
-    expect(design.fallbacks['Mark.Pointed@i.stroke']).toBe('Mark.Pointed.stroke');
+    expect(design.space['pointers.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
+    expect(design.starter['pointers.Position:i']).toBe('Arrow');
+    expect(design.space['Arrow.Pointed:i.fill']).toBeDefined();
+    expect(design.space['Arrow.Name:i.color']).toBeDefined();
+    expect(design.space['Arrow.Pointed:i.padding']).toBeUndefined();
+    expect(design.space['IntCell:v.fill']).toBeDefined();
+    expect(design.space['views.Int:v']).toBeUndefined();
+    expect(design.fallbacks['Mark.Pointed:i.stroke']).toBe('Mark.Pointed.stroke');
   });
 
   it.each([
@@ -1726,7 +1727,7 @@ describe('pauses at labels', () => {
       expect(design.starter['listing.lit.fill']).toBe('amber-200');
       // A region follows the mark where the root draws its label; an unmarked one the lit look.
       expect(design.fallbacks['listing.lit@insert.compare.left.fill']).toBe(
-        'Highlight.Pointed@insert.compare.left.fill'
+        'Highlight.Pointed:@insert.compare.left.fill'
       );
       expect(design.fallbacks['listing.lit@insert.swap.fill']).toBe('listing.lit.fill');
     });
@@ -1738,7 +1739,7 @@ describe('pauses at labels', () => {
       const marked = build({
         chosen: {
           'Highlight.Pointed.fill': 'violet-100',
-          'Highlight.Pointed@insert.compare.left.fill': 'sky-100',
+          'Highlight.Pointed:@insert.compare.left.fill': 'sky-100',
           'listing.lit.fill': 'amber-200'
         }
       });
@@ -1748,7 +1749,7 @@ describe('pauses at labels', () => {
       // A region given a paint of its own in the variant built on keeps it as the mark changes.
       const apart = build({
         base: { ...marked, 'listing.lit@insert.swap.to.fill': 'red-200' },
-        chosen: { 'Highlight.Pointed@insert.swap.to.fill': 'rose-100' }
+        chosen: { 'Highlight.Pointed:@insert.swap.to.fill': 'rose-100' }
       });
       expect(apart['listing.lit@insert.swap.to.fill']).toBe('red-200');
     });
@@ -1889,9 +1890,9 @@ describe('pauses inside a run', () => {
 
   it('keys a label’s place by its full name only', () => {
     const { space, starter } = insertion.design;
-    expect(space['Highlight.Pointed@insert.compare.left.fill']).toBeDefined();
-    expect(space['Highlight.Pointed@left.fill']).toBeUndefined();
-    const chosen = { 'Highlight.Pointed@left.fill': 'sky-100' };
+    expect(space['Highlight.Pointed:@insert.compare.left.fill']).toBeDefined();
+    expect(space['Highlight.Pointed:left.fill']).toBeUndefined();
+    const chosen = { 'Highlight.Pointed:left.fill': 'sky-100' };
     expect(buildVariant(space, starter, { chosen }, 1).dropped).toHaveLength(1);
   });
 });
@@ -1915,13 +1916,13 @@ describe('places', () => {
       '<Layout name="Key" of="key"><Node>{key}</Node></Layout><Layout name="Main" of="key, values"><Node>{@render Cells()}<Key key={key} /></Node></Layout>';
     const prepared = prepareSvelteComponent(source(view));
     const { space, starter, renders, fallbacks } = prepared.design;
-    expect(space['views.Int@key']).toEqual(['IntCell', 'IntTally', 'none']);
-    expect(starter['views.Int@key']).toBe('IntCell');
-    expect(fallbacks['views.Int@key']).toBe('views.Int');
-    expect(space['IntTally@key.fill']).toBeDefined();
-    expect(space['IntCell@v.color']).toBeDefined();
+    expect(space['views.Int:key']).toEqual(['IntCell', 'IntTally', 'none']);
+    expect(starter['views.Int:key']).toBe('IntCell');
+    expect(fallbacks['views.Int:key']).toBe('views.Int');
+    expect(space['IntTally:key.fill']).toBeDefined();
+    expect(space['IntCell:v.color']).toBeDefined();
     // The editor's marker after the render names the place's own choice.
-    expect(Object.values(renders)).toContain('views.Int@key');
+    expect(Object.values(renders)).toContain('views.Int:key');
     // A value in braces at the place calls its alias in place of its type, writing nothing beside it.
     expect(prepared.component).toMatch(/\$\.get\(__place\d+\), \(\) => \$\$props\.key/u);
     expect(prepared.component).not.toMatch(/from_(?:html|svg)\(`[^`]*__place/u);
@@ -1952,15 +1953,18 @@ describe('places', () => {
     ).toThrow('DistCell views Dist, a union, whose values are drawn by their member');
   });
 
-  it('refuses a label and a variable a place would share', () => {
-    expect(() =>
-      prepareSvelteComponent(
-        source(
-          '<Layout name="Shown" of="key, @key"><Node>{key} {@key}</Node></Layout><Layout name="Main" of="key, @key"><Node><Shown key={key} /></Node></Layout>',
-          '@shown[let key = Int(2); const picked = @key[values[0]];]'
-        )
+  it('keeps a label and a variable of one name apart, the label a moment of the run (:@…)', () => {
+    const { space } = prepareSvelteComponent(
+      source(
+        '<Layout name="Shown" of="key, @shown.key"><Node>{key} {@shown.key}</Node></Layout><Layout name="Main" of="key, @shown.key"><Node><Shown key={key} /></Node></Layout>',
+        '@shown[let key = Int(2); const picked = @key[values[0]];]'
       )
-    ).toThrow('rename the label');
+    ).design;
+    expect(
+      Object.keys(space)
+        .filter((key) => /^IntCell:(?:@shown\.)?key\.fill$/u.test(key))
+        .sort()
+    ).toEqual(['IntCell:@shown.key.fill', 'IntCell:key.fill']);
   });
 });
 
@@ -2528,12 +2532,12 @@ describe('props bound to a view’s value', () => {
 
     it('gives each value its own icon, an enumeration unordered, starting on distinct icons', () => {
       const { design } = withState('<View of="State" name="StateMark"><Node icon={this} /></View>');
-      expect(design.space['StateMark.icon@open']).toEqual(iconNames);
+      expect(design.space['StateMark=open.icon']).toEqual(iconNames);
       expect(design.starter).toMatchObject({
-        'StateMark.icon@open': 'circle',
-        'StateMark.icon@done': 'circle-dot'
+        'StateMark=open.icon': 'circle',
+        'StateMark=done.icon': 'circle-dot'
       });
-      expect(design.space['StateMark.icon@from']).toBeUndefined();
+      expect(design.space['StateMark.icon.from']).toBeUndefined();
     });
 
     it('starts a node drawing only an icon unboxed, as a word, and a value cell boxed', () => {
@@ -2581,10 +2585,10 @@ describe('props bound to a view’s value', () => {
     const { design } = component(
       '<View of="Card" name="CardBox"><Node fill={this.seen}>{this.level}</Node></View>'
     );
-    expect(design.space['CardBox.fill@true']).toContain('blue-200');
+    expect(design.space['CardBox=true.fill']).toContain('blue-200');
     expect(design.starter).toMatchObject({
-      'CardBox.fill@false': 'neutral-200',
-      'CardBox.fill@true': 'blue-200'
+      'CardBox=false.fill': 'neutral-200',
+      'CardBox=true.fill': 'blue-200'
     });
   });
 
@@ -2592,11 +2596,11 @@ describe('props bound to a view’s value', () => {
     const { design } = component(
       '<View of="Card" name="CardBox"><Node textSize={this.level}>{this.level}</Node></View>'
     );
-    expect(design.space['CardBox.textSize@from']).toEqual([12, 14, 16, 18, 20, 24]);
-    expect(design.space['CardBox.textSize@order']).toEqual(['up', 'down']);
+    expect(design.space['CardBox.textSize.from']).toEqual([12, 14, 16, 18, 20, 24]);
+    expect(design.space['CardBox.textSize.order']).toEqual(['up', 'down']);
     expect(design.starter).toMatchObject({
-      'CardBox.textSize@from': 16,
-      'CardBox.textSize@order': 'up'
+      'CardBox.textSize.from': 16,
+      'CardBox.textSize.order': 'up'
     });
   });
 
@@ -2606,16 +2610,16 @@ describe('props bound to a view’s value', () => {
         `<script domain>const State = type(['Unseen', 'Queued', 'Done']);</script><script algorithm>@run[let s = State('Queued');]</script><View of="State" name="StateText"><Node value={this} /></View>\n${views}\n<Layout name="Main"><Node>{s}</Node></Layout>`
       );
     const coloured = states('<View of="State" name="Dot"><Node fill={this}>{this}</Node></View>');
-    expect(coloured.design.space['Dot.fill@hue']).toContain('teal');
+    expect(coloured.design.space['Dot.fill.hue']).toContain('teal');
     expect(coloured.design.starter).toMatchObject({
-      'Dot.fill@hue': 'blue',
-      'Dot.fill@order': 'up'
+      'Dot.fill.hue': 'blue',
+      'Dot.fill.order': 'up'
     });
-    expect(coloured.design.space).not.toHaveProperty(['Dot.fill@Unseen']);
+    expect(coloured.design.space).not.toHaveProperty(['Dot=Unseen.fill']);
     const sized = states(
       '<View of="State" name="Dot"><Node strokeWidth={this}>{this}</Node></View>'
     );
-    expect(sized.design.space['Dot.strokeWidth@from']).toEqual([0, 0.5, 1, 1.5, 2]);
+    expect(sized.design.space['Dot.strokeWidth.from']).toEqual([0, 0.5, 1, 1.5, 2]);
     expect(() =>
       states('<View of="State" name="Dot"><Node font={this}>{this}</Node></View>')
     ).toThrow(/an enumeration, whose values run in its declared order, and font's options do not/);
@@ -2626,7 +2630,7 @@ describe('props bound to a view’s value', () => {
       `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 2 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[4, 7]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntText"><Node value={this} /></View>\n<View of="Position" name="Faded"><Node opacity={this}>{this}</Node></View>\n<View of="Position" name="PositionText"><Node value={this} /></View>\n<Layout name="Main" of="values, i"><Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node></Layout>`
     );
     // -1 to 2, four values, one to each of opacity's four options.
-    expect(design.space['Faded.opacity@from']).toEqual([0.25]);
+    expect(design.space['Faded.opacity.from']).toEqual([0.25]);
   });
 
   it.each([
@@ -2665,9 +2669,9 @@ describe('props bound to a view’s value', () => {
       '<View of="Wide" name="Bar"><Node width={this} /></View>',
       '<Node>{wide}</Node>'
     );
-    expect(design.space['Bar.width@unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
+    expect(design.space['Bar.width.unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
     // The largest unit keeping 99, the largest Wide, within 200 pixels.
-    expect(design.starter['Bar.width@unit']).toBe(2);
+    expect(design.starter['Bar.width.unit']).toBe(2);
     // From the left, as width runs, until the design places it otherwise; the width is the value,
     // so the kind has no width variable, and a variant naming one is told why.
     expect(design.space['Bar.xAnchor']).toEqual(['start', 'center', 'end']);
@@ -2707,11 +2711,11 @@ describe('props bound to a view’s value', () => {
       `<script domain>const Flag = type('boolean'); const Vertex = record({ seen: Flag }); const Vertices = array(Vertex, { max: 2 }); const Position = index(Vertices); const Graph = record({ vertices: Vertices });</script><script input>const graph = Graph;</script><Case name="main" graph={{ vertices: [{ seen: false }, { seen: true }] }} /><script algorithm>@run[let done = Flag(false);]</script><View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Graph" name="Drawing"><Node layout="row">{#each this.vertices as v, j}<Node kind="Dot" fill={v.seen} opacity={j}>x</Node>{/each}</Node></View>\n<Layout name="Main" of="graph, done"><Node>{graph}{done}</Node></Layout>`
     );
     expect(design.starter).toMatchObject({
-      'Drawing.Dot.fill@false': 'neutral-200',
-      'Drawing.Dot.fill@true': 'blue-200'
+      'Drawing.Dot=false.fill': 'neutral-200',
+      'Drawing.Dot=true.fill': 'blue-200'
     });
     // j is a Position, -1 to 2: four values, one to each of opacity's four options.
-    expect(design.space['Drawing.Dot.opacity@from']).toEqual([0.25]);
+    expect(design.space['Drawing.Dot.opacity.from']).toEqual([0.25]);
   });
 
   describe('a label’s operands', () => {
@@ -2722,7 +2726,7 @@ describe('props bound to a view’s value', () => {
 
     it('binds an operand by the type its runs gave it', () => {
       const { design } = labelled('opacity={this.left}');
-      expect(design.space['Ask.opacity@from']).toEqual([0.25]);
+      expect(design.space['Ask.opacity.from']).toEqual([0.25]);
     });
 
     it('refuses an operand its runs gave no type, saying how to give it one', () => {
@@ -2845,7 +2849,7 @@ describe('slots and boxes', () => {
         '{wide}'
       )
     );
-    expect(design.space['Bar.Length.height@unit']).toBeDefined();
+    expect(design.space['Bar.Length.height.unit']).toBeDefined();
   });
 
   it('refuses where a box sits, or how a row spaces, written in the markup', () => {
@@ -3024,11 +3028,11 @@ describe('starter looks of a graph', () => {
 
   it('starts a link label unboxed, the stage white behind it, so the line breaks round it', () => {
     const { design } = prepareSvelteComponent(graph);
-    expect(design.starter['WeightText@edge.weight.fill']).toBe('white');
-    expect(design.starter['WeightText@edge.weight.stroke']).toBe('none');
+    expect(design.starter['WeightText:edge.weight.fill']).toBe('white');
+    expect(design.starter['WeightText:edge.weight.stroke']).toBe('none');
     // Its own paint, not its kind's; here the weight is drawn only on links, so its view starts as
     // plain text too (a weight drawn elsewhere keeps its box: see layout.server.test.ts).
-    expect(design.fallbacks['WeightText@edge.weight.fill']).toBeUndefined();
+    expect(design.fallbacks['WeightText:edge.weight.fill']).toBeUndefined();
     expect(design.starter['WeightText.stroke']).toBe('none');
   });
 
@@ -3037,9 +3041,9 @@ describe('starter looks of a graph', () => {
     expect(design.starter['VertexCard.fill']).toBe('white');
     expect(design.starter['VertexCard.stroke']).toBe('neutral-300');
     expect(design.starter['VertexCard.gap']).toBe(0.25);
-    expect(design.starter['VertexCard.NameText@this.name.fill']).toBe('none');
-    expect(design.starter['VertexCard.StateText@this.state.stroke']).toBe('none');
-    expect(design.fallbacks['VertexCard.NameText@this.name.fill']).toBeUndefined();
+    expect(design.starter['VertexCard.NameText:this.name.fill']).toBe('none');
+    expect(design.starter['VertexCard.StateText:this.state.stroke']).toBe('none');
+    expect(design.fallbacks['VertexCard.NameText:this.name.fill']).toBeUndefined();
   });
 
   it('starts the nodes a free layout’s links join as circles, a state machine’s states', async () => {

@@ -78,7 +78,7 @@ describe('drawn value markers', () => {
           {
             seed: 1,
             views: options,
-            variant: { ...showing('IntDots'), 'views.Int@target': 'IntTally' }
+            variant: { ...showing('IntDots'), 'views.Int:target': 'IntTally' }
           }
         ])
       ).toEqual([{ view: 'IntCell', whole: true, title: 'Not drawn: views.Int is IntDots' }]);
@@ -276,14 +276,14 @@ describe('place values', () => {
     'views.Int': 'IntCell',
     'views.Index': 'IndexText',
     'pointers.Index': 'Highlight',
-    'pointers.Index@left': 'Highlight',
+    'pointers.Index:@left': 'Highlight',
     'Highlight.Pointed.fill': 'amber-100',
-    'Highlight.Pointed@left.fill': 'sky-100',
-    'Highlight.Pointed@left.shown': true,
-    'Arrow.Pointed@left.fill': 'amber-100',
-    'IndexText@i.fill': 'sky-100',
-    'IntCell@v.fill': 'white',
-    'Ask.IntCell@this.a.fill': 'green-100',
+    'Highlight.Pointed:@left.fill': 'sky-100',
+    'Highlight.Pointed:@left.shown': true,
+    'Arrow.Pointed:@left.fill': 'amber-100',
+    'IndexText:i.fill': 'sky-100',
+    'IntCell:v.fill': 'white',
+    'Ask.IntCell:this.a.fill': 'green-100',
     'Ask.fill': 'none'
   };
   const sites = (text: string) => {
@@ -298,7 +298,7 @@ describe('place values', () => {
     pointers: { Index: ['Highlight', 'Arrow'] },
     kinds: { [sites('<Node>{@render Int(this.a)}')]: ['Ask'] },
     renders: {
-      [sites('{@render Index(@left)}')]: 'pointers.Index@left',
+      [sites('{@render Index(@left)}')]: 'pointers.Index:@left',
       [sites('{@render Index(@right)}')]: 'pointers.Index',
       [sites('{@render Index(i)}')]: 'views.Index',
       [sites('{@render Int(this.a)}')]: 'views.Int',
@@ -312,20 +312,20 @@ describe('place values', () => {
 
   it("shows a place's own view choice and the paint of the view it draws, after its render", () => {
     expect(rows('{@render Index(@left)}')).toEqual([
-      ['view', 'pointers.Index@left', 'Highlight'],
-      ['Highlight.Pointed.shown', 'Highlight.Pointed@left.shown', 'true'],
-      ['Highlight.Pointed.fill', 'Highlight.Pointed@left.fill', 'sky-100']
+      ['view', 'pointers.Index:@left', 'Highlight'],
+      ['Highlight.Pointed.shown', 'Highlight.Pointed:@left.shown', 'true'],
+      ['Highlight.Pointed.fill', 'Highlight.Pointed:@left.fill', 'sky-100']
     ]);
     // A render whose argument has no variables of its own is no place shown.
     expect(rows('{@render Index(@right)}')).toBeUndefined();
   });
 
   it('names a place in a part by its argument, and one in a typed view after the view', () => {
-    expect(rows('{@render Index(i)}')).toEqual([['IndexText.fill', 'IndexText@i.fill', 'sky-100']]);
+    expect(rows('{@render Index(i)}')).toEqual([['IndexText.fill', 'IndexText:i.fill', 'sky-100']]);
     expect(rows('{@render Int(this.a)}')).toEqual([
-      ['IntCell.fill', 'Ask.IntCell@this.a.fill', 'green-100']
+      ['IntCell.fill', 'Ask.IntCell:this.a.fill', 'green-100']
     ]);
-    expect(rows('{@render Int(v)}')).toEqual([['IntCell.fill', 'IntCell@v.fill', 'white']]);
+    expect(rows('{@render Int(v)}')).toEqual([['IntCell.fill', 'IntCell:v.fill', 'white']]);
   });
 
   it("keeps a place's variables out of its kind's tag", () => {
@@ -337,7 +337,7 @@ describe('place values', () => {
     const state = EditorState.create({ doc, extensions: [drawnValues] }).update({
       effects: [
         setDrawnValues.of({ presentations: [presentation] }),
-        setRevealedKeys.of(['Highlight.Pointed@left.fill'])
+        setRevealedKeys.of(['Highlight.Pointed:@left.fill'])
       ]
     }).state;
     const tables: string[][] = [];
@@ -347,8 +347,8 @@ describe('place values', () => {
           const widget = decoration.spec.widget as { revealed?: readonly string[] } | undefined;
           if (widget && Array.isArray(widget.revealed)) tables.push([...widget.revealed]);
         });
-    expect(tables).toEqual([['Highlight.Pointed@left.fill']]);
-    expect(ghostRowAt(state, ['Highlight.Pointed@left.fill'])).toBe(
+    expect(tables).toEqual([['Highlight.Pointed:@left.fill']]);
+    expect(ghostRowAt(state, ['Highlight.Pointed:@left.fill'])).toBe(
       state.doc.lineAt(doc.indexOf('{@render Index(@left)}')).to
     );
     expect(ghostRowAt(state, ['Nothing.fill'])).toBeUndefined();

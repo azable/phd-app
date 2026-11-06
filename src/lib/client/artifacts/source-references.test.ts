@@ -104,14 +104,14 @@ describe('references in messages', () => {
 
   it('name a design variable by its kind and place', () => {
     expect(named('Highlight.Pointed.fill')).toEqual(['Highlight', '<Pointed']);
-    expect(named('Highlight.Pointed@compare.left.fill')).toEqual([
+    expect(named('Highlight.Pointed:@compare.left.fill')).toEqual([
       'Highlight',
       '<Pointed',
       '{@compare.left}'
     ]);
     // Without a build, a value in braces has no type the text says; a place still names it.
     expect(named('views.Int')).toEqual([]);
-    expect(named('pointers.Index@compare.right')).toEqual(['{@compare.right}']);
+    expect(named('pointers.Index:@compare.right')).toEqual(['{@compare.right}']);
   });
 
   it('name lines, a line and column, or a run of lines', () => {
@@ -149,12 +149,12 @@ describe('view choices, by what a build records each render reads', () => {
     renders: {
       [siteOf('{@render Index(lo)}')]: 'views.Index',
       [siteOf('{@render Index(mid)}')]: 'pointers.Index',
-      [siteOf('{@render Index(found)}')]: 'pointers.Index@found'
+      [siteOf('{@render Index(found)}')]: 'pointers.Index:found'
     },
     variant: {
       'views.Index': 'IndexText',
       'pointers.Index': 'Highlight',
-      'pointers.Index@found': 'Arrow'
+      'pointers.Index:found': 'Arrow'
     }
   };
   const covered = (text: string, built?: typeof design) =>
@@ -168,25 +168,22 @@ describe('view choices, by what a build records each render reads', () => {
   it('name the same with keys as written: {Index}, {Index}.pointer, {Index}:found', () => {
     expect(covered('{Index}', design)).toEqual(covered('views.Index', design));
     expect(covered('{Index}.pointer', design)).toEqual(covered('pointers.Index', design));
-    expect(covered('{Index}:found', design)).toEqual(covered('pointers.Index@found', design));
-    expect(named('Highlight.Pointed:compare.left.fill')).toEqual(
-      named('Highlight.Pointed@compare.left.fill')
-    );
+    expect(covered('{Index}:found', design)).toEqual(covered('pointers.Index:found', design));
     expect(
-      codeIn(both, 'set {Index}:found and Highlight.Pointed:compare.left.fill', design)
+      codeIn(both, 'set {Index}:found and Highlight.Pointed:@compare.left.fill', design)
     ).toEqual([
       { text: 'set ', code: false },
       { text: '{Index}:found', code: true },
       { text: ' and ', code: false },
-      { text: 'Highlight.Pointed:compare.left.fill', code: true }
+      { text: 'Highlight.Pointed:@compare.left.fill', code: true }
     ]);
   });
 
   it("name a place's own render, and leave it out of the type's once set apart", () => {
-    expect(covered('pointers.Index@found', design)).toEqual(['Arrow', '{@render Index(found)}']);
+    expect(covered('pointers.Index:found', design)).toEqual(['Arrow', '{@render Index(found)}']);
     const alike = {
       ...design,
-      variant: { ...design.variant, 'pointers.Index@found': 'Highlight' }
+      variant: { ...design.variant, 'pointers.Index:found': 'Highlight' }
     };
     expect(covered('pointers.Index', alike)).toEqual([
       'Highlight',
@@ -280,9 +277,9 @@ describe('design variables with a row of their own', () => {
   const design = {
     variant: {
       'views.Index': 'IndexText',
-      'pointers.Index@found': 'Arrow',
+      'pointers.Index:found': 'Arrow',
       'Highlight.Pointed.fill': 'amber-100',
-      'Highlight.Pointed@left.fill': 'sky-100',
+      'Highlight.Pointed:@left.fill': 'sky-100',
       'IntCell.fill': 'white',
       'Main.gap': 0.5,
       'listing.language': 'code'
@@ -291,10 +288,10 @@ describe('design variables with a row of their own', () => {
 
   it("are a kind's or a place's prop, a place's view choice, or a frame or listing setting", () => {
     for (const key of [
-      'Highlight.Pointed@left.fill',
+      'Highlight.Pointed:@left.fill',
       'Highlight.Pointed.fill',
       'IntCell.fill',
-      'pointers.Index@found',
+      'pointers.Index:found',
       'Main.gap',
       'listing.language'
     ])
@@ -303,7 +300,7 @@ describe('design variables with a row of their own', () => {
 
   it("are not a type's own view choice, a key the variant has not, or anything without a build", () => {
     expect(ghostKey('views.Index', design)).toBeUndefined();
-    expect(ghostKey('Highlight.Pointed@right.fill', design)).toBeUndefined();
+    expect(ghostKey('Highlight.Pointed:right.fill', design)).toBeUndefined();
     expect(ghostKey('@left', design)).toBeUndefined();
     expect(ghostKey('IntCell.fill')).toBeUndefined();
   });
@@ -327,15 +324,15 @@ describe('long label names in pills', () => {
   });
 
   it("keep a kind's place's prop, and show names of two parts or fewer whole", () => {
-    expect(shown('Highlight.Pointed@insert.compare.left.fill')).toBe(
-      'Highlight.Pointed@…compare.left.fill'
+    expect(shown('Highlight.Pointed:@insert.compare.left.fill')).toBe(
+      'Highlight.Pointed:@…compare.left.fill'
     );
-    expect(shown('pointers.Index@search.check.at')).toBe('pointers.Index@…check.at');
+    expect(shown('pointers.Index:@search.check.at')).toBe('pointers.Index:@…check.at');
     for (const text of [
       '@swap.held',
       '@left',
       'pause@insert.swap',
-      'Ask.IntCell@g.a.fill',
+      'Ask.IntCell:g.a.fill',
       'IntCell.fill'
     ])
       expect(elidedName(text)).toBeUndefined();

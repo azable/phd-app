@@ -1,142 +1,129 @@
 /**
- * Design keys as written and as the app keeps them. Each written mark has one meaning: `$` a token,
- * `<…>` a tag group, `{Type}` the view a type is drawn with, `:` a place, `=` a value of the data,
- * no mark a kind; `@` names only a part of the run, a label. Inside the app the variables stay flat
- * in the form variants have always stored (`views.Int@target`, `IntCell@target.stroke`,
- * `Card.stroke@true`), so stored Timelines, preferences and the option checks keep their keys; the
- * written form is what the assistant reads and writes, the guide teaches, and the developer sees:
+ * Design keys as written, which is also how the app keeps them. Each mark has one meaning: `$` a
+ * token, `<…>` a tag group, `{Type}` the view a type is drawn with, `:` a place on the page, `=`
+ * a value of the data, no mark a kind; `@` only a part of the run, a label, as a label marks a
+ * moment or span of it. A place drawn from a label's value keeps the label's `@` after its `:`.
+ * Only a view choice is kept apart from how it is written, as a choice holds a view's name rather
+ * than props:
  *
- * | Kept                                 | Written                               |
- * | ------------------------------------ | ------------------------------------- |
- * | `views.Int`                          | `{Int}`                               |
- * | `views.Int@target`                   | `{Int}:target`                        |
- * | `views.@insert.key`                  | `{@insert.key}`                       |
- * | `pointers.Index`                     | `{Index}.pointer`                     |
- * | `pointers.Index@lo`                  | `{Index}:lo`                          |
- * | `IntCell@target.stroke`              | `IntCell:target.stroke`               |
- * | `Card.stroke@true`                   | `Card=true.stroke`                    |
- * | `Card@this.seen.stroke@true`         | `Card:this.seen=true.stroke`          |
- * | `Bar.height@from` (`@hue`, …)        | `Bar.height.from` (`.hue`, …)         |
- * | `listing.syntax`                     | `listing.syntax` (or `<Listing>.syntax`) |
+ * | Kept                          | Written                       |
+ * | ----------------------------- | ----------------------------- |
+ * | `views.Int`                   | `{Int}`                       |
+ * | `views.Int:target`            | `{Int}:target`                |
+ * | `views.@insert.key`           | `{@insert.key}`               |
+ * | `pointers.Index`              | `{Index}.pointer`             |
+ * | `pointers.Index:@scan.next`   | `{Index}:@scan.next`          |
  *
- * `$` tokens, `$` styles' props (`$cell.stroke`), what a kind inherits (`IntCell.inherit`), `<…>`
- * groups, `listing.lit@label.…` (a label, so `@`) and frame keys are alike in both. A place's view
- * and pointer share `{Type}:place`, as a place is drawn one way or the other; where a design has
- * both, the pointer's is written `{Type}.pointer:place`. People read the written keys nested (see
- * nestedDesign).
+ * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.Pointed:@scan.next.fill`,
+ * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
+ * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
+ * `<…>` groups, `listing.lit@insert.key.fill` and `listing.syntax` (or `<Listing>.syntax`). A
+ * place's view and pointer share `{Type}:place`, as a place is drawn one way or the other; where a
+ * design has both, the pointer's is written `{Type}.pointer:place`. People read the keys nested
+ * (see nestedDesign).
  */
 
-import { baseKey, listingAlias } from './design';
+import { baseKey, listingAlias, placeCaption } from './design';
 
-/** The variables of an ordered bound prop (see bound.ts): its first option, hue, order and unit. */
-const orderParts = new Set(['from', 'hue', 'order', 'unit']);
-
-const kindPattern = /^[A-Z][\w$]*(?:\.[A-Z][\w$]*)*$/u;
-const propPattern = /^[a-z]\w*$/u;
+/** A place as kept and written: a variable or field (`lo`, `pair.left`), or a label (`@scan.next`). */
+const placePattern = String.raw`@?[\w$.]+?`;
+const viewKey = new RegExp(
+  String.raw`^(views|pointers)\.(@[\w$.]+?|[\w$.]+?)(?::(${placePattern}))?$`,
+  'u'
+);
+const writtenView = new RegExp(
+  String.raw`^\{(@[\w$.]+|[A-Z][\w$.]*)\}(\.pointer)?(?::(${placePattern}))?$`,
+  'u'
+);
+/** A kind's key: kind, place, value, prop and an ordered prop's part (see bound.ts). */
+const kindKey = new RegExp(
+  String.raw`^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(?::(${placePattern}))?(?:=("(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*)(?:\.(from|hue|order|unit))?$`,
+  'u'
+);
 const plainValue = /^[\w$-]+$/u;
 
-type KeptKey =
-  | { view: 'views' | 'pointers'; type: string; place?: string }
-  | { kind: string; place?: string; value?: string; part?: string; prop: string };
-
-/** A kept key's parts, or undefined for one with no kind, place or value (a token, a group, …). */
-function keptParts(key: string): KeptKey | undefined {
-  const view = /^(views|pointers)\.(@[\w$.]+?|[\w$.]+?)(?:@([\w$.]+))?$/u.exec(key);
-  if (view) return { view: view[1] as 'views' | 'pointers', type: view[2], place: view[3] };
-  if (!/^[A-Z]/u.test(key)) return undefined;
-  // A value or an ordered prop's part follows the prop: `Card.stroke@true`, `Bar.height@from`.
-  let core = key;
-  let suffix: string | undefined;
-  const last = key.lastIndexOf('@');
-  if (last > 0) {
-    const before = key.slice(0, last);
-    const segment = before.slice(before.lastIndexOf('.') + 1);
-    if (before.includes('.') && propPattern.test(segment)) {
-      core = before;
-      suffix = key.slice(last + 1);
-    }
-  }
-  const at = core.indexOf('@');
-  const kind = at < 0 ? core.slice(0, core.lastIndexOf('.')) : core.slice(0, at);
-  const rest = at < 0 ? core.slice(core.lastIndexOf('.') + 1) : core.slice(at + 1);
-  const dot = at < 0 ? -1 : rest.lastIndexOf('.');
-  if (at >= 0 && dot < 0) return undefined;
-  const place = at < 0 ? undefined : rest.slice(0, dot);
-  const prop = at < 0 ? rest : rest.slice(dot + 1);
-  if (!kindPattern.test(kind) || !propPattern.test(prop)) return undefined;
-  const ordered = suffix !== undefined && orderParts.has(suffix);
+/** A kind's key in its parts, or undefined for any other key (a token, a group, a view choice, …). */
+export function kindKeyParts(
+  key: string
+): { kind: string; place?: string; value?: string; prop: string; part?: string } | undefined {
+  const parts = kindKey.exec(key);
+  if (!parts) return undefined;
+  const [, kind, place, quoted, prop, part] = parts;
+  const value = quoted?.startsWith('"') ? (JSON.parse(quoted) as string) : quoted;
   return {
     kind,
     prop,
     ...(place ? { place } : {}),
-    ...(suffix === undefined ? {} : ordered ? { part: suffix } : { value: suffix })
+    ...(value !== undefined ? { value } : {}),
+    ...(part ? { part } : {})
   };
 }
 
+/** A kind's key at a value of the data, `Card=true.stroke` (see bound.ts). */
+export const valueKeyOf = (kind: string, prop: string, value: string): string =>
+  `${kind}=${plainValue.test(value) ? value : JSON.stringify(value)}.${prop}`;
+
 /**
- * A kept key as written. `has` tells whether the design has a key, so a place drawn both ways
- * writes its pointer apart.
+ * The kind a variable sets, with its place but not its value: `IntCell:lo` for `IntCell:lo.fill`,
+ * `Card` for `Card=true.stroke`, `Bar` for `Bar.height.from`; any other key up to its last dot.
  */
-export function writtenKey(key: string, has?: (key: string) => boolean): string {
-  // A place's label (see placeLabelKey), label@lo, is written :lo.label.
-  const label = /^label@([\w$.]+)$/u.exec(key);
-  if (label) return `:${label[1]}.label`;
-  const parts = keptParts(key);
-  if (!parts) return key;
-  if ('view' in parts) {
-    const type = `{${parts.type}}`;
-    if (parts.view === 'views') return parts.place ? `${type}:${parts.place}` : type;
-    if (!parts.place) return `${type}.pointer`;
-    const both = has?.(`views.${parts.type}@${parts.place}`);
-    return both ? `${type}.pointer:${parts.place}` : `${type}:${parts.place}`;
-  }
-  const value =
-    parts.value === undefined
-      ? ''
-      : `=${plainValue.test(parts.value) ? parts.value : JSON.stringify(parts.value)}`;
-  return `${parts.kind}${parts.place ? `:${parts.place}` : ''}${value}.${parts.prop}${
-    parts.part ? `.${parts.part}` : ''
-  }`;
+export function keyKind(key: string): string {
+  const parts = kindKeyParts(key);
+  if (parts) return parts.place ? `${parts.kind}:${parts.place}` : parts.kind;
+  return key.slice(0, Math.max(0, key.lastIndexOf('.')));
 }
 
-const writtenView = /^\{(@[\w$.]+|[A-Z][\w$.]*)\}(\.pointer)?(?::([\w$.]+))?$/u;
-const writtenKind =
-  /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(?::([\w$.]+?))?(?:=("(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*)(?:\.(from|hue|order|unit))?$/u;
+/** The prop a variable sets: `fill` for `IntCell:lo.fill` and `Card=true.fill`, `height` for `Bar.height.from`. */
+export function keyProp(key: string): string {
+  return kindKeyParts(key)?.prop ?? key.slice(key.lastIndexOf('.') + 1);
+}
+
+/** Whether a variable sets a kind's own prop: no place, value or ordered part, as `IntCell.fill`. */
+export const isOwnOfKind = (key: string): boolean => {
+  const parts = kindKeyParts(key);
+  return !!parts && !parts.place && parts.value === undefined && !parts.part;
+};
+
+/** Whether a variable is set for a place or a value of the data rather than its whole kind. */
+export const isPlacedOrValued = (key: string): boolean => {
+  const parts = kindKeyParts(key);
+  return parts ? parts.place !== undefined || parts.value !== undefined : false;
+};
 
 /**
- * A key as the app keeps it, from either form: the written form converted, the kept form as it is,
- * and the listing's group, `<Listing>.syntax`, as `listing.syntax`. Where `has` is given, a place's
- * view goes to the pointer where only the pointer is in the design, as `{Index}:lo` at a mark.
+ * A kept key as written: a view choice in braces, every other key as it is. `has` tells whether
+ * the design has a key, so a place drawn both ways writes its pointer apart.
+ */
+export function writtenKey(key: string, has?: (key: string) => boolean): string {
+  const view = viewKey.exec(key);
+  if (!view) return key;
+  const [, choice, type, place] = view;
+  const braced = `{${type}}`;
+  if (choice === 'views') return place ? `${braced}:${place}` : braced;
+  if (!place) return `${braced}.pointer`;
+  const both = has?.(`views.${type}:${place}`);
+  return both ? `${braced}.pointer:${place}` : `${braced}:${place}`;
+}
+
+/**
+ * A key as the app keeps it: a view choice from braces, the listing's group, `<Listing>.syntax`, as
+ * `listing.syntax`, every other key as it is. Where `has` is given, a place's view goes to the
+ * pointer where only the pointer is in the design, as `{Index}:lo` at a mark.
  */
 export function keptKey(key: string, has?: (key: string) => boolean): string {
-  const label = /^:([\w$.]+)\.label$/u.exec(key);
-  if (label) return `label@${label[1]}`;
   const view = writtenView.exec(key);
   if (view) {
     const [, type, pointer, place] = view;
-    const at = place ? `@${place}` : '';
+    const at = place ? `:${place}` : '';
     if (pointer) return `pointers.${type}${at}`;
     return placedView(`views.${type}${at}`, has);
   }
-  if (/^[A-Z]/u.test(key) && /[:=]/u.test(key)) {
-    const kind = writtenKind.exec(key);
-    if (kind) {
-      const [, name, place, quoted, prop, part] = kind;
-      const value = quoted?.startsWith('"') ? (JSON.parse(quoted) as string) : quoted;
-      return `${name}${place ? `@${place}` : ''}.${prop}${value !== undefined ? `@${value}` : ''}${
-        part ? `@${part}` : ''
-      }`;
-    }
-  }
-  const ordered = /^([A-Z][\w$.]*\.[a-z]\w*)\.(from|hue|order|unit)$/u.exec(key);
-  if (ordered && keptParts(ordered[1])) return `${ordered[1]}@${ordered[2]}`;
   return placedView(listingAlias(key), has);
 }
 
 /** A place's view key, moved to the pointer's where the design has only the pointer there. */
 function placedView(key: string, has: ((key: string) => boolean) | undefined): string {
-  if (!has || !key.startsWith('views.') || !key.includes('@', 'views.'.length + 1) || has(key))
-    return key;
+  if (!has || !key.startsWith('views.') || !viewKey.exec(key)?.[3] || has(key)) return key;
   const pointer = `pointers.${key.slice('views.'.length)}`;
   return has(pointer) ? pointer : key;
 }
@@ -153,16 +140,14 @@ export function writtenValues<T>(
 
 /**
  * A message's kept keys as written, as a build's refusal names them for the assistant: each word
- * that is a kept key, and each kind at a place (`IntCell@target`), as `{Int}` and `IntCell:target`.
+ * that is a view choice, as `views.Int` written `{Int}`.
  */
 export function writtenText(text: string, has?: (key: string) => boolean): string {
-  return text.replace(/[\w$@.{}<>-]+/gu, (word) => {
+  return text.replace(/[\w$@:.{}<>-]+/gu, (word) => {
     const end = /\.+$/u.exec(word)?.[0] ?? '';
     const key = word.slice(0, word.length - end.length);
     const written = writtenKey(key, has);
-    if (written !== key) return written + end;
-    const placed = /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)@([\w$.]+)$/u.exec(key);
-    return placed ? `${placed[1]}:${placed[2]}${end}` : word;
+    return written !== key ? written + end : word;
   });
 }
 
@@ -223,6 +208,8 @@ export type NestedDesign<T> = { [key: string]: T | NestedDesign<T> };
 function pathOf(key: string): string[] {
   if (key.startsWith('{')) return [key];
   if (key === baseKey) return ['...'];
+  const caption = placeCaption.exec(key);
+  if (caption) return [`:${caption[1]}`, 'label'];
   const ofBase = /^(scale|palette)\.([a-z]\w*)$/u.exec(key);
   if (ofBase) return [ofBase[1], ofBase[2]];
   const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
@@ -240,7 +227,7 @@ function pathOf(key: string): string[] {
     ];
   }
   const kind =
-    /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(:[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
+    /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(:@?[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
       key
     );
   if (!kind) return [key];

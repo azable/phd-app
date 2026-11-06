@@ -59,8 +59,8 @@ describe('variant diff', () => {
   it('writes its keys with their marks: a type view in braces, a place after :, a value after =', () => {
     const kept = {
       'views.Int': 'IntCell',
-      'IntCell@k.fill': 'red-500',
-      'Card.fill@true': 'blue-100'
+      'IntCell:k.fill': 'red-500',
+      'Card=true.fill': 'blue-100'
     };
     expect(JSON.parse(variantDocument(kept))).toEqual({
       '{Int}': 'IntCell',
@@ -101,12 +101,12 @@ describe('variant diff', () => {
 
 describe('choices in words', () => {
   it('names a variable by its kind, prop and place', () => {
-    expect(choiceName('Highlight.Pointed@pair.left.fill')).toBe(
+    expect(choiceName('Highlight.Pointed:pair.left.fill')).toBe(
       'Highlight pointed fill for pair.left'
     );
-    expect(choiceName('IntCell@i.stroke')).toBe('Int cell stroke for i');
+    expect(choiceName('IntCell:i.stroke')).toBe('Int cell stroke for i');
     expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');
-    expect(choiceName('views.Int@swap.held')).toBe('Int view for swap.held');
+    expect(choiceName('views.Int:swap.held')).toBe('Int view for swap.held');
     expect(choiceName('pointers.Index')).toBe('Index pointer');
     expect(choiceName('listing.language')).toBe('Listing language');
   });
@@ -143,15 +143,15 @@ describe("a developer's edit of the choices", () => {
   it('reads the keys as written against the variant as kept, so a renamed key is no change', () => {
     const kept = {
       'views.Int': 'IntCell',
-      'pointers.Index@lo': 'LoMark',
-      'IntCell@target.stroke': 'violet-500',
-      'Card.stroke@true': 'amber-500'
+      'pointers.Index:lo': 'LoMark',
+      'IntCell:target.stroke': 'violet-500',
+      'Card=true.stroke': 'amber-500'
     };
     expect(choiceEdits(kept, variantDocument(kept))).toEqual({ chosen: {}, unset: [] });
     const edited = JSON.parse(variantDocument(kept)) as Record<string, string>;
     edited['{Index}:lo'] = 'HiMark';
     expect(choiceEdits(kept, JSON.stringify(edited))).toEqual({
-      chosen: { 'pointers.Index@lo': 'HiMark' },
+      chosen: { 'pointers.Index:lo': 'HiMark' },
       unset: []
     });
   });

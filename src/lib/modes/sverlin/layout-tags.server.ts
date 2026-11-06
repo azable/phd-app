@@ -474,14 +474,14 @@ export function layoutTags(source: string): {
     edits.push({
       start: token.start,
       length: token.open,
-      text: `<Node kind="Code" __code="@${token.place}">`
+      text: `<Node kind="Code" __code=":${token.place}">`
     });
     edits.push({ start: token.end, length: 1, text: '</Node>' });
   }
   for (const match of scanned.matchAll(/\b__code\b/gu))
     problems.push({
       message:
-        '__code is reserved for the library: write a token in the text, as $i[A[i]], to refer to the place @i.',
+        '__code is reserved for the library: write a token in the text, as :i[A[i]], to refer to the place :i.',
       start: match.index ?? 0
     });
   for (const match of scanned.matchAll(/\b__math(?:Text)?\b/gu))
@@ -532,7 +532,7 @@ export function layoutTags(source: string): {
     shifts,
     scenes: storyboard.scenes,
     unshown,
-    captions: captions.map(({ place, start }) => ({ place: `@${place}`, start }))
+    captions: captions.map(({ place, start }) => ({ place: `:${place}`, start }))
   };
 }
 

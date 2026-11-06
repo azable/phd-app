@@ -106,19 +106,19 @@ describe('tokens naming places in a listing', () => {
     expect(problems).toEqual([]);
     expect(text).toBe('A[j - 1] > key');
     expect(tokens.map(({ place, start, end }) => [place, text.slice(start, end)])).toEqual([
-      ['@x', 'A[j - 1]'],
-      ['@key', 'key']
+      [':x', 'A[j - 1]'],
+      [':key', 'key']
     ]);
     // A region inside a token keeps the prefix of the region around the token.
     expect(regions.map(({ label }) => label)).toEqual(['cmp', 'cmp.left']);
     const around = readRegions('  $j[@left[j - 1]] and $pair.left[l]');
-    expect(around.tokens.map(({ place }) => place)).toEqual(['@j', '@pair.left']);
+    expect(around.tokens.map(({ place }) => place)).toEqual([':j', ':pair.left']);
     expect(around.regions.map(({ label }) => label)).toEqual(['left']);
   });
 
   it('reads :x[…] as a token, as $x[…] was, but never a : after a name or before a space or =', () => {
     const written = readRegions('  :lo[lo] = 0, $hi[hi] = n; x := y; a : b; {key:values[0]}');
-    expect(written.tokens.map(({ place }) => place)).toEqual(['@lo', '@hi']);
+    expect(written.tokens.map(({ place }) => place)).toEqual([':lo', ':hi']);
     expect(written.text).toBe('lo = 0, hi = n; x := y; a : b; {key:values[0]}');
   });
 
@@ -162,34 +162,34 @@ describe('tokens naming places in a listing', () => {
     // with the target.
     const steps = touched(binarySearch(tokened), ['open', 'probe.mid', 'probe.low']);
     expect(steps[0]).toEqual([]);
-    expect(steps[1]).toEqual(['@lo', '@hi']);
-    expect(steps[2]).toEqual(['@mid']);
-    expect(steps[3]).toEqual(['@mid', '@target']);
+    expect(steps[1]).toEqual([':lo', ':hi']);
+    expect(steps[2]).toEqual([':mid']);
+    expect(steps[3]).toEqual([':mid', ':target']);
     // Pausing at the move right, only lo, as the code kept from earlier touches nothing.
-    expect(touched(binarySearch(tokened), ['probe.right']).flat()).toEqual(['@lo']);
+    expect(touched(binarySearch(tokened), ['probe.right']).flat()).toEqual([':lo']);
     // Linear search: the loop variable and its element, and the target.
-    expect(touched(linearSearch, ['scan.check'])[1]).toEqual(['@i', '@target']);
+    expect(touched(linearSearch, ['scan.check'])[1]).toEqual([':i', ':target']);
   });
 
   it('light each place in its mark’s fill, or its stroke where the fill is none or white', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
     const values = {
       ...prepared.design.starter,
-      'Arrow.Pointed@mid.fill': 'sky-200',
-      'IntCell@target.fill': 'white',
-      'IntCell@target.stroke': 'violet-500'
+      'Arrow.Pointed:mid.fill': 'sky-200',
+      'IntCell:target.fill': 'white',
+      'IntCell:target.stroke': 'violet-500'
     };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     expect(listing?.places?.paints).toMatchObject({
-      '@mid': 'sky-200',
-      '@target': 'violet-500',
-      '@lo': prepared.design.starter['Arrow.Pointed.fill']
+      ':mid': 'sky-200',
+      ':target': 'violet-500',
+      ':lo': prepared.design.starter['Arrow.Pointed.fill']
     });
     expect(listing?.places?.look).toBe('fill');
     // A place's own fill falls back to its kind's.
     expect(
       placePaint(
-        '@x',
+        ':x',
         { type: 'Int', pointer: false },
         { 'views.Int': 'IntCell', 'IntCell.fill': 'red-200' }
       )
@@ -199,12 +199,12 @@ describe('tokens naming places in a listing', () => {
     const pointer = { type: 'Index', pointer: true };
     const arrow = { 'pointers.Index': 'Arrow', 'Arrow.Pointed.fill': 'amber-100' };
     expect(
-      placePaint('@lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'amber-500' }, 'line')
+      placePaint(':lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'amber-500' }, 'line')
     ).toBe('amber-500');
-    expect(placePaint('@lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'none' }, 'line')).toBe(
+    expect(placePaint(':lo', pointer, { ...arrow, 'Arrow.Pointed.stroke': 'none' }, 'line')).toBe(
       'amber-100'
     );
-    expect(listing?.places?.lines).toHaveProperty('@target', 'violet-500');
+    expect(listing?.places?.lines).toHaveProperty(':target', 'violet-500');
     // listing.places none lights nothing.
     const none = shownListing(
       prepared,
@@ -216,12 +216,12 @@ describe('tokens naming places in a listing', () => {
 
   it('are told to the assistant with the variable that removes them, as no node prop does', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
-    const values = { ...prepared.design.starter, 'Arrow.Pointed@mid.fill': 'sky-200' };
+    const values = { ...prepared.design.starter, 'Arrow.Pointed:mid.fill': 'sky-200' };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     const text = placeLightsText(listing?.places);
     expect(text).toContain('listing.places fill');
     expect(text).toContain('a 3px band round it');
-    expect(text).toContain('@mid in sky-200');
+    expect(text).toContain(':mid in sky-200');
     expect(text).toContain('listing.places none removes them');
     const none = shownListing(
       prepared,
@@ -278,16 +278,16 @@ describe('tokens naming places in a listing', () => {
   <Scene name="main" case="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
 </Storyboard>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
-    expect(steps[1]).toEqual(['@key', '@i']);
-    expect(steps[2]).toEqual(['@j']);
-    expect(steps.at(-2)).toEqual(['@j', '@key']);
+    expect(steps[1]).toEqual([':key', ':i']);
+    expect(steps[2]).toEqual([':j']);
+    expect(steps.at(-2)).toEqual([':j', ':key']);
     // The end, :after, lights no code, so it touches nothing.
     expect(steps.at(-1)).toEqual([]);
   });
 
   it('touch nothing without lit code', () => {
     expect(
-      touchedPlaces([{ place: '@i', start: 0, end: 1 }], [{ current: [], earlier: [[0, 1]] }])
+      touchedPlaces([{ place: ':i', start: 0, end: 1 }], [{ current: [], earlier: [[0, 1]] }])
     ).toEqual([[]]);
   });
 });

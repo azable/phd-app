@@ -231,7 +231,7 @@ function untypedProblem(prop: string, written: string, path: Node, scope: Scope)
   return `${prop}={${written}} reads this.${name}, which ${shown} gives no type: a plain number has no known values, so give it one where the algorithm computes it, with a constructor, as Int(…).`;
 }
 
-/** A value of an unordered domain names its own variable, as Card.stroke@visited, so it is one word. */
+/** A value of an unordered domain names its own variable, as Card=visited.stroke, so it is one word. */
 const nameable = (value: BoundValue) =>
   typeof value === 'boolean' || /^[A-Za-z0-9_-]+$/u.test(String(value));
 

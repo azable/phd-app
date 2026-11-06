@@ -137,6 +137,7 @@ import {
   freeLayoutProps,
   kindKey,
   placeLabelKey,
+  placeName,
   placeProps,
   listingPlacesOptions,
   roleProps,
@@ -373,7 +374,7 @@ export type PreparedComponent = {
     renders: Record<string, string>;
     /**
      * The places with a view choice of their own, by the alias they are drawn through: its variable,
-     * as views.Int@swap.held, the type's it falls back to, its options, and whether it is a pointer.
+     * as views.Int:@swap.held, the type's it falls back to, its options, and whether it is a pointer.
      */
     places: Record<string, { key: string; base: string; options: string[]; pointer: boolean }>;
     /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
@@ -905,7 +906,7 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
         places: laid.captions.map(({ place }) => place),
         unrendered: (place, rendered) =>
           new InvalidSvelteSourceError(
-            `The token :${place.slice(1)}[…] names :${place.slice(1)}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.map((each) => `:${each.slice(1)}`).join(', ')}` : ''}.`,
+            `The token ${place}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}${rendered.length ? `, and the places it renders are ${rendered.join(', ')}` : ''}.`,
             {
               code: 'view_markup',
               start: sourcePosition(
@@ -1546,7 +1547,6 @@ function prepareViews(
     const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
     const aliasOf = new Map<string, string>();
-    const placeReaders = new Map<string, Set<boolean>>();
     const labelMarks = new Map<string, { kinds: Record<string, string>; by?: string }>();
     // The places the root and its parts render at, which a listing's tokens can name.
     const rootPlaces = new Map<string, RenderedPlace>();
@@ -1581,8 +1581,6 @@ function prepareViews(
       const options = asMark ? marks : plain;
       const prefix = asMark ? 'pointers' : 'views';
       const within = site.within ? `${site.within}.` : '';
-      const readers = placeReaders.get(`${within}${name}${at}`) ?? new Set<boolean>();
-      placeReaders.set(`${within}${name}${at}`, readers.add(label));
       let alias: string | undefined;
       if (options.length > 1) {
         const key = `${prefix}.${within}${name}${at}`;
@@ -1613,13 +1611,13 @@ function prepareViews(
                 ? {}
                 : site.inLink
                   ? { unboxed: linkLabelPaint }
-                  : cards.has(site.within) && at.startsWith('@this.')
+                  : cards.has(site.within) && at.startsWith(':this.')
                     ? { unboxed: cardFieldPaint }
                     : {})
             });
       // A label the root marks: its listing region's paint falls back to the mark's.
       if (asMark && label && !within)
-        labelMarks.set(at.slice(1), {
+        labelMarks.set(at.slice(2), {
           kinds: Object.fromEntries(
             options
               .filter((view) => unlaid.some(({ key }) => key === kindKey(view, 'Pointed')))
@@ -1628,13 +1626,6 @@ function prepareViews(
           ...(options.length > 1 ? { by: `pointers.${name}${at}` } : {})
         });
     }
-    // One @ names a label or a variable, so a place a label and a variable would share is refused.
-    const shared = [...placeReaders].find(([, readers]) => readers.size > 1);
-    if (shared)
-      throw new InvalidSvelteSourceError(
-        `${shared[0]} is rendered at a label and at a variable both named ${shared[0].slice(shared[0].indexOf('@'))}, but a place's name says which: rename the label.`,
-        { code: 'view_label' }
-      );
     const caseInputsOf = caseInputs(source, blocks, extracted.cases, domain);
     const input = caseInputsOf[0]?.input ?? { state: {}, types: {} };
     // Each scene that steps shows one case, named.
@@ -2511,7 +2502,7 @@ function prepareViews(
             ...placesSpace,
             // A label for each place a pointer view naming its place is drawn at.
             ...Object.fromEntries(
-              [...labelledPlaces].map((at) => [placeLabelKey(at), [at.slice(1)]])
+              [...labelledPlaces].map((at) => [placeLabelKey(at), [placeName(at)]])
             ),
             ...boundDesign(bindings).space
           },
@@ -2533,7 +2524,7 @@ function prepareViews(
             ),
             ...regionStarter,
             ...Object.fromEntries(
-              [...labelledPlaces].map((at) => [placeLabelKey(at), at.slice(1)])
+              [...labelledPlaces].map((at) => [placeLabelKey(at), placeName(at)])
             ),
             // A link's label, as a weight, and a card's fields start unboxed: a box would read as
             // a node of its own. The card is the box.
@@ -4741,8 +4732,8 @@ const cardLook: Readonly<Record<string, string | number>> = {
 
 /**
  * Every {@render} tag: the name it calls, where it starts, whether it is inside a <Node>, and its
- * place (see Place): what its argument is written as after `@`, a label (`@swap.held`), a variable
- * (`@i`), or a field (`@g.a`), none for another expression or none at all; whether it is a label;
+ * place (see Place): `:` and what its argument is written as, a label (`:@swap.held`), a variable
+ * (`:i`), or a field (`:g.a`), none for another expression or none at all; whether it is a label;
  * and, inside a view, that view's path.
  */
 function renderSites(
@@ -4799,9 +4790,9 @@ function renderSites(
       if (typeof name === 'string') {
         const label = argument?.type === 'Identifier' && isLabelKey(argument.name ?? '');
         const written = label
-          ? asWritten(argument.name ?? '')
+          ? `:${asWritten(argument.name ?? '')}`
           : chain(argument)
-            ? `@${source.slice(argument.start, argument.end).replaceAll(viewThis, 'this')}`
+            ? `:${source.slice(argument.start, argument.end).replaceAll(viewThis, 'this')}`
             : undefined;
         sites.push({
           name,
