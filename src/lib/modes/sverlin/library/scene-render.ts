@@ -400,8 +400,12 @@ export function pairNodes(from: DrawnScene, to: DrawnScene): Map<string, DrawnNo
   // each kind, so a pointer's arrow and label still move with it when the element it points at
   // nests in another pointer that has come to the same element, and leaves its list. A copy's
   // parts start from its source's, as the copy does, though the source keeps them where it stays.
+  // Only its own parts: not those of a value or pointer mark nested inside it, as where two
+  // pointers meet at one element.
   const inside = (scene: DrawnScene, node: DrawnNode) =>
-    scene.nodes.filter((other) => !other.leaving && ancestors(scene, other).includes(node));
+    scene.nodes.filter(
+      (other) => !other.leaving && ancestors(scene, other).find(({ identity }) => identity) === node
+    );
   for (const now of to.nodes) {
     const was = pairs.get(now.key);
     if (!was || was.id === now.id || !now.identity) continue;
@@ -634,5 +638,31 @@ export function sceneBetween(from: DrawnScene, to: DrawnScene, t: number): Drawn
   }
   for (const link of from.links)
     if (!newKeys.has(link.key)) links.push({ ...link, opacity: link.opacity * (1 - t) });
-  return indexed(nodes, links);
+  return indexed(abovePlaced(to, nodes, pairs), links);
+}
+
+/**
+ * The nodes of a move in drawing order, those travelling (and all they hold) after the rest, so a
+ * value passing another item's slot is not painted over by that slot's fill, as a swapped cell
+ * crossing the next cell's background; each group keeps the scene's order, parents first.
+ */
+function abovePlaced(
+  to: DrawnScene,
+  nodes: DrawnNode[],
+  pairs: Map<string, DrawnNode>
+): DrawnNode[] {
+  const travels = new Set<string>();
+  for (const node of to.nodes) {
+    const was = pairs.get(node.key);
+    if (was && (Math.abs(was.box.x - node.box.x) > 0.5 || Math.abs(was.box.y - node.box.y) > 0.5))
+      travels.add(node.id);
+  }
+  if (!travels.size) return nodes;
+  const travelling = (node: DrawnNode): boolean => {
+    if (node.leaving) return false;
+    for (let id: string | undefined = node.id; id; id = to.byId.get(id)?.parent)
+      if (travels.has(id)) return true;
+    return false;
+  };
+  return [...nodes.filter((node) => !travelling(node)), ...nodes.filter(travelling)];
 }
