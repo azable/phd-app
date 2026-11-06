@@ -85,7 +85,7 @@ export const buildPurposeSchema = v.picklist([
   // A version shown again as it was built, by today's app, as one an older app built no longer
   // draws (service.ts buildProjectPresentations, asBuilt).
   'rebuild',
-  // The answers to a batch of comparisons applied, with no model call (commands.ts presentPicks).
+  // The answers to a batch of comparisons applied, with no model call (ai/turns/comparisons.ts presentPicks).
   'picks'
 ]);
 

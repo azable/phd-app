@@ -56,13 +56,17 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   transport contracts belong under `src/lib/shared/`; concrete study definitions
   under `src/lib/studies/`; browser sessions and UI under `src/lib/client/`;
   persistence and project commands under `src/lib/server/`; mode-neutral AI
-  (providers, bots, decisions, context, costs) under `src/lib/server/ai/`.
+  (providers, bots, decisions, context, turns, costs) under
+  `src/lib/server/ai/`.
 - Each mode's browser-safe contract and starter, server build, and playback live
   together under `src/lib/modes/<mode>/`, and its AI (bot, prompts, helpers)
   under `src/lib/modes/<mode>/assistant/`. An engine (compiler, layout, library,
   scenes, build) never imports its assistant: the assistant uses the engine's
-  public functions, not the reverse. Keep server-only and browser-only entry
-  points separate; preserve the one-way import rules in `eslint.config.js`.
+  public functions, not the reverse; mode-neutral server code reaches a mode
+  only through `modes/catalog.ts`, `modes/server.ts` and
+  `modes/assistants.server.ts`. Keep server-only and browser-only entry points
+  separate; preserve the one-way import rules in `eslint.config.js`, which check
+  both.
 - Stable direct URLs belong under `static/`. Generated shadcn-svelte component
   source belongs under `src/lib/client/components/ui/` with helper
   `src/lib/client/components/utils.ts`; `components.json` is authoritative for

@@ -108,29 +108,29 @@ and the values it sets: each is built as one pair, both from the viewed variant
 The first pair is built alone and shown at once, in place of the decision's one
 version, and the rest are built after it, one pair at a time, each queued as
 soon as it is built (`presentRemainingComparisons` in
-[`commands.ts`](src/lib/server/projects/commands.ts)). The question is stored on
-the pair's `visualization.presented` events, each with its side's `label`, and
-shown above it on the stage and as a card in the chat, each side by its label;
-the assistant's context gives a preferred side as its label (“Cells or tallies?
-→ tallies”), and a preference naming that display set is read with it in the
-assistant's context. A comparison may also ask a brief attribute by showing,
-naming it and the tag each side stands for (tone: restrained or bold), stored as
-each side's `brief`: preferring a side sets the attribute, inferred, its source
-the question and the side's label (`projectBrief` in
-[`brief.ts`](src/lib/shared/projects/brief.ts)); a tie or skip sets nothing. A
-pair is answered by preferring a side (Top or Bottom), Either (a tie) or Unsure
-(a skip), all recorded as `visualization.preference-recorded`, a tie or skip as
-its `outcome` with no `preferred`. The card marks each side by the latest
-answer, a tick beside the chosen side and a cross beside the other (ticks on
-both for Either), or a question mark beside each while it is unanswered or
-Unsure. Choosing the card shows its pair on the stage again, to answer it or
-answer it again (the same command, so it also rebases on a preferred side and
-may start a turn); a pair's latest answer is the one that counts, on its card
-and in the preference model. An answer on one of them asks the assistant for no
-turn while others wait (`waitingComparisons`); it sets aside, as
-`candidates-advanced` with reason `moot`, those the answer makes moot, asking
-the pair just answered, about a variable it settled, or something a value it
-settled hides (`mootComparison` in
+[`turn.server.ts`](src/lib/modes/sverlin/assistant/turn.server.ts)). The
+question is stored on the pair's `visualization.presented` events, each with its
+side's `label`, and shown above it on the stage and as a card in the chat, each
+side by its label; the assistant's context gives a preferred side as its label
+(“Cells or tallies? → tallies”), and a preference naming that display set is
+read with it in the assistant's context. A comparison may also ask a brief
+attribute by showing, naming it and the tag each side stands for (tone:
+restrained or bold), stored as each side's `brief`: preferring a side sets the
+attribute, inferred, its source the question and the side's label
+(`projectBrief` in [`brief.ts`](src/lib/shared/projects/brief.ts)); a tie or
+skip sets nothing. A pair is answered by preferring a side (Top or Bottom),
+Either (a tie) or Unsure (a skip), all recorded as
+`visualization.preference-recorded`, a tie or skip as its `outcome` with no
+`preferred`. The card marks each side by the latest answer, a tick beside the
+chosen side and a cross beside the other (ticks on both for Either), or a
+question mark beside each while it is unanswered or Unsure. Choosing the card
+shows its pair on the stage again, to answer it or answer it again (the same
+command, so it also rebases on a preferred side and may start a turn); a pair's
+latest answer is the one that counts, on its card and in the preference model.
+An answer on one of them asks the assistant for no turn while others wait
+(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
+`moot`, those the answer makes moot, asking the pair just answered, about a
+variable it settled, or something a value it settled hides (`mootComparison` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
 that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
@@ -554,8 +554,9 @@ the current version and saying so (`runAttemptLadder`). Provider retries are
 disabled. The default 180-second request ceiling and study deadline bound each
 attempt; see
 [`src/lib/server/ai/bots/attempt-profiles.ts`](src/lib/server/ai/bots/attempt-profiles.ts),
-[`src/lib/server/projects/commands.ts`](src/lib/server/projects/commands.ts),
-and
+[`src/lib/server/ai/turns/attempt-ladder.ts`](src/lib/server/ai/turns/attempt-ladder.ts),
+[`src/lib/modes/sverlin/assistant/turn.server.ts`](src/lib/modes/sverlin/assistant/turn.server.ts)
+(`refusedAsWritten`, `returnedWarnings`), and
 [`src/lib/server/projects/operations.ts`](src/lib/server/projects/operations.ts).
 Generated source, attempts, diagnostics, accepted artifacts, and presentations
 remain in the project Timeline. Each diagnostic records where the code it is

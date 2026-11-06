@@ -12,7 +12,7 @@ import type { SceneNode, SceneStep } from './library';
 
 /**
  * What every padding warning ends with, which keeps it from sending a version back for repair
- * (see returnedWarnings in server/projects/commands.ts): the picture is right, only roomier.
+ * (see returnedWarnings in assistant/turn.server.ts): the picture is right, only roomier.
  */
 export const designOnlyWarning = 'The picture is drawn as it is.';
 
