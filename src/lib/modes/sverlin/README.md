@@ -120,6 +120,17 @@ layout, a view, or a node with a `kind`.
   own, as `<Node kind="Caption">Find the target</Node>`. Blocks in a node with
   no `layout` and no words, as `<Node><Goal /><Cells /></Node>`, wrap against
   each other with no gap, and the build warns: give it a layout.
+- A node shows data with `value=`, as `<Node value={this} />`: the app knows it
+  is a value of its type, so it shows the type's unit, is selected as that
+  value, can be styled at its place or for a value of its data (see Places), and
+  is followed from step to step. Words written in a node are the author's text,
+  as a caption or ∞ for a cost not yet known. A node with no `layout` holds one
+  block, its value or its words with what their line holds, centred in its box
+  (or as `align` says, where its kind has one), so a box larger than what it
+  holds (a slot shared with a larger value, as a union's members share one, or a
+  stack's child, as large as the largest) holds it in its middle. Its words keep
+  the largest size they reach at any step, so words that change do not move what
+  is set in their line.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
 - Write text in the participant's words about what the algorithm does, never a
