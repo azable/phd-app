@@ -31,7 +31,7 @@
       {#each values as v, k}{#if k < sorted}<Node kind="Sorted" layout="stack" row={0} col={k}><When of="@next"><Node kind="SortedMark"></Node></When>{v}</Node>{:else}<Node kind="Unsorted" row={0} col={k}>{v}</Node>{/if}{/each}
       <Node kind="Lane" row={1} col={j}>{j}</Node>
     </Node>
-    <Node kind="KeyRow" layout="row"><Node>key</Node>{key}</Node>
+    <Node kind="KeyRow" layout="row"><Node>:key[key]</Node>{key}</Node>
   </Node>
 </Layout>
 <Layout name="Story" of="values, sorted, key, j, @next">

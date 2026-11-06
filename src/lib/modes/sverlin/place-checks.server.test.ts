@@ -12,6 +12,7 @@ import {
 } from './place-checks.server';
 import { drawnSteps } from './testing/scenes';
 
+const drawn = '<Layout name="Show"><Node>{i} {target} {values}</Node></Layout>';
 const source = (listing: string, algorithm: string, markup = '', pause = '@scan.check') => `
 <script input>
   const values = Values;
@@ -27,6 +28,7 @@ ${listing}
 </script>
 
 ${markup}
+${drawn}
 
 <Storyboard>
   <Scene name="search" case="main" pause="${pause}"><Main /></Scene>
@@ -58,6 +60,12 @@ describe('place and label checks', () => {
         message: expect.stringContaining('writes i as plain text on lines 2, 4')
       })
     ]);
+    // A variable no render draws has no place a token could name, so the build would refuse one.
+    expect(
+      plainListingVariables(
+        source('SEARCH(A)\n1  @start[start at i = 0]', search).replace(drawn, '')
+      )
+    ).toEqual([]);
   });
 
   it('asks for a token of a changed variable its region marks by no name', () => {

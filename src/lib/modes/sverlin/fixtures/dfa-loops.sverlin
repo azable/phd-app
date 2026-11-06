@@ -40,11 +40,11 @@
 
 <script listing="textbook">
   start in @setup[q0]
-  @start[set i to 0]
-  @more[while i is within the text]
-      @scan[@read[read text[i]]
+  @start[set :i[i] to 0]
+  @more[while :i[i] is within the text]
+      @scan[@read[read text[:i[i]]]
       @transition[follow that character's transition]]
-      @next[move i right]
+      @next[move :i[i] right]
   if @accepted[the current state is q2]
       @accept[accept]
   otherwise @reject[reject]
@@ -104,7 +104,7 @@
 <View of="TextIndex" name="TextMarker">
   <Node layout="column">
     <Link to={this} />
-    <Node kind="TextMarkerLabel">i</Node>
+    <Node kind="TextMarkerLabel">:i[i]</Node>
   </Node>
 </View>
 

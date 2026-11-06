@@ -30,6 +30,13 @@
  *   now the fixtures themselves, links/linear-search kept as linear-search; grid-marks changes as a
  *   node drawing a position a variable holds takes no identity; call-frames and fib-calls change
  *   too, from the library's removals (not traced to one cause, 7 November 2026).
+ * - 20 fixtures with listings or captions (bfs-*, dfa-*, dijkstra-*, linear-search, list-markers,
+ *   listing-*, search-*, stack-highlight, ucs-compare, insertion-decisions): each mention of a
+ *   variable the view draws is a token, as :i[i], in the listing and in a caption, so it lights
+ *   with its place (listing.plain-variable, view.caption-name); the words are as they were, so only
+ *   the lights change. bars and merge-sort-stack label each statement of a clumped label inside it
+ *   (label.clumped), which leaves their scenes as they were. replay/* stay as the assistant wrote
+ *   them.
  */
 
 import { createHash } from 'node:crypto';
@@ -89,8 +96,7 @@ function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): 
   steps.forEach((step, index) => {
     const boxes = new Map(step.nodes.map((node) => [node.id, node.box]));
     for (const node of step.nodes) {
-      if (!node.layout || node.layout === 'free' || node.follows)
-        continue;
+      if (!node.layout || node.layout === 'free' || node.follows) continue;
       const parent = node.parent && boxes.get(node.parent);
       if (!parent) continue;
       const key = `${sceneOf(index)}|${node.id}`;

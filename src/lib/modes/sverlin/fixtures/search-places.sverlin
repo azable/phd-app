@@ -20,11 +20,11 @@
 <script listing="pseudocode">
   @range[:lo[lo] = 0, :hi[hi] = length(A) - 1]
   while @open[:lo[lo] <= :hi[hi]]
-    @probe[@mid[:mid[mid] = (lo + hi) / 2]
+    @probe[@mid[:mid[mid] = (:lo[lo] + :hi[hi]) / 2]
     if @low[:mid[A[mid]] < :target[target]]
-      @right[:lo[lo] = mid + 1]
+      @right[:lo[lo] = :mid[mid] + 1]
     else
-      @left[:hi[hi] = mid - 1]]
+      @left[:hi[hi] = :mid[mid] - 1]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Arrow">

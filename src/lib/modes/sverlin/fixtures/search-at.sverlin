@@ -40,8 +40,8 @@
 </Layout>
 <Layout name="Bounds" of="lo, hi">
   <Node layout="row">
-    <Node>lo</Node><Node kind="Bound" value={lo} />
-    <Node>hi</Node><Node kind="Bound" value={hi} />
+    <Node>:lo[lo]</Node><Node kind="Bound" value={lo} />
+    <Node>:hi[hi]</Node><Node kind="Bound" value={hi} />
   </Node>
 </Layout>
 

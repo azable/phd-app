@@ -12,9 +12,9 @@
   for (@start[let pass = Position(0)]; @passes[pass < values.length - 1]; @nextPass[pass++]) @sweep{
     for (@first[let j = Position(0)]; @inner[j < values.length - 1 - pass]; @next[j++]) @pair{
       if (@test[values[j] > values[j + 1]]) @swap{
-        const moved = values[j];
-        values[j] = values[j + 1];
-        values[j + 1] = moved;
+        @save[const moved = values[j];]
+        @move[values[j] = values[j + 1];]
+        @put[values[j + 1] = moved;]
       }
     }
   }

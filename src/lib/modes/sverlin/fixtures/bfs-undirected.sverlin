@@ -59,7 +59,7 @@
 </Layout>
 <Layout name="QueueLine" of="queue">
   <Node layout="row">
-    <Node>queue</Node>
+    <Node>:queue[queue]</Node>
     {queue}
   </Node>
 </Layout>

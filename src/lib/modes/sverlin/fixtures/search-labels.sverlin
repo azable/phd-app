@@ -22,11 +22,11 @@
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="LowerMark">
-  <Node layout="column"><Link to={this} /><Node kind="LowerLabel">lo</Node></Node>
+  <Node layout="column"><Link to={this} /><Node kind="LowerLabel">:lo[lo]</Node></Node>
 </View>
 
 <View of="Index" name="UpperMark">
-  <Node layout="column"><Link to={this} /><Node kind="UpperLabel">hi</Node></Node>
+  <Node layout="column"><Link to={this} /><Node kind="UpperLabel">:hi[hi]</Node></Node>
 </View>
 
 <View of="Index" name="IndexNumber"><Node value={this} /></View>

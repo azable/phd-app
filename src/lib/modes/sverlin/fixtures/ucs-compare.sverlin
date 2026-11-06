@@ -146,7 +146,7 @@
 
 <Layout name="FrontierLine">
   <Node layout="row">
-    <Node kind="FrontierTitle">frontier</Node>
+    <Node kind="FrontierTitle">:frontier[frontier]</Node>
     {frontier}
   </Node>
 </Layout>

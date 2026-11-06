@@ -30,6 +30,22 @@ export function sourceVariables(source: string): Set<string> {
   return new Set(declared.filter((name) => new RegExp(`^${identifier}$`, 'u').test(name)));
 }
 
+/**
+ * The variables the views and layouts draw, as `{i}` or `index={i}`: those a token can name, as the
+ * build refuses a token naming a place no render draws.
+ */
+export function drawnVariables(source: string): Set<string> {
+  const markup = source.replace(/<script\b[\s\S]*?<\/script>/gu, '');
+  const variables = sourceVariables(source);
+  const drawn = new Set<string>();
+  // A render draws the variable itself, `{i}` or `value={i}`; one inside an expression, as
+  // `{#each values as v}`, draws what the expression gives, and a prop passed on, as
+  // `<Row values={values} />`, draws nothing itself.
+  for (const match of markup.matchAll(/(?:(?<!=)|\bvalue=)\{\s*([A-Za-z_$][\w$]*)\s*\}/gu))
+    if (variables.has(match[1])) drawn.add(match[1]);
+  return drawn;
+}
+
 /** The labels each scene pauses at, by full name, its stops (`:before`) left out. */
 function pausedLabels(source: string): string[] {
   return [...source.matchAll(/<Scene\b[^>]*?\bpause="([^"]*)"/gu)].flatMap((match) =>
@@ -90,7 +106,7 @@ function listings(source: string): Listing[] {
 
 /** A variable a listing writes as plain text: listing.plain-variable. */
 export function plainListingVariables(source: string): BuildWarning[] {
-  const variables = sourceVariables(source);
+  const variables = drawnVariables(source);
   return listings(source).flatMap(({ name, body }) => {
     const lines = body.split('\n');
     const plain = new Map<string, number[]>();
@@ -129,7 +145,7 @@ function changedVariables(code: string, variables: ReadonlySet<string>): string[
  * as a region's text names what its step does, not every value it reads.
  */
 export function unmarkedListingChanges(source: string): BuildWarning[] {
-  const variables = sourceVariables(source);
+  const variables = drawnVariables(source);
   const labels = labelDeclarations(source);
   const algorithm = labels.filter(({ listing }) => listing === undefined);
   const resolve = (written: string) =>
@@ -263,7 +279,7 @@ function markupTexts(source: string): MarkupText[] {
  * name, as a caption `i`, is view.caption-name.
  */
 export function captionNames(source: string): BuildWarning[] {
-  const variables = sourceVariables(source);
+  const variables = drawnVariables(source);
   return [
     ...new Set(
       markupTexts(source)
@@ -281,7 +297,7 @@ export function captionNames(source: string): BuildWarning[] {
  * lights nothing: view.plain-code.
  */
 export function plainCode(source: string): BuildWarning[] {
-  const variables = sourceVariables(source);
+  const variables = drawnVariables(source);
   const name = `(?<![\\w$.:@])(${identifier})`;
   const code = new RegExp(
     `${name}\\s*(?:\\[[^\\]\\s]+\\]|(?:===?|!==?|<=?|>=?|\\+\\+|--)\\s*[\\w$]+)`,
