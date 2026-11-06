@@ -149,7 +149,8 @@ export type ChatAttemptPurpose =
   | 'repair'
   | 'fallback'
   | 'choosing'
-  | 'helper';
+  | 'helper'
+  | 'scoring';
 
 /** Recordable identity of the profile selected for one generation request. */
 export type ChatAttempt = {
@@ -225,8 +226,24 @@ export type SourceArtifactChatOutput = {
  * settled.
  */
 export type ViewHelpersRequest =
-  | { type: string; layout?: undefined; task?: string }
-  | { layout: string; type?: undefined; task?: string };
+  | { type: string; layout?: undefined; skeleton?: undefined; task?: string }
+  | { layout: string; type?: undefined; skeleton?: undefined; task?: string }
+  | {
+      /** A source with holes for the helpers to fill (modes/sverlin/assistant/skeleton.server.ts). */
+      skeleton: string;
+      /** What every fill must keep to, in the forms the app can check. */
+      constraints?: string[];
+      type?: undefined;
+      layout?: undefined;
+      task?: string;
+    };
+
+/**
+ * The longest skeleton the helpers are given, in characters: the largest fixture source is about
+ * 6,100 (dijkstra-fields.sverlin), so this leaves room for a source several times larger while
+ * keeping a stray reply from sending each helper a huge prompt.
+ */
+export const maximumViewHelpersSkeleton = 40_000;
 
 /** The longest task the helpers are given, in characters: a sentence or two. */
 export const maximumViewHelpersTask = 300;

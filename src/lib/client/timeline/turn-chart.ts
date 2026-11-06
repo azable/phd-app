@@ -58,10 +58,12 @@ export function turnChart(
     const seconds = outcome ? `${Math.round(outcome.payload.durationMs / 1000)} s` : '…';
     bars.push({
       id: `call-${request.request.id}`,
-      kind: purpose === 'helper' ? 'helper' : 'call',
+      // The pipeline's calls after the reply, its helpers, scoring and choosing, run beside it.
+      kind:
+        purpose === 'helper' || purpose === 'scoring' || purpose === 'choosing' ? 'helper' : 'call',
       label:
-        purpose === 'helper'
-          ? `helper ${shortModel(model)} ${seconds}`
+        purpose === 'helper' || purpose === 'scoring' || purpose === 'choosing'
+          ? `${purpose} ${shortModel(model)} ${seconds}`
           : `${attempt} ${purpose} ${effort} ${seconds} → ${result.label}`,
       detail: [
         `${shortModel(model)}${effort ? ` · ${effort}` : ''}`,

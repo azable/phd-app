@@ -11,30 +11,36 @@ import {
   type Arrangement,
   type Readability
 } from '$lib/shared/readability';
+import { typicalStage } from '../readability.server';
 
 const whole = (value: number) => Math.round(value).toLocaleString('en');
 
-/** The shape layouts aim at: wide, as a slide or a laptop's stage, unless asked otherwise. */
-const targetAspect = 16 / 9;
+/**
+ * The shape layouts aim at: the stage a version shows on (readability.server.ts typicalStage),
+ * 3:2. Until 6 November this was 16:9, a slide's shape, which ranked layouts wider than the stage
+ * they show on (the helpers audit, design.md "Helpers: skeletons with holes").
+ */
+const targetAspect = typicalStage.width / typicalStage.height;
 
 /**
- * How near a layout's content is to 16:9, from 1 there to 0 at a third or three times as wide: a
- * square scores about 0.5, a 9:16 column nothing, so tall layouts rank below wide ones.
+ * How near a layout's content is to the stage's 3:2, from 1 there to 0 at a third or three times as
+ * wide: a 2:1 page scores about 0.74, a square about 0.63, a 2:3 column 0.26, so tall layouts rank
+ * below wide ones.
  */
-export function wideCloseness({ content }: Readability): number {
+export function stageCloseness({ content }: Readability): number {
   const aspect = content.width / content.height;
   return Math.max(0, 1 - Math.abs(Math.log(aspect / targetAspect)) / Math.log(3));
 }
 
 /**
  * Arrangements best first: text readable on the typical stage before anything, then a shape near
- * 16:9 and a fuller frame with fewer crossings, each crossing costing a tenth of the frame; the
+ * the stage's and a fuller frame with fewer crossings, each crossing costing a tenth of the frame; the
  * shown one first of equals.
  */
 export function rankedArrangements(arrangements: readonly Arrangement[]): Arrangement[] {
   const score = ({ readability, crossings }: Arrangement) =>
     (readability.text >= smallestReadableText ? 2 : 0) +
-    3 * wideCloseness(readability) +
+    3 * stageCloseness(readability) +
     (readability.fill ?? 0) -
     crossings / 10;
   return arrangements.toSorted(

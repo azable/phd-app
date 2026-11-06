@@ -3,26 +3,27 @@ import { describe, expect, it } from 'vitest';
 import bars from '../fixtures/bars.sverlin?raw';
 import bfs from '../fixtures/bfs-undirected.sverlin?raw';
 import bot, { viewHelpersRequest } from './bot.server';
+import { holeHelperTask } from './helper-proposals.server';
+import { skeletonFor } from './skeleton.server';
 import {
   bestCandidates,
   checkCandidate,
   checkLayoutCandidate,
   freeLayoutName,
+  holeHelperPrompt,
   layoutHelperDirections,
-  layoutHelperPrompt,
   fullGuidePrompt,
   guideSections,
   mainViewType,
-  viewHelperDirections,
-  viewHelperPrompt,
-  viewHelperTask
+  viewHelperDirections
 } from './view-helpers.server';
 
 describe('view helpers', () => {
   it('take the guide by heading, each section up to the next heading', () => {
     const markdown = '## A\na\n### B\nb\n## C\nc';
     expect(guideSections(markdown, ['## A', '## C'])).toBe('## A\na\n\n## C\nc');
-    expect(viewHelperPrompt.length).toBeLessThan(fullGuidePrompt.length / 2);
+    expect(holeHelperPrompt(['view']).length).toBeLessThan(fullGuidePrompt.length / 2);
+    expect(holeHelperPrompt(['view', 'any']).length).toBeGreaterThan(fullGuidePrompt.length / 2);
   });
 
   it('propose views of the type the source draws as values, not its pointers', () => {
@@ -82,19 +83,56 @@ describe('view helpers', () => {
     expect(viewHelpersRequest({ type: ' ', task: 'x' })).toEqual({});
   });
 
+  it('take a skeleton and its constraints from the reply over a type or layout', () => {
+    const skeleton =
+      '<View of="Int" name="A"><Node /></View>\n<Hole name="page" kind="layout" task="wide" />';
+    expect(
+      viewHelpersRequest({
+        type: '',
+        layout: '',
+        task: 'a wider page',
+        skeleton,
+        constraints: [' at most 30 steps ', '']
+      })
+    ).toEqual({
+      viewHelpers: { skeleton, constraints: ['at most 30 steps'], task: 'a wider page' }
+    });
+    // A skeleton with no hole is no skeleton; the type is taken instead.
+    expect(
+      viewHelpersRequest({
+        type: 'Int',
+        layout: '',
+        task: '',
+        skeleton: '<View />',
+        constraints: []
+      })
+    ).toEqual({ viewHelpers: { type: 'Int' } });
+  });
+
   it('give each helper the task and what the participant settled, with its direction', () => {
-    const asked = viewHelperTask({
-      type: 'Card',
+    const { skeleton } = skeletonFor(bars, { type: 'Int', task: 'draw each as a dial' })!;
+    const asked = holeHelperTask({
+      skeleton,
+      holes: [
+        {
+          name: 'view',
+          kind: 'view',
+          of: 'Int',
+          task: 'draw each as a dial',
+          group: 'view',
+          start: 0,
+          end: 0
+        }
+      ],
       count: 1,
-      source: '<View …>',
       direction: viewHelperDirections[2],
-      task: 'draw each card as a playing card',
+      constraints: [],
       background: 'The brief:\n- audience: first-year students'
     });
-    expect(asked).toContain('of the type Card, trying a drawing');
-    expect(asked).toContain('The task, from the assistant: draw each card as a playing card');
+    expect(asked).toContain('- view (view of Int): draw each as a dial');
+    expect(asked).toContain('trying a drawing');
     expect(asked).toContain('- audience: first-year students');
-    expect(viewHelperTask({ type: 'Int', count: 1, source: '' })).not.toContain('task');
+    expect(asked).toContain('<Hole name="view" kind="view" of="Int" task="draw each as a dial" />');
   });
 });
 
@@ -137,7 +175,7 @@ describe('layout helpers', () => {
         description: '',
         markup: beside.replace('name="Main"', 'name="Page"')
       })
-    ).toMatchObject({ kept: false, reason: 'not one layout named Main' });
+    ).toMatchObject({ kept: false, reason: expect.stringContaining('the layout Main') });
   });
 
   it('give the assistant the best few, one of each that draws alike', () => {
@@ -167,7 +205,7 @@ describe('layout helpers', () => {
     expect(layoutHelperDirections.length).toBeGreaterThanOrEqual(8);
     expect(new Set(viewHelperDirections).size).toBe(viewHelperDirections.length);
     expect(viewHelperDirections.length).toBeGreaterThanOrEqual(5);
-    expect(layoutHelperPrompt).toContain('## Free layout and links');
+    expect(holeHelperPrompt(['layout'])).toContain('## Free layout and links');
   });
 
   it('are asked by a layout in a reply, as views are by a type', () => {

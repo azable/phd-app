@@ -49,7 +49,15 @@ export const aiGenerationRequestedEventSchema = v.object({
   type: v.literal('ai.generation-requested'),
   payload: v.object({
     attempt: positiveSchema,
-    purpose: v.picklist(['intake', 'initial', 'repair', 'fallback', 'choosing', 'helper']),
+    purpose: v.picklist([
+      'intake',
+      'initial',
+      'repair',
+      'fallback',
+      'choosing',
+      'helper',
+      'scoring'
+    ]),
     /** Why this first call stepped up from the fast model, where it did; absent before 2026-11-06. */
     escalation: v.optional(v.picklist(escalationReasons)),
     prompt: recordedTextSchema,

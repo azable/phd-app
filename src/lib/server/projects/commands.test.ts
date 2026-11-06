@@ -742,26 +742,39 @@ describe('submitProjectFeedback', () => {
   });
 
   describe('a reply that only asks the view helpers', () => {
+    const proposal = (markup: string) => ({
+      proposals: [
+        {
+          name: 'IntDot',
+          description: 'a dot',
+          fills: [{ hole: 'view', markup }],
+          aimedAspect: '3:2'
+        }
+      ]
+    });
     const helperAdapter = {
       id: 'test-helpers',
       generateReply: async () => ({
-        output: {
-          views: [
-            {
-              name: 'IntDot',
-              description: 'a dot',
-              markup: '<View of="Int" name="IntDot"><Node value={this} /></View>'
-            }
-          ]
-        }
+        output: proposal('<View of="Int" name="IntDot"><Node value={this} /></View>')
       })
     } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+    // The scoring stage's Decisions API, never the real one in tests: yes at 0.7 to every question.
+    const decide = vi.fn(async (request: { questions: { name: string }[] }) => ({
+      answers: request.questions.map(({ name }) => ({
+        type: 'choice',
+        name,
+        choice: true,
+        probabilities: [0.7, 0.3]
+      })),
+      usage: { input_tokens: 1200, output_tokens: 0 }
+    }));
 
     /** A linear-search project with one message queued and claimed by a turn with helpers on. */
     async function claimedWithHelpers(
       writtenMeanwhile = false,
       adapter = helperAdapter,
-      replies?: (source: string) => object[]
+      replies?: (source: string) => object[],
+      more: Partial<ProjectCommandDependencies> = {}
     ) {
       const { getProjectTemplate } = await import('./starter-catalog');
       const { createProject } = await import('./service');
@@ -824,7 +837,7 @@ describe('submitProjectFeedback', () => {
       const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
       return runQueuedAssistantTurn(
         { projectId: created.projectId, operationId: assistantOperationId },
-        { ...commandDependencies, viewHelperAdapter: adapter }
+        { ...commandDependencies, viewHelperAdapter: adapter, decide, ...more }
       );
     }
 
@@ -864,7 +877,7 @@ describe('submitProjectFeedback', () => {
       const { runQueuedAssistantTurn } = await import('$lib/server/ai/turns/entry');
       const followed = await runQueuedAssistantTurn(
         { projectId: document.projectId, operationId: followUpId },
-        { ...commandDependencies, viewHelperAdapter: helperAdapter }
+        { ...commandDependencies, viewHelperAdapter: helperAdapter, decide }
       );
       expect(followed.appendedEvents.some((event) => event.type === 'assistant.responded')).toBe(
         true
@@ -875,23 +888,20 @@ describe('submitProjectFeedback', () => {
     });
 
     it('sends a view that did not build back once to its helper, keeping it fixed', async () => {
-      const view = (name: string) => ({
-        name: 'IntDot',
-        description: 'a dot',
-        markup: `<View of="Int" name="${name}"><Node value={this} /></View>`
-      });
+      const view = (type: string) =>
+        proposal(`<View of="${type}" name="IntDot"><Node value={this} /></View>`);
       const retrying = {
         id: 'test-helpers',
-        // The first answer misnames its view; told why, the helper fixes it.
+        // The first answer draws another type; told why, the helper fixes it.
         generateReply: async ({ messages }: { messages: unknown[] }) => ({
-          output: { views: [view(messages.length > 1 ? 'IntDot' : 'Wrong')] }
+          output: view(messages.length > 1 ? 'Int' : 'Wrong')
         })
       } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
       const { appendedEvents } = await claimedWithHelpers(false, retrying);
       const candidates = appendedEvents.find(
         (event) => event.type === 'visualization.view-candidates'
       );
-      // Each of the five helpers misnamed its view; the three retried fixed it when told, and as
+      // Each of the five helpers drew another type; the three retried fixed it when told, and as
       // they draw alike the assistant is given one.
       expect(
         candidates?.type === 'visualization.view-candidates' &&
@@ -1012,6 +1022,72 @@ describe('submitProjectFeedback', () => {
       expect(asksForGraphics('Draw each suit as a symbol')).toBe(true);
       expect(asksForGraphics('Pause on every swap, and slow it down')).toBe(false);
       expect(asksForGraphics('Who is it for? Students new to graphs.')).toBe(false);
+    });
+
+    it('scores the fills, and offers the combination the designing model chose, with why', async () => {
+      decide.mockClear();
+      const choosing = {
+        id: 'test-helpers',
+        generateReply: async ({ attempt }: { attempt: { purpose: string } }) => ({
+          output:
+            attempt.purpose === 'choosing'
+              ? {
+                  combinations: [
+                    { picks: [{ group: 'g1', option: 'g1o1' }], why: 'a dot reads at any size' }
+                  ]
+                }
+              : proposal('<View of="Int" name="IntDot"><Node value={this} /></View>')
+        })
+      } as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+      const { appendedEvents } = await claimedWithHelpers(false, choosing);
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      if (candidates?.type !== 'visualization.view-candidates') throw new Error('no candidates');
+      expect(candidates.payload.stages).toMatchObject({ scoring: 'on', choosing: 'on' });
+      expect(candidates.payload.candidates).toEqual([
+        expect.objectContaining({
+          name: 'IntDot',
+          why: 'a dot reads at any size',
+          score: expect.closeTo(0.7),
+          facts: expect.stringContaining('text')
+        })
+      ]);
+      const purposes = appendedEvents.flatMap((event) =>
+        event.type === 'ai.generation-requested' ? [event.payload.purpose] : []
+      );
+      // Five helpers, a scoring call for each fill kept, and one choosing call.
+      expect(purposes.filter((purpose) => purpose === 'helper')).toHaveLength(5);
+      expect(purposes.filter((purpose) => purpose === 'scoring')).toHaveLength(5);
+      expect(purposes.filter((purpose) => purpose === 'choosing')).toHaveLength(1);
+      expect(decide).toHaveBeenCalledTimes(5);
+      expect(JSON.stringify(decide.mock.calls[0][0])).toContain('data:image/png;base64,');
+    });
+
+    it('ranks by the app’s measures alone with scoring and choosing switched off', async () => {
+      decide.mockClear();
+      const { helperPipeline } = await import('$lib/server/ai/bots/helper-pipeline');
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, undefined, {
+        helperPipeline: {
+          ...helperPipeline,
+          scoring: { ...helperPipeline.scoring, enabled: false },
+          choosing: { ...helperPipeline.choosing, enabled: false }
+        }
+      });
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      expect(candidates).toMatchObject({
+        payload: { stages: { scoring: 'off', choosing: 'off' }, candidates: [{ name: 'IntDot' }] }
+      });
+      expect(decide).not.toHaveBeenCalled();
+      expect(
+        appendedEvents.some(
+          (event) =>
+            event.type === 'ai.generation-requested' &&
+            (event.payload.purpose === 'scoring' || event.payload.purpose === 'choosing')
+        )
+      ).toBe(false);
     });
 
     it('leaves the candidates to the turn of a message written meanwhile', async () => {

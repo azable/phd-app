@@ -22,7 +22,12 @@ export const modelPrices: Readonly<Record<string, ModelPrice>> = {
   'gpt-5.6-sol': { input: 4, cachedInput: 0.4, output: 20 },
   'gpt-5.6-luna': { input: 0.2, cachedInput: 0.02, output: 1.2 },
   'gpt-6.1-sol': { input: 2, cachedInput: 0.1, output: 10 },
-  'gpt-6.1-terra': { input: 1, cachedInput: 0.05, output: 5 }
+  'gpt-6.1-terra': { input: 1, cachedInput: 0.05, output: 5 },
+  // Through the Decisions API only, which the helpers' scoring stage calls: $0.10 per million input
+  // tokens, with no charge for output, cache reads or cache writes (OpenAI's announcement of the
+  // public beta, 6 October 2026, as reported at https://techenclave.com/news/items/openai-opens-
+  // decisions-api-priced-at-0-10-per-million-input-tokens, read 2026-11-06).
+  'gpt-6-luna': { input: 0.1, cachedInput: 0.1, output: 0 }
 };
 
 /**

@@ -307,7 +307,18 @@ export type AiViewHelpers = {
     readability?: string;
     /** What its helper tried, telling apart arrangements of one layout, which share its name. */
     label?: string;
+    /** Its fill of each hole of the skeleton, where the round filled one. */
+    fills?: Record<string, string>;
+    group?: string;
+    facts?: string;
+    /** The decision model's score of its pictures, 0 to 1, and each question's probability. */
+    score?: number;
+    answers?: Record<string, number>;
+    /** Why the designing model put its fills together. */
+    why?: string;
   }[];
+  /** The skeleton whose holes the candidates fill, where the assistant wrote one. */
+  skeleton?: string;
   /** Replies given since they were proposed, none of them offering these. */
   repliesSince?: number;
 };
