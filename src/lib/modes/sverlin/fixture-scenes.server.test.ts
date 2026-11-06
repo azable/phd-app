@@ -12,6 +12,9 @@
  *   names only a moment of the run (the boxes are as they were).
  * - links/*: added, each a fixture above with its pointers drawn as links from variables (see
  *   pointer-links.server.test.ts); no other fixture's scenes changed.
+ * - replay/linear-search, links/linear-search: a node lit by its place at a step records the light
+ *   (look.light), which the server scenes had dropped with its CSS box-shadow; with the light left
+ *   out, both hash as before.
  */
 
 import { createHash } from 'node:crypto';
