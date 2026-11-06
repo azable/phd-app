@@ -309,10 +309,14 @@ function withBase(
   }
   const sets = Object.keys(own).some((key) => key !== baseKey);
   if (!sets) return { space: { ...space, ...own }, problems };
+  // A layout's frame keeps its own options: the page round a picture is no part of a base.
+  const frames = framedKinds(space);
+  const framing = (key: string) =>
+    frames.has(kindOf(key)) && Object.hasOwn(frameOptions, key.slice(kindOf(key).length + 1));
   const governed = Object.fromEntries(
     Object.entries(space).map(([key, options]) => [
       key,
-      key.startsWith('views.') || key.startsWith('pointers.')
+      key.startsWith('views.') || key.startsWith('pointers.') || framing(key)
         ? options
         : baseOptions(propOf(key), options, values)
     ])
@@ -727,10 +731,11 @@ export function buildVariant(
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
       origins[key] = 'kept';
-    } else if (Object.hasOwn(space, key))
+    } else if (Object.hasOwn(space, key) && value !== starter[key])
       // A variable the design still offers but not with this value, as a minSize between two of
       // its steps, is said, not dropped unseen; a variable the source no longer has goes quietly,
-      // as a base from before an edit holds many. A look only, never sending a version back.
+      // as a base from before an edit holds many, and so does a starter's value a new base's scale
+      // has no step for, which was no one's choice. A look only, never sending a version back.
       dropped.push(
         writtenText(
           `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`,

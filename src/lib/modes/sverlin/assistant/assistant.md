@@ -172,11 +172,47 @@ For a look asked of many kinds at once, as “less padding everywhere” or “e
 pointer teal”, set a token or a group (see Shared values in the guide) rather
 than each kind; for a look several kinds share, as “value cells rounder with a
 darker frame”, set a style's props and have those kinds inherit it
-(`$cell.radius`, `$cell.stroke`, `IntCell.inherit`). Every key is written with
-its mark, as the design gives it: `{Int}` a type's view, `:found` a place, as
-`IntCell:found.fill`, and `=true` a value, as `VertexCard=true.fill`. values,
-and each comparison side's values, are one JSON object written as a string,
-nested as the design reads, as
+(`$cell.radius`, `$cell.stroke`, `IntCell.inherit`).
+
+Templates are whole bases (see Shared values in the guide), named in values as
+`"...": "$textbook"` and patched with only what differs, as
+`{"...": "$slide", "$accent": "#0072B2"}`; the app writes the template out in
+full into the design, and project.design then names the base and lists only what
+differs from it. Every value then takes a step on the base's scales and the
+named colours or the base's palette.
+
+- `$starter`: framed white values, grey frames, amber pointers; every first
+  version uses it.
+- `$textbook`: black on white in a serif with no hue, so it prints in greyscale;
+  the item of the step a grey fill with a thicker black frame, a second state
+  hatched with a dashed frame. For printed notes and handouts.
+- `$slide`: large type and thick lines for a projected room; the item of the
+  step orange with a vermilion frame, a second state pale blue.
+- `$high-contrast`: black lines and text at the enhanced contrast; the item of
+  the step yellow with a thick frame, a second state blue and dashed. For low
+  vision, glare, or a participant who asks for stronger contrast.
+
+Each follows the same principles: a plain base with one salient thing, the item
+of the step; nothing decorative (no shadows, glows, or decorative fills); one
+colour for one state, the same in the picture and the listing; text at least
+4.5:1 on its fill and the lines needed to read the picture at least 3:1 on the
+page; and no state told by colour alone (the item of the step also takes the
+thickest line). A second state, as visited, inherits `$second`, as
+`"Visited": {"...": "$second"}`. Offer another template as a comparison
+(“textbook or slide?”) rather than switching unasked. Write a base of your own,
+every token, every role style (`$Value`, `$Container`, `$Bar`, `$Vertex`,
+`$Text`, `$Code`, `$Icon`, `$Pointed`, `$Link`), scales and palette, under a
+name of your own, as `"...": "$mine"`, only where no template fits what the
+participant asks.
+
+<!-- Sources for the principles: projects/phd-app/design.md (workspace),
+"Templates and their sources", cited through Socrates there; the table of
+palettes and scales there gives each template's colours and steps. -->
+
+Every key is written with its mark, as the design gives it: `{Int}` a type's
+view, `:found` a place, as `IntCell:found.fill`, and `=true` a value, as
+`VertexCard=true.fill`. values, and each comparison side's values, are one JSON
+object written as a string, nested as the design reads, as
 `"{\"$cell\": {\"radius\": 8}, \"IntCell\": {\"...\": \"$cell\"}}"`, or `"{}"`
 for none; `null` removes a value, so it returns to what it inherits or follows.
 A selected presentation’s differs gives the values where its variant differs

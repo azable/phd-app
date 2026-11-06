@@ -7,7 +7,11 @@
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import type { AiDesign, AiDesignContext, AiVariable } from '$lib/server/ai/context/project-context';
 import { writtenKey } from '../library/node/design-keys';
+import { templateOf, templates, templateValues } from './templates/templates';
 import {
+  baseKey,
+  baseOptions,
+  paletteKey,
   frameOptions,
   listingOptions,
   listingPlacesOptions,
@@ -45,7 +49,7 @@ function patternOf(set: readonly DesignValue[]): string | undefined {
 }
 
 export function designContext(design: AiDesign): AiDesignContext {
-  const { options, variables } = writtenDesign(design);
+  const { options, variables } = withoutBase(writtenDesign(design));
   const values: Record<string, Record<string, DesignValue>> = {};
   const levels: Record<string, DesignValue | Record<string, DesignValue>> = {};
   const followers = new Map<string, Set<string>>();
@@ -105,6 +109,24 @@ export function designContext(design: AiDesign): AiDesignContext {
     variables: full,
     values: told,
     ...(Object.keys(levels).length ? { levels } : {})
+  };
+}
+
+/**
+ * The design told against the template it names as its base (see templates.ts): every value still
+ * the template's is left out, as the base's name says it, so the context lists only the
+ * differences, not the base's 200-odd values.
+ */
+function withoutBase(design: AiDesign): AiDesign {
+  const named = design.variables.find(({ variable }) => variable === '...' || variable === baseKey);
+  const template = templateOf(named?.value);
+  if (!template) return design;
+  const base = templateValues(template);
+  return {
+    options: design.options,
+    variables: design.variables.filter(
+      ({ variable, value }) => !Object.hasOwn(base, variable) || base[variable] !== value
+    )
   };
 }
 
@@ -170,13 +192,13 @@ export function designVariables(
     }
     const style = styleOf(key);
     if (style && Object.hasOwn(propOptions, style.prop)) {
-      options[style.prop] = propOptions[style.prop as DesignProp];
+      options[style.prop] = baseOptions(style.prop, propOptions[style.prop as DesignProp], variant);
       return { variable: key, options: style.prop, value, ...(origin ? { origin } : {}) };
     }
     // A token's options are its prop's; a role level's, its prop's and the tokens that fit it.
     if (isToken(key)) {
       const set = tokenProps[key];
-      options[set] = propOptions[set];
+      options[set] = baseOptions(set, propOptions[set], variant);
       return { variable: key, options: set, value, ...(origin ? { origin } : {}) };
     }
     const group = groupOf(key);
@@ -209,7 +231,18 @@ export function designVariables(
       // The forms of a layout whose links make no layers, which do not take layered.
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };
-    if (!view && !pointer && Object.hasOwn(known, set)) options[set] = known[set];
+    if (!view && !pointer && Object.hasOwn(known, set))
+      options[set] = baseOptions(set, known[set], variant);
+    // A base's name, scales and palette are free within their form (see withBase).
+    const ofBase =
+      key === baseKey
+        ? [...Object.keys(templates).map((name) => `$${name}`), '$ and a name of your own']
+        : key.startsWith('scale.')
+          ? ['rising numbers, 0 or more, separated by spaces']
+          : paletteKey.test(key)
+            ? ['an exact colour, # and six hex digits']
+            : undefined;
+    if (ofBase) return { variable: key, options: ofBase, value, ...(origin ? { origin } : {}) };
     return {
       variable: key,
       options: view

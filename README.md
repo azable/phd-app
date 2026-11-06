@@ -87,7 +87,10 @@ give `values` of its own over those, which unlike a `vary`'s settle nothing
 object in a string, nested as the design reads and applied as a JSON Merge
 Patch, `null` removing a value; text that is not one object goes back as a slip
 of writing:
-[`design-patch.server.ts`](src/lib/modes/sverlin/assistant/design-patch.server.ts));
+[`design-patch.server.ts`](src/lib/modes/sverlin/assistant/design-patch.server.ts);
+values naming a template as their base, as `"...": "$textbook"`, get the
+template written out in full under them, from the JSON files in
+[`assistant/templates/`](src/lib/modes/sverlin/assistant/templates/templates.ts));
 after a manual change the first presentation keeps the viewed variant's values
 and the second is randomised; a manual change can also edit the viewed variant's
 choices as nested JSON (the Choices tab while editing): the values it changes or
