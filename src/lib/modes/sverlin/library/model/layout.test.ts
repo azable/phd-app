@@ -231,6 +231,43 @@ describe('layout', () => {
     expect(solved.boxes.get(items[1])).toMatchObject({ x: 39, y: 0 });
   });
 
+  it('lays a subgrid’s items on its grid’s columns, its padding and its gap moving them', () => {
+    const sized = (width: number, style: Record<string, string> = {}) =>
+      div({ width: `${width}px`, height: '10px', ...style });
+    const placed = (row: number, column: number, width: number) =>
+      sized(width, { 'grid-row-start': `${row}`, 'grid-column-start': `${column}` });
+    const tracks = { 'grid-auto-columns': 'max-content', 'grid-auto-rows': 'max-content' };
+    const [x, y] = [
+      sized(30, { 'grid-row-start': '1', 'grid-column-start': '1' }),
+      sized(20, { 'grid-row-start': '1', 'grid-column-start': '2' })
+    ];
+    const subgrid = div(
+      {
+        display: 'grid',
+        ...tracks,
+        'grid-template-columns': 'subgrid',
+        'grid-row-start': '2',
+        'grid-column-start': '1',
+        'grid-column-end': 'span 2',
+        'padding-left': '3px',
+        'column-gap': '0px',
+        'justify-items': 'start'
+      },
+      x,
+      y
+    );
+    const [a, b] = [placed(1, 1, 10), placed(1, 2, 50)];
+    const root = div({ display: 'grid', ...tracks, 'column-gap': '4px' }, a, b, subgrid);
+    const { boxes, problems } = lay(root);
+    expect(problems).toEqual([]);
+    // Column 1 holds x with the subgrid's padding before it and half of its gap's 4px less after
+    // it, 30 + 3 − 2; column 2, b at 50. The subgrid spans both, and y starts 2px into the gap.
+    expect(boxes.get(b)?.x).toBe(31 + 4);
+    expect(boxes.get(subgrid)).toMatchObject({ x: 0, width: 31 + 4 + 50 });
+    expect(boxes.get(x)?.x).toBe(3);
+    expect(boxes.get(y)?.x).toBe(31 + 4 - 2);
+  });
+
   it('centres a cell value, the cell kept at its least size', () => {
     const value = element('span', {}, {}, '42');
     const cell = div(

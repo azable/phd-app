@@ -383,6 +383,49 @@ function sizer(options: ReserveOptions) {
     const { width, height } = extentAlone(at, element);
     return { width: Math.round(width), height: Math.round(height) };
   }
+  type SubgridLeaf = { at: number; size: number; before: number; after: number };
+  /**
+   * A subgrid's items along its axis (0 rows, 1 columns) by their coordinates, those of subgrids
+   * inside it included, each with the room the subgrids add round it, as the layout model adds it
+   * (see leavesOf in layout.ts): a subgrid's padding and border round its first and last items, and
+   * half the difference between its gap and its parent's between the others.
+   */
+  function subgridLeaves(
+    at: Read,
+    subgrid: ModelElement,
+    axis: 0 | 1,
+    parentGap: number
+  ): SubgridLeaf[] {
+    const look = at.styled.get(subgrid)?.look;
+    if (!look) return [];
+    const gap = axis === 1 ? look.columnGap : look.rowGap;
+    const inside = (gap - parentGap) / 2;
+    const [start, end] = axis === 1 ? [3, 1] : [0, 2];
+    const [startEdge, endEdge] = [start, end].map((side) => look.padding[side] + look.border[side]);
+    const name = axis === 1 ? 'col' : 'row';
+    const units = elementsOf(subgrid).flatMap((child): SubgridLeaf[][] => {
+      if (child.attributes['data-sv-subgrid'] === name)
+        return [subgridLeaves(at, child, axis, gap)];
+      const placed = child.attributes[`data-sv-${name}`];
+      if (placed === undefined) return [];
+      const { width, height } = sizeAlone(at, child);
+      return [[{ at: Number(placed), size: axis === 1 ? width : height, before: 0, after: 0 }]];
+    });
+    const rangeOf = (leaves: readonly SubgridLeaf[]) => [
+      Math.min(...leaves.map((leaf) => leaf.at)),
+      Math.max(...leaves.map((leaf) => leaf.at))
+    ];
+    const [first, last] = rangeOf(units.flat());
+    return units.flatMap((leaves) => {
+      const [from, to] = rangeOf(leaves);
+      return leaves.map((leaf) => ({
+        ...leaf,
+        before: leaf.before + (leaf.at === from ? (from === first ? startEdge : inside) : 0),
+        after: leaf.after + (leaf.at === to ? (to === last ? endEdge : inside) : 0)
+      }));
+    });
+  }
+
   /**
    * Widen a grid's kept tracks to hold every cell of these drawings of it: each column as wide as
    * the widest cell it holds and each row as tall as the tallest. A track no drawn cell reaches that
@@ -425,12 +468,19 @@ function sizer(options: ReserveOptions) {
           Number(cell.attributes['data-sv-row-span'] ?? 1),
           Number(cell.attributes['data-sv-col-span'] ?? 1)
         ];
+        const subgrid = cell.attributes['data-sv-subgrid'];
         [
           [row, spans[0], height, rows],
           [column, spans[1], width, columns]
         ].forEach(([placed, span, size, tracks], axis) => {
           const sized = tracks as Map<number, number>;
-          if (placed !== 'all' && span === 1)
+          // A subgrid's items size the tracks they are on, in its place.
+          if (subgrid === (axis === 1 ? 'col' : 'row'))
+            for (const leaf of subgridLeaves(at, cell, axis as 0 | 1, gaps[axis])) {
+              const size = leaf.size + leaf.before + leaf.after;
+              sized.set(leaf.at, Math.max(sized.get(leaf.at) ?? 0, size));
+            }
+          else if (placed !== 'all' && span === 1)
             sized.set(placed as number, Math.max(sized.get(placed as number) ?? 0, size as number));
           else
             spanning[axis].push({

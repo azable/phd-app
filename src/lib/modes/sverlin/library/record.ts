@@ -136,7 +136,7 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
           model = undefined;
         }
       if (!substituted && !quiet)
-        for (const [, message] of body.matchAll(/data-sv-collision="([^"]*)"/gu))
+        for (const [, message] of body.matchAll(/data-sv-warning="([^"]*)"/gu))
           options.warn?.(message);
       return readMarkup(body, layer);
     } catch (cause) {

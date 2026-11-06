@@ -652,6 +652,28 @@ export function gridExtents(
     atoms[name] = { name, base: 'integer', values: values as number[] };
     scope.set(left.name as string, name);
   };
+  // The most items a grid's child can place on the grid's tracks as a subgrid (see subgrid in
+  // Node.svelte): one for each node, and a collection's max for an {#each} over it or a value of it
+  // drawn by its view; none where it holds text or a block whose items cannot be counted.
+  const itemCount = (node: Node, scope: Scope): number | undefined => {
+    const maxOf = (expression: unknown) => {
+      const type = typeOfPath(expression as Node, scope, extended);
+      const structure = type === undefined ? undefined : extended.structures[type];
+      return structure?.kind === 'collection' ? structure.max : undefined;
+    };
+    let count = 0;
+    for (const child of (node.children as Node[] | undefined) ?? []) {
+      if (child.type === 'Text' && !String(child.data ?? '').trim()) continue;
+      if (child.type === 'InlineComponent' && child.name === 'Node') count += 1;
+      else if (child.type === 'MustacheTag') count += maxOf(child.expression) ?? 1;
+      else if (child.type === 'EachBlock') {
+        const max = maxOf(child.expression);
+        if (max === undefined) return undefined;
+        count += max;
+      } else return undefined;
+    }
+    return count || undefined;
+  };
   // The rows and cols a grid's cells can take, through the blocks between it and them.
   const cells = (
     node: unknown,
@@ -679,10 +701,15 @@ export function gridExtents(
     if (part.type === 'InlineComponent' && part.name === 'Node') {
       const given = (name: string) =>
         (part.attributes as Node[] | undefined)?.some((each) => each.name === name);
-      // An axis left out spans every track, reaching none of its own; both left out, (0, 0). A
+      // An axis left out spans every track, reaching none of its own, unless its items are placed
+      // on them as a subgrid's, item k at k, where they can be counted; both left out, (0, 0). A
       // span reaches the tracks after its coordinate too.
       const reached = (axis: 'row' | 'col', other: 'row' | 'col') => {
-        if (!given(axis)) return given(other) ? [] : [0];
+        if (!given(axis)) {
+          if (!given(other)) return [0];
+          const count = itemCount(part, scope);
+          return Array.from({ length: count ?? 0 }, (_, k) => k);
+        }
         const at = coordinate(part, axis, scope);
         const span = given(`${axis}Span`) ? coordinate(part, `${axis}Span`, scope) : [1];
         if (!at || !span) return undefined;

@@ -1859,9 +1859,10 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `layout`: `'row'`, `'column'`, `'grid'` (placed by coordinates; see Grid),
   `'free'` (placed by layout; see Free layout and links), or `'stack'` (one over
   the other; see Stack); arranges a node's children.
-- `row` and `col`: in a grid, the cell a child is placed in, whole numbers from
-  0, as `row={i} col={j}`; only a grid's children take them, and each takes
-  both.
+- `row` and `col`: in a grid, the cell a child is placed in, whole numbers, as
+  `row={i} col={j}`; only a grid's children take them. One left out spans every
+  track of its axis, and both left out place it at row 0, col 0. `rowSpan` and
+  `colSpan` cover more tracks from there (see Grid).
 - `kind`: a kind of its own within its view or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design), or chosen
   at each step by an expression of names written in the source, as
@@ -1917,6 +1918,16 @@ cell by `row` and `col`, usually loop indices or positions:
   `<Node row={0} col={1} colSpan={2}>`. A cell covering several tracks takes no
   room of its own in any of them: where it is larger than they are, with the
   gaps between them, they share the rest equally.
+- A cell spanning tracks whose children are all nodes is a subgrid: it places
+  them on the grid's own tracks, item `k` at coordinate `k` from its own `col`
+  (or `row`), from 0 where it spans every track, as CSS
+  `grid-template-columns: subgrid` does. `<Node row={0}>{values}</Node>` puts
+  `values[k]` in column `k`, through its view's row of items, so a mark at
+  `col={i}` lines up under it;
+  `<Node col={-1}><Node>values</Node><Node>i</Node></Node>` writes a key down
+  the rows. Its kind's `gap` and `align` apply between and in its items' cells,
+  and its box is a band behind them; its tracks are the grid's, so its `justify`
+  between, around, or evenly has no effect, and the build warns.
 - A coordinate is a whole number: a position (`index(...)`), an expression over
   one, as `j - 1`, a loop's index, or a number written in the source. A
   coordinate outside the array's range, as −1 for `j - 1` before the first cell,

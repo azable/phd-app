@@ -255,3 +255,56 @@ describe('typed grid coordinates', () => {
     expect(steps[1].nodes.some((node) => node.runs?.some((run) => run.text === 'last'))).toBe(true);
   });
 });
+
+describe('subgrids', () => {
+  const centres = (step: Parameters<typeof boxes>[0], kind: string) =>
+    boxes(step, kind).map(({ x, width }) => Math.round(x + width / 2));
+  const cellsView = `<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>`;
+
+  it('places {values} drawn by its view on the grid’s columns, values[k] in column k', async () => {
+    const { steps, built } = await drawnSteps(
+      sort(
+        `    <Node row={0}>{values}</Node>
+    <Node row={1} col={i}>{i}</Node>`,
+        cellsView
+      )
+    );
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/grid/u));
+    const step = steps[1];
+    const cells = centres(step, 'IntCell');
+    expect(cells).toHaveLength(5);
+    // i is 1 at @insert.init#1: its arrow is centred under values[1].
+    const [tip] = centres(step, 'Arrow.Tip');
+    expect(Math.abs(tip - cells[1])).toBeLessThanOrEqual(1);
+  });
+
+  it('numbers a key’s words down the rows, beside the cells they name', async () => {
+    const { steps } = await drawnSteps(
+      sort(`${valuesRow.replace('row={0}', 'row={1}')}
+    <Node row={2} col={i}>{i}</Node>
+    <Node col={-1}><Node>head</Node><Node>values</Node><Node>i</Node></Node>`)
+    );
+    const step = steps[1];
+    const word = (text: string) =>
+      step.nodes.find((node) => node.runs?.some((run) => run.text === text))?.box;
+    const [cell] = boxes(step, 'IntCell');
+    const middle = (box?: { y: number; height: number }) => (box ? box.y + box.height / 2 : NaN);
+    const values = word('values');
+    expect(
+      Math.abs(middle(values) - middle({ ...cell, height: values ? cell.width : 0 }))
+    ).toBeLessThan(cell.width);
+    expect(word('i')!.y).toBeGreaterThanOrEqual(values!.y + values!.height);
+    expect(word('head')!.y + word('head')!.height).toBeLessThanOrEqual(values!.y);
+    expect(values!.x + values!.width).toBeLessThanOrEqual(cell.x);
+  });
+
+  it('warns that justify cannot spread a subgrid’s tracks', async () => {
+    const { built } = await drawnSteps(
+      sort(`    <Node kind="Band" row={0}>{#each values as v}<Node>{v}</Node>{/each}</Node>`),
+      { chosen: { 'Main.Band.justify': 'between' } }
+    );
+    expect(built.warnings).toContainEqual(
+      expect.stringMatching(/^A subgrid takes its grid's tracks/u)
+    );
+  });
+});

@@ -730,12 +730,19 @@ export type GridCells = {
   count?: readonly [number, number];
 };
 
-export function provideGrid(grid: GridCells | undefined): void {
+/**
+ * A subgrid around its items: the axis whose tracks it takes from its grid (0 rows, 1 columns), the
+ * coordinate of its first track, and the coordinate its next item takes, which the subgrids inside
+ * it share, so their items go on numbering (see subgrid in Node.svelte).
+ */
+export type Subgrid = { subgrid: 0 | 1; first: number; next: { at: number } };
+
+export function provideGrid(grid: GridCells | Subgrid | undefined): void {
   setContext('sverlin:grid', grid);
 }
 
-export function gridContext(): GridCells | undefined {
-  return getContext<GridCells | undefined>('sverlin:grid');
+export function gridContext(): GridCells | Subgrid | undefined {
+  return getContext<GridCells | Subgrid | undefined>('sverlin:grid');
 }
 
 /** The way the collection around a node runs, so a collection inside it runs across it, as rows in a column do. */

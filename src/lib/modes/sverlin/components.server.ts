@@ -1591,6 +1591,13 @@ export function slotInsertions(
       const views = children.some(
         (child) => child.type === 'RenderTag' || child.type === 'InlineComponent'
       );
+      // A grid's child holding only nodes can place them on the grid's tracks (see subgrid in
+      // Node.svelte).
+      const placed = attributes.some((attribute) =>
+        ['row', 'col', 'rowSpan', 'colSpan'].includes(attribute.name ?? '')
+      );
+      if (placed && views && !text)
+        insertions.push({ at: (part.start ?? 0) + '<Node'.length, text: ' __nodes' });
       if (text && views && !attributes.some((attribute) => attribute.name === 'layout'))
         insertions.push({ at: (part.start ?? 0) + '<Node'.length, text: ' __text' });
       // A node holding one {#each} and nothing else but links between its items is a collection:

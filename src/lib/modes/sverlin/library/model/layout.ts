@@ -209,7 +209,8 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     const items = itemsOf(element);
     const { display } = look;
     if (display === 'flex' || display === 'inline-flex') return flex(look, items, width, height);
-    if (display === 'grid' || display === 'inline-grid') return grid(look, items, width, height);
+    if (display === 'grid' || display === 'inline-grid')
+      return grid(element, look, items, width, height);
     if (['block', 'inline-block', 'flow-root', 'list-item'].includes(display))
       return block(look, items, width);
     if (display === 'inline') return inline(look, items, width);
@@ -369,10 +370,111 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     return { width: outer, height: tall, children };
   }
 
-  function grid(look: Look, items: readonly Item[], width?: number, height?: number): Content {
+  type Axis = 'column' | 'row';
+  const subgridAxis = (look: Look): Axis | undefined => {
+    if (look.subgridColumns && look.subgridRows) problems.add('subgrids along both axes');
+    return look.subgridColumns ? 'column' : look.subgridRows ? 'row' : undefined;
+  };
+  const startAlong = (look: Look, axis: Axis) =>
+    axis === 'column' ? look.gridColumnStart : look.gridRowStart;
+  const spanAlong = (look: Look, axis: Axis) =>
+    axis === 'column' ? look.gridColumnSpan : look.gridRowSpan;
+  const gapAlong = (look: Look, axis: Axis) =>
+    laid(axis === 'column' ? look.columnGap : look.rowGap);
+  const sizeAlong = (size: { width: number; height: number }, axis: Axis) =>
+    axis === 'column' ? size.width : size.height;
+  /** An element's padding and border at its start and its end along an axis. */
+  const edgesAlong = (look: Look, axis: Axis) =>
+    axis === 'column'
+      ? [laid(look.padding[3]) + look.border[3], laid(look.padding[1]) + look.border[1]]
+      : [laid(look.padding[0]) + look.border[0], laid(look.padding[2]) + look.border[2]];
+
+  type Leaf = {
+    item: { element: ModelElement; look: Look };
+    line: number;
+    span: number;
+    before: number;
+    after: number;
+  };
+  /**
+   * A subgrid's items along its axis, with the items of subgrids inside it along the same axis: each
+   * with its line from the subgrid's first track, and the room the subgrids add before and after it,
+   * as CSS Grid 2 adds it to their margins: a subgrid's padding and border at its first and last
+   * tracks, and half the difference between its gap and its parent's at the gaps inside it. A
+   * subgrid with no span of its own spans the tracks its items reach.
+   */
+  function leavesOf(
+    element: ModelElement,
+    axis: Axis,
+    parentGap: number,
+    given?: number
+  ): { leaves: Leaf[]; span: number } {
+    const look = lookAt(element);
+    const gap = gapAlong(look, axis);
+    const inside = halved(gap - parentGap);
+    const [startEdge, endEdge] = edgesAlong(look, axis);
+    let next = 0;
+    const units = itemsOf(element).flatMap((item) => {
+      if (!('element' in item)) {
+        if (item.text.trim()) problems.add('text in a subgrid');
+        return [];
+      }
+      const start = startAlong(item.look, axis);
+      const line = start === undefined ? next : start - 1;
+      const own = spanAlong(item.look, axis);
+      const inner =
+        subgridAxis(item.look) === axis ? leavesOf(item.element, axis, gap, own) : undefined;
+      const span = inner?.span ?? own ?? 1;
+      next = line + span;
+      return [
+        { line, span, leaves: inner?.leaves ?? [{ item, line: 0, span, before: 0, after: 0 }] }
+      ];
+    });
+    const span = given ?? Math.max(1, ...units.map((unit) => unit.line + unit.span));
+    const leaves = units.flatMap((unit) =>
+      unit.leaves.map((leaf) => ({
+        ...leaf,
+        line: unit.line + leaf.line,
+        before: leaf.before + (leaf.line === 0 ? (unit.line === 0 ? startEdge : inside) : 0),
+        after:
+          leaf.after +
+          (leaf.line + leaf.span === unit.span
+            ? unit.line + unit.span === span
+              ? endEdge
+              : inside
+            : 0)
+      }))
+    );
+    return { leaves, span };
+  }
+
+  /**
+   * The tracks a subgrid takes from its parent grid along its axis: their sizes, the gap between
+   * them, how far its border box starts after its first line and ends before its last, and its
+   * parent's gap, which its own overrides.
+   */
+  type GivenTracks = {
+    axis: Axis;
+    sizes: readonly number[];
+    lineGap: number;
+    before: number;
+    after: number;
+    parentGap: number;
+  };
+  const givenTracks = new Map<ModelElement, GivenTracks>();
+  const giveTracks = (element: ModelElement, given: GivenTracks) => {
+    givenTracks.set(element, given);
+    fragments.delete(element);
+  };
+
+  function grid(
+    element: ModelElement,
+    look: Look,
+    items: readonly Item[],
+    width?: number,
+    height?: number
+  ): Content {
     const kids = items.filter((item) => 'element' in item || item.text.trim());
-    const anonymous = (item: Item, at?: number): Fragment | undefined =>
-      'element' in item ? box(item.element, at) : undefined;
     const sizeOf = (item: Item, at?: number) =>
       'element' in item ? box(item.element, at) : inline(look, [item], at);
     const justifyOf = (item: Item) =>
@@ -389,15 +491,27 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
     const widest = Math.max(0, ...natural.map((size) => size.width));
     const tallest = Math.max(0, ...natural.map((size) => size.height));
     const count = kids.length;
-    /** Place an item in its cell, stretching it where its alignment says. */
-    const place = (index: number, x: number, y: number, cellWidth: number, cellHeight: number) => {
+    /**
+     * Place an item in its cell, stretching it where its alignment says; a subgrid always stretches
+     * along its axis, as its tracks are its parent's.
+     */
+    const place = (
+      index: number,
+      x: number,
+      y: number,
+      cellWidth: number,
+      cellHeight: number,
+      subgrid?: Axis
+    ) => {
       const item = kids[index];
       const justify = justifyOf(item);
       const align = alignOf(item);
       const stretchedWidth =
-        stretches(justify) && !('element' in item && item.look.width !== 'auto');
+        subgrid === 'column' ||
+        (stretches(justify) && !('element' in item && item.look.width !== 'auto'));
       const stretchedHeight =
-        stretches(align) && !('element' in item && item.look.height !== 'auto');
+        subgrid === 'row' ||
+        (stretches(align) && !('element' in item && item.look.height !== 'auto'));
       // Text is an anonymous box of its line, placed as an item, so its text is placed with it.
       const fragment =
         'element' in item
@@ -435,19 +549,28 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
           ]
         : [];
     };
-    void anonymous;
+    const given = givenTracks.get(element);
     if (
       kids.some((item) => 'element' in item && item.look.gridRowStart !== undefined) ||
       look.gridTemplateColumns.length ||
-      look.gridTemplateRows.length
+      look.gridTemplateRows.length ||
+      subgridAxis(look)
     )
       return placedGrid();
     // Items placed by their lines, as a grid of rows and columns: each track as its template gives
     // it, or else as large as the largest item in it, and the room left across spread by
-    // justify-content.
+    // justify-content. A subgrid takes its parent's tracks along its axis (see GivenTracks), and,
+    // laid out with no parent's, is a grid of its own, as in CSS.
     function placedGrid(): Content {
       if (look.gridAutoColumns !== 'max-content' || look.gridAutoRows !== 'max-content')
         problems.add(`grid-auto-columns and -rows: ${look.gridAutoColumns} ${look.gridAutoRows}`);
+      // A subgrid with no span of its own spans the tracks its items reach.
+      const spanOf = (item: Item, axis: Axis) => {
+        if (!('element' in item)) return 1;
+        const own = spanAlong(item.look, axis);
+        if (own !== undefined || subgridAxis(item.look) !== axis) return own ?? 1;
+        return leavesOf(item.element, axis, gapAlong(look, axis)).span;
+      };
       const lines = kids.map((item) =>
         'element' in item &&
         item.look.gridRowStart !== undefined &&
@@ -455,44 +578,57 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
           ? {
               row: item.look.gridRowStart - 1,
               column: item.look.gridColumnStart - 1,
-              rowSpan: item.look.gridRowSpan ?? 1,
-              columnSpan: item.look.gridColumnSpan ?? 1
+              rowSpan: spanOf(item, 'row'),
+              columnSpan: spanOf(item, 'column')
             }
           : undefined
       );
       if (lines.some((line) => !line)) problems.add('grid items not placed by line');
+      // What each item asks of the tracks along an axis; a subgrid's items ask in its place.
+      const asks = (axis: Axis) =>
+        lines.flatMap((line, index) => {
+          if (!line) return [];
+          const item = kids[index];
+          const at = axis === 'column' ? line.column : line.row;
+          const span = axis === 'column' ? line.columnSpan : line.rowSpan;
+          if ('element' in item && subgridAxis(item.look) === axis)
+            return leavesOf(item.element, axis, gapAlong(look, axis), span).leaves.map((leaf) => ({
+              at: at + leaf.line,
+              span: leaf.span,
+              size: sizeAlong(box(leaf.item.element), axis) + leaf.before + leaf.after
+            }));
+          return [{ at, span, size: sizeAlong(natural[index], axis) }];
+        });
       // Each track as its template gives it, or as large as the largest item it alone holds; an
       // item spanning tracks larger than they are with their gaps shares the rest equally among
       // them, the fewest-spanning items first, as CSS grows intrinsic tracks.
-      const tracks = (axis: 'row' | 'column', template: readonly number[], gap: number) => {
-        const span = axis === 'row' ? 'rowSpan' : 'columnSpan';
-        const size = (index: number) =>
-          axis === 'column' ? natural[index].width : natural[index].height;
+      const tracks = (axis: Axis, template: readonly number[], gap: number) => {
+        const items = asks(axis);
+        const reach = Math.max(template.length, ...items.map(({ at, span }) => at + span));
+        if (given?.axis === axis) {
+          if (reach > given.sizes.length) problems.add('subgrid items past its tracks');
+          return Array.from(
+            { length: Math.max(reach, given.sizes.length) },
+            (_, track) => given.sizes[track] ?? 0
+          );
+        }
         const sizes = Array.from(
-          {
-            length: Math.max(
-              template.length,
-              ...lines.map((line) => (line ? line[axis] + line[span] : 0))
-            )
-          },
+          { length: reach },
           (_, track) =>
             template[track] ??
             Math.max(
               0,
-              ...lines.flatMap((line, index) =>
-                line?.[axis] === track && line[span] === 1 ? [size(index)] : []
-              )
+              ...items.flatMap(({ at, span, size }) => (at === track && span === 1 ? [size] : []))
             )
         );
-        const spanning = lines
-          .flatMap((line, index) => (line && line[span] > 1 ? [{ line, index }] : []))
-          .sort((a, b) => a.line[span] - b.line[span]);
-        for (const { line, index } of spanning) {
-          const covered = Array.from({ length: line[span] }, (_, k) => line[axis] + k);
+        for (const { at, span, size } of items
+          .filter((item) => item.span > 1)
+          .sort((a, b) => a.span - b.span)) {
+          const covered = Array.from({ length: span }, (_, k) => at + k);
           const growing = covered.filter((track) => template[track] === undefined);
           const room =
             covered.reduce((total, track) => total + sizes[track], 0) + (covered.length - 1) * gap;
-          const extra = size(index) - room;
+          const extra = size - room;
           if (extra > 0 && growing.length)
             for (const track of growing) sizes[track] += extra / growing.length;
         }
@@ -504,6 +640,10 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         (count - 1) * gap;
       const columns = tracks('column', look.gridTemplateColumns, columnGap);
       const rows = tracks('row', look.gridTemplateRows, rowGap);
+      // Along a subgrid's axis its lines are its parent's, its own gap only moving its items.
+      const lineGap = (axis: Axis, gap: number) => (given?.axis === axis ? given.lineGap : gap);
+      const columnLines = lineGap('column', columnGap);
+      const rowLines = lineGap('row', rowGap);
       const extent = (sizes: readonly number[], gap: number) =>
         sizes.reduce((total, size) => total + size, 0) + Math.max(0, sizes.length - 1) * gap;
       const starts = (sizes: readonly number[], gap: number, start: number, between: number) => {
@@ -514,26 +654,68 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
           return here;
         });
       };
-      const outerWidth = width ?? extent(columns, columnGap);
-      const outerHeight = height ?? extent(rows, rowGap);
-      const across = distribute(
-        outerWidth - extent(columns, columnGap),
-        columns.length,
-        look.justifyContent
-      );
-      const xs = starts(columns, columnGap, across.start, across.between);
-      const ys = starts(rows, rowGap, 0, 0);
-      const children = lines.flatMap((line, index) =>
-        line
-          ? place(
-              index,
-              xs[line.column],
-              ys[line.row],
-              spanned(columns, line.column, line.columnSpan, columnGap + across.between),
-              spanned(rows, line.row, line.rowSpan, rowGap)
-            )
-          : []
-      );
+      // A subgrid's first line from its content's start, its content's own size along its axis,
+      // and the room it takes off its items' cells before and after them (see leavesOf).
+      const firstLine = (axis: Axis) =>
+        given?.axis === axis ? -(given.before + edgesAlong(look, axis)[0]) : 0;
+      const ownRoom = (axis: Axis, sizes: readonly number[]) =>
+        given?.axis === axis
+          ? extent(sizes, given.lineGap) -
+            given.before -
+            given.after -
+            edgesAlong(look, axis)[0] -
+            edgesAlong(look, axis)[1]
+          : undefined;
+      const extras = (axis: Axis, at: number, span: number, total: number) => {
+        if (given?.axis !== axis) return [0, 0];
+        const [startEdge, endEdge] = edgesAlong(look, axis);
+        const inside = halved(gapAlong(look, axis) - given.parentGap);
+        return [
+          at === 0 ? given.before + startEdge : inside,
+          at + span === total ? given.after + endEdge : inside
+        ];
+      };
+      const outerWidth = width ?? ownRoom('column', columns) ?? extent(columns, columnGap);
+      const outerHeight = height ?? ownRoom('row', rows) ?? extent(rows, rowGap);
+      const across =
+        given?.axis === 'column'
+          ? { start: firstLine('column'), between: 0 }
+          : distribute(
+              outerWidth - extent(columns, columnGap),
+              columns.length,
+              look.justifyContent
+            );
+      const xs = starts(columns, columnLines, across.start, across.between);
+      const ys = starts(rows, rowLines, firstLine('row'), 0);
+      const children = lines.flatMap((line, index) => {
+        if (!line) return [];
+        const [left, right] = extras('column', line.column, line.columnSpan, columns.length);
+        const [top, bottom] = extras('row', line.row, line.rowSpan, rows.length);
+        const item = kids[index];
+        const subgrid = 'element' in item ? subgridAxis(item.look) : undefined;
+        if (subgrid && 'element' in item) {
+          const [at, span] =
+            subgrid === 'column' ? [line.column, line.columnSpan] : [line.row, line.rowSpan];
+          giveTracks(item.element, {
+            axis: subgrid,
+            sizes: (subgrid === 'column' ? columns : rows).slice(at, at + span),
+            lineGap: subgrid === 'column' ? columnLines + across.between : rowLines,
+            before: subgrid === 'column' ? left : top,
+            after: subgrid === 'column' ? right : bottom,
+            parentGap: gapAlong(look, subgrid)
+          });
+        }
+        return place(
+          index,
+          xs[line.column] + left,
+          ys[line.row] + top,
+          spanned(columns, line.column, line.columnSpan, columnLines + across.between) -
+            left -
+            right,
+          spanned(rows, line.row, line.rowSpan, rowLines) - top - bottom,
+          subgrid
+        );
+      });
       return { width: outerWidth, height: outerHeight, children };
     }
     if (look.gridAutoFlow.startsWith('column')) {
