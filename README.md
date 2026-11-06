@@ -535,6 +535,14 @@ come from the server PDF, drawn by `pdfjs-dist` on `@napi-rs/canvas` (npm
 packages, no system package), so the Render host makes them too; if making them
 fails, the round skips scoring and ranks by the app's measures.
 
+`firstTurns` sets how the first turns go, from the big picture down. With
+`flow`, a first version's reply shows one version and asks a question in words
+with up to three answers shown as buttons; the app's round after it tries whole
+pictures (one hole in place of the views and layouts), and the follow-up shows
+them as the comparison. With `caching`, each answer that names a task gets a
+round of its own while the question waits, and the reply to that answer is given
+its candidates at once.
+
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):
 before a project's first version, “Making a first version…” over the blank
