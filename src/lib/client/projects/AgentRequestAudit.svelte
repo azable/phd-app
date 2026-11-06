@@ -14,6 +14,7 @@
     agentTokens,
     type AgentRequest
   } from '$lib/client/timeline/agent-requests';
+  import { escalationText } from '$lib/shared/projects/events/ai-generation';
   import { presentProjectEvent } from '$lib/client/timeline/event-presentation';
 
   /**
@@ -63,6 +64,11 @@
     <BotIcon class="size-4 text-muted-foreground" />
     <span class="font-medium">Agent request · attempt {request.payload.attempt}</span>
     <span class="text-muted-foreground">{request.payload.purpose}</span>
+    {#if request.payload.escalation}
+      <span class="text-xs font-medium text-amber-700 dark:text-amber-400"
+        >{escalationText(request.payload.escalation)}</span
+      >
+    {/if}
     <span class="font-mono text-xs text-muted-foreground">
       {outcome?.type === 'ai.generation-succeeded'
         ? (outcome.payload.model ?? request.payload.requestedModel)

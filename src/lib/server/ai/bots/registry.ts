@@ -12,6 +12,8 @@ import {
   type ParticipantIntakeClassifierOutput
 } from '$lib/server/ai/bots/participant-intake';
 import type { AiProjectContext } from '$lib/server/ai/context/project-context';
+import { steppedUpParameters } from '$lib/server/ai/bots/attempt-profiles';
+import { currentEscalation } from '$lib/server/ai/turns/struggle';
 import type {
   CandidateAssistantOutput,
   ChatBotConfig,
@@ -30,16 +32,22 @@ export function createChatbot<Project, Output extends object>(
     if (!Number.isSafeInteger(request.attempt) || request.attempt < 1 || !profile)
       throw new Error(`Chatbot attempt ${request.attempt} is outside the configured ladder.`);
     const attempt = { number: request.attempt, purpose: profile.purpose };
+    const parameters =
+      request.turn === 'feedback' && profile.feedbackParameters
+        ? { ...profile.parameters, ...profile.feedbackParameters }
+        : profile.parameters;
+    // A visualization turn's first call steps up where the participant seems to be struggling
+    // (ai/turns/struggle.ts); the intake classifier and the repairs never do.
+    const escalation =
+      request.attempt === 1 && profile.purpose === 'initial' ? currentEscalation() : undefined;
     return {
       messages: request.messages,
       initialPrompt: config.initialPrompt,
       context: await config.buildContext({ ...request, attempt }),
       attempt,
-      parameters:
-        request.turn === 'feedback' && profile.feedbackParameters
-          ? { ...profile.parameters, ...profile.feedbackParameters }
-          : profile.parameters,
-      responseFormat: config.responseFormatFor?.(request) ?? config.responseFormat
+      parameters: escalation ? { ...parameters, ...steppedUpParameters } : parameters,
+      responseFormat: config.responseFormatFor?.(request) ?? config.responseFormat,
+      ...(escalation ? { escalation } : {})
     };
   };
   const generatePrepared = async (

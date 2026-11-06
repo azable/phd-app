@@ -81,6 +81,8 @@ export async function submitCandidateFeedback(
       );
       current = generation.document;
       if (!generation.ok) {
+        // The fast first call flagged the request as unclear: it runs again, stepped up.
+        if (generation.rethink) return { document: current, done: false, rethink: true };
         if (!generation.retried) return { document: current, done: true };
         failureSummaries.push(`Attempt ${attempt}: ${generation.message}`);
         return { document: current, done: false };
