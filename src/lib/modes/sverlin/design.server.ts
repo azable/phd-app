@@ -16,7 +16,6 @@ import {
   listingOptions,
   listingPropOptions,
   listingRegionProps,
-  optionsOf,
   isPlaceLabel,
   placeLabelLength,
   placePaint,
@@ -426,7 +425,7 @@ export function designSpace(
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
     ...Object.fromEntries(
       places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
+        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, propOptions[prop]])
       )
     ),
     ...layoutSpace(layouts)
@@ -438,7 +437,7 @@ export function designSpace(
  * one structure dagre's layered engine lays out (library/node/layered-engine.ts).
  */
 function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[] {
-  const options = optionsOf(kind.role, prop);
+  const options = propOptions[prop];
   return prop === 'form' && kind.free?.structure !== 'layers'
     ? options.filter((option) => option !== 'layered')
     : options;

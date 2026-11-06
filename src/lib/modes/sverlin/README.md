@@ -1268,20 +1268,20 @@ has more room than its tracks need, `justify` start, center, or end puts the
 room after, around, or before them, and between, around, or evenly spreads the
 tracks over it; an array's kind starts at center where every value of its type
 keeps one length throughout, as an array being sorted, and at start where one
-grows or shrinks, as a queue, so no element moves as another comes or goes.
-Positions past an array's ends are drawn in end slots, kept only as far as drawn
-positions go: an array's kind has `overflow`, included (end slots are tracks of
-its box) or excluded (they hang outside, so centring it centres its elements),
-and a `<Pointed>` kind too, shown (drawn past the ends) or hidden (nothing
-there, keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`,
-`opacity`, and `strokeStyle`; `route`, `layout` (as its layout's arrows run, the
-start), `straight`, `curved` (each arrow choosing its own side and how far to
-bow round what is in its way), or `wire` (straight runs turning only at right
-angles, round the boxes, side by side apart); `head`, the mark at each end a
-link points to, `none`, `arrow` (a filled triangle), `open` (an outlined one),
-`vee`, `dot`, `diamond`, or `bar`, which starts at `none` where every link of
-the kind is a two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the
-start), 12, or 16 pixels. A label's look is its own nodes' kind.
+grows or shrinks, as a queue, so no element moves as another comes or goes. A
+row or column is a grid of one row or column (see Grid), so positions past an
+array's ends are drawn in end slots, tracks before its first element and after
+its last, kept only as far as drawn positions go. A `<Pointed>` kind has
+`overflow`, shown (drawn past the ends) or hidden (nothing there, keeping no
+room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and
+`strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
+`straight`, `curved` (each arrow choosing its own side and how far to bow round
+what is in its way), or `wire` (straight runs turning only at right angles,
+round the boxes, side by side apart); `head`, the mark at each end a link points
+to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
+`diamond`, or `bar`, which starts at `none` where every link of the kind is a
+two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16
+pixels. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the

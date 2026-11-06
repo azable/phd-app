@@ -669,18 +669,6 @@ export function endSlotContext(): { collection: string; position: number } | und
  * Inside an {#each} item's node, which keeps the end slots of the collection it is an item of:
  * the element inside keeps none of its own.
  */
-/** How a collection whose overflow is excluded hangs its end slots outside its box. */
-export type Overhang = { layout: 'row' | 'column'; gap: number };
-
-/** Tell a collection's items whether its end slots hang outside its box, and how. */
-export function provideOverhang(overhang: Overhang | undefined): void {
-  setContext('sverlin:overhang', overhang);
-}
-
-export function overhangContext(): Overhang | undefined {
-  return getContext<Overhang | undefined>('sverlin:overhang');
-}
-
 export function provideItemEnds(collection: string): void {
   setContext('sverlin:item-ends', collection);
 }

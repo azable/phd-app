@@ -44,7 +44,9 @@ const valuesRow = `    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/e
 
 /** The boxes of a step's nodes of one kind, left to right. */
 const boxes = (
-  step: { nodes: { kind?: string; box: { x: number; y: number; width: number } }[] },
+  step: {
+    nodes: { kind?: string; box: { x: number; y: number; width: number; height: number } }[];
+  },
   kind: string
 ) =>
   step.nodes

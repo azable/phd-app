@@ -720,6 +720,24 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       });
       return { width: outerWidth, height: outerHeight, children };
     }
+    // A row or a column of tracks each as large as its item, as Node.svelte draws rows and columns,
+    // places them as a flex line does: across, a row aligns them by align-items and a column by
+    // justify-items, and its line stretches to the grid's size.
+    const flowsAcross = look.gridAutoFlow.startsWith('column');
+    if ((flowsAcross ? look.gridAutoColumns : look.gridAutoRows) === 'max-content') {
+      if (flowsAcross) return flex({ ...look, flexDirection: 'row' }, items, width, height);
+      const across = (alignment: string) => (alignment === 'legacy' ? 'normal' : alignment);
+      return flex(
+        { ...look, flexDirection: 'column', alignItems: across(look.justifyItems) },
+        items.map((item) =>
+          'element' in item
+            ? { ...item, look: { ...item.look, alignSelf: item.look.justifySelf } }
+            : item
+        ),
+        width,
+        height
+      );
+    }
     if (look.gridAutoFlow.startsWith('column')) {
       if (look.gridAutoColumns !== '1fr')
         problems.add(`grid-auto-columns: ${look.gridAutoColumns}`);

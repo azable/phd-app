@@ -12,7 +12,6 @@
   import type { Direction, Form } from './forms';
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
-  import Overhang from './Overhang.svelte';
   import Pointing from './Pointing.svelte';
   import {
     designContext,
@@ -36,8 +35,6 @@
     layoutMemoryContext,
     movingIdentity,
     nodeIdsContext,
-    overhangContext,
-    provideOverhang,
     elementSlot,
     pointedContext,
     pointerAroundContext,
@@ -390,8 +387,6 @@
     endSlot && element?.collection === endSlot.collection ? endSlot.position : undefined;
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
-  // Where the collection this node is an item or element of hangs its end slots, if outside it.
-  const overhang = overhangContext();
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   // Hidden at this step with every render it holds, keeping its room, its children with it.
   const hiddenHere = untrack(
@@ -924,18 +919,8 @@
         )
       : 0
   );
-  // A collection whose overflow is excluded hangs its end slots outside its box (see Overhang).
-  const excluded = $derived(collection && look('overflow') === 'excluded');
-  untrack(() => {
-    if (collection)
-      provideOverhang(
-        excluded && (arrangement === 'row' || arrangement === 'column')
-          ? { layout: arrangement, gap }
-          : undefined
-      );
-  });
-  // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS flex and
-  // grid, and their links never move their children: they are drawn over them (see LinkOverlay).
+  // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS grids,
+  // and their links never move their children: they are drawn over them (see LinkOverlay).
   const free = $derived(arrangement === 'free');
   const overlaid = $derived(
     __links && (arrangement === 'row' || arrangement === 'column' || arrangement === 'grid')
@@ -1086,12 +1071,14 @@
         data-sv-collection={collection ? id : undefined}
         data-sv-overlaid={overlaid ? '' : undefined}
         style:gap={`${gap}em`}
-        style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
-        style:justify-items={collection
-          ? arrangement === 'column'
-            ? alignment
-            : 'center'
-          : undefined}
+        style:align-items={arrangement === 'column' ? 'center' : alignment}
+        style:justify-items={arrangement === 'column'
+          ? collection && packs
+            ? 'center'
+            : alignment
+          : collection
+            ? 'center'
+            : undefined}
         style:justify-content={justification}
         style:width={collection && arrangement === 'row' && (packed || (packs && packRoom))
           ? 'max-content'
@@ -1102,7 +1089,7 @@
         style:margin-inline-end={collection && arrangement === 'row' && roomAt !== 'flex-end'
           ? 'auto'
           : undefined}
-        style:position={excluded || overlaid ? 'relative' : undefined}
+        style:position={overlaid ? 'relative' : undefined}
       >
         {@render contents()}
         {#each { length: spares } as _, index (index)}
@@ -1137,11 +1124,9 @@
 
 {#snippet drawn()}
   {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
-    <Overhang {overhang} side="before">
-      {#each itemEnds.before as end (end)}
-        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-      {/each}
-    </Overhang>
+    {#each itemEnds.before as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
   {/if}
   {#if atEnd !== undefined}
     {#if pointers.length}
@@ -1149,19 +1134,15 @@
     {/if}
   {:else if pointers.length}
     {#if position === 0 && inSequence && before.length}
-      <Overhang {overhang} side="before">
-        {#each before as end (end)}
-          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-        {/each}
-      </Overhang>
+      {#each before as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
     {/if}
     <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
     {#if position === length - 1 && inSequence && after.length}
-      <Overhang {overhang} side="after">
-        {#each after as end (end)}
-          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-        {/each}
-      </Overhang>
+      {#each after as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
     {/if}
   {:else if slotWidth || slotHeight || reaches}
     <!-- A box of its own size in the slot that keeps the largest it reaches (see varies), with room
@@ -1181,11 +1162,9 @@
     {@render nodeBox()}
   {/if}
   {#if eachItem && eachItem.index === itemLength - 1 && inSequence && itemEnds.after.length}
-    <Overhang {overhang} side="after">
-      {#each itemEnds.after as end (end)}
-        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-      {/each}
-    </Overhang>
+    {#each itemEnds.after as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
   {/if}
 {/snippet}
 
@@ -1268,14 +1247,20 @@
     text-transform: none;
     font-variant-caps: normal;
   }
+  /*
+    A row or column is a grid of one row or one column, each child a track as large as itself, in
+    order, an end slot a track before the first or after the last like the rest.
+  */
   .items {
-    display: flex;
+    display: grid;
   }
   .row {
-    flex-direction: row;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
   }
   .column {
-    flex-direction: column;
+    grid-auto-flow: row;
+    grid-auto-rows: max-content;
   }
   /*
     A grid places each cell by its row and col, each column as wide as its widest cell and each row
@@ -1316,11 +1301,7 @@
     sequence are evenly spaced however their labels differ; each item keeps its own size, centred
     in its track along the layout direction.
   */
-  .uniform {
-    display: grid;
-  }
   .uniform.row {
-    grid-auto-flow: column;
     grid-auto-columns: 1fr;
   }
   .uniform.column {

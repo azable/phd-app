@@ -307,7 +307,7 @@ export const propOptions = {
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
-  overflow: ['shown', 'hidden', 'included', 'excluded'],
+  overflow: ['shown', 'hidden'],
   shadow: ['none', 'soft', 'lifted', 'hard'],
   glow: ['none', 'on'],
   fillStyle: ['solid', 'hatched'],
@@ -462,7 +462,7 @@ const uniformSlot = {
 
 /** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
-  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
+  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
   value: nodeProps,
   bar: nodeProps,
   vertex: nodeProps,
@@ -494,24 +494,6 @@ export const starterFreeLayout: Record<string, string | number> = {
   curve: 'straight',
   layoutSeed: 1
 };
-
-/**
- * A prop's options for a role: overflow says, for a pointer, whether it is drawn past its
- * collection's ends, and for a collection's node, whether its end slots are inside its box or hang
- * outside it.
- */
-export const overflowOptions = {
-  pointer: ['shown', 'hidden'],
-  collection: ['included', 'excluded']
-} as const;
-
-export function optionsOf(
-  role: KindRole,
-  prop: DesignProp
-): readonly (string | number | boolean)[] {
-  if (prop !== 'overflow') return propOptions[prop];
-  return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
-}
 
 /**
  * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
@@ -625,8 +607,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     gap: 0.5,
     align: 'center',
     justify: 'start',
-    spacing: 'slots',
-    overflow: 'included'
+    spacing: 'slots'
   },
   value: {
     shown: true,
@@ -840,27 +821,24 @@ export const listingAlias = (key: string): string =>
 export const groupProps = (role: KindRole): readonly DesignProp[] =>
   roleProps[role].filter((prop) => prop !== 'shown');
 
-/** Whether a role's prop can name a token: every value the token can hold is one of the prop's. */
-export function tokenFits(role: KindRole, prop: DesignProp, token: DesignToken): boolean {
-  const options = optionsOf(role, prop);
+/** Whether a prop can name a token: every value the token can hold is one of the prop's. */
+export function tokenFits(prop: DesignProp, token: DesignToken): boolean {
+  const options = propOptions[prop];
   return propOptions[tokenProps[token]].every((option) => options.includes(option as never));
 }
 
 /**
- * A group's options for a prop over the roles of the kinds it reaches: those every one of them
- * takes, and each token that fits them all.
+ * A group's options for a prop, where a role of the kinds it reaches has it: the prop's, and each
+ * token that fits it.
  */
 export function groupOptions(
   roles: readonly KindRole[],
   prop: DesignProp
 ): readonly (string | number | boolean)[] {
-  const reached = roles.filter((role) => groupProps(role).includes(prop));
-  const [first, ...rest] = reached.map((role) => optionsOf(role, prop));
+  if (!roles.some((role) => groupProps(role).includes(prop))) return [];
   return [
-    ...(first ?? []).filter((option) => rest.every((options) => options.includes(option as never))),
-    ...(Object.keys(tokenProps) as DesignToken[]).filter((token) =>
-      reached.every((role) => tokenFits(role, prop, token))
-    )
+    ...propOptions[prop],
+    ...(Object.keys(tokenProps) as DesignToken[]).filter((token) => tokenFits(prop, token))
   ];
 }
 
