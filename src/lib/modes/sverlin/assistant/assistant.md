@@ -603,8 +603,12 @@ of its regions, the source each label resolved to (by its text and line), and
 whether the algorithm runs its code: check them against the listing before
 replying, and relabel a region mapped to the wrong code or never run. A caption
 can name what the listing names with the same tokens, for example
-`Lift $i[A[i]] into $key[key].`, so the words, the listing and the picture light
-together.
+`Lift :i[A[i]] into :key[key].`, so the words, the listing and the picture light
+together. Write code inside a sentence as a token, never as plain text:
+`:i[A[i]]` for a place the layout draws, `:@front[values[j] > key]` for a moment
+of the run, a label, which lights with that label's region and needs no render.
+Code that refers to nothing in the algorithm stays plain text, and should be
+rare.
 
 The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),
