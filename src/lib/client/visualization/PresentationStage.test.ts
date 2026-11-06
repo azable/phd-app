@@ -14,6 +14,7 @@ import {
   PresentationSelection
 } from './presentation-selection.svelte';
 import { VisualSelections } from './visual-selection.svelte';
+import { VisualAnnotations } from './visual-annotations.svelte';
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const displaySetId = '12345678-1234-4123-8123-123456789abd';
@@ -316,6 +317,7 @@ function stage(
       playback: new PresentationPlayback(),
       layout: 'comparison',
       visualSelections: new VisualSelections(),
+      visualAnnotations: new VisualAnnotations(),
       disabled: busy
     }
   }).body;

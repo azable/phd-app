@@ -14,6 +14,7 @@
   import type { PairAnswers } from '$lib/client/visualization/pair-answers';
   import { baseCandidate } from '$lib/client/visualization/presentation-selection.svelte';
   import type { VisualSelection } from '$lib/client/visualization/visual-selection.svelte';
+  import type { VisualAnnotations } from '$lib/client/visualization/visual-annotations.svelte';
   import type { MessageContent } from '$lib/shared/projects/events/message-content';
 
   import MessageContentView from './MessageContent.svelte';
@@ -37,6 +38,8 @@
     presentations: TimelinePresentation[];
     /** Elements selected in the visible presentations. */
     visualSelections?: readonly VisualSelection[];
+    /** Comments pinned in presentations, sent with the next message or answer on them. */
+    annotations?: VisualAnnotations;
     onSubmitted?: () => void;
     onDraftChange?: (content: MessageContent, focused: boolean) => void;
     /** The candidate feedback builds on, where none is shown, as for a source chosen on its own. */
@@ -57,6 +60,7 @@
     presentationCount,
     presentations,
     visualSelections = [],
+    annotations,
     onSubmitted = () => {},
     onDraftChange = (_content: MessageContent, _focused: boolean) => {},
     base,
@@ -81,6 +85,13 @@
   let editorRevision = $state(0);
   let focused = $state(false);
   const selected = $derived(selectedFeedbackContext(presentations, visualSelections));
+  // The comments pinned in the presentations shown, which the next message or answer carries.
+  const shownIds = $derived(
+    presentations.slice(0, 2).map(({ presentation }) => presentation.presentationId)
+  );
+  const pinned = $derived(
+    (annotations?.drafts ?? []).filter(({ presentationId }) => shownIds.includes(presentationId))
+  );
   // While the assistant replies, every system says it is thinking; where its turn runs apart from
   // the message that asked for it, a message written meanwhile can still be sent, for its next turn.
   const thinking = $derived(session.pending?.type === 'feedback' || session.assistantResponding);
@@ -97,11 +108,13 @@
   /** The draft, as a message would send it, to go with an answer to the pair; none when empty. */
   export function takeComment(): MessageContent | undefined {
     const draft = serializeEditor();
-    return draft.length ? feedbackSubmissionContent(draft, selected) : undefined;
+    const written = draft.length ? feedbackSubmissionContent(draft, selected) : [];
+    return written.length || pinned.length ? [...pinned, ...written] : undefined;
   }
 
   /** Empty the box once what it held is sent. */
   export function clear(): void {
+    annotations?.take(shownIds);
     editorRevision += 1;
     hasContent = false;
     enterWithPair = false;
@@ -115,7 +128,8 @@
 
   async function send(editorContent: MessageContent): Promise<boolean> {
     if (!session.atHead || session.pending || session.readOnly) return false;
-    const content = feedbackSubmissionContent(editorContent, selected);
+    const written = editorContent.length ? feedbackSubmissionContent(editorContent, selected) : [];
+    const content = [...pinned, ...written];
     const from = base ?? baseCandidate(presentations);
     const viewing = feedbackViewing(presentations, baseSource, steps);
     return session.runCommand({
@@ -132,7 +146,7 @@
     event.preventDefault();
     if (!editor || pair) return;
     const editorContent = serializeEditor();
-    if (editorContent.length === 0) return;
+    if (editorContent.length === 0 && pinned.length === 0) return;
     if (await send(editorContent)) {
       clear();
       onSubmitted();
@@ -323,6 +337,37 @@
       <div
         class="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring"
       >
+        {#if pinned.length > 0}
+          <ol
+            class="flex flex-col gap-1 border-b bg-muted/40 px-3 py-2 text-sm"
+            aria-label="Comments pinned in the pictures, sent with your next message or answer"
+          >
+            {#each pinned as annotation, index (annotation)}
+              <li class="flex items-start gap-2">
+                <span
+                  class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-primary text-xs font-semibold text-primary"
+                  >{index + 1}</span
+                >
+                <span class="min-w-0 flex-1 break-words">
+                  {annotation.text}
+                  <span class="text-muted-foreground">
+                    · step {annotation.step + 1}{annotation.element
+                      ? ` · ${annotation.element.label}`
+                      : ''}</span
+                  >
+                </span>
+                <button
+                  type="button"
+                  class="text-muted-foreground hover:text-foreground"
+                  aria-label={`Remove comment ${annotation.text}`}
+                  onclick={() => annotations?.remove(annotation)}
+                >
+                  <XIcon class="size-3" />
+                </button>
+              </li>
+            {/each}
+          </ol>
+        {/if}
         {#if selected.length > 0 && !hasExplicitReferences}
           <div
             class="border-b bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
@@ -410,7 +455,10 @@
               type="submit"
               size="sm"
               aria-label="Submit project feedback"
-              disabled={!session.atHead || !!session.pending || session.readOnly || !hasContent}
+              disabled={!session.atHead ||
+                !!session.pending ||
+                session.readOnly ||
+                (!hasContent && pinned.length === 0)}
             >
               {#if thinking && !queueing}
                 <Spinner data-icon="inline-start" />Thinking

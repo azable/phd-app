@@ -133,10 +133,17 @@ question mark beside each while it is unanswered or Unsure. Choosing the card
 shows its pair on the stage again, to answer it or answer it again (the same
 command, so it also rebases on a preferred side and may start a turn); a pair's
 latest answer is the one that counts, on its card and in the preference model.
-An answer on one of them asks the assistant for no turn while others wait
-(`waitingComparisons`); it sets aside, as `candidates-advanced` with reason
-`moot`, those the answer makes moot, asking the pair just answered, about a
-variable it settled, or something a value it settled hides (`mootComparison` in
+In a picture built from source, a participant can pin a short comment where they
+clicked, on the element selected, or both (Comment, on the stage): it waits as a
+dashed numbered pin, listed above the message box, until the next message or
+answer on that picture carries it as an `annotation` part, then stays a solid
+pin there at its step
+([`visual-annotations.svelte.ts`](src/lib/client/visualization/visual-annotations.svelte.ts)),
+and the assistant reads it as feedback on that design. An answer on one of them
+asks the assistant for no turn while others wait (`waitingComparisons`); it sets
+aside, as `candidates-advanced` with reason `moot`, those the answer makes moot,
+asking the pair just answered, about a variable it settled, or something a value
+it settled hides (`mootComparison` in
 [`variant-guard.ts`](src/lib/server/projects/variant-guard.ts)), and the answer
 that leaves none waiting starts the assistant's turn. A preference model
 ([`preference-model.ts`](src/lib/server/projects/preference-model.ts)), a
