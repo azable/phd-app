@@ -308,3 +308,34 @@ describe('subgrids', () => {
     );
   });
 });
+
+describe('the basis', () => {
+  const diagonal = sort(`    {#each values as v, k}<Node row={k} col={k}>{v}</Node>{/each}`);
+
+  it('is square at the start, drawing a table', async () => {
+    const { steps } = await drawnSteps(diagonal);
+    const cells = boxes(steps[1], 'IntCell');
+    expect(cells[1].x).toBeGreaterThanOrEqual(cells[0].x + cells[0].width);
+    expect(cells[1].y).toBeGreaterThan(cells[0].y);
+  });
+
+  it('places each cell at col times its col vector plus row times its row vector', async () => {
+    // A diamond: col runs right and down, row left and down, so cells on the diagonal fall in one
+    // column, a pitch apart.
+    const { steps, built } = await drawnSteps(diagonal, {
+      chosen: { 'Main.colX': 0.5, 'Main.colY': 0.5, 'Main.rowX': -0.5, 'Main.rowY': 0.5 }
+    });
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/layout model/iu));
+    const cells = boxes(steps[1], 'IntCell').sort((a, b) => a.y - b.y);
+    expect(new Set(cells.map(({ x }) => Math.round(x))).size).toBe(1);
+    const pitches = cells.slice(1).map((cell, k) => Math.round(cell.y - cells[k].y));
+    expect(new Set(pitches).size).toBe(1);
+    expect(pitches[0]).toBeGreaterThanOrEqual(Math.round(cells[0].height));
+  });
+
+  it('refuses a col and a row that are parallel', async () => {
+    await expect(
+      drawnSteps(diagonal, { chosen: { 'Main.rowX': 1, 'Main.rowY': 0 } })
+    ).rejects.toThrow(/not parallel/u);
+  });
+});

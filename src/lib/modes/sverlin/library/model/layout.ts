@@ -550,6 +550,8 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         : [];
     };
     const given = givenTracks.get(element);
+    // A grid whose cells are all placed out of flow, as a basis places them, holds nothing in flow.
+    if (!count) return { width: width ?? 0, height: height ?? 0, children: [] };
     if (
       kids.some((item) => 'element' in item && item.look.gridRowStart !== undefined) ||
       look.gridTemplateColumns.length ||

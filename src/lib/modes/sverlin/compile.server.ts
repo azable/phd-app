@@ -1157,6 +1157,7 @@ function prepareViews(
       problems,
       kinds: unlaid,
       freeNodes,
+      gridKinds,
       linkedNodes,
       flows,
       tagKinds,
@@ -1824,17 +1825,19 @@ function prepareViews(
         items && (items.type ?? (items.over ? variables.get(items.over) : undefined));
       return structure
         ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } }
-        : kind.role === 'link' && lines.has(kind.key)
-          ? { ...kind, lines: true }
-          : items
-            ? {
-                ...kind,
-                collection: {
-                  axis: items.axis,
-                  steady: itemsType !== undefined && steady.has(itemsType)
+        : gridKinds.has(kind.key)
+          ? { ...kind, grid: true }
+          : kind.role === 'link' && lines.has(kind.key)
+            ? { ...kind, lines: true }
+            : items
+              ? {
+                  ...kind,
+                  collection: {
+                    axis: items.axis,
+                    steady: itemsType !== undefined && steady.has(itemsType)
+                  }
                 }
-              }
-            : kind;
+              : kind;
     });
     // A name nothing gives the page would fail only in the browser.
     const placeStarts = new Set(placeNames.map(({ start }) => start));
@@ -3750,6 +3753,8 @@ function withNodeRefs(
   kinds: DesignKind[];
   /** The <Node layout="free"> tags of each kind that has one, and the flow the first sets. */
   freeNodes: Map<string, unknown[]>;
+  /** The kinds of the <Node layout="grid"> tags. */
+  gridKinds: Set<string>;
   /** Each <Node> holding links, with the kind of the links written in it. */
   linkedNodes: { kind: string; node: unknown }[];
   flows: Map<string, 'x' | 'y'>;
@@ -4257,6 +4262,8 @@ function withNodeRefs(
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes and the flow they set.
   const freeNodes = new Map<string, Tag[]>();
+  // A kind with a node arranging a grid has its basis among its props (see gridProps).
+  const gridKinds = new Set<string>();
   const flows = new Map<string, 'x' | 'y'>();
   const laidOutFreely = ({ name, tag }: Entry) =>
     name === 'Node' &&
@@ -4311,6 +4318,10 @@ function withNodeRefs(
         flows.set(key, part.data);
     }
     if (entry.name === 'Node') nodeKinds.set(entry.start, key);
+    const [arranged] = ((entry.tag.attributes ?? []).find(({ name }) => name === 'layout')?.value ??
+      []) as { type?: string; data?: string }[];
+    if (entry.name === 'Node' && arranged?.type === 'Text' && arranged.data === 'grid')
+      gridKinds.add(key);
     // A node holding one {#each} is a collection: its kind's starters depend on its axis and on
     // whether what it goes over keeps one length (see starterLook).
     const items = (entry.tag.children ?? []).filter(
@@ -4402,6 +4413,7 @@ function withNodeRefs(
     problems,
     kinds: [...kinds].map(([key, role]) => ({ key, role })),
     freeNodes,
+    gridKinds,
     linkedNodes: tags.flatMap(({ name, links, view, tag }) =>
       name === 'Node' && links ? [{ kind: kindKey(view, 'Link'), node: tag }] : []
     ),

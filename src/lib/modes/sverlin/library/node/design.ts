@@ -267,6 +267,12 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
 const spacing = [0, 0.0625, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
+ * A component of a grid's basis vector, in pitches: halves give the shapes the guide names, as a
+ * diamond's [0.5, 0.5] and [−0.5, 0.5].
+ */
+const basisSteps = [-1, -0.5, 0, 0.5, 1];
+
+/**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
  * pixels; whether a box takes its slot's width and height or its own, and where its own sits in
  * the slot; whether a row or column places its children in their slots or packs them; how a pointer
@@ -314,7 +320,11 @@ export const propOptions = {
   head: headShapes,
   headSize: headSizes,
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
-  icon: iconNames
+  icon: iconNames,
+  colX: basisSteps,
+  colY: basisSteps,
+  rowX: basisSteps,
+  rowY: basisSteps
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;
@@ -470,6 +480,13 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
 export const freeLayoutProps: readonly DesignProp[] = ['form', 'direction', 'curve', 'layoutSeed'];
+
+/**
+ * The props a kind arranging a grid has besides its role's: its basis, the x and y of the vector
+ * its columns run along and of the one its rows run along, starting square, as a table.
+ */
+export const gridProps: readonly DesignProp[] = ['colX', 'colY', 'rowX', 'rowY'];
+export const starterGrid: Record<string, number> = { colX: 1, colY: 0, rowX: 0, rowY: 1 };
 
 /** A free layout's starting look, but for its direction (see starterLook in design.server.ts). */
 export const starterFreeLayout: Record<string, string | number> = {

@@ -728,6 +728,21 @@ export type GridCells = {
   cells: (readonly [number | 'all', number | 'all'])[];
   start: readonly [number, number];
   count?: readonly [number, number];
+  basis?: Basis;
+};
+
+/**
+ * A grid whose basis is not square places each cell itself: at col times the col vector plus row
+ * times the row vector, in pitches, from the corner of the box round every coordinate it keeps;
+ * a pitch is the largest row's height and the largest column's width, in pixels, with the gap, in
+ * em, between pitches (see basis in Node.svelte).
+ */
+export type Basis = {
+  col: readonly [number, number];
+  row: readonly [number, number];
+  pitch: readonly [number, number];
+  origin: readonly [number, number];
+  gap: number;
 };
 
 /**

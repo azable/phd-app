@@ -64,6 +64,7 @@
     throughContext,
     typeContext,
     wrappedContext,
+    type Basis,
     type Packing,
     type Pointer
   } from '../type-context';
@@ -555,7 +556,7 @@
       const along = inSubgrid.subgrid === 1 ? 'row' : 'column';
       return collection && arrangement === along ? inSubgrid.subgrid : undefined;
     }
-    if (!cell || !__nodes) return undefined;
+    if (!cell || !__nodes || grid?.basis) return undefined;
     if (cell.col === 'all') return 1;
     if (cell.row === 'all') return 0;
     if (cell.colSpan > 1) return 1;
@@ -661,6 +662,76 @@
   const tracks = untrack(() =>
     gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
   );
+  // A grid's basis, its kind's: the directions its columns and its rows run, each an x and a y in
+  // pitches; a square one is a table, which CSS lays out. Any other places every cell at one
+  // pitch, the largest row's height and the largest column's width at any step, in a box round
+  // every coordinate the grid keeps, so nothing moves; while the page measures, the cells are
+  // sized as a table's.
+  const basis = untrack((): Basis | undefined => {
+    if (arrangement !== 'grid') return undefined;
+    const component = (prop: string, start: number) => {
+      const value = look(prop);
+      return typeof value === 'number' ? value : start;
+    };
+    const vectors = {
+      col: [component('colX', 1), component('colY', 0)] as const,
+      row: [component('rowX', 0), component('rowY', 1)] as const
+    };
+    if (vectors.col[0] * vectors.row[1] - vectors.col[1] * vectors.row[0] === 0)
+      throw new Error(
+        `A grid's basis needs a col and a row that are not parallel: col [${vectors.col.join(', ')}] and row [${vectors.row.join(', ')}] put every cell on one line.`
+      );
+    const square =
+      vectors.col[0] === 1 && vectors.col[1] === 0 && vectors.row[0] === 0 && vectors.row[1] === 1;
+    if (square || !tracks) return undefined;
+    const [firstRow, firstColumn] = tracks.start ?? [0, 0];
+    const rows = [firstRow, firstRow + Math.max(0, tracks.rows.length - 1)];
+    const columns = [firstColumn, firstColumn + Math.max(0, tracks.columns.length - 1)];
+    const corners = rows.flatMap((r) => columns.map((c) => [r, c] as const));
+    const along = (axis: 0 | 1) =>
+      Math.min(...corners.map(([r, c]) => c * vectors.col[axis] + r * vectors.row[axis]));
+    return {
+      ...vectors,
+      pitch: [Math.max(0, ...tracks.rows), Math.max(0, ...tracks.columns)],
+      origin: [along(0), along(1)],
+      gap: typeof look('gap') === 'number' ? (look('gap') as number) : 0
+    };
+  });
+  // The box round a basis grid's cells: as far as its farthest corner, plus a pitch.
+  const basisBox = untrack(() => {
+    if (!basis || !tracks) return undefined;
+    const [firstRow, firstColumn] = tracks.start ?? [0, 0];
+    const corners = [firstRow, firstRow + Math.max(0, tracks.rows.length - 1)].flatMap((r) =>
+      [firstColumn, firstColumn + Math.max(0, tracks.columns.length - 1)].map((c) => [r, c])
+    );
+    const extent = (axis: 0 | 1) =>
+      Math.max(...corners.map(([r, c]) => c * basis.col[axis] + r * basis.row[axis])) -
+      basis.origin[axis];
+    const length = (axis: 0 | 1) => {
+      const pitch = axis === 0 ? basis.pitch[1] : basis.pitch[0];
+      return `calc(${extent(axis)} * (${pitch}px + ${basis.gap}em) + ${pitch}px)`;
+    };
+    return { width: length(0), height: length(1) };
+  });
+  // Where a basis grid places a cell: at its coordinates through the basis, from the box's corner,
+  // a pitch large, its node placed in it as the grid's align says.
+  const basisPlace = untrack(() => {
+    const placing = grid?.basis;
+    if (!placing || !cell) return undefined;
+    const at = (coordinate: number | 'all') => (coordinate === 'all' ? 0 : coordinate);
+    const offset = (axis: 0 | 1) => {
+      const pitch = axis === 0 ? placing.pitch[1] : placing.pitch[0];
+      const units =
+        at(cell.col) * placing.col[axis] + at(cell.row) * placing.row[axis] - placing.origin[axis];
+      return `calc(${units} * (${pitch}px + ${placing.gap}em))`;
+    };
+    return {
+      left: offset(0),
+      top: offset(1),
+      width: `${placing.pitch[1]}px`,
+      height: `${placing.pitch[0]}px`
+    };
+  });
   // A subgrid's first track: its own coordinate, or, spanning every track, its grid's first.
   const subgridFirst = untrack(() => {
     if (subgrid === undefined || numbered === undefined) return undefined;
@@ -680,7 +751,8 @@
           ? {
               cells: [],
               start: tracks?.start ?? [0, 0],
-              ...(tracks ? { count: [tracks.rows.length, tracks.columns.length] as const } : {})
+              ...(tracks ? { count: [tracks.rows.length, tracks.columns.length] as const } : {}),
+              ...(basis ? { basis } : {})
             }
           : undefined
     )
@@ -987,10 +1059,12 @@
         style:align-items={alignment}
         style:justify-items={alignment}
         style:justify-content={justification}
-        style:grid-template-columns={trackCss(tracks?.columns)}
-        style:grid-template-rows={trackCss(tracks?.rows)}
+        style:grid-template-columns={basis ? undefined : trackCss(tracks?.columns)}
+        style:grid-template-rows={basis ? undefined : trackCss(tracks?.rows)}
         data-sv-overlaid={overlaid ? '' : undefined}
-        style:position={overlaid ? 'relative' : undefined}
+        style:position={overlaid || basis ? 'relative' : undefined}
+        style:width={basisBox?.width}
+        style:height={basisBox?.height}
       >
         {@render contents()}
         {#if overlaid}
@@ -1129,10 +1203,17 @@
     data-sv-row-span={cellAttributes.rowSpan}
     data-sv-col-span={cellAttributes.colSpan}
     data-sv-warning={warning}
-    style:grid-row-start={rowLines?.start}
-    style:grid-row-end={rowLines?.end}
-    style:grid-column-start={colLines?.start}
-    style:grid-column-end={colLines?.end}
+    style:grid-row-start={basisPlace ? undefined : rowLines?.start}
+    style:grid-row-end={basisPlace ? undefined : rowLines?.end}
+    style:grid-column-start={basisPlace ? undefined : colLines?.start}
+    style:grid-column-end={basisPlace ? undefined : colLines?.end}
+    style:position={basisPlace ? 'absolute' : undefined}
+    style:left={basisPlace?.left}
+    style:top={basisPlace?.top}
+    style:width={basisPlace?.width}
+    style:height={basisPlace?.height}
+    style:align-items={basisPlace ? 'center' : undefined}
+    style:justify-content={basisPlace ? 'center' : undefined}
   >
     {@render drawn()}
   </div>

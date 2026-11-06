@@ -1966,6 +1966,10 @@ cell by `row` and `col`, usually loop indices or positions:
 - The grid's kind has `gap`, between columns and rows; `align`, where each cell
   sits in its column and row; and `justify`, how the columns spread where the
   grid has more room than they need.
+- The grid's kind also has its basis: `colX` and `colY`, the direction its
+  columns run, and `rowX` and `rowY`, the direction its rows run, each −1, −0.5,
+  0, 0.5, or 1, in pitches. A cell is at `col` times the first plus `row` times
+  the second. The start, `colX` 1, `colY` 0, `rowX` 0, `rowY` 1, is a table.
 
 ### Counts
 
