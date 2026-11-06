@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { MasterStep } from './algorithm/interpret.server';
 import {
-  bundlePresentation,
+  bundlePresentation as bundleOnBase,
   compileSvelteComponent as compileCurrent,
   InvalidSvelteSourceError,
   prepareSvelteComponent as prepareCurrent
 } from './compile.server';
+import { onStarterBase } from './testing/scenes';
 import { currentForm } from './testing/legacy-sources';
 
 // Sources built from pieces here are written with parts as snippets; each is read in the current
@@ -21,8 +22,24 @@ import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import heapTree from './fixtures/heap-tree.sverlin?raw';
 import listMarkers from './fixtures/list-markers.sverlin?raw';
 import listingPython from './fixtures/listing-python.sverlin?raw';
-import { buildVariant } from './design.server';
+import { buildVariant as buildOnBase, type VariantRequest } from './design.server';
 import { iconNames } from './library/fonts';
+
+// Each request on the starter base where it names none, as every design in the app names one.
+const bundlePresentation = (
+  component: Parameters<typeof bundleOnBase>[0],
+  seed: number,
+  request: VariantRequest = {},
+  options?: Parameters<typeof bundleOnBase>[3]
+) => bundleOnBase(component, seed, onStarterBase(request), options);
+const buildVariant = (
+  offered: Parameters<typeof buildOnBase>[0],
+  start: Parameters<typeof buildOnBase>[1],
+  request: VariantRequest,
+  ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
+    ? R
+    : never
+) => buildOnBase(offered, start, onStarterBase(request), ...rest);
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
 const kindsOf = (space: Record<string, unknown>) =>
@@ -129,7 +146,10 @@ describe('single-component Svelte compilation', () => {
     expect(bundles[0].layoutCode).not.toContain('values[i] === target');
     const again = await bundlePresentation(prepared, 1, { randomise: true });
     expect(again.variant).toEqual(bundles[0].variant);
-    expect((await bundlePresentation(prepared, 1)).variant).toEqual(prepared.design.starter);
+    // With no values, the starter on the starter base, which the variant records.
+    const plain = (await bundlePresentation(prepared, 1)).variant;
+    expect(plain).toMatchObject(prepared.design.starter);
+    expect(plain.base).toBe('$starter');
   });
 
   it('rejects a design block, and a source with no algorithm block', async () => {

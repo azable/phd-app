@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
+import { prepareSvelteComponent } from '../compile.server';
+import { bundlePresentation } from '../testing/scenes';
 import { fillSkeleton, holeGroups, holesOf, skeletonFor } from './skeleton.server';
 
 const source = `<script domain>

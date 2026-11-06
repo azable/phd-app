@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { buildBatch } from './build.server';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import { serverMeasure } from './fonts/measure.server';
 import { type Geometry } from './library/geometry';
 import { parseSheet } from './library/model/css';

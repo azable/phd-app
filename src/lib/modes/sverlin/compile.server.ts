@@ -117,6 +117,7 @@ import {
   listingRegionSpace,
   starterVariant,
   viewKey,
+  withStarterBase,
   type DesignKind,
   type DesignOrigin,
   type DesignSpace,
@@ -479,9 +480,12 @@ export class InvalidSvelteSourceError extends Error {
   }
 }
 
-/** Compile one seeded presentation; batch builds prepare once and bundle per seed instead. */
+/**
+ * Compile one seeded presentation on the starter base; batch builds prepare once and bundle per
+ * seed instead.
+ */
 export async function compileSvelteComponent(source: string, seed = 1): Promise<SvelteBundle> {
-  return bundlePresentation(prepareSvelteComponent(source), seed);
+  return bundlePresentation(prepareSvelteComponent(source), seed, withStarterBase({}));
 }
 
 /** The steps a page of the source starts with, paced by its view; none where the view does not build. */

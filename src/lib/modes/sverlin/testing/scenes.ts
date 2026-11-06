@@ -4,12 +4,42 @@
  * reader sees it, and where links start and end.
  */
 
-import type { VariantRequest } from '$lib/shared/presentations';
-import { bundlePresentation, prepareSvelteComponent, type SvelteBundle } from '../compile.server';
+import {
+  bundlePresentation as bundleOnBase,
+  prepareSvelteComponent,
+  type SvelteBundle
+} from '../compile.server';
+import { withStarterBase, type VariantRequest } from '../design.server';
+import { baseKey } from '../library/node/design';
+import { starterBase } from '../library/node/starter-base';
 import type { ServedScenes } from '../server-scenes';
 import type { SceneBox, SceneLink, SceneNode, ScenePoint, SceneStep } from '../library';
 
-/** Every step's scene of a source, built with a seed and a variant, and the build. */
+/**
+ * A test's request on the starter base: as a design entering the app (see withStarterBase), and a
+ * hand-written variant to build on that names no base, as a test's few values, with the starter base
+ * under it, as every variant the app builds holds one.
+ */
+export function onStarterBase(request: VariantRequest): VariantRequest {
+  const { base, chosen } = request;
+  const named = [base, chosen].some((values) => values && Object.hasOwn(values, baseKey));
+  return base && Object.keys(base).length && !named
+    ? { ...request, base: { ...starterBase, ...base } }
+    : withStarterBase(request);
+}
+
+/** The build's bundlePresentation, its request on the starter base where it names none. */
+export const bundlePresentation = (
+  prepared: Parameters<typeof bundleOnBase>[0],
+  seed: number,
+  request: VariantRequest = {},
+  options?: Parameters<typeof bundleOnBase>[3]
+): Promise<SvelteBundle> => bundleOnBase(prepared, seed, onStarterBase(request), options);
+
+/**
+ * Every step's scene of a source, built with a seed and a variant on the starter base where it
+ * names none (see onStarterBase), and the build.
+ */
 export async function drawnSteps(
   source: string,
   request: VariantRequest = {},

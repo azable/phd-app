@@ -9,7 +9,8 @@
 
 import { expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import bfs from './fixtures/bfs-dequeue.sverlin?raw';
 import dijkstra from './fixtures/dijkstra-fields.sverlin?raw';
 import { browserTestsOn as enabled, openHosted } from './testing/browser';

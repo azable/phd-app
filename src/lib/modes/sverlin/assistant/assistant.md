@@ -181,8 +181,8 @@ full into the design, and project.design then names the base and lists only what
 differs from it. Every value then takes a step on the base's scales and the
 named colours or the base's palette.
 
-- `$starter`: framed white values, grey frames, amber pointers; every first
-  version uses it.
+- `$starter`: framed white values, grey frames, amber pointers; a first version
+  that names no base gets it written in.
 - `$textbook`: black on white in a serif with no hue, so it prints in greyscale;
   the item of the step a grey fill with a thicker black frame, a second state
   hatched with a dashed frame. For printed notes and handouts.
@@ -200,10 +200,11 @@ page; and no state told by colour alone (the item of the step also takes the
 thickest line). A second state, as visited, inherits `$second`, as
 `"Visited": {"...": "$second"}`. Offer another template as a comparison
 (“textbook or slide?”) rather than switching unasked. Write a base of your own,
-every token, every role style (`$Value`, `$Container`, `$Bar`, `$Vertex`,
-`$Text`, `$Code`, `$Icon`, `$Pointed`, `$Link`), scales and palette, under a
-name of your own, as `"...": "$mine"`, only where no template fits what the
-participant asks.
+under a name of your own, as `"...": "$mine"`, only where no template fits what
+the participant asks: set the tokens, role styles (`$Value`, `$Container`,
+`$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon`, `$Pointed`, `$Link`), scales and
+palette it changes, and the app writes `$starter`'s values out under them, so
+the base holds every role's look.
 
 <!-- Sources for the principles: projects/phd-app/design.md (workspace),
 "Templates and their sources", cited through Socrates there; the table of

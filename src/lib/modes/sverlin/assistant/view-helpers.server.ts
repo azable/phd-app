@@ -15,7 +15,7 @@ import holeHelper from './hole-helper.md?raw';
 import layoutHelper from './layout-helper.md?raw';
 import viewHelper from './view-helper.md?raw';
 import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
-import { viewKey } from '../design.server';
+import { viewKey, withStarterBase } from '../design.server';
 
 /** Prompt text from a Markdown file: its HTML comments are notes for maintainers. */
 const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu, '').trim();
@@ -346,11 +346,7 @@ export async function checkFills(
   );
   try {
     const prepared = prepareSvelteComponent(filled.source);
-    const built = await bundlePresentation(
-      prepared,
-      1,
-      Object.keys(chosen).length ? { chosen } : {}
-    );
+    const built = await bundlePresentation(prepared, 1, withStarterBase({ chosen }));
     const part = own.map((hole) => hole.of ?? hole.name).join(', ');
     const checked = measured(
       built,

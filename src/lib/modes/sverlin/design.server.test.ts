@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { bundlePresentation as bundleOnBase, prepareSvelteComponent } from './compile.server';
 import { linearSearchSource } from './contract';
 import bst from './fixtures/bst.sverlin?raw';
 import pseudocode from './fixtures/listing-pseudocode.sverlin?raw';
@@ -9,12 +9,32 @@ import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import dijkstraFields from './fixtures/dijkstra-fields.sverlin?raw';
 import { forms } from './library/node/forms';
 import {
-  buildVariant,
+  buildVariant as buildOnBase,
   DesignValueError,
   listingRegionFallbacks,
   listingRegionSpace,
-  starterVariant
+  starterVariant,
+  withStarterBase,
+  type VariantRequest
 } from './design.server';
+import { starterBase } from './library/node/starter-base';
+import { onStarterBase } from './testing/scenes';
+
+// Each request on the starter base where it names none, as every design in the app names one.
+const buildVariant = (
+  offered: Parameters<typeof buildOnBase>[0],
+  start: Parameters<typeof buildOnBase>[1],
+  request: VariantRequest,
+  ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
+    ? R
+    : never
+) => buildOnBase(offered, start, onStarterBase(request), ...rest);
+const bundlePresentation = (
+  component: Parameters<typeof bundleOnBase>[0],
+  seed: number,
+  request: VariantRequest = {},
+  options?: Parameters<typeof bundleOnBase>[3]
+) => bundleOnBase(component, seed, onStarterBase(request), options);
 
 const prepared = prepareSvelteComponent(linearSearchSource);
 const { space, starter } = prepared.design;
@@ -579,13 +599,18 @@ describe('design tokens and tag groups', () => {
   });
 
   it('gives each prop on a scale only its steps, refusing a value off the scale', () => {
-    const scaled = build({ chosen: { 'scale.radius': '0 6 999', '$Value.radius': 6 } });
-    expect(scaled['IntCell.radius']).toBe(6);
-    expect(() => build({ chosen: { 'scale.radius': '0 6 999', 'IntCell.radius': 8 } })).toThrow(
-      /IntCell\.radius cannot be 8; its options are 0, 6, 999/u
+    // The base's own values must sit on its scale too: the starter's radii 8, 2 and 4 do not.
+    const onScale = { $radius: 6, '$Bar.radius': 0, '$Code.radius': 0 };
+    expect(() => build({ chosen: { 'scale.radius': '0 6 999' } })).toThrow(
+      /\$radius cannot be 8; its options are 0, 6, 999/u
     );
+    const scaled = build({ chosen: { 'scale.radius': '0 6 999', ...onScale, '$Value.radius': 6 } });
+    expect(scaled['IntCell.radius']).toBe(6);
+    expect(() =>
+      build({ chosen: { 'scale.radius': '0 6 999', ...onScale, 'IntCell.radius': 8 } })
+    ).toThrow(/IntCell\.radius cannot be 8; its options are 0, 6, 999/u);
     // A line also takes 0, for no line, though its scale starts higher.
-    expect(build({ chosen: { 'scale.line': '1 2', 'IntCell.strokeWidth': 0 } })).toBeDefined();
+    expect(build({ chosen: { 'scale.line': '1 1.5 2', 'IntCell.strokeWidth': 0 } })).toBeDefined();
     expect(() => build({ chosen: { 'scale.spacing': '0 0.5 0.25' } })).toThrow(
       /scale\.spacing cannot be "0 0\.5 0\.25": a scale is rising numbers/u
     );
@@ -623,14 +648,26 @@ describe('design tokens and tag groups', () => {
     const { values, dropped } = buildVariant(
       levelled.space,
       levelled.starter,
-      { chosen: { base: '$textbook', 'listing.lit.fill': 'neutral-200' } },
+      { chosen: { ...starterBase, base: '$mine', 'listing.lit.fill': 'neutral-200' } },
       1,
       levelled.fallbacks,
       levelled.roles
     );
-    expect(values.base).toBe('$textbook');
+    expect(values.base).toBe('$mine');
     expect(values['listing.lit.fill']).toBeUndefined();
     expect(dropped).toEqual([]);
-    expect(() => build({ chosen: { base: 'textbook' } })).toThrow(/names its base with \$/u);
+    expect(() => build({ chosen: { ...starterBase, base: 'textbook' } })).toThrow(
+      /names its base with \$/u
+    );
+  });
+
+  it('refuses a design naming no base, or a base missing a role’s look', () => {
+    const plain = (request: Parameters<typeof buildOnBase>[2]) =>
+      buildOnBase(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles);
+    expect(() => plain({ chosen: { 'IntCell.radius': 0 } })).toThrow(/names no base/u);
+    expect(() => plain({ chosen: { base: '$textbook' } })).toThrow(
+      /base sets no \$Value\.fill, .*start from a template/u
+    );
+    expect(plain(withStarterBase({})).values.base).toBe('$starter');
   });
 });

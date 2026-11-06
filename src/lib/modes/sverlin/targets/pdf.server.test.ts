@@ -9,7 +9,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import * as v from 'valibot';
 import { expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
+import { prepareSvelteComponent } from '../compile.server';
+import { bundlePresentation } from '../testing/scenes';
 import replay from '../fixtures/replay/replay.json';
 import type { DesignValues } from '../library/node/design';
 import { sceneMessageSchema } from '../scene';

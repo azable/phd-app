@@ -9,7 +9,8 @@
 import type { Frame } from 'playwright-core';
 import { expect, it } from 'vitest';
 
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import search from './fixtures/search-places.sverlin?raw';
 import { colourCss } from './library/node/design';

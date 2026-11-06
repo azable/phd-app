@@ -847,28 +847,6 @@ export function groupOptions(
 }
 
 /**
- * Each role's starting look, which no variable names (a kind's role gives it its props and this
- * look): its value for each prop, naming a token where it is the token's for the same prop, so the
- * starter resolves to starterLooks exactly.
- */
-export const roleLooks: Record<
-  KindRole,
-  Record<string, string | number | boolean>
-> = Object.fromEntries(
-  Object.entries(starterLooks).map(([role, look]) => [
-    role,
-    Object.fromEntries(
-      groupProps(role as KindRole).map((prop) => {
-        const token = (Object.keys(tokenProps) as DesignToken[]).find(
-          (name) => tokenProps[name] === prop && starterTokens[name] === look[prop]
-        );
-        return [prop, token ?? look[prop]];
-      })
-    )
-  ])
-) as Record<KindRole, Record<string, string | number | boolean>>;
-
-/**
  * A style, written with `$` as a token is but holding a group of props, as `$cell` with
  * `$cell.stroke` and `$cell.padding`, which kinds inherit (see levelFor). A token's name is never a
  * style's.
@@ -886,8 +864,8 @@ export function styleOf(key: string): { style: `$${string}`; prop: string } | un
 
 /**
  * The style holding a role's look in a design's base, as `$Value` for every value kind: each prop a
- * kind of the role follows below its group and above the look the code starts it with (roleLooks),
- * so a base written out sets every role's look as data. Capitalised, as a role's look is no token
+ * kind of the role follows below its group, so the base sets every role's look as data and the
+ * engine has none of its own (see starter-base.ts and missingRoleLooks). Capitalised, as a role's look is no token
  * (`$text` is the text colour, `$Text` the text role's look).
  */
 export const roleStyle = (role: KindRole): `$${string}` =>
@@ -1006,9 +984,10 @@ export const inheritKey = (kind: string): string => `${kind}.inherit`;
 /**
  * What a kind's prop follows, and the variable its value comes from: what the kind inherits where
  * that sets the prop (a style's prop, naming a token or a value, or a kind of its role's own value),
- * else its group's value where the variant sets it, else its role's style in the base where the
- * variant sets it (see roleStyle), else its role's look, through tokens. Undefined
- * for a variable that is no kind's prop a group could set (a place's, a frame's, a view choice).
+ * else its group's value where the variant sets it, else its role's style in the base (see
+ * roleStyle), through tokens; no value where the base sets none, which the build refuses (see
+ * missingRoleLooks). Undefined for a variable that is no kind's prop a group could set (a place's,
+ * a frame's, a view choice).
  * Shared by the build and the assistant's design, so both tell what follows what alike.
  */
 export function levelFor(
@@ -1036,9 +1015,25 @@ export function levelFor(
     : Object.hasOwn(values, base)
       ? base
       : undefined;
-  const level = from ? values[from] : roleLooks[role][prop];
-  if (isToken(level)) return { value: values[level], from: level };
-  return from ? { value: level, from } : { value: level };
+  if (!from) return { value: undefined };
+  const level = values[from];
+  return isToken(level) ? { value: values[level], from: level } : { value: level, from };
+}
+
+/**
+ * The role styles a design's base leaves out, as `$Value.fill`, among the roles its kinds have: a
+ * base sets every role's look its kinds follow, so no kind falls back to a look nobody chose.
+ */
+export function missingRoleLooks(
+  values: Readonly<Record<string, unknown>>,
+  roles: Readonly<Record<string, KindRole>>
+): string[] {
+  const used = new Set(Object.values(roles));
+  return [...used].flatMap((role) =>
+    groupProps(role)
+      .map((prop) => `${roleStyle(role)}.${prop}`)
+      .filter((key) => !Object.hasOwn(values, key))
+  );
 }
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {

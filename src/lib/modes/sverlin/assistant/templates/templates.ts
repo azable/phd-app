@@ -4,14 +4,15 @@
  * a palette where it uses exact colours, a second state's style (`$second`), and the listing's
  * look. A design names one as `"...": "$textbook"` and patches it; the app writes the template
  * out in full into the design (see readDesignPatch), so the Timeline records every base value and
- * the build never reads a template. `starter` is today's look, as the engine starts every kind; the
- * others follow the principles in assistant.md's Templates.
+ * the build never reads a template. `starter` is the engine's starter base, written into a design
+ * that names none (see ../../library/node/starter-base.ts); the others follow the principles in
+ * assistant.md's Templates.
  */
 
 import { flatDesign } from '../../library/node/design-keys';
+import starter from '../../library/node/starter-base.json';
 import highContrast from './high-contrast.json';
 import slide from './slide.json';
-import starter from './starter.json';
 import textbook from './textbook.json';
 
 type DesignValue = string | number | boolean;

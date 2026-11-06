@@ -2,7 +2,8 @@ import { expect, it } from 'vitest';
 
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import { UnavailableScenesError } from '../../server';
-import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
+import { prepareSvelteComponent } from '../compile.server';
+import { bundlePresentation } from '../testing/scenes';
 import search from '../fixtures/search-places.sverlin?raw';
 import { exportFile } from './export.server';
 

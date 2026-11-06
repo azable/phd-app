@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { callTypes } from './calls.server';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
+import { prepareSvelteComponent } from './compile.server';
+import { bundlePresentation } from './testing/scenes';
 import framesFixture from './fixtures/call-frames.sverlin?raw';
 import fibFixture from './fixtures/fib-calls.sverlin?raw';
 import { designOnlyWarning } from './padding-warnings.server';

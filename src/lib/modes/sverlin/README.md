@@ -1486,6 +1486,10 @@ no mark one kind. `@` names only a part of the run, a label, as in the source.
   `$Container`, `$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon`, `$Pointed` and
   `$Link`, which every kind of that role follows; its scales; its palette; and
   the listing's look. `"..."` at the top names it, as `"...": "$textbook"`.
+  Every design names its base and holds every role's look: the app has no look
+  of its own. A design that comes in naming none, as a first version's or a demo
+  example's, gets the starter base, `"...": "$starter"`, written in; one naming
+  a base but missing a role's look is refused, naming what is missing.
   - A scale is the steps a prop takes, numbers separated by spaces:
     `scale.spacing` for `padding` and `gap` (em), `scale.radius`, `scale.type`
     for `textSize` and `scale.line` for `strokeWidth` (pixels), and
