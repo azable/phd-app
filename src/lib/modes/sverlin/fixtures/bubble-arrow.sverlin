@@ -51,11 +51,9 @@
       <Node>{@pass.pair.swap.from}</Node>
       <Node>{@pass.pair.swap.to}</Node>
     </Node>
-    <When of="@pass.pair.swap">
-      <Link from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
-    </When>
+    <Link when="@pass.pair.swap" from={@pass.pair.swap.from} to={@pass.pair.swap.to} />
     {@pass.pair.compare}
-    <When of="@pass.pair.swap"><SwapNote /></When>
+    <Node when="@pass.pair.swap"><SwapNote /></Node>
   </Node>
 </Layout>
 

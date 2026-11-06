@@ -142,14 +142,10 @@
 
 <Layout name="Status" of="@accept, @reject">
   <Node kind="StatusArea">
-    <OneOf>
-      <When of="@accept">
-        <Node kind="Accepted">Accepted: the DFA reached q2.</Node>
-      </When>
-      <When of="@reject">
-        <Node kind="Rejected">Rejected: the DFA never reached q2.</Node>
-      </When>
-    </OneOf>
+    <Node layout="stack">
+      <Node when="@accept" kind="Accepted">Accepted: the DFA reached q2.</Node>
+      <Node when="@reject" kind="Rejected">Rejected: the DFA never reached q2.</Node>
+    </Node>
   </Node>
 </Layout>
 

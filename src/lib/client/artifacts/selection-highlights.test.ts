@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState } from '@codemirror/state';
 
-import sverlin from '$lib/modes/sverlin/fixtures/links/linear-search.sverlin?raw';
+import sverlin from '$lib/modes/sverlin/fixtures/linear-search.sverlin?raw';
 
 import { elementHighlights, highlightRanges } from './selection-highlights';
 

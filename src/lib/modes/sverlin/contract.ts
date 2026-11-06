@@ -67,7 +67,7 @@ export const linearSearchSource = `<script domain>
     {values}
     <Node kind="Marks" layout="row"><Node>{i}</Node><Node>{found}</Node></Node>
     <Checking i={i} />
-    <When of="@run"><Result target={target} found={found} /></When>
+    <Node when="@run" layout="column"><Result target={target} found={found} /></Node>
   </Node>
 </Layout>
 

@@ -30,6 +30,13 @@
  *   now the fixtures themselves, links/linear-search kept as linear-search; grid-marks changes as a
  *   node drawing a position a variable holds takes no identity; call-frames and fib-calls change
  *   too, from the library's removals (not traced to one cause, 7 November 2026).
+ * - bubble-arrow, bubble-layouts, dfa-loops, dfa-panels, linear-search, list-markers,
+ *   stack-highlight: written with a node's when and a stack instead of <When> and <OneOf>, so
+ *   their ids move with their lines; dfa-panels and linear-search draw the same boxes; the bubble
+ *   pair gain an empty node round their swap note; dfa-loops' status and list-markers' start note
+ *   keep a stack's room (the largest branch); stack-highlight's board sits 26 px higher, its cells
+ *   4 px smaller, as its notes' stack keeps room for both. The replay fixtures still write the old
+ *   forms, which still build, so theirs are as they were.
  */
 
 import { createHash } from 'node:crypto';
@@ -89,8 +96,7 @@ function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): 
   steps.forEach((step, index) => {
     const boxes = new Map(step.nodes.map((node) => [node.id, node.box]));
     for (const node of step.nodes) {
-      if (!node.layout || node.layout === 'free' || node.follows)
-        continue;
+      if (!node.layout || node.layout === 'free' || node.follows) continue;
       const parent = node.parent && boxes.get(node.parent);
       if (!parent) continue;
       const key = `${sceneOf(index)}|${node.id}`;
