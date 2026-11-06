@@ -31,9 +31,12 @@ type Part = {
   children?: Part[];
   else?: Part;
   parameters?: (Part & { typeAnnotation?: { typeAnnotation?: Part & { typeName?: Part } } })[];
-  declaration?: { declarations?: { id?: Part }[] };
   callee?: Part;
   arguments?: Part[];
+  operator?: string;
+  left?: Part;
+  right?: Part;
+  value?: unknown;
   implicit?: boolean;
   [key: string]: unknown;
 };
@@ -155,6 +158,21 @@ export function implicitRenders(
       }
       return record(base)?.fields[property];
     }
+    // A position moved by a number, as j - 1, is a position in the same collection.
+    if (
+      expression.type === 'BinaryExpression' &&
+      (expression.operator === '+' || expression.operator === '-')
+    ) {
+      const { left, right } = expression;
+      const isPosition = (type: string | undefined) => !!type && !!atoms[type]?.index;
+      const isNumber = (side: Part | undefined, type: string | undefined) =>
+        (side?.type === 'Literal' && typeof side.value === 'number') ||
+        (!!type && !isPosition(type) && atoms[type]?.base === 'integer');
+      const [leftType, rightType] = [typeOf(left, scope), typeOf(right, scope)];
+      if (isPosition(leftType) && isNumber(right, rightType)) return leftType;
+      if (expression.operator === '+' && isPosition(rightType) && isNumber(left, leftType))
+        return rightType;
+    }
     return undefined;
   };
   // A union with one member drawn as a pointer, as a position or the end, marks where it points.
@@ -179,9 +197,9 @@ export function implicitRenders(
           });
         continue;
       }
-      if (part.type === 'ConstTag')
-        for (const declaration of part.declaration?.declarations ?? [])
-          if (declaration.id?.name) local = new Map(local).set(declaration.id.name, undefined);
+      // {@const before = j - 1}, parsed as an assignment: the name has its expression's type.
+      if (part.type === 'ConstTag' && part.expression?.left?.name)
+        local = new Map(local).set(part.expression.left.name, typeOf(part.expression.right, local));
       const inner = new Map(local);
       if (part.type === 'SnippetBlock')
         for (const parameter of part.parameters ?? []) {

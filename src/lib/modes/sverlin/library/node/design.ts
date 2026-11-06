@@ -527,9 +527,10 @@ export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint])
 
 /**
  * A render at a place: what is written there after `@` (`@left`, `@g.a`), the path of the view it
- * is written in, as `Ask.` (empty outside views), and the view it draws, the variant's choice.
+ * is written in, as `Ask.` (empty outside views), and the view it draws, the variant's choice. A
+ * render with no name, as {j - 1}, has an empty `at` and its expression as `written`, for place().
  */
-export type Place = { within: string; at: string; view?: string };
+export type Place = { within: string; at: string; view?: string; written?: string };
 
 /**
  * A kind's own variables at a place, as `IntCell@swap.held` or `Highlight.Pointed@left`: for the

@@ -388,18 +388,19 @@ pointer that marks nothing at any step.
 - A pointer view may read the input and algorithm variables, so its label can
   follow the state. A pointer at an element drawn as a link, as the edge being
   examined, gives the link its kind's stroke and width.
-- A pointer view names its pointer with `{place()}`, the place it is rendered
-  at: `lo` for `{lo}`, `pair.left` for a field in a part. So one view captions
-  every pointer,
+- A view names the place it is rendered at with `{place()}`: `lo` for `{lo}`,
+  `pair.left` for a field in a part, `before` for a `{@const before = j - 1}`.
+  So one view captions every pointer,
   `<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node></View>`,
   and a source declares one, not one for each name. The design labels a place in
   the participant's words, as `:lo.label` "low", any text of up to 24
-  characters, which `place()` gives instead. `place()` is written only in a view
-  holding a `<Pointed>`. An element's position, as `{edges[e].to}`, has no
-  place, so `place()` gives nothing there, and the build warns. A name written
-  into a pointer view, as `i` under the mark, is right only where the variant
-  chooses that view for that place, and a randomised variant can choose it
-  elsewhere; write `{place()}` instead.
+  characters, which `place()` gives instead. `place()` is written in any view,
+  as a mark drawn in a grid cell (see Grid). An expression with no name of its
+  own, as `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as
+  written, and the design cannot label it; name it with `{@const}` to label it.
+  A name written into a view, as `i` under the mark, is right only where the
+  variant chooses that view for that place, and a randomised variant can choose
+  it elsewhere; write `{place()}` instead.
 - A pointer view's layout places its marks round the element: a column puts them
   under it, which suits a row of cells. For an array drawn in a column, give the
   type a second pointer view whose marks run across, as
@@ -1920,7 +1921,11 @@ cell by `row` and `col`, usually loop indices or positions:
 - A position in a cell placed by it, as `<Node row={1} col={i}>{i}</Node>`,
   draws through the view the design chooses for its type, so a pointer view with
   no `<Pointed>`, as an arrow and a caption, draws a mark in a lane of its own,
-  and slides from cell to cell as the position moves.
+  and slides from cell to cell as the position moves. A position moved by a
+  number, as `{j - 1}`, is a position too, and so is a `{@const}` holding one,
+  so `{@const before = j - 1}` then `<Node row={2} col={before}>{before}</Node>`
+  draws a mark captioned `before` by `{place()}`, in the track before the first
+  cell when `j` is 0.
 - It may also hold `<Link>`s among its cells, each drawn straight from cell to
   cell, its ends often computed from the index: a heap drawn as a tree places
   slot `k` by its depth and joins it to its children,

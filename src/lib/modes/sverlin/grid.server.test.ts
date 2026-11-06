@@ -43,7 +43,10 @@ ${cells}
 const valuesRow = `    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}`;
 
 /** The boxes of a step's nodes of one kind, left to right. */
-const boxes = (step: { nodes: { kind?: string; box: { x: number; y: number } }[] }, kind: string) =>
+const boxes = (
+  step: { nodes: { kind?: string; box: { x: number; y: number; width: number } }[] },
+  kind: string
+) =>
   step.nodes
     .filter((node) => node.kind === kind)
     .map(({ box }) => box)
@@ -84,12 +87,12 @@ describe('coordinates outside the range', () => {
     const labels = (built as { steps: string[] }).steps;
     const front = steps.findIndex((_, k) => labels[k].startsWith('@insert.scan.swap'));
     expect(front).toBeGreaterThan(0);
-    // After the first swap j is 0, so j - 1 is −1: its mark is left of every value cell.
+    // After the first swap j is 0, so j - 1 is −1: a position, drawn as a mark through its view,
+    // left of every value cell.
     const step = steps[front];
     const cells = boxes(step, 'IntCell');
-    const before = step.nodes.find((node) => node.runs?.some((run) => run.text === '-1'));
-    expect(before).toBeDefined();
-    expect(before!.box.x + before!.box.width).toBeLessThanOrEqual(cells[0].x);
+    const [before] = boxes(step, 'Arrow.Tip');
+    expect(before.x + before.width).toBeLessThanOrEqual(cells[0].x);
   });
 
   it('keeps every value cell where it is at every step', async () => {
@@ -109,6 +112,39 @@ describe('marks as grid cells', () => {
     );
     expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/draws as its number/u));
     expect(steps[1].nodes.some((node) => node.kind === 'Arrow.Tip')).toBe(true);
+  });
+});
+
+describe('place() in a view drawn in a cell', () => {
+  const named = (cells: string) =>
+    sort(`${valuesRow}\n${cells}`).replace(
+      '<Node kind="Caption">mark</Node>',
+      '<Node kind="Caption">{place()}</Node>'
+    );
+  const captions = (step: { nodes: { kind?: string; runs?: { text: string }[] }[] }) =>
+    step.nodes
+      .filter((node) => node.kind === 'Arrow.Caption')
+      .map((node) => (node.runs ?? []).map((run) => run.text).join(''))
+      .sort();
+
+  it('names a variable’s place, or gives the design’s label for it, with no <Pointed>', async () => {
+    const source = named(
+      `    <Node row={1} col={i}>{i}</Node>\n    <Node row={2} col={j}>{j}</Node>`
+    );
+    const { steps, built } = await drawnSteps(source);
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/place\(\)/u));
+    expect(captions(steps[1])).toEqual(['i', 'j']);
+    const labelled = await drawnSteps(source, { chosen: { ':j.label': 'scan' } });
+    expect(captions(labelled.steps[1])).toEqual(['i', 'scan']);
+  });
+
+  it('names a {@const} by its name, and an expression as it is written', async () => {
+    const { steps } = await drawnSteps(
+      named(`    {@const before = j - 1}
+    <Node row={1} col={before}>{before}</Node>
+    <Node row={2} col={j + 1}>{j + 1}</Node>`)
+    );
+    expect(captions(steps[1])).toEqual(['before', 'j + 1']);
   });
 });
 

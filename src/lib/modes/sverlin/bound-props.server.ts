@@ -533,12 +533,12 @@ export function countCalls(
 
 /**
  * Each `place()` in the markup, by where its name is, with the view it is in and why it cannot be
- * given, if it cannot: it names the place a pointer view is rendered at (see sverlinPlace in
- * library/type-context.ts), so it is called with nothing, only in a view holding a <Pointed>.
+ * given, if it cannot: it names the place the view is rendered at (see sverlinPlace in
+ * library/type-context.ts), so it is called with nothing, only in a view.
  */
 export function placeCalls(
   markup: unknown,
-  pointerViews: ReadonlySet<string>
+  views: ReadonlySet<string>
 ): { start: number; view?: string; problem?: string }[] {
   const calls: { start: number; view?: string; problem?: string }[] = [];
   const visit = (node: unknown, view: string | undefined): void => {
@@ -552,9 +552,9 @@ export function placeCalls(
     if (part.type === 'CallExpression' && (part.callee as Node | undefined)?.name === 'place') {
       const args = (part.arguments as unknown[] | undefined) ?? [];
       const problem = args.length
-        ? 'place() takes nothing: it gives the name of the place the pointer view is rendered at.'
-        : view === undefined || !pointerViews.has(view)
-          ? `place() names the place a pointer view is rendered at, so it is written only in a view holding a <Pointed>${view ? `, and ${view} holds none` : ''}: to write a name elsewhere, write it as text.`
+        ? 'place() takes nothing: it gives the name of the place the view is rendered at.'
+        : view === undefined || !views.has(view)
+          ? 'place() names the place a view is rendered at, so it is written only in a <View>: to write a name elsewhere, write it as text.'
           : undefined;
       calls.push({
         start: (part.callee as Node).start as number,
@@ -641,6 +641,17 @@ export function gridExtents(
         Array.isArray(attribute.value) &&
         (attribute.value as Node[])[0]?.data === 'grid'
     );
+  // {@const before = j - 1}: the name takes its expression's values.
+  const constant = (tag: Node, scope: Map<string, string>): void => {
+    const { left, right } = (tag.expression ?? {}) as { left?: Node; right?: Node };
+    if (left?.type !== 'Identifier') return;
+    scope.delete(left.name as string);
+    const values = right ? valuesOf(right, scope, extended) : undefined;
+    if (!values?.length || !values.every(Number.isInteger)) return;
+    const name = `{@const ${left.name as string}} at ${tag.start as number}`;
+    atoms[name] = { name, base: 'integer', values: values as number[] };
+    scope.set(left.name as string, name);
+  };
   // The rows and cols a grid's cells can take, through the blocks between it and them.
   const cells = (
     node: unknown,
@@ -648,7 +659,14 @@ export function gridExtents(
     found: { row?: number[]; col?: number[] }[]
   ): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach((child) => cells(child, scope, found));
+    if (Array.isArray(node)) {
+      const local = new Map(scope);
+      for (const child of node) {
+        if ((child as Node).type === 'ConstTag') constant(child as Node, local);
+        cells(child, local, found);
+      }
+      return;
+    }
     const part = node as Node;
     if (part.type === 'EachBlock') {
       cells(part.children, inEach(part, scope), found);

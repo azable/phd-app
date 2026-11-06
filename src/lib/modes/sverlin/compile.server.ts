@@ -1518,7 +1518,7 @@ function prepareViews(
     );
     // place() in a pointer view names the place its pointer is rendered at (see sverlinPlace), or
     // the design's label for it; the views calling it, whose places each get a label variable.
-    const placeNames = placeCalls(ast.html, new Set(found.pointers.keys()));
+    const placeNames = placeCalls(ast.html, new Set(Object.keys(components)));
     const misplaced = placeNames.filter(({ problem }) => problem);
     if (misplaced.length)
       throw InvalidSvelteSourceError.combine(
@@ -1553,22 +1553,20 @@ function prepareViews(
     );
     for (const site of sites) {
       const { name, start, inNode, at, label } = site;
-      // A pointer rendered with no name, as {lo + 1}, has no place for place() to name.
-      const unnamed = !at && pointerChosen[name] && !site.within ? optionsOf(name) : undefined;
-      if (
-        unnamed &&
-        (!inNode || !unnamed.plain.length) &&
-        unnamed.marks.some((view) => namingViews.has(view))
-      ) {
-        placeWarnings.push(
-          `{${site.argument}} is a pointer with no place of its own, as it is no variable or field of one, so place() in its view gives nothing there: caption it in words, or render a variable holding the position, as {next}, which place() names.`
-        );
-      }
-      if (!at || !(chosen[name] || pointerChosen[name])) continue;
+      if (!(chosen[name] || pointerChosen[name])) continue;
       const { plain, marks } = optionsOf(name);
       const asMark = marks.length > 0 && (!inNode || !plain.length);
-      if (asMark && !site.within && marks.some((view) => namingViews.has(view)))
-        labelledPlaces.add(at);
+      const naming = (asMark ? marks : plain).some((view) => namingViews.has(view));
+      // A render with no name, as {j - 1}, has no place of its own: place() gives it as written.
+      if (!at) {
+        if (naming) {
+          const place = `{ within: "", at: "", written: ${JSON.stringify(site.argument.replaceAll(viewThis, 'this'))} }`;
+          if (asMark) pointerPlaces.set(start, { place });
+          else placeSlots.set(start, place);
+        }
+        continue;
+      }
+      if (naming && !site.within) labelledPlaces.add(at);
       // A place drawn both as a pointer and as a value, as a caption's number, takes its pointer's
       // paint.
       if (!site.within && (asMark || !rootPlaces.has(at)))

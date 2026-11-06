@@ -87,15 +87,12 @@ describe('place() in a pointer view', () => {
     byView.steps.forEach((step, k) => expect(marks(step)).toEqual(marks(byLayout.steps[k])));
   });
 
-  it('is refused outside a pointer view, and with anything given', () => {
-    const outside = search('lo', asView, '{values}').replace(
-      '<View of="Int" name="IntCell"><Node value={this} /></View>',
-      '<View of="Int" name="IntCell"><Node>{place()}</Node></View>'
-    );
+  it('is refused outside a view, and with anything given', () => {
+    const outside = search('lo', asView, '{values}<Node>{place()}</Node>');
     expect(() => prepareSvelteComponent(outside)).toThrow(
       expect.objectContaining({
         code: 'view_name',
-        message: expect.stringContaining('place() names the place a pointer view is rendered at')
+        message: expect.stringContaining('so it is written only in a <View>')
       })
     );
     expect(() => prepareSvelteComponent(search('{place(1)}', asView, '{values}'))).toThrow(

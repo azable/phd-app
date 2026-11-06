@@ -484,12 +484,14 @@ export function placeContext(): Place | undefined {
 }
 
 /**
- * What place() in a pointer view gives: the design's label for the place the pointer is rendered
- * at (`label@lo`), else the place's own name, as `lo` or `pair.left`; nothing outside a place.
+ * What place() in a view gives: the design's label for the place the view is rendered at
+ * (`label@lo`), else the place's own name, as `lo` or `pair.left`, or, for a render with no name,
+ * its expression as written, as `j - 1`; nothing outside a place.
  */
 export function sverlinPlace(): string {
   const place = placeContext();
   if (!place) return '';
+  if (!place.at) return place.written ?? '';
   const label = designContext()[placeLabelKey(place.at)];
   return typeof label === 'string' && label ? label : place.at.slice(1);
 }
