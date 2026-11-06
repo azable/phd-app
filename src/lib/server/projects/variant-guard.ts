@@ -96,7 +96,7 @@ function pictureSize(tree: PictureTree, variant: DesignValues, hidden: Hidden): 
 
 /** The snippet a kind's shown variable hides: the last kind in its path, before any place. */
 function shownSnippet(variable: string): string {
-  return variable.slice(0, -'.shown'.length).split('@')[0].split('.').at(-1) ?? variable;
+  return variable.slice(0, -'.shown'.length).split(/[:=]/u)[0].split('.').at(-1) ?? variable;
 }
 
 function hiddenBy(changes: readonly [string, unknown][]): Hidden {
@@ -105,8 +105,8 @@ function hiddenBy(changes: readonly [string, unknown][]): Hidden {
     if (!hides(variable, value)) continue;
     if (variable === 'listing.language') hidden.listing = true;
     else if (variable.endsWith('.shown')) hidden.snippets.add(shownSnippet(variable));
-    // A place's own view (views.Int@value) hides one render; the type's, all of them.
-    else if (!variable.includes('@'))
+    // A place's own view (views.Int:value) hides one render; the type's, all of them.
+    else if (!variable.includes(':'))
       hidden.types.add(
         variable
           .slice(variable.indexOf('.') + 1)
@@ -273,7 +273,7 @@ export function mootComparison(
     (variable) =>
       (hidden.listing && variable.startsWith('listing.')) ||
       variable
-        .split('@')[0]
+        .split(/[:=]/u)[0]
         .split('.')
         .some((part) => names.has(part))
   );

@@ -4,37 +4,43 @@ import {
   flatDesign,
   keptKey,
   keptValues,
+  keyKind,
+  keyProp,
+  kindKeyParts,
   mergePatch,
   nestedDesign,
   writtenKey,
   writtenValues
 } from './design-keys';
 
-// Each kept key, as variants have always stored it, and its written form.
+// Each view choice as kept, and as written.
 const pairs: [kept: string, written: string][] = [
   ['views.Int', '{Int}'],
-  ['views.Int@target', '{Int}:target'],
-  ['views.Card.Name@this.name', '{Card.Name}:this.name'],
+  ['views.Int:target', '{Int}:target'],
+  ['views.Card.Name:this.name', '{Card.Name}:this.name'],
   ['views.@insert.key', '{@insert.key}'],
-  ['views.@insert.key@swap.held', '{@insert.key}:swap.held'],
-  ['pointers.Index', '{Index}.pointer'],
-  ['IntCell@target.stroke', 'IntCell:target.stroke'],
-  ['LoMark.Pointed@lo.fill', 'LoMark.Pointed:lo.fill'],
-  ['Highlight.Pointed@insert.swap.from.fill', 'Highlight.Pointed:insert.swap.from.fill'],
-  ['VertexCard.padding@true', 'VertexCard=true.padding'],
-  ['StateMark.icon@done', 'StateMark=done.icon'],
-  ['Card@this.seen.stroke@false', 'Card:this.seen=false.stroke'],
-  ['Note.color@a b', 'Note="a b".color'],
-  ['Bar.height@from', 'Bar.height.from'],
-  ['Bar.fill@hue', 'Bar.fill.hue'],
-  ['Bar.fill@order', 'Bar.fill.order'],
-  ['Bar.width@unit', 'Bar.width.unit'],
-  ['IntCell@target.fill@hue', 'IntCell:target.fill.hue']
+  ['views.@insert.key:swap.held', '{@insert.key}:swap.held'],
+  ['views.Int:@scan.next', '{Int}:@scan.next'],
+  ['pointers.Index', '{Index}.pointer']
 ];
 
-// Keys alike in both forms.
+// Keys alike in both forms: `:` a place, `=` a value of the data, `@` only a label.
 const alike = [
   'IntCell.stroke',
+  'IntCell:target.stroke',
+  'LoMark.Pointed:lo.fill',
+  'Mark.Pointed:@visit.look.check.next.fill',
+  'VertexCard=true.padding',
+  'StateMark=done.icon',
+  'Card:this.seen=false.stroke',
+  'Note="a b".color',
+  'Bar.height.from',
+  'Bar.fill.hue',
+  'Bar.fill.order',
+  'Bar.width.unit',
+  'IntCell:target.fill.hue',
+  ':lo.label',
+  ':@visit.look.check.next.label',
   'Main.Problem.gap',
   '$accent',
   '<Node>.padding',
@@ -56,35 +62,55 @@ describe('design keys as written', () => {
     expect(keptKey(key)).toBe(key);
   });
 
-  it('keeps a kept key as it is, so old variants and requests still load', () => {
-    for (const [kept] of pairs) expect(keptKey(kept)).toBe(kept);
-  });
-
   it("names the listing's group by its settings", () => {
     expect(keptKey('<Listing>.syntax')).toBe('listing.syntax');
   });
 
+  it('reads a kind key in its parts, a label place keeping its @', () => {
+    expect(kindKeyParts('Mark.Pointed:@visit.look.check.next.fill')).toEqual({
+      kind: 'Mark.Pointed',
+      place: '@visit.look.check.next',
+      prop: 'fill'
+    });
+    expect(kindKeyParts('Card:this.seen=false.stroke')).toEqual({
+      kind: 'Card',
+      place: 'this.seen',
+      value: 'false',
+      prop: 'stroke'
+    });
+    expect(kindKeyParts('IntCell:target.fill.hue')).toEqual({
+      kind: 'IntCell',
+      place: 'target',
+      prop: 'fill',
+      part: 'hue'
+    });
+    expect(keyKind('Card=true.stroke')).toBe('Card');
+    expect(keyKind('IntCell:lo.fill')).toBe('IntCell:lo');
+    expect(keyProp('Bar.height.from')).toBe('height');
+    expect(kindKeyParts(':lo.label')).toBeUndefined();
+  });
+
   it("sends a place's view to the pointer where the design has only the pointer there", () => {
-    const design = new Set(['pointers.Index@lo', 'views.Index@k']);
+    const design = new Set(['pointers.Index:lo', 'views.Index:k']);
     const has = (key: string) => design.has(key);
-    expect(keptKey('{Index}:lo', has)).toBe('pointers.Index@lo');
-    expect(keptKey('{Index}:k', has)).toBe('views.Index@k');
-    expect(keptKey('views.Index@lo', has)).toBe('pointers.Index@lo');
+    expect(keptKey('{Index}:lo', has)).toBe('pointers.Index:lo');
+    expect(keptKey('{Index}:k', has)).toBe('views.Index:k');
+    expect(keptKey('views.Index:lo', has)).toBe('pointers.Index:lo');
   });
 
   it('writes the pointer apart where a place is drawn both ways', () => {
-    const design = new Set(['pointers.Index@lo', 'views.Index@lo']);
+    const design = new Set(['pointers.Index:lo', 'views.Index:lo']);
     const has = (key: string) => design.has(key);
-    expect(writtenKey('pointers.Index@lo', has)).toBe('{Index}.pointer:lo');
-    expect(writtenKey('views.Index@lo', has)).toBe('{Index}:lo');
-    expect(keptKey('{Index}.pointer:lo', has)).toBe('pointers.Index@lo');
-    expect(keptKey('{Index}:lo', has)).toBe('views.Index@lo');
+    expect(writtenKey('pointers.Index:lo', has)).toBe('{Index}.pointer:lo');
+    expect(writtenKey('views.Index:lo', has)).toBe('{Index}:lo');
+    expect(keptKey('{Index}.pointer:lo', has)).toBe('pointers.Index:lo');
+    expect(keptKey('{Index}:lo', has)).toBe('views.Index:lo');
   });
 
   it('converts whole variants both ways', () => {
     const kept = {
       'views.Int': 'IntCell',
-      'IntCell@target.stroke': 'violet-500',
+      'IntCell:target.stroke': 'violet-500',
       $accent: 'teal-600'
     };
     const written = writtenValues(kept);
@@ -118,6 +144,9 @@ describe('the nested form', () => {
     ['Here.Pointed.fill', { Here: { Pointed: { fill: 1 } } }],
     ['IntCell:target.stroke', { IntCell: { ':target': { stroke: 1 } } }],
     ['IntCell:pair.left.fill', { IntCell: { ':pair.left': { fill: 1 } } }],
+    ['Mark.Pointed:@scan.next.fill', { Mark: { Pointed: { ':@scan.next': { fill: 1 } } } }],
+    [':lo.label', { ':lo': { label: 1 } }],
+    [':@scan.next.label', { ':@scan.next': { label: 1 } }],
     ['Card=true.stroke', { Card: { '=true': { stroke: 1 } } }],
     ['Note="a b".color', { Note: { '="a b"': { color: 1 } } }],
     ['Card:this.seen=false.stroke', { Card: { ':this.seen': { '=false': { stroke: 1 } } } }],

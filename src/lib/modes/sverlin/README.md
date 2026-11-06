@@ -391,11 +391,14 @@ pointer that marks nothing at any step.
   follow the state. A pointer at an element drawn as a link, as the edge being
   examined, gives the link its kind's stroke and width.
 - A view names the place it is rendered at with `{place()}`: `lo` for `{lo}`,
-  `pair.left` for a field in a part, `before` for a `{@const before = j - 1}`.
-  So one view captions every pointer,
+  `pair.left` for a field in a part, `before` for a `{@const before = j - 1}`,
+  and a label's last name, never its path, `neighbour` for
+  `{@visit.look.neighbour}`, so a label named after what it marks captions
+  itself. So one view captions every pointer,
   `<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node></View>`,
   and a source declares one, not one for each name. The design labels a place in
-  the participant's words, as `:lo.label` "low", any text of up to 24
+  the participant's words, as `:lo.label` "low" or
+  `:@visit.look.neighbour.label` "next to visit", any text of up to 24
   characters, which `place()` gives instead. `place()` is written in any view,
   as a mark drawn in a grid cell (see Grid). An expression with no name of its
   own, as `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as
@@ -992,7 +995,7 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
-`Highlight.Pointed:insert.swap.from.fill` and `…to.fill` `red-300`, turns only
+`Highlight.Pointed:@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
 the pairs found out of order red, and with `@insert.swap.to` in the scene's
 pause, as a step of their own before anything is written. Showing or hiding
 something at some steps needs no flag, sentinel, or cast in the algorithm: a
@@ -1421,19 +1424,20 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
 ### Places
 
 A value in braces is a place, named after `:` by what is written there: a label,
-by its full name, a variable, or a field, as `{@pair.compare.left}` at
-`:pair.compare.left`, `{found}` at `:found`, and `{this.left}` in `Ask` at
-`Ask.` and `:this.left`. A value written another way, as `{values[0]}`, is none.
-Every value in braces is drawn by the view its type's variable chooses, in its
-kinds' looks; a place has variables of its own that fall back to those until a
-variant sets them, so one value is drawn apart with nothing declared:
+by its full name and keeping its `@`, as a label marks a moment of the run, a
+variable, or a field, as `{@pair.compare.left}` at `:@pair.compare.left`,
+`{found}` at `:found`, and `{this.left}` in `Ask` at `Ask.` and `:this.left`. A
+value written another way, as `{values[0]}`, is none. Every value in braces is
+drawn by the view its type's variable chooses, in its kinds' looks; a place has
+variables of its own that fall back to those until a variant sets them, so one
+value is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it
-  draws, as `{Index}:found` or `{Int}:swap.held`;
+  draws, as `{Index}:found` or `{Int}:@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
   can draw, the kinds its nodes name included, as
-  `Highlight.Pointed:pair.compare.left.fill` or
-  `IntTally.Tally:swap.held.shown`, though not for another view that view
+  `Highlight.Pointed:@pair.compare.left.fill` or
+  `IntTally.Tally:@swap.held.shown`, though not for another view that view
   renders.
 
 A place sets only paint and whether it is shown, never how much room anything
@@ -1448,21 +1452,23 @@ colour only.
 {
   "{Index}.pointer": "Highlight",
   "{Index}:found": "Arrow",
-  "Highlight.Pointed:pair.compare.left.fill": "sky-100",
-  "IntCell:swap.held.fill": "neutral-100"
+  "Highlight.Pointed:@pair.compare.left.fill": "sky-100",
+  "IntCell:@swap.held.fill": "neutral-100"
 }
 ```
 
 In a key the last part is the prop, and the dots after `:` the place's. A place
 drawn both as a mark and as a number writes its mark's view
-`{Index}.pointer:found`. A label and a variable rendered by one type with one
-name would share a place, which is an error: rename the label.
+`{Index}.pointer:found`. A label and a variable of one name are two places,
+`:@held` and `:held`.
 
 ### Shared values
 
 A key's mark says what it sets: `$` a token, `<…>` every kind its tag makes,
 `{…}` the view a type is drawn with, `:` a place, `=` a value of the data, and
-no mark one kind. `@` names only a part of the run, a label, as in the source.
+no mark one kind. `@` names only a part of the run, a label, as in the source:
+it says when, as `:` says where, so a place drawn from a label's value is
+`:@label`.
 
 - A token is one value the starter's kinds share: `$text` (text colour),
   `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight` (a

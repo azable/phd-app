@@ -140,7 +140,7 @@ export function readRegions(body: string): {
           at: characters[index].at
         });
       open.push({
-        place: `@${token[1]}`,
+        place: `:${token[1]}`,
         start: text.length,
         at: characters[index].at,
         inside: Boolean(outer)

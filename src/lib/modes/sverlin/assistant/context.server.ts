@@ -207,8 +207,12 @@ export function designVariables(
       return { variable: key, options: key, value, ...(origin ? { origin } : {}) };
     }
     const follows = followed(key);
-    // A place's own choice, as views.Int@swap.held or views.Ask.Int@g.a, has its type's options.
-    const typeIn = (rest: string) => rest.split('@')[0].split('.').at(-1) ?? rest;
+    // A place's own choice, as views.Int:swap.held or views.Ask.Int:g.a, has its type's options; a
+    // label's view, as views.@scan.check, is the label's.
+    const typeIn = (rest: string) => {
+      const type = rest.split(':')[0];
+      return type.startsWith('@') ? type : (type.split('.').at(-1) ?? rest);
+    };
     const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
     const pointer = key.startsWith('pointers.') ? typeIn(key.slice('pointers.'.length)) : undefined;
     const prop =

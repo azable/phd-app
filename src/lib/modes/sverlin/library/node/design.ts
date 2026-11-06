@@ -529,24 +529,38 @@ export const paintProps: ReadonlySet<string> = new Set([
 export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint]);
 
 /**
- * A render at a place: what is written there after `@` (`@left`, `@g.a`), the path of the view it
- * is written in, as `Ask.` (empty outside views), and the view it draws, the variant's choice. A
- * render with no name, as {j - 1}, has an empty `at` and its expression as `written`, for place().
+ * A render at a place: `:` and what is written there (`:left`, `:g.a`, or a label, `:@scan.next`),
+ * the path of the view it is written in, as `Ask.` (empty outside views), and the view it draws,
+ * the variant's choice. A render with no name, as {j - 1}, has an empty `at` and its expression as
+ * `written`, for place().
  */
 export type Place = { within: string; at: string; view?: string; written?: string };
 
 /**
- * A kind's own variables at a place, as `IntCell@swap.held` or `Highlight.Pointed@left`: for the
- * kinds of the view the place draws, its nested snippets' included; none for another kind.
+ * The design variable captioning a place, as `:lo.label` for `:lo` or `:@scan.next.label` for a
+ * label's place, which place() in its view gives: any short text, the place's own short name to
+ * start (see placeName).
  */
-/**
- * The design variable labelling a pointer's place, as `label@lo` for `@lo` (written `:lo.label`),
- * which place() in its view gives: any short text, the place's own name to start.
- */
-export const placeLabelKey = (at: string): string => `label${at}`;
+export const placeLabelKey = (at: string): string => `${at}.label`;
+
+/** A place's caption key, `:lo.label` or `:@scan.next.label`, its place's name the first group. */
+export const placeCaption = /^:(@?[\w$.]+?)\.label$/u;
 
 /** Whether a variable is a place's label, which takes any short text rather than an option. */
-export const isPlaceLabel = (key: string): boolean => /^label@[\w$.]+$/u.test(key);
+export const isPlaceLabel = (key: string): boolean => placeCaption.test(key);
+
+/**
+ * A place's own name, as place() gives it with no caption in the design: a variable's or field's as
+ * written (`lo`, `pair.left`), a label's last name, never its path (`next` for `:@scan.next`), as
+ * a label marks a moment of the run and its path only says where in the code.
+ */
+export const placeName = (at: string): string =>
+  at.startsWith(':@') ? at.slice(at.lastIndexOf('.') + 1).replace(/^:?@/u, '') : at.slice(1);
+
+/**
+ * A kind's own variables at a place, as `IntCell:swap.held` or `Highlight.Pointed:left`: for the
+ * kinds of the view the place draws, its nested snippets' included; none for another kind.
+ */
 
 /** The longest label a place takes, a word or two under a mark. */
 export const placeLabelLength = 24;

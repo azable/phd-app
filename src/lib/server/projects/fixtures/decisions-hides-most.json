@@ -17,35 +17,35 @@
     "IntTally.shown": true,
     "pointers.Index": "CheckMark",
     "CheckMark.shown": true,
-    "views.Int@value": "IntCell",
+    "views.Int:value": "IntCell",
     "ResultCard.shown": true,
     "SearchView.shown": true,
     "listing.language": "textbook",
-    "views.Int@target": "IntCell",
-    "CheckMark@i.shown": true,
+    "views.Int:target": "IntCell",
+    "CheckMark:i.shown": true,
     "FoundCaption.shown": true,
-    "IntCell@value.shown": true,
-    "IntCell@target.shown": true,
+    "IntCell:value.shown": true,
+    "IntCell:target.shown": true,
     "IntTally.Tally.shown": true,
-    "IntTally@value.shown": true,
+    "IntTally:value.shown": true,
     "MissingCaption.shown": true,
-    "IntTally@target.shown": true,
+    "IntTally:target.shown": true,
     "EqualityQuestion.shown": true,
-    "ResultCard@answer.shown": true,
-    "IntTally.Tally@value.shown": true,
-    "IntTally.Tally@target.shown": true,
-    "EqualityQuestion@check.shown": true,
+    "ResultCard:answer.shown": true,
+    "IntTally.Tally:value.shown": true,
+    "IntTally.Tally:target.shown": true,
+    "EqualityQuestion:@check.shown": true,
     "CheckMark.PointerCaption.shown": true,
-    "views.EqualityQuestion.Int@e.a": "IntCell",
-    "views.EqualityQuestion.Int@e.b": "IntCell",
-    "CheckMark.PointerCaption@i.shown": true,
-    "EqualityQuestion.IntCell@e.a.shown": true,
-    "EqualityQuestion.IntCell@e.b.shown": true,
-    "EqualityQuestion.IntTally@e.a.shown": true,
-    "EqualityQuestion.IntTally@e.b.shown": true,
-    "EqualityQuestion.FlagWord@e.value.shown": true,
-    "EqualityQuestion.IntTally.Tally@e.a.shown": true,
-    "EqualityQuestion.IntTally.Tally@e.b.shown": true
+    "views.EqualityQuestion.Int:e.a": "IntCell",
+    "views.EqualityQuestion.Int:e.b": "IntCell",
+    "CheckMark.PointerCaption:i.shown": true,
+    "EqualityQuestion.IntCell:e.a.shown": true,
+    "EqualityQuestion.IntCell:e.b.shown": true,
+    "EqualityQuestion.IntTally:e.a.shown": true,
+    "EqualityQuestion.IntTally:e.b.shown": true,
+    "EqualityQuestion.FlagWord:e.value.shown": true,
+    "EqualityQuestion.IntTally.Tally:e.a.shown": true,
+    "EqualityQuestion.IntTally.Tally:e.b.shown": true
   },
   "options": {
     "views.Int": ["IntCell", "IntTally", "none"],
@@ -64,43 +64,43 @@
     "IntTally.shown": [true, false],
     "pointers.Index": ["CheckMark", "none"],
     "CheckMark.shown": [true, false],
-    "views.Int@value": ["IntCell", "IntTally", "none"],
+    "views.Int:value": ["IntCell", "IntTally", "none"],
     "ResultCard.shown": [true, false],
     "SearchView.shown": [true, false],
     "listing.language": ["textbook", "none"],
-    "views.Int@target": ["IntCell", "IntTally", "none"],
-    "CheckMark@i.shown": [true, false],
+    "views.Int:target": ["IntCell", "IntTally", "none"],
+    "CheckMark:i.shown": [true, false],
     "FoundCaption.shown": [true, false],
-    "IntCell@value.shown": [true, false],
-    "IntCell@target.shown": [true, false],
+    "IntCell:value.shown": [true, false],
+    "IntCell:target.shown": [true, false],
     "IntTally.Tally.shown": [true, false],
-    "IntTally@value.shown": [true, false],
+    "IntTally:value.shown": [true, false],
     "MissingCaption.shown": [true, false],
-    "IntTally@target.shown": [true, false],
+    "IntTally:target.shown": [true, false],
     "EqualityQuestion.shown": [true, false],
-    "ResultCard@answer.shown": [true, false],
-    "IntTally.Tally@value.shown": [true, false],
-    "IntTally.Tally@target.shown": [true, false],
-    "EqualityQuestion@check.shown": [true, false],
+    "ResultCard:answer.shown": [true, false],
+    "IntTally.Tally:value.shown": [true, false],
+    "IntTally.Tally:target.shown": [true, false],
+    "EqualityQuestion:@check.shown": [true, false],
     "CheckMark.PointerCaption.shown": [true, false],
-    "views.EqualityQuestion.Int@e.a": ["IntCell", "IntTally", "none"],
-    "views.EqualityQuestion.Int@e.b": ["IntCell", "IntTally", "none"],
-    "CheckMark.PointerCaption@i.shown": [true, false],
-    "EqualityQuestion.IntCell@e.a.shown": [true, false],
-    "EqualityQuestion.IntCell@e.b.shown": [true, false],
-    "EqualityQuestion.IntTally@e.a.shown": [true, false],
-    "EqualityQuestion.IntTally@e.b.shown": [true, false],
-    "EqualityQuestion.FlagWord@e.value.shown": [true, false],
-    "EqualityQuestion.IntTally.Tally@e.a.shown": [true, false],
-    "EqualityQuestion.IntTally.Tally@e.b.shown": [true, false]
+    "views.EqualityQuestion.Int:e.a": ["IntCell", "IntTally", "none"],
+    "views.EqualityQuestion.Int:e.b": ["IntCell", "IntTally", "none"],
+    "CheckMark.PointerCaption:i.shown": [true, false],
+    "EqualityQuestion.IntCell:e.a.shown": [true, false],
+    "EqualityQuestion.IntCell:e.b.shown": [true, false],
+    "EqualityQuestion.IntTally:e.a.shown": [true, false],
+    "EqualityQuestion.IntTally:e.b.shown": [true, false],
+    "EqualityQuestion.FlagWord:e.value.shown": [true, false],
+    "EqualityQuestion.IntTally.Tally:e.a.shown": [true, false],
+    "EqualityQuestion.IntTally.Tally:e.b.shown": [true, false]
   },
   "seen": [
     {
       "views.Int": "IntTally",
-      "views.Int@value": "IntTally",
-      "views.Int@target": "IntTally",
-      "views.EqualityQuestion.Int@e.a": "IntTally",
-      "views.EqualityQuestion.Int@e.b": "IntTally"
+      "views.Int:value": "IntTally",
+      "views.Int:target": "IntTally",
+      "views.EqualityQuestion.Int:e.a": "IntTally",
+      "views.EqualityQuestion.Int:e.b": "IntTally"
     }
   ],
   "answers": [
@@ -271,7 +271,7 @@
     },
     {
       "type": "choice",
-      "name": "CheckMark@i.shown",
+      "name": "CheckMark:i.shown",
       "choice": "false",
       "probabilities": [
         {
@@ -301,7 +301,7 @@
     },
     {
       "type": "choice",
-      "name": "IntCell@value.shown",
+      "name": "IntCell:value.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -316,7 +316,7 @@
     },
     {
       "type": "choice",
-      "name": "IntCell@target.shown",
+      "name": "IntCell:target.shown",
       "choice": "false",
       "probabilities": [
         {
@@ -346,7 +346,7 @@
     },
     {
       "type": "choice",
-      "name": "IntTally@value.shown",
+      "name": "IntTally:value.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -376,7 +376,7 @@
     },
     {
       "type": "choice",
-      "name": "IntTally@target.shown",
+      "name": "IntTally:target.shown",
       "choice": "false",
       "probabilities": [
         {
@@ -406,7 +406,7 @@
     },
     {
       "type": "choice",
-      "name": "ResultCard@answer.shown",
+      "name": "ResultCard:answer.shown",
       "choice": "false",
       "probabilities": [
         {
@@ -421,7 +421,7 @@
     },
     {
       "type": "choice",
-      "name": "IntTally.Tally@value.shown",
+      "name": "IntTally.Tally:value.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -436,7 +436,7 @@
     },
     {
       "type": "choice",
-      "name": "IntTally.Tally@target.shown",
+      "name": "IntTally.Tally:target.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -451,7 +451,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion@check.shown",
+      "name": "EqualityQuestion:@check.shown",
       "choice": "false",
       "probabilities": [
         {
@@ -481,7 +481,7 @@
     },
     {
       "type": "choice",
-      "name": "CheckMark.PointerCaption@i.shown",
+      "name": "CheckMark.PointerCaption:i.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -496,7 +496,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntCell@e.a.shown",
+      "name": "EqualityQuestion.IntCell:e.a.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -511,7 +511,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntCell@e.b.shown",
+      "name": "EqualityQuestion.IntCell:e.b.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -526,7 +526,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntTally@e.a.shown",
+      "name": "EqualityQuestion.IntTally:e.a.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -541,7 +541,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntTally@e.b.shown",
+      "name": "EqualityQuestion.IntTally:e.b.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -556,7 +556,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.FlagWord@e.value.shown",
+      "name": "EqualityQuestion.FlagWord:e.value.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -571,7 +571,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntTally.Tally@e.a.shown",
+      "name": "EqualityQuestion.IntTally.Tally:e.a.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -586,7 +586,7 @@
     },
     {
       "type": "choice",
-      "name": "EqualityQuestion.IntTally.Tally@e.b.shown",
+      "name": "EqualityQuestion.IntTally.Tally:e.b.shown",
       "choice": "(keep)",
       "probabilities": [
         {
@@ -680,7 +680,7 @@
     },
     {
       "type": "choice",
-      "name": "views.Int@value",
+      "name": "views.Int:value",
       "choice": "IntTally",
       "probabilities": [
         {
@@ -699,7 +699,7 @@
     },
     {
       "type": "choice",
-      "name": "views.Int@target",
+      "name": "views.Int:target",
       "choice": "IntTally",
       "probabilities": [
         {
@@ -718,7 +718,7 @@
     },
     {
       "type": "choice",
-      "name": "views.EqualityQuestion.Int@e.a",
+      "name": "views.EqualityQuestion.Int:e.a",
       "choice": "IntTally",
       "probabilities": [
         {
@@ -737,7 +737,7 @@
     },
     {
       "type": "choice",
-      "name": "views.EqualityQuestion.Int@e.b",
+      "name": "views.EqualityQuestion.Int:e.b",
       "choice": "IntTally",
       "probabilities": [
         {

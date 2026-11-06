@@ -8,6 +8,8 @@
  *   type allows −1 as it allows the length (coordinates outside the range).
  * - bubble-arrow, bubble-layouts: a column holding a link keeps the largest room its links need at
  *   any step, so its row of cells no longer moves up and down as the swap's link comes and goes.
+ * - search-places, replay/linear-search: a place in the scene data is named :lo, not @lo, as `@`
+ *   names only a moment of the run (the boxes are as they were).
  */
 
 import { createHash } from 'node:crypto';

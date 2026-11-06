@@ -18,15 +18,13 @@ export function tokenProblems(
   rendered: readonly string[]
 ): MappingProblem[] {
   const known = new Set(rendered);
-  // A place as written, :mid for the @mid kept (see design-keys.ts).
-  const written = (place: string) => `:${place.slice(1)}`;
   const listed = rendered.length
-    ? `the places it renders are ${[...known].sort().map(written).join(', ')}`
+    ? `the places it renders are ${[...known].sort().join(', ')}`
     : 'it draws nothing at a place, as {mid} at :mid';
   return tokens
     .filter(({ place }) => !known.has(place))
     .map(({ place, at }) => ({
-      message: `The token ${written(place)}[…] names ${written(place)}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}, and ${listed}.`,
+      message: `The token ${place}[…] names ${place}, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}, and ${listed}.`,
       block: 'listing' as const,
       at
     }));
@@ -51,7 +49,7 @@ const unseen = new Set(['none', 'white', undefined]);
 
 /**
  * The colour a place lights in: the fill of its mark, the <Pointed> of the pointer view drawn there
- * (Mark.Pointed@i.fill) or the view a value there is drawn with (IntCell@key.fill), or its stroke
+ * (Mark.Pointed:i.fill) or the view a value there is drawn with (IntCell:key.fill), or its stroke
  * where the fill is none or white, else the listing's lit fill. Its line, which outlines its
  * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
  * then darkens it as far as it needs, see lineColour in ../library/listing/places.ts).

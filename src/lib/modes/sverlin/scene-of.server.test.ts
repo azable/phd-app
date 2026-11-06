@@ -72,7 +72,7 @@ it(
       1,
       {
         chosen: {
-          'IntCell@target.stroke': 'violet-500',
+          'IntCell:target.stroke': 'violet-500',
           'listing.places': 'fill',
           'Arrow.Pointed.fill': 'amber-100',
           'Arrow.Pointed.stroke': 'amber-500'
@@ -80,19 +80,19 @@ it(
       }
     );
     const scenes = lit.layout.scenes!;
-    expect(scenes.frame.places).toHaveProperty('@target', colourCss('violet-500'));
+    expect(scenes.frame.places).toHaveProperty(':target', colourCss('violet-500'));
     // A pointer's pale fill lights its place; its stroke, darkened until it shows, outlines it.
-    expect(scenes.frame.places).toHaveProperty('@lo', colourCss('amber-100'));
+    expect(scenes.frame.places).toHaveProperty(':lo', colourCss('amber-100'));
     expect(scenes.frame.placeLines).toMatchObject({
-      '@lo': colourCss('amber-600'),
-      '@target': colourCss('violet-500')
+      ':lo': colourCss('amber-600'),
+      ':target': colourCss('violet-500')
     });
     const step = scenes.steps[1];
     const tokens = step.nodes.flatMap(({ runs = [] }) => runs).filter(({ places }) => places);
     expect(tokens.map(({ text, places }) => [text, places])).toContainEqual([
       'target',
-      ['@target']
+      [':target']
     ]);
-    expect(step.nodes.some(({ places }) => places?.includes('@target'))).toBe(true);
+    expect(step.nodes.some(({ places }) => places?.includes(':target'))).toBe(true);
   }
 );

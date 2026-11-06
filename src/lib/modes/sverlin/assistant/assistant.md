@@ -212,8 +212,10 @@ palettes and scales there gives each template's colours and steps. -->
 
 Every key is written with its mark, as the design gives it: `{Int}` a type's
 view, `:found` a place, as `IntCell:found.fill`, and `=true` a value, as
-`VertexCard=true.fill`. values, and each comparison side's values, are one JSON
-object written as a string, nested as the design reads, as
+`VertexCard=true.fill`. `@` only ever means a label, a moment of the run, so a
+place drawn from a label's value keeps it:
+`Mark.Pointed:@visit.look.neighbour.fill`. values, and each comparison side's
+values, are one JSON object written as a string, nested as the design reads, as
 `"{\"$cell\": {\"radius\": 8}, \"IntCell\": {\"...\": \"$cell\"}}"`, or `"{}"`
 for none; `null` removes a value, so it returns to what it inherits or follows.
 A selected presentation’s differs gives the values where its variant differs
@@ -349,16 +351,19 @@ prefer the algorithm’s own names, matching the listing, to words such as
 “current” unless the participant asks for words, and compare the forms rather
 than settling on one. A view captions the place it is drawn at with `{place()}`,
 so one view serves every pointer and every mark in a grid cell; a word for one
-place is the design’s `:lo.label`, not another view. Where a part of the picture
-could be drawn in genuinely different ways, as a position marked by its name, by
-the element it reads, or by a highlight alone, write those as alternative views
-or pointer views (`<View>`s) of the same type, so the variant can choose between
-them and you can compare them, rather than one view that fixes a single form.
-This matters most for the main structure, which can be drawn as genuinely
-different representations: a graph as vertices and arrows, as an adjacency
-matrix, or both side by side; an array as cells or as bars; a tree as nodes and
-links or as nested boxes. Compare representations like these early, before
-smaller looks. Comparisons are cheap: they cost no model call, and the
+place is the design’s `:lo.label`, not another view. At a label, `place()` gives
+the label's last name, so name a label after the moment or value it marks, as
+`@neighbour[w]` for the neighbour a check reads, never after an action, as
+`@next[w]`, which a reader takes for “go to the next one”. Where a part of the
+picture could be drawn in genuinely different ways, as a position marked by its
+name, by the element it reads, or by a highlight alone, write those as
+alternative views or pointer views (`<View>`s) of the same type, so the variant
+can choose between them and you can compare them, rather than one view that
+fixes a single form. This matters most for the main structure, which can be
+drawn as genuinely different representations: a graph as vertices and arrows, as
+an adjacency matrix, or both side by side; an array as cells or as bars; a tree
+as nodes and links or as nested boxes. Compare representations like these early,
+before smaller looks. Comparisons are cheap: they cost no model call, and the
 participant answers each at a glance, so err on the side of more; when unsure
 whether a choice is worth asking, ask it. Give as many independent comparisons
 as the information you need, from 2 to 10 in one decision, the most useful

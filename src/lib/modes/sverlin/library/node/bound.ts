@@ -2,12 +2,13 @@
  * Props bound to a view's value, as `<Node stroke={this.visited} />`: the prop's options are the
  * range, the values the expression can take the domain, and the design says which option each
  * value takes. An unordered domain (booleans, words not of an enumeration) has a variable per
- * value, as `Card.stroke@true`; an ordered one (numbers, an enumeration in its declared order)
+ * value, as `Card=true.stroke`; an ordered one (numbers, an enumeration in its declared order)
  * keeps its order, taking consecutive options from
- * `@from`, or for a colour the shades of `@hue`, lightest first, running `@order` up or down.
+ * `.from`, or for a colour the shades of `.hue`, lightest first, running `.order` up or down.
  */
 
 import { hues, propOptions, shades, type DesignProp } from './design';
+import { valueKeyOf } from './design-keys';
 
 /** A value a bound prop maps from. */
 export type BoundValue = string | number | boolean;
@@ -61,18 +62,18 @@ export const orderedProps: ReadonlySet<string> = new Set([
 /** Colour props: hues for an unordered domain, one hue's shades for an ordered one. */
 export const colourProps: ReadonlySet<string> = new Set(['fill', 'stroke', 'color']);
 
-/** The variable a value of an unordered domain takes its option from, as Card.stroke@true. */
+/** The variable a value of an unordered domain takes its option from, as Card=true.stroke. */
 export const valueKey = (kind: string, prop: string, value: BoundValue): string =>
-  `${kind}.${prop}@${String(value)}`;
+  valueKeyOf(kind, prop, String(value));
 
 /** The variables of an ordered domain: the first option, or a colour's hue, and which way it runs. */
 export const orderKeys = (
   kind: string,
   prop: string
 ): { from: string; hue: string; order: string } => ({
-  from: `${kind}.${prop}@from`,
-  hue: `${kind}.${prop}@hue`,
-  order: `${kind}.${prop}@order`
+  from: `${kind}.${prop}.from`,
+  hue: `${kind}.${prop}.hue`,
+  order: `${kind}.${prop}.order`
 });
 
 export const orders = ['up', 'down'] as const;
@@ -139,8 +140,8 @@ export const lengthProps: ReadonlySet<string> = new Set(['width', 'height']);
 /** The pixels per unit a length's kind may take. */
 export const lengthUnits: readonly number[] = [1, 2, 3, 4, 6, 8, 12, 16, 24];
 
-/** The variable giving a length's pixels per unit, as Bar.width@unit. */
-export const unitKey = (kind: string, prop: string): string => `${kind}.${prop}@unit`;
+/** The variable giving a length's pixels per unit, as Bar.width.unit. */
+export const unitKey = (kind: string, prop: string): string => `${kind}.${prop}.unit`;
 
 /** A bound length in pixels: the value times its kind's unit, or undefined where either is missing. */
 export function boundLength(

@@ -11,8 +11,8 @@ const cases = [
     name: 'a place and the listing (search-places)',
     source: search,
     kept: {
-      'IntCell@target.stroke': 'violet-500',
-      'Arrow.Pointed@lo.fill': 'sky-100',
+      'IntCell:target.stroke': 'violet-500',
+      'Arrow.Pointed:lo.fill': 'sky-100',
       'listing.places': 'fill'
     },
     written: {
@@ -24,7 +24,7 @@ const cases = [
   {
     name: 'a value of the data (bfs-captions)',
     source: bfs,
-    kept: { 'VertexCard.fill@true': 'teal-100', 'VertexCard.fill@false': 'white' },
+    kept: { 'VertexCard=true.fill': 'teal-100', 'VertexCard=false.fill': 'white' },
     written: { 'VertexCard=true.fill': 'teal-100', 'VertexCard=false.fill': 'white' }
   }
 ];

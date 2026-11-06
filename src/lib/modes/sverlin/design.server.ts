@@ -54,7 +54,14 @@ import {
   type DesignValues,
   type KindRole
 } from './library/node/design';
-import { keptKey, keptValues, writtenText } from './library/node/design-keys';
+import {
+  isPlacedOrValued,
+  keptKey,
+  keptValues,
+  keyKind,
+  keyProp,
+  writtenText
+} from './library/node/design-keys';
 import { starterBase, starterBaseName } from './library/node/starter-base';
 import { designOnlyWarning } from './padding-warnings.server';
 
@@ -121,7 +128,7 @@ const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
- * place sets, and their own choices of view, as views.Int@swap.held.
+ * place sets, and their own choices of view, as views.Int:@swap.held.
  */
 export type DesignPlaces = {
   kinds: readonly DesignKind[];
@@ -155,7 +162,7 @@ function layoutStarter(names: readonly string[]): Record<string, DesignValue> {
   };
 }
 
-const kindOf = (key: string) => key.slice(0, Math.max(0, key.lastIndexOf('.')));
+const kindOf = keyKind;
 
 const tokens = Object.keys(tokenProps) as DesignToken[];
 
@@ -602,7 +609,7 @@ const fits = (space: DesignSpace, key: string, value: unknown) =>
 function unfit(space: DesignSpace, key: string, value: unknown): string {
   if (!Object.hasOwn(space, key)) {
     // A size the view binds to its value has no variable of its own; its kind's anchor places it.
-    if (/\.(width|height)$/u.test(key) && Object.hasOwn(space, `${key}@unit`)) {
+    if (/\.(width|height)$/u.test(key) && Object.hasOwn(space, `${key}.unit`)) {
       const kind = kindOf(key);
       const axis = key.endsWith('.width') ? 'width' : 'height';
       return `${kind}'s ${axis} is bound to its value in the view, ${axis}={…}, so it has no ${axis} variable; ${kind}.${axis === 'width' ? 'x' : 'y'}Anchor places it.`;
@@ -615,17 +622,17 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
         (other) => other.startsWith('views.') || other.startsWith('pointers.')
       );
       // A position draws as a mark only in the root of a layout a scene shows (see Pointers).
-      const type = /^pointers\.([^@]+)/u.exec(key)?.[1];
+      const type = /^pointers\.(@?[^:@]+)/u.exec(key)?.[1];
       const unmarked =
         type && !Object.hasOwn(space, `pointers.${type}`)
           ? ` No ${type} draws as a pointer: a position draws as a mark only where it is rendered in a page layout's root itself, outside other nodes; inside a node it draws as its number (views.${type}), and in a layout another layout draws by its tag it draws nothing.`
           : '';
       return `The design has no variable ${key}; its view choices are ${choices.join(', ') || 'none'}.${unmarked}`;
     }
-    const kind = key.slice(0, key.lastIndexOf('.'));
+    const kind = keyKind(key);
     // A place sets only its paint and whether it is shown: every other prop holds for its kind.
-    const at = kind.indexOf('@');
-    const prop = key.slice(kind.length + 1);
+    const at = kind.indexOf(':');
+    const prop = keyProp(key);
     const ofKind = at < 0 ? undefined : `${kind.slice(0, at)}.${prop}`;
     if (ofKind && !placeProps.has(prop) && Object.hasOwn(space, ofKind))
       return `A place sets only its paint (${placePaint.join(', ')}) and whether it is shown, never how much room anything takes: ${prop} holds for every ${kind.slice(0, at)} at every step, as ${ofKind}.`;
@@ -693,8 +700,8 @@ export function buildVariant(
   origins: Record<string, DesignOrigin>;
   dropped: string[];
 } {
-  // Keys come written or as kept (see design-keys.ts): `{Int}`, `IntCell:target.stroke` and
-  // <Listing>.syntax are views.Int, IntCell@target.stroke and listing.syntax here.
+  // Keys come written or as kept (see design-keys.ts): `{Int}` and <Listing>.syntax are views.Int
+  // and listing.syntax here; every other key is the same in both.
   const aliased = (entries: Record<string, unknown> | undefined) =>
     keptValues(entries ?? {}, (key) => Object.hasOwn(offered, key));
   const base = aliased(request.base);
@@ -852,14 +859,14 @@ export function buildVariant(
 }
 
 /**
- * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card.fill@true,
+ * The prop a variable sets, as fill for Compared.Pointed.fill or for a bound prop's Card=true.fill,
  * views for a choice of views (views.Int, pointers.Index).
  */
 function propOf(key: string): string {
   if (key.startsWith('views.') || key.startsWith('pointers.')) return 'views';
   // A token draws with the kinds of its prop that hold its value, so they stay alike.
   if (isToken(key)) return tokenProps[key];
-  return key.slice(key.lastIndexOf('.') + 1).replace(/@.*/u, '');
+  return keyProp(key);
 }
 
 /**
@@ -903,7 +910,7 @@ function randomised(
     if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
     if (key === baseKey || key.startsWith('scale.') || paletteKey.test(key)) continue;
     const group =
-      slotProps.has(propOf(key)) && !key.includes('@')
+      slotProps.has(propOf(key)) && !isPlacedOrValued(key)
         ? key
         : `${propOf(key)}=${JSON.stringify(value)}`;
     groups.set(group, [...(groups.get(group) ?? []), key]);
@@ -935,7 +942,7 @@ function drawOne(
   if (prop === 'views') return value === 'none' ? value : pick(options.filter((o) => o !== 'none'));
   if (kept.has(prop) || framedKinds(space).has(kindOf(key))) return value;
   // A bound prop's hue and the way its options run are drawn afresh; a length's unit stays near.
-  if (['@hue', '@order'].some((end) => key.endsWith(end))) return pick(options);
+  if (['.hue', '.order'].some((end) => key.endsWith(end))) return pick(options);
   if (colourProps.has(prop)) {
     // An exact colour draws another of the base's palette (see paletteKey).
     if (typeof value === 'string' && exactColour.test(value))
@@ -950,7 +957,7 @@ function drawOne(
       )
     );
   }
-  if (key.endsWith('@unit') || lengthProps.has(prop)) {
+  if (key.endsWith('.unit') || lengthProps.has(prop)) {
     if (value === 0) return value;
     const at = options.indexOf(value);
     return pick(options.slice(Math.max(1, at - 2), at + 3).filter((option) => option !== 0));

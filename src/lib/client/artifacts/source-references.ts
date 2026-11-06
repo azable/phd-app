@@ -1,7 +1,7 @@
 /**
  * What text in a message refers to in a source: the regions an inline code span names, as a view,
  * layout or kind (`Highlight`, `Title`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
- * (`Highlight.Pointed@left.fill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
+ * (`Highlight.Pointed:@left.fill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
  * is there; and the regions build problems are about.
  *
  * @packageDocumentation
@@ -72,7 +72,7 @@ export function referenceRanges(
       : lineRange(source, Number(first), Number(last ?? first));
   }
   const variable = new RegExp(
-    String.raw`^(views|pointers)\.(${name}(?:\.${name})*)(?:@(.+))?$`,
+    String.raw`^(views|pointers)\.(${name}(?:\.${name})*)(?::(.+))?$`,
     'u'
   ).exec(written);
   if (variable) {
@@ -98,21 +98,21 @@ export function referenceRanges(
 
 /**
  * The design variable a reference names whose value the editor shows in a row of its own, which a
- * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Highlight.Pointed@left.fill`), a
- * place's view choice (`pointers.Index@found`), or a page-frame or listing setting, as the variant
+ * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Highlight.Pointed:left.fill`), a
+ * place's view choice (`pointers.Index:found`), or a page-frame or listing setting, as the variant
  * of a build of the source (`design`) has it. A type's own view choice (`views.Index`) has no row:
  * the view markers after its renders show it.
  */
 export function ghostKey(text: string, design?: ReferenceDesign): string | undefined {
   const written = keptReference(text, design);
   if (!design?.variant || !Object.hasOwn(design.variant, written)) return undefined;
-  return /^(?:views|pointers)\.[^@]+$/u.test(written) ? undefined : written;
+  return /^(?:views|pointers)\.[^:]+$/u.test(written) ? undefined : written;
 }
 
 /**
  * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
- * `@insert.compare.left` as `@…compare.left`, `Highlight.Pointed@insert.compare.left.fill` as
- * `Highlight.Pointed@…compare.left.fill`, a kind's place keeping its prop; `head` before the
+ * `@insert.compare.left` as `@…compare.left`, `Highlight.Pointed:@insert.compare.left.fill` as
+ * `Highlight.Pointed:@…compare.left.fill`, a kind's place keeping its prop; `head` before the
  * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
  * fewer, or text that names no label.
  */
@@ -120,7 +120,7 @@ export function elidedName(
   text: string
 ): { head: string; hidden: string; tail: string } | undefined {
   const written = new RegExp(
-    String.raw`^((?:${name}(?:\.${name})*)?@)(${name}(?:\.${name})*)$`,
+    String.raw`^((?:${name}(?:\.${name})*:?)?@)(${name}(?:\.${name})*)$`,
     'u'
   );
   const match = written.exec(text);
@@ -135,7 +135,7 @@ export function elidedName(
 
 /**
  * Text split into its code and the rest, as an error message names code without marking it: a
- * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index@found`,
+ * `{…}` span, a label (`@left`, `@check.found[`), a key or path (`pointers.Index:found`,
  * `Row.Under`), or a call (`Highlight(…)`), each code only where it names something in the source.
  */
 export function codeIn(
@@ -180,7 +180,7 @@ function codeAt(text: string, at: number): string[] {
     const braces = balanced(text, at, '{', '}');
     if (!braces) return [];
     // A type's view as written, as `{Int}:target` or `{Index}.pointer` (see design-keys.ts).
-    const after = /^(?:\.pointer)?(?::[\w$.]+)?/u.exec(text.slice(at + braces.length))?.[0] ?? '';
+    const after = /^(?:\.pointer)?(?::@?[\w$.]+)?/u.exec(text.slice(at + braces.length))?.[0] ?? '';
     return after ? [braces + after, braces] : [braces];
   }
   const rest = text.slice(at);
@@ -192,7 +192,7 @@ function codeAt(text: string, at: number): string[] {
       : [label];
   }
   const path = new RegExp(
-    String.raw`^${name}(?:\.${name})*(?:[@:]${name}(?:\.${name})*)?(?:=[\w$-]+(?:\.${name})+)?`,
+    String.raw`^${name}(?:\.${name})*(?::@?${name}(?:\.${name})*)?(?:=[\w$-]+(?:\.${name})+)?`,
     'u'
   ).exec(rest)?.[0];
   if (!path) return [];
@@ -202,8 +202,8 @@ function codeAt(text: string, at: number): string[] {
 }
 
 /**
- * A reference as the app keeps its keys: `{Int}` as views.Int, `IntCell:target.stroke` as
- * IntCell@target.stroke (see design-keys.ts), where the assistant writes them so.
+ * A reference as the app keeps its keys: `{Int}` as views.Int, every other key as written (see
+ * design-keys.ts), where the assistant writes them so.
  */
 function keptReference(text: string, design?: ReferenceDesign): string {
   const written = text.trim();
@@ -291,22 +291,26 @@ function matches(source: string, pattern: RegExp, group = 0): SourceRange[] {
 }
 
 /**
- * A kind or its variable, as `Row.Under`, `Highlight.Pointed.fill` or `IntCell@swap.held.fill`:
- * the path of views, layouts and kinds, and the place after `@`, less a prop at the end.
+ * A kind or its variable, as `Row.Under`, `Highlight.Pointed.fill`, `IntCell:swap.held.fill` or
+ * `Mark.Pointed:@scan.next.fill`: the path of views, layouts and kinds, and the place after `:`
+ * (a label's keeping its `@`), less a prop at the end.
  */
 function kindKey(text: string): { segments: string[]; place?: string } | undefined {
-  const [path, ...rest] = text.split('@');
+  const colon = text.indexOf(':');
+  const path = colon < 0 ? text : text.slice(0, colon);
   const pathPattern = new RegExp(String.raw`^${name}(?:\.${name})*$`, 'u');
-  if (!pathPattern.test(path) || rest.length > 1) return undefined;
-  if (!rest.length) {
+  if (!pathPattern.test(path)) return undefined;
+  if (colon < 0) {
     const segments = path.split('.');
     if (props.has(segments.at(-1) ?? '')) segments.pop();
     return segments.length ? { segments } : undefined;
   }
-  const place = rest[0].split('.');
+  const written = text.slice(colon + 1);
+  const label = written.startsWith('@') ? '@' : '';
+  const place = written.slice(label.length).split('.');
   if (props.has(place.at(-1) ?? '') && place.length > 1) place.pop();
   if (!pathPattern.test(place.join('.'))) return undefined;
-  return { segments: path.split('.'), place: place.join('.') };
+  return { segments: path.split('.'), place: `${label}${place.join('.')}` };
 }
 
 /**
@@ -418,7 +422,7 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
 /** A view choice's parts: `views` or `pointers`, the type it draws, and its place, if any. */
 function choice(key: string): { kind: string; type: string; place?: string } | undefined {
   const parsed = new RegExp(
-    String.raw`^(views|pointers)\.(?:${name}\.)*(${name})(?:@(.+))?$`,
+    String.raw`^(views|pointers)\.(?:${name}\.)*(${name})(?::(.+))?$`,
     'u'
   ).exec(key);
   return parsed ? { kind: parsed[1], type: parsed[2], place: parsed[3] } : undefined;
@@ -428,7 +432,7 @@ function choice(key: string): { kind: string; type: string; place?: string } | u
  * The renders a build records as reading a view choice, each tag whole, and the declaration of the
  * view the variant chooses. A type's choice (`views.Index`) also names the renders of the type at
  * places of their own that draw with its view, as they do until a variant sets theirs apart; a
- * place's choice (`pointers.Index@found`) names only its own.
+ * place's choice (`pointers.Index:found`) names only its own.
  */
 function choiceRanges(source: string, key: string, design: ReferenceDesign): SourceRange[] {
   const wanted = choice(key);
@@ -484,9 +488,9 @@ function placeRenders(source: string, place: string): SourceRange[] {
   );
 }
 
-/** A place as written in a render: a label, or a variable or field. */
+/** A place as written in a render: a label (`@scan.next`), or a variable or field. */
 function placeArgument(place: string): string {
-  return `@?${escape(place)}`;
+  return escape(place);
 }
 
 function sorted(ranges: SourceRange[]): SourceRange[] {

@@ -5,7 +5,7 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import { placedKind, placeLabelKey, type DesignValues, type Place } from './node/design';
+import { placedKind, placeLabelKey, placeName, type DesignValues, type Place } from './node/design';
 import type { ShownFrame } from './fit';
 import type { ArrangeEdge } from './node/arrange';
 import type { Layout } from './node/props';
@@ -490,16 +490,17 @@ export function placeContext(): Place | undefined {
 }
 
 /**
- * What place() in a view gives: the design's label for the place the view is rendered at
- * (`label@lo`), else the place's own name, as `lo` or `pair.left`, or, for a render with no name,
- * its expression as written, as `j - 1`; nothing outside a place.
+ * What place() in a view gives: the design's caption for the place the view is rendered at
+ * (`:lo.label`), else the place's own name (see placeName), as `lo`, `pair.left` or a label's last
+ * name, `next` for `:@scan.next`, or, for a render with no name, its expression as written, as
+ * `j - 1`; nothing outside a place.
  */
 export function sverlinPlace(): string {
   const place = placeContext();
   if (!place) return '';
   if (!place.at) return place.written ?? '';
   const label = designContext()[placeLabelKey(place.at)];
-  return typeof label === 'string' && label ? label : place.at.slice(1);
+  return typeof label === 'string' && label ? label : placeName(place.at);
 }
 
 /**
