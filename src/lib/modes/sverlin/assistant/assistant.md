@@ -103,6 +103,14 @@ Some features suit common needs. Offer them as alternatives where they fit:
   viewHelpers to the layout and a short task; each arrangement comes with how it
   draws (its shape, fill and parts), so compare the best against the current
   one.
+- Where the view helpers are on and the idea itself is open, as a first version
+  or a request for another way to show it, write a skeleton in
+  viewHelpers.skeleton: the whole source with a `<Hole name kind task />` in
+  place of each part to try, and constraints the app can check. Decide what the
+  skeleton fixes and what each hole asks for, so the helpers try different
+  representations of the idea rather than small variations. Each candidate comes
+  with its fills, the app's facts, a score from pictures where they were judged,
+  and, for a combination, why its fills go together.
 - When the participant gives code in a real language, such as C, name its
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against

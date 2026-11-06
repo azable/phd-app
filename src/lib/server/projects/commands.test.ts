@@ -1090,6 +1090,44 @@ describe('submitProjectFeedback', () => {
       ).toBe(false);
     });
 
+    it('stops at the reply’s wait where late candidates may not join', async () => {
+      decide.mockClear();
+      const { helperPipeline } = await import('$lib/server/ai/bots/helper-pipeline');
+      const { appendedEvents } = await claimedWithHelpers(false, helperAdapter, undefined, {
+        helperPipeline: {
+          ...helperPipeline,
+          timing: { replyWaitMs: 0, lateCandidatesJoin: false }
+        }
+      });
+      const candidates = appendedEvents.find(
+        (event) => event.type === 'visualization.view-candidates'
+      );
+      expect(candidates).toMatchObject({
+        payload: {
+          stages: {
+            scoring: 'skipped',
+            choosing: 'skipped',
+            skipped: expect.stringContaining('past the reply’s wait'),
+            late: true
+          }
+        }
+      });
+      expect(decide).not.toHaveBeenCalled();
+    });
+
+    it('runs no helpers for any project while the pipeline’s helpers are off', async () => {
+      const { projectViewHelpers } = await import('./view-helpers-config');
+      const { helperPipeline } = await import('$lib/server/ai/bots/helper-pipeline');
+      const switchedOn = {
+        projectId: crypto.randomUUID(),
+        events: [{ id: 1, type: 'project.view-helpers-set', payload: { enabled: true } }]
+      } as unknown as ProjectDocument;
+      expect(await projectViewHelpers(switchedOn)).toBe(true);
+      expect(await projectViewHelpers(switchedOn, { ...helperPipeline, helpers: false })).toBe(
+        false
+      );
+    });
+
     it('leaves the candidates to the turn of a message written meanwhile', async () => {
       const { appendedEvents } = await claimedWithHelpers(true);
       expect(appendedEvents.some((event) => event.type === 'visualization.view-candidates')).toBe(
