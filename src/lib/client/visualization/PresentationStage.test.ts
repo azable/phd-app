@@ -36,6 +36,13 @@ describe('presentation stage while the project is busy', () => {
     expect(disabled(body, 'Next visualization step')).toBe(false);
   });
 
+  it('goes to the first or the last step from either end, each disabled where it already is', () => {
+    const body = stage(askedPair(['Start', 'Middle', 'Result']), false);
+    expect(body).toContain('Step 1 of 3');
+    expect(disabled(body, 'First visualization step')).toBe(true);
+    expect(disabled(body, 'Last visualization step')).toBe(false);
+  });
+
   it('labels the running operation over the stage, dimming only what it replaces', () => {
     const thinking = stage([...askedPair(), accepted(3)], true);
     expect(thinking).toContain('Thinking…');

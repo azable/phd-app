@@ -86,7 +86,7 @@ export const interfaceParts: readonly InterfacePart[] = [
     id: 'step-controls',
     name: 'Step controls',
     descriptions: everySystem(
-      'Previous and Next move through the visualization one step at a time; between them is the step you are on.'
+      'Previous and Next move through the visualization one step at a time, and the buttons at either end go to the first or the last step; between them is the step you are on.'
     ),
     locator: { selector: 'button[aria-label="Previous visualization step"]', up: 1 }
   },

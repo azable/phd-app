@@ -3,6 +3,8 @@
   import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
   import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
   import CheckIcon from '@lucide/svelte/icons/check';
+  import ChevronFirstIcon from '@lucide/svelte/icons/chevron-first';
+  import ChevronLastIcon from '@lucide/svelte/icons/chevron-last';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import ChevronsLeftIcon from '@lucide/svelte/icons/chevrons-left';
@@ -410,6 +412,16 @@
     <!-- Stepping, apart from the answers so neither is taken for the other. -->
     <div class="flex max-w-full min-w-0 items-center gap-2">
       <Button
+        size="icon-lg"
+        variant="outline"
+        aria-label="First visualization step"
+        title="First step"
+        onclick={() => seek(0)}
+        disabled={step === 0}
+      >
+        <ChevronFirstIcon />
+      </Button>
+      <Button
         size="lg"
         variant="outline"
         aria-label="Previous visualization step"
@@ -477,6 +489,16 @@
       >
         Next
         <ChevronRightIcon data-icon="inline-end" />
+      </Button>
+      <Button
+        size="icon-lg"
+        variant="outline"
+        aria-label="Last visualization step"
+        title="Last step"
+        onclick={() => seek(stepCount - 1)}
+        disabled={step >= stepCount - 1}
+      >
+        <ChevronLastIcon />
       </Button>
     </div>
     {#if layout === 'comparison' && visible.length === 2 && !answersInChat}
