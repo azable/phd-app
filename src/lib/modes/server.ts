@@ -154,7 +154,7 @@ type ModeBuilders = {
   exportFile?: ExportSource;
   designKeys?: DesignKeys;
   /** The tag in a version's source that drew a selected element, as its id names it. */
-  locateElement?: (source: string, id: string) => ElementLocation | undefined;
+  locateElement?: (source: string, id: string, listingName?: string) => ElementLocation | undefined;
 };
 
 const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {

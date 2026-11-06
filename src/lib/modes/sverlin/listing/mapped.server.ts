@@ -16,6 +16,7 @@ import type { Label } from '../algorithm/labels.server';
 import { spanOf } from '../algorithm/parse.server';
 import type { Listing, Mark } from './listing';
 import { mathsFenceAt, mathsText, tokenInMaths, unclosedMaths } from '../maths.server';
+import { closesOnly, keptLines, opensOnly } from './source-lines';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
 export type Region = { label: string; start: number; end: number; at: number };
@@ -107,9 +108,9 @@ export function readRegions(body: string): {
   problems: MappingProblem[];
 } {
   const lines = body.split('\n');
-  const first = lines.findIndex((line) => line.trim());
-  const last = lines.findLastIndex((line) => line.trim());
-  if (first < 0) return { text: '', regions: [], tokens: [], problems: [] };
+  const shown = keptLines(lines);
+  if (!shown) return { text: '', regions: [], tokens: [], problems: [] };
+  const { first, last } = shown;
   const kept = lines.slice(first, last + 1);
   const indent = Math.min(
     ...kept.filter((line) => line.trim()).map((line) => line.length - line.trimStart().length)
@@ -118,9 +119,7 @@ export function readRegions(body: string): {
   const characters: { character: string; at: number }[] = [];
   let at = lines.slice(0, first).reduce((total, line) => total + line.length + 1, 0);
   // A line of marks alone would show blank: openings join the next line, which takes their
-  // indentation, and closings join the line before.
-  const opensOnly = /^\s*(?:(?:[@$]|:@?)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[\s*)+$/u;
-  const closesOnly = /^\s*\]+\s*$/u;
+  // indentation, and closings join the line before (see shownLineGroups).
   kept.forEach((line, index) => {
     const joined = (index > 0 && opensOnly.test(kept[index - 1])) || closesOnly.test(line);
     if (closesOnly.test(line) && characters.at(-1)?.character === '\n') characters.pop();

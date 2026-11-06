@@ -5,6 +5,8 @@
  * number, as L3 (see provideNodeIds in library/type-context.ts for how ids are formed).
  */
 
+import { listingLine, type ListingLine } from './listing/source-lines';
+
 export type ElementLocation = {
   /** Line and column (both from 1) of the element's <Node>, <Link>, or <Listing> tag. */
   line: number;
@@ -17,6 +19,8 @@ export type ElementLocation = {
   items: number[];
   /** The source line holding the tag, trimmed and shortened. */
   markup: string;
+  /** For a listing's line, where the listing's block holds it and the labels round it. */
+  listing?: ListingLine;
 };
 
 // The key is URL-encoded (see keyedRef in library/type-context.ts).
@@ -26,8 +30,16 @@ const maxMarkup = 200;
 // What an id's position can start: a library tag, a caption token, or inline maths.
 const drawnFrom = /^(?:<(?:Node|Link|Listing)(?:[\s/>]|$)|[:$][A-Za-z_][\w$.]*\[|\$\$)/u;
 
-/** Locate an element id in a Sverlin source, or undefined if it names no library tag there. */
-export function locateElement(source: string, id: string): ElementLocation | undefined {
+/**
+ * Locate an element id in a Sverlin source, or undefined if it names no library tag there; a
+ * listing's line is found in the listing the presentation shows (its listing.language), else the
+ * first.
+ */
+export function locateElement(
+  source: string,
+  id: string,
+  listingName?: string
+): ElementLocation | undefined {
   const match = elementId.exec(id);
   if (!match) return undefined;
   const line = Number(match[1]);
@@ -41,12 +53,15 @@ export function locateElement(source: string, id: string): ElementLocation | und
     return undefined;
   }
   const trimmed = text.trim();
+  const shownLine = text.slice(column - 1).startsWith('<Listing') && /^L(\d+)$/u.exec(key ?? '');
+  const listing = shownLine ? listingLine(source, Number(shownLine[1]), listingName) : undefined;
   return {
     line,
     column,
     ...(key === undefined ? {} : { key }),
     occurrence: match[4] ? Number(match[4]) : 1,
     items: match[5] ? match[5].slice(1).split('/').map(Number) : [],
-    markup: trimmed.length > maxMarkup ? `${trimmed.slice(0, maxMarkup - 1)}…` : trimmed
+    markup: trimmed.length > maxMarkup ? `${trimmed.slice(0, maxMarkup - 1)}…` : trimmed,
+    ...(listing ? { listing } : {})
   };
 }

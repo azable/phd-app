@@ -280,10 +280,14 @@ validates and keeps per presentation and step. Feedback records them as
 `element-ref` segments at the start of the message; the server checks each id
 names a `<Node>` in that presentation's source
 ([`element-ref.ts`](src/lib/modes/sverlin/element-ref.ts)) and gives the
-assistant the tag, its render, and the label the participant saw. Otherwise a
-message is only the participant's words: what was on screen (the presentation
-and step viewed, the pair compared, or a source chosen on its own) is recorded
-beside it as `feedback.submitted` `viewing`
+assistant the tag, its render, and the label the participant saw. A listing's
+line also gives its lines in the listing block and the labels round it, and a
+click on a token, as `:i[…]`, the token's place; the source panel lights the
+same: the line, and its innermost label's code or the token's place
+([`listing/source-lines.ts`](src/lib/modes/sverlin/listing/source-lines.ts)).
+Otherwise a message is only the participant's words: what was on screen (the
+presentation and step viewed, the pair compared, or a source chosen on its own)
+is recorded beside it as `feedback.submitted` `viewing`
 ([`feedback-context.ts`](src/lib/client/timeline/feedback-context.ts)), not
 shown in the chat, and given to the assistant as a note before those words. The
 compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as

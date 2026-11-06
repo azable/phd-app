@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState } from '@codemirror/state';
 
-import { highlightRanges } from './selection-highlights';
+import sverlin from '$lib/modes/sverlin/fixtures/links/linear-search.sverlin?raw';
+
+import { elementHighlights, highlightRanges } from './selection-highlights';
 
 const source = [
   '<Node layout="row">',
@@ -46,5 +48,39 @@ describe('link highlights', () => {
     expect(ranges.map(({ from, to }) => doc.slice(from, to))).toEqual([
       '<Link from="a" to="b" label={"a > b"} />'
     ]);
+  });
+});
+
+describe('a selected listing line', () => {
+  const lines = sverlin.split('\n');
+  const listingTag = lines.findIndex((line) => line.includes('<Listing />'));
+  const id = `${listingTag + 1}:${lines[listingTag].indexOf('<Listing') + 1}@L4`;
+  const shown = (highlights: ReturnType<typeof elementHighlights>) =>
+    highlights.map((each) =>
+      'from' in each ? sverlin.slice(each.from, each.to) : lines[each.line - 1].trim()
+    );
+
+  it('lights its tag, its line in the listing block, and its label’s code', () => {
+    expect(shown(elementHighlights(sverlin, { id }))).toEqual([
+      '<Listing />',
+      '3      @scan.check[if A[:i[i]] = target]',
+      '@check[values[i] === target]'
+    ]);
+  });
+
+  it('lights a clicked token’s place, where its variable is declared and drawn, not the label', () => {
+    const highlights = shown(elementHighlights(sverlin, { id, place: ':i' }));
+    expect(highlights.slice(0, 2)).toEqual([
+      '<Listing />',
+      '3      @scan.check[if A[:i[i]] = target]'
+    ]);
+    expect(highlights).toContain('i');
+    expect(highlights).not.toContain('@check[values[i] === target]');
+  });
+
+  it('lights only the tag of an element that is no listing line', () => {
+    const node = lines.findIndex((line) => line.includes('<Node value={this} />'));
+    const at = `${node + 1}:${lines[node].indexOf('<Node') + 1}`;
+    expect(shown(elementHighlights(sverlin, { id: at }))).toEqual(['<Node value={this} />']);
   });
 });
