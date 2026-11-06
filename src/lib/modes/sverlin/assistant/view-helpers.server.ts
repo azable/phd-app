@@ -4,7 +4,8 @@
  * becomes part of the source and which to compare; a helper never changes a version itself.
  */
 
-import { readabilityText, unreadableProblem, wideCloseness } from '$lib/shared/readability';
+import { readabilityText, unreadableProblem } from '$lib/shared/readability';
+import { wideCloseness } from './arrangements.server';
 
 import guide from '../README.md?raw';
 import layoutHelper from './layout-helper.md?raw';

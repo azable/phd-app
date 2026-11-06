@@ -12,6 +12,7 @@ import type {
   AiProjectContext
 } from '$lib/server/ai/context/project-context';
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
+import type { Arrangement } from '$lib/shared/readability';
 import type { AiContextSelection } from '$lib/server/ai/context/project-context';
 import type { ProjectCommandDependencies } from '$lib/server/projects/commands';
 import type { EventId } from '$lib/shared/projects/events';
@@ -47,6 +48,8 @@ type AssistantModule = {
   default: ChatBotConfig<AiProjectContext, ModeOutput>;
   readDecisionValues?: DecisionValuesReader;
   design?: DesignForAssistant;
+  /** The best arrangements of a version's free layouts, in a line each, for the assistant. */
+  tellArrangements?: (arrangements: readonly Arrangement[]) => string[];
   /** What the mode's workspace offers that its assistant must know, beyond every mode's. */
   interfaceCapabilities?: readonly string[];
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { rankedArrangements } from '$lib/shared/readability';
+import { rankedArrangements } from './assistant/arrangements.server';
 
 import { arrangementDesigns } from './arrangements.server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';

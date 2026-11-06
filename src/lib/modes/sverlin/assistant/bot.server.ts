@@ -29,6 +29,9 @@ import assistant from './assistant.md?raw';
 /** How a recorded decision's design values are read (see ../../assistants.server.ts). */
 export { readDesignPatch as readDecisionValues } from './design-patch.server';
 
+/** How the assistant is told a version's arrangements (see ../../assistants.server.ts). */
+export { arrangementsText as tellArrangements } from './arrangements.server';
+
 /** The design as the assistant reads it (see ../../assistants.server.ts). */
 export const design: DesignForAssistant = { variables: designVariables, context: designContext };
 
