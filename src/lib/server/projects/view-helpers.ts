@@ -9,7 +9,7 @@ import {
   type AiViewHelpers
 } from '$lib/server/chat-bots/project-context';
 import { preferenceSummary } from '$lib/server/chat-bots/preference-summary';
-import { layoutBlock } from '$lib/modes/sverlin/view-helpers.server';
+import { layoutBlock } from '$lib/modes/sverlin/assistant/view-helpers.server';
 import { projectBrief } from '$lib/shared/projects/brief';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 

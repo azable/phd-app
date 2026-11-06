@@ -55,11 +55,14 @@ alone cannot prove that arbitrary JS will never attempt navigation.
 - Environment-neutral schemas, Timeline projections, reusable study tooling, and
   transport contracts belong under `src/lib/shared/`; concrete study definitions
   under `src/lib/studies/`; browser sessions and UI under `src/lib/client/`;
-  persistence, AI providers, and project commands under `src/lib/server/`.
-- Each mode's browser-safe contract and starter, server build/bot, and playback
-  live together under `src/lib/modes/<mode>/`. Keep server-only and browser-only
-  entry points separate; preserve the one-way import rules in
-  `eslint.config.js`.
+  persistence and project commands under `src/lib/server/`; mode-neutral AI
+  (providers, bots, decisions, context, costs) under `src/lib/server/ai/`.
+- Each mode's browser-safe contract and starter, server build, and playback live
+  together under `src/lib/modes/<mode>/`, and its AI (bot, prompts, helpers)
+  under `src/lib/modes/<mode>/assistant/`. An engine (compiler, layout, library,
+  scenes, build) never imports its assistant: the assistant uses the engine's
+  public functions, not the reverse. Keep server-only and browser-only entry
+  points separate; preserve the one-way import rules in `eslint.config.js`.
 - Stable direct URLs belong under `static/`. Generated shadcn-svelte component
   source belongs under `src/lib/client/components/ui/` with helper
   `src/lib/client/components/utils.ts`; `components.json` is authoritative for
@@ -67,14 +70,15 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   components.
 - The public Svelte component source contract is the mode starter and build
   implementation in `src/lib/modes/sverlin/`. Its assistant prompt belongs in
-  the same folder: instructions in `assistant.md`, followed by the language
-  guide. The Sverlin language guide, `src/lib/modes/sverlin/README.md`, is both
-  the assistant's language reference and the developer documentation of the
-  language (an approved exception to keeping guides in the root `README.md`);
-  update it in the same change as any change to the blocks, the subset,
-  `Node`/`Link` props, or drawn defaults. Its `<!-- -->` comments are maintainer
-  notes stripped from the prompt; everything else is sent to the model. Each
-  mode has its own assistant; never make one bot serve more than one mode.
+  its `assistant/` folder: instructions in `assistant/assistant.md`, followed by
+  the language guide. The Sverlin language guide,
+  `src/lib/modes/sverlin/README.md`, is both the assistant's language reference
+  and the developer documentation of the language (an approved exception to
+  keeping guides in the root `README.md`); update it in the same change as any
+  change to the blocks, the subset, `Node`/`Link` props, or drawn defaults. Its
+  `<!-- -->` comments are maintainer notes stripped from the prompt; everything
+  else is sent to the model. Each mode has its own assistant; never make one bot
+  serve more than one mode.
 
 ## Commands and operational state
 
@@ -153,9 +157,11 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   and extend it; a parallel implementation needs its reason stated in the
   review.
 - A new mode should add one folder plus one catalogue registration, not another
-  cross-cutting assistant/mode mapping. Keep project intake, operations,
-  attempts, persistence, and workspace controls mode-neutral; only mode-specific
-  build, source, bot, and playback behavior belong in the mode folder.
+  cross-cutting assistant/mode mapping. Prefer project intake, operations,
+  attempts, persistence, and workspace controls that are mode-neutral; where a
+  part is really about one mode (as Sverlin's design values in decisions, or its
+  helper rounds), put it in that mode's folder or behind a mode hook, rather
+  than branching on the mode in shared code.
 - AI-generated source is validated/built before activation. Timelines retain
   prompts, responses, diagnostics, source, accepted artifacts, and
   presentations.

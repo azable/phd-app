@@ -1,6 +1,6 @@
 <!--
-The Sverlin language guide. bot.server.ts sends this file to the assistant after
-the instructions in assistant.md, with these HTML comments removed, so every
+The Sverlin language guide. assistant/bot.server.ts sends this file to the assistant
+after the instructions in assistant/assistant.md, with these HTML comments removed, so every
 other word here is model guidance. Comments are notes for maintainers. guide.server.test.ts builds
 every complete example and checks the documented Node and Link props and their
 named values against the compiler. Update this guide in the same change as the

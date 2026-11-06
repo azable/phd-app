@@ -73,12 +73,12 @@ export function createChatbot<Project, Output extends object>(
 
 type ModeOutput = SourceArtifactChatOutput | CandidateAssistantOutput;
 const modules = import.meta.glob<{ default: ChatBotConfig<AiProjectContext, ModeOutput> }>(
-  '../../../modes/*/bot.server.ts',
+  '../../../modes/*/assistant/bot.server.ts',
   { eager: true }
 );
 const modeChatbots = Object.fromEntries(
   Object.keys(modeCatalog).map((mode) => {
-    const config = modules[`../../../modes/${mode}/bot.server.ts`]?.default;
+    const config = modules[`../../../modes/${mode}/assistant/bot.server.ts`]?.default;
     if (!config || config.id !== modeCatalog[mode as keyof typeof modeCatalog].assistantId)
       throw new Error(`Visualization mode ${mode} needs its own matching assistant.`);
     return [mode, createChatbot(config, openAIAdapter)];

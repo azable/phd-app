@@ -30,9 +30,9 @@ library's Svelte sources live in
 language, blocks and library together, is documented in one guide,
 [`src/lib/modes/sverlin/README.md`](src/lib/modes/sverlin/README.md), which the
 Sverlin assistant's prompt includes after its instructions in
-[`assistant.md`](src/lib/modes/sverlin/assistant.md), so editing either changes
-the model's guidance. HTML comments in both files are maintainer notes left out
-of the prompt, and
+[`assistant/assistant.md`](src/lib/modes/sverlin/assistant/assistant.md), so
+editing either changes the model's guidance. HTML comments in both files are
+maintainer notes left out of the prompt, and
 [`guide.server.test.ts`](src/lib/modes/sverlin/guide.server.test.ts) builds its
 complete examples and checks its `Node` and `Link` props and named values
 against the compiler.

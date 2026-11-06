@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import bars from './fixtures/bars.sverlin?raw';
-import bfs from './fixtures/bfs-undirected.sverlin?raw';
+import bars from '../fixtures/bars.sverlin?raw';
+import bfs from '../fixtures/bfs-undirected.sverlin?raw';
 import bot, { viewHelpersRequest } from './bot.server';
 import {
   bestCandidates,

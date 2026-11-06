@@ -327,7 +327,7 @@ export type PreparedComponent = {
   /**
    * Every label of the algorithm, by full name; and for each label, how many runs it has and how
    * many of them change what the view draws, for the assistant to choose scenes' pauses by (see
-   * assistant.md).
+   * assistant/assistant.md).
    */
   pauses: { labels: string[]; runs: Record<string, LabelRuns> };
   /**

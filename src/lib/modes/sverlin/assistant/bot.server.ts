@@ -23,8 +23,8 @@ import * as v from 'valibot';
 import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
 
 import assistant from './assistant.md?raw';
-import guide from './README.md?raw';
-import { listingMapsOf, recordedTrace } from './compile.server';
+import guide from '../README.md?raw';
+import { listingMapsOf, recordedTrace } from '../compile.server';
 
 /** Prompt text from a Markdown file: its HTML comments are notes for maintainers. */
 const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu, '').trim();

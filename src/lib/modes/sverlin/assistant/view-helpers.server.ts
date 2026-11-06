@@ -6,11 +6,11 @@
 
 import { readabilityText, unreadableProblem, wideCloseness } from '$lib/shared/readability';
 
-import guide from './README.md?raw';
+import guide from '../README.md?raw';
 import layoutHelper from './layout-helper.md?raw';
 import helper from './view-helper.md?raw';
-import { bundlePresentation, prepareSvelteComponent } from './compile.server';
-import { viewKey } from './design.server';
+import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
+import { viewKey } from '../design.server';
 
 /** Prompt text from a Markdown file: its HTML comments are notes for maintainers. */
 const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu, '').trim();

@@ -74,7 +74,7 @@ import {
   viewHelperTask,
   type ProposedView,
   type ViewCandidate
-} from '$lib/modes/sverlin/view-helpers.server';
+} from '$lib/modes/sverlin/assistant/view-helpers.server';
 import { openAIAdapter } from '$lib/server/ai/providers/openai';
 import type { ChatAdapter } from '$lib/server/ai/providers/types';
 import { turnHelperCounts, turnViewHelpers } from './view-helpers-config';

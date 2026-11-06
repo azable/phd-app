@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import aiAssistant, { languageGuide } from './bot.server';
+import aiAssistant, { languageGuide } from './assistant/bot.server';
 import { compileSvelteComponent, libraryProps } from './compile.server';
 import guide from './README.md?raw';
 
