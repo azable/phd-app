@@ -113,6 +113,22 @@ describe('variants', () => {
     expect(dropped[0]).toMatch(/The picture is drawn as it is\.$/u);
   });
 
+  it('names the kind meant where a value names a kind by its last part only, and lists no token as a kind', () => {
+    const nested = { ...space, 'Main.Board.AtI.fill': ['none', 'sky-100'] };
+    const [why] = buildVariant(
+      nested,
+      starter,
+      { chosen: { 'Main.AtI.fill': 'sky-100' } },
+      1
+    ).dropped;
+    expect(why).toContain(
+      'The design has no variable Main.AtI.fill (no kind Main.AtI: did you mean Main.Board.AtI.fill?); its kinds of node are'
+    );
+    expect(why).toContain('Main.Board.AtI');
+    expect(why).not.toMatch(/\$\w/u);
+    expect(why).toMatch(/The value is left out\.$/u);
+  });
+
   it('rejects a chosen value outside its options, and leaves out one for no variable, saying why', () => {
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.radius': 3 } }, 1)).toThrow(
       DesignValueError

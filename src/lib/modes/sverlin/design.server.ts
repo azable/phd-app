@@ -532,20 +532,30 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
     if (ofKind && !placeProps.has(prop) && Object.hasOwn(space, ofKind))
       return `A place sets only its paint (${placePaint.join(', ')}) and whether it is shown, never how much room anything takes: ${prop} holds for every ${kind.slice(0, at)} at every step, as ${ofKind}.`;
     const near = Object.keys(space).filter((other) => other.startsWith(`${kind}.`));
-    return near.length
-      ? `${kind} has no prop ${key.slice(kind.length + 1)}; its variables are ${near.join(', ')}.`
-      : `The design has no variable ${key}; its kinds of node are ${[
-          ...new Set(
-            Object.keys(space)
-              .filter(
-                (other) =>
-                  !other.startsWith('views.') &&
-                  !other.startsWith('pointers.') &&
-                  !other.startsWith('listing.')
-              )
-              .map((other) => other.slice(0, other.lastIndexOf('.')))
+    if (near.length)
+      return `${kind} has no prop ${key.slice(kind.length + 1)}; its variables are ${near.join(', ')}.`;
+    // Tokens ($text) are no kinds; a kind is what comes before a variable's last dot.
+    const kinds = [
+      ...new Set(
+        Object.keys(space)
+          .filter(
+            (other) =>
+              other.includes('.') &&
+              !other.startsWith('views.') &&
+              !other.startsWith('pointers.') &&
+              !other.startsWith('listing.')
           )
-        ].join(', ')}.`;
+          .map((other) => other.slice(0, other.lastIndexOf('.')))
+      )
+    ];
+    // A kind named by its last part only, as Main.AtI for Main.Board.AtI inside Board.
+    const last = kind.slice(kind.lastIndexOf('.') + 1);
+    const meant = kinds.filter((other) => other === last || other.endsWith(`.${last}`));
+    // The list stays last, after "; its", which stableMessage (attempt-ladder.ts) strips.
+    const guess = meant.length
+      ? ` (no kind ${kind}: did you mean ${meant.map((other) => `${other}${key.slice(kind.length)}`).join(' or ')}?)`
+      : '';
+    return `The design has no variable ${key}${guess}; its kinds of node are ${kinds.join(', ')}.`;
   }
   const options = space[key];
   const shown =
