@@ -96,6 +96,8 @@
     layout,
     row,
     col,
+    rowSpan = 1,
+    colSpan = 1,
     children,
     flow,
     icon: kindIcon = false,
@@ -103,6 +105,7 @@
     __over,
     __ref,
     __id,
+    __again = false,
     __type,
     __links,
     __field = false,
@@ -127,9 +130,15 @@
     icon?: boolean;
     /** How children are arranged; a collection's items default to a row. */
     layout?: Layout;
-    /** In a grid, the cell this node is placed in: whole numbers from 0, as loop indices. */
+    /**
+     * In a grid, the cell this node is placed in, as loop indices; one left out spans every track
+     * of its axis, and both, cell (0, 0).
+     */
     row?: number;
     col?: number;
+    /** In a grid, how many rows and columns its cell covers from its row and col. */
+    rowSpan?: number;
+    colSpan?: number;
     children?: Snippet;
     /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
     flow?: 'x' | 'y';
@@ -144,6 +153,8 @@
     __ref?: string;
     /** Internal: an id given by the node this one stands for, such as the node a pointer draws again. */
     __id?: string;
+    /** Internal: set where this node is drawn again by itself, inside its pointers or as a copy: it is no grid cell, the node drawing it being one. */
+    __again?: boolean;
     /** Internal: set by the compiler on a node showing its view's own value: that value's type, which gives its unit. */
     __type?: string;
     /** Internal: set by the compiler when <Link> components sit among this node's children. */
@@ -499,6 +510,7 @@
     __component,
     __items,
     __domains,
+    __again: true,
     ...bound
   });
 
@@ -551,28 +563,60 @@
       ? { width: along, height: across }
       : { width: across, height: along };
   });
-  // A grid's child is placed in the cell its row and col name, one to a coordinate at each step;
-  // the nodes inside it are no grid's children. A grid keeps the tracks the page worked out over
-  // every step (see LayoutMemory), so it never moves as it fills in.
-  const grid = gridContext();
-  const cell = untrack(() => (row !== undefined && col !== undefined ? { row, col } : undefined));
-  untrack(() => {
-    if (!cell) return;
+  // A grid's child is placed in the cell its row and col name, covering rowSpan rows and colSpan
+  // columns from there; an axis left out spans all its tracks, and a child with neither is at
+  // (0, 0). The nodes inside it are no grid's children. A grid keeps the tracks the page worked out
+  // over every step (see LayoutMemory), so it never moves as it fills in.
+  const grid = untrack(() => (__again ? undefined : gridContext()));
+  const cell = untrack(() =>
+    grid
+      ? {
+          row: row ?? (col === undefined ? 0 : ('all' as const)),
+          col: col ?? (row === undefined ? 0 : ('all' as const)),
+          rowSpan,
+          colSpan
+        }
+      : undefined
+  );
+  // Two cells covering one coordinate at a step are drawn over each other, and the build warns
+  // (see warn in library/record.ts), as a grid places each cell where it is written.
+  const collision = untrack(() => {
+    if (!cell || !grid) return undefined;
     // A coordinate below 0 or past the last track extends the grid by a track (see widenTracks).
-    if (![cell.row, cell.col].every((at) => Number.isInteger(at)))
+    if (![cell.row, cell.col].every((at) => at === 'all' || Number.isInteger(at)))
       throw new Error(
         `A grid's cell is placed at whole numbers, not row ${cell.row}, col ${cell.col}.`
       );
-    const at = `${cell.row},${cell.col}`;
-    if (grid?.cells.has(at))
+    if (![cell.rowSpan, cell.colSpan].every((span) => Number.isInteger(span) && span >= 1))
       throw new Error(
-        `Two cells of a grid are at row ${cell.row}, col ${cell.col} at this step: each coordinate holds one cell at a time.`
+        `A grid's cell covers a whole number of tracks from 1, not rowSpan ${cell.rowSpan}, colSpan ${cell.colSpan}.`
       );
-    grid?.cells.add(at);
+    const covered = (at: number | 'all', span: number) =>
+      at === 'all' ? (['all'] as const) : Array.from({ length: span }, (_, k) => at + k);
+    const mine = covered(cell.row, cell.rowSpan).flatMap((r) =>
+      covered(cell.col, cell.colSpan).map((c) => [r, c] as const)
+    );
+    const meets = (a: number | 'all', b: number | 'all') => a === 'all' || b === 'all' || a === b;
+    const met = mine.find(([r, c]) => grid.cells.some(([r2, c2]) => meets(r, r2) && meets(c, c2)));
+    grid.cells.push(...mine);
+    if (!met) return undefined;
+    const axis = (name: string, at: number | 'all') =>
+      at === 'all' ? `every ${name}` : `${name} ${at}`;
+    return `Two cells of a grid cover ${axis('row', met[0])}, ${axis('col', met[1])} at one step, so they are drawn over each other: give each a row or col of its own.`;
   });
   // The CSS line a coordinate takes: tracks start at the smallest coordinate any step reaches, which
-  // the page knows once it has measured every step; while measuring, a cell is sized alone.
+  // the page knows once it has measured every step; while measuring, a cell is sized alone. A full
+  // span covers every track the page keeps, and one track while measuring.
   const line = (at: number, start: number) => Math.max(1, at - start + 1);
+  const lines = (at: number | 'all', span: number, axis: 0 | 1) =>
+    at === 'all'
+      ? { start: 1, end: grid?.count?.[axis] ? `span ${grid.count[axis]}` : undefined }
+      : {
+          start: line(at, grid?.start[axis] ?? 0),
+          end: span > 1 ? `span ${span}` : undefined
+        };
+  const rowLines = untrack(() => (cell ? lines(cell.row, cell.rowSpan, 0) : undefined));
+  const colLines = untrack(() => (cell ? lines(cell.col, cell.colSpan, 1) : undefined));
   // A grid in a typed view is drawn by every copy of the view and for every value it is probed
   // with, so it keeps its tracks by its site, one set they all share and line up by.
   const inView = untrack(() => Boolean(__component) || insideView());
@@ -587,7 +631,13 @@
   );
   untrack(() =>
     provideGrid(
-      arrangement === 'grid' ? { cells: new Set(), start: tracks?.start ?? [0, 0] } : undefined
+      arrangement === 'grid'
+        ? {
+            cells: [],
+            start: tracks?.start ?? [0, 0],
+            ...(tracks ? { count: [tracks.rows.length, tracks.columns.length] as const } : {})
+          }
+        : undefined
     )
   );
   const trackCss = (sizes: readonly number[] | undefined) =>
@@ -958,13 +1008,18 @@
 {#if look('shown') === false || leftOut}
   <!-- Left out of this presentation: drawn nowhere, keeping no room. -->
 {:else if cell}
-  <!-- A grid's child, in the cell its row and col place it in. -->
+  <!-- A grid's child, in the cell its row and col place it in, over its spans. -->
   <div
     class="sv-cell"
     data-sv-row={cell.row}
     data-sv-col={cell.col}
-    style:grid-row-start={line(cell.row, grid?.start[0] ?? 0)}
-    style:grid-column-start={line(cell.col, grid?.start[1] ?? 0)}
+    data-sv-row-span={cell.rowSpan > 1 && cell.row !== 'all' ? cell.rowSpan : undefined}
+    data-sv-col-span={cell.colSpan > 1 && cell.col !== 'all' ? cell.colSpan : undefined}
+    data-sv-collision={collision}
+    style:grid-row-start={rowLines?.start}
+    style:grid-row-end={rowLines?.end}
+    style:grid-column-start={colLines?.start}
+    style:grid-column-end={colLines?.end}
   >
     {@render drawn()}
   </div>

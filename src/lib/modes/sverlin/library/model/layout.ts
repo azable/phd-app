@@ -452,28 +452,58 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
         'element' in item &&
         item.look.gridRowStart !== undefined &&
         item.look.gridColumnStart !== undefined
-          ? { row: item.look.gridRowStart - 1, column: item.look.gridColumnStart - 1 }
+          ? {
+              row: item.look.gridRowStart - 1,
+              column: item.look.gridColumnStart - 1,
+              rowSpan: item.look.gridRowSpan ?? 1,
+              columnSpan: item.look.gridColumnSpan ?? 1
+            }
           : undefined
       );
       if (lines.some((line) => !line)) problems.add('grid items not placed by line');
-      const tracks = (axis: 'row' | 'column', template: readonly number[]) =>
-        Array.from(
+      // Each track as its template gives it, or as large as the largest item it alone holds; an
+      // item spanning tracks larger than they are with their gaps shares the rest equally among
+      // them, the fewest-spanning items first, as CSS grows intrinsic tracks.
+      const tracks = (axis: 'row' | 'column', template: readonly number[], gap: number) => {
+        const span = axis === 'row' ? 'rowSpan' : 'columnSpan';
+        const size = (index: number) =>
+          axis === 'column' ? natural[index].width : natural[index].height;
+        const sizes = Array.from(
           {
-            length: Math.max(template.length, ...lines.map((line) => (line ? line[axis] + 1 : 0)))
+            length: Math.max(
+              template.length,
+              ...lines.map((line) => (line ? line[axis] + line[span] : 0))
+            )
           },
           (_, track) =>
             template[track] ??
             Math.max(
               0,
               ...lines.flatMap((line, index) =>
-                line?.[axis] === track
-                  ? [axis === 'column' ? natural[index].width : natural[index].height]
-                  : []
+                line?.[axis] === track && line[span] === 1 ? [size(index)] : []
               )
             )
         );
-      const columns = tracks('column', look.gridTemplateColumns);
-      const rows = tracks('row', look.gridTemplateRows);
+        const spanning = lines
+          .flatMap((line, index) => (line && line[span] > 1 ? [{ line, index }] : []))
+          .sort((a, b) => a.line[span] - b.line[span]);
+        for (const { line, index } of spanning) {
+          const covered = Array.from({ length: line[span] }, (_, k) => line[axis] + k);
+          const growing = covered.filter((track) => template[track] === undefined);
+          const room =
+            covered.reduce((total, track) => total + sizes[track], 0) + (covered.length - 1) * gap;
+          const extra = size(index) - room;
+          if (extra > 0 && growing.length)
+            for (const track of growing) sizes[track] += extra / growing.length;
+        }
+        return sizes;
+      };
+      // The room an item spanning tracks from `start` has: the tracks and the gaps between them.
+      const spanned = (sizes: readonly number[], start: number, count: number, gap: number) =>
+        sizes.slice(start, start + count).reduce((total, size) => total + size, 0) +
+        (count - 1) * gap;
+      const columns = tracks('column', look.gridTemplateColumns, columnGap);
+      const rows = tracks('row', look.gridTemplateRows, rowGap);
       const extent = (sizes: readonly number[], gap: number) =>
         sizes.reduce((total, size) => total + size, 0) + Math.max(0, sizes.length - 1) * gap;
       const starts = (sizes: readonly number[], gap: number, start: number, between: number) => {
@@ -495,7 +525,13 @@ export function layOut(root: ModelElement, options: ModelOptions): ModelLayout {
       const ys = starts(rows, rowGap, 0, 0);
       const children = lines.flatMap((line, index) =>
         line
-          ? place(index, xs[line.column], ys[line.row], columns[line.column], rows[line.row])
+          ? place(
+              index,
+              xs[line.column],
+              ys[line.row],
+              spanned(columns, line.column, line.columnSpan, columnGap + across.between),
+              spanned(rows, line.row, line.rowSpan, rowGap)
+            )
           : []
       );
       return { width: outerWidth, height: outerHeight, children };

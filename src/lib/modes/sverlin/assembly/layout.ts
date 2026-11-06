@@ -41,6 +41,7 @@ type Host = {
   width(text: string, font: string): number;
   metrics(font: string): { ascent: number; descent: number; xHeight: number };
   report(message: string, step?: number): void;
+  warn(message: string): void;
 };
 
 const scope = globalThis as unknown as {
@@ -137,7 +138,9 @@ scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes)
       if (drawn) scope.__sverlinDrawing = JSON.stringify(drawing);
     },
     report: (cause, step) =>
-      host.report((cause instanceof Error ? cause.message : String(cause)).slice(0, 500), step)
+      host.report((cause instanceof Error ? cause.message : String(cause)).slice(0, 500), step),
+    // Warned of once, as the version shown is laid out.
+    ...(drawn ? { warn: (message: string) => host.warn(message.slice(0, 500)) } : {})
   });
   const extents = [...layouts.extents.values()];
   const frame = shownFrame(extents, ratio === 'fit', fitShapes);

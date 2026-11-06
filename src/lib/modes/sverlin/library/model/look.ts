@@ -54,6 +54,9 @@ export type Look = {
   /** The line a grid item starts at, from 1, as grid-row-start: 2 places it; none, auto-placed. */
   gridRowStart?: number;
   gridColumnStart?: number;
+  /** How many tracks a grid item covers from its start line, as grid-row-end: span 2 gives 2. */
+  gridRowSpan?: number;
+  gridColumnSpan?: number;
   tabSize: number;
 };
 
@@ -479,6 +482,13 @@ export function lookOf(
       throw new Error(`Layout model: ${property}: ${value} is not modelled`);
     return { [key]: Number(value) };
   };
+  const spanOf = (key: 'gridRowSpan' | 'gridColumnSpan', property: string) => {
+    const value = get(property);
+    if (value === undefined || value === 'auto') return {};
+    const [, count] = /^span (\d+)$/u.exec(value) ?? [];
+    if (!count) throw new Error(`Layout model: ${property}: ${value} is not modelled`);
+    return { [key]: Number(count) };
+  };
   const position = (get('position') ?? 'static') as Look['position'];
   let display =
     'hidden' in element.attributes ? 'none' : (get('display') ?? displays[element.tag] ?? 'inline');
@@ -546,6 +556,8 @@ export function lookOf(
     gridTemplateRows: tracksOf('grid-template-rows'),
     ...lineOf('gridRowStart', 'grid-row-start'),
     ...lineOf('gridColumnStart', 'grid-column-start'),
+    ...spanOf('gridRowSpan', 'grid-row-end'),
+    ...spanOf('gridColumnSpan', 'grid-column-end'),
     tabSize: inherited.tabSize
   };
   for (const property of ['float', 'flex-wrap'])

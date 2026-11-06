@@ -62,6 +62,8 @@ export type RecordOptions = {
   ancestors: readonly ModelElement[];
   /** A step the view failed to draw, with why. */
   report: (cause: unknown, step?: number) => void;
+  /** What a step draws that reads wrongly, as two grid cells drawn over each other (see Node). */
+  warn?: (message: string) => void;
   /**
    * Collects what each step draws, once laid out, as a key (see describeDrawn): two steps, of one
    * presentation or two, have the same key where they draw the same picture.
@@ -133,6 +135,9 @@ export async function recordLayouts(options: RecordOptions): Promise<Reservation
           componentSheets.set(id, sheet);
           model = undefined;
         }
+      if (!substituted && !quiet)
+        for (const [, message] of body.matchAll(/data-sv-collision="([^"]*)"/gu))
+          options.warn?.(message);
       return readMarkup(body, layer);
     } catch (cause) {
       if (!substituted && !quiet) report(cause, step);

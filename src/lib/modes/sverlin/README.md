@@ -1907,8 +1907,16 @@ cell by `row` and `col`, usually loop indices or positions:
 </Layout>
 ```
 
-- A grid holds only nodes placed by `row` and `col`, from any number of
-  `{#each}` and `{#if}` blocks, in any order; a value or text goes inside one.
+- A grid holds only nodes, from any number of `{#each}` and `{#if}` blocks, in
+  any order; a value or text goes inside one. Each is placed by its `row` and
+  `col`; a node with neither is at row 0, col 0.
+- A node with only `row` spans every column, and one with only `col` every row,
+  as a title across the table, `<Node kind="Title" row={0}>Sorted so far</Node>`
+  above values at `row={1}`. `colSpan` and `rowSpan` make a cell cover that many
+  columns or rows from its `col` and `row`, as
+  `<Node row={0} col={1} colSpan={2}>`. A cell covering several tracks takes no
+  room of its own in any of them: where it is larger than they are, with the
+  gaps between them, they share the rest equally.
 - A coordinate is a whole number: a position (`index(...)`), an expression over
   one, as `j - 1`, a loop's index, or a number written in the source. A
   coordinate outside the array's range, as −1 for `j - 1` before the first cell,
@@ -1935,7 +1943,8 @@ cell by `row` and `col`, usually loop indices or positions:
 - A coordinate no node uses is a gap, as the corner above the headers, a
   triangle of comparisons per pass, or a sparse adjacency matrix placing each
   edge at `row={e.from} col={e.to}`: no placeholder nodes.
-- Two cells at one coordinate at one step is an error at that step.
+- Two cells covering one coordinate at one step are drawn over each other, and
+  the build warns: give each a `row` or `col` of its own.
 - Every column is as wide as its widest cell and every row as tall as its
   tallest at any step, and there are as many as the coordinates' types allow, an
   `{#each}` index up to its array's `max`, so a table filling in, or drawn for a

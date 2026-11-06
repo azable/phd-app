@@ -719,11 +719,16 @@ export function packingContext(): Packing | undefined {
 }
 
 /**
- * A grid around its cells: the cells it holds at this step, by row and col, so two at one coordinate
- * are found; and the coordinate its first row and column take, below 0 where a step places a cell
- * there (see widenTracks in model/reserve.ts).
+ * A grid around its cells: the coordinates its cells cover at this step, as [row, col], 'all' for
+ * every track of a full span, so two cells at one coordinate are found; the coordinate its first
+ * row and column take, below 0 where a step places a cell there; and how many rows and columns it
+ * keeps, once the page knows (see widenTracks in model/reserve.ts).
  */
-export type GridCells = { cells: Set<string>; start: readonly [number, number] };
+export type GridCells = {
+  cells: (readonly [number | 'all', number | 'all'])[];
+  start: readonly [number, number];
+  count?: readonly [number, number];
+};
 
 export function provideGrid(grid: GridCells | undefined): void {
   setContext('sverlin:grid', grid);

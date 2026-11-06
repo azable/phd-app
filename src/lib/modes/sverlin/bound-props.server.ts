@@ -582,7 +582,7 @@ export function gridExtents(
   domain: DomainRegistry,
   variables: Scope,
   views: Scope,
-  unknown: { axis: 'row' | 'col'; start: number; end: number }[] = []
+  unknown: { axis: string; start: number; end: number }[] = []
 ): Map<number, [number[] | null, number[] | null]> {
   const atoms: Record<string, AtomType> = { ...domain.atoms };
   const extended: DomainRegistry = { ...domain, atoms };
@@ -626,7 +626,7 @@ export function gridExtents(
     const known = values?.length && values.every((value) => typeof value === 'number');
     if (!known && part?.type === 'MustacheTag')
       unknown.push({
-        axis: name as 'row' | 'col',
+        axis: name,
         start: (part.expression as Node).start as number,
         end: (part.expression as Node).end as number
       });
@@ -676,8 +676,22 @@ export function gridExtents(
       cells(part.children, scope, found);
       return cells(part.else, scope, found);
     }
-    if (part.type === 'InlineComponent' && part.name === 'Node')
-      found.push({ row: coordinate(part, 'row', scope), col: coordinate(part, 'col', scope) });
+    if (part.type === 'InlineComponent' && part.name === 'Node') {
+      const given = (name: string) =>
+        (part.attributes as Node[] | undefined)?.some((each) => each.name === name);
+      // An axis left out spans every track, reaching none of its own; both left out, (0, 0). A
+      // span reaches the tracks after its coordinate too.
+      const reached = (axis: 'row' | 'col', other: 'row' | 'col') => {
+        if (!given(axis)) return given(other) ? [] : [0];
+        const at = coordinate(part, axis, scope);
+        const span = given(`${axis}Span`) ? coordinate(part, `${axis}Span`, scope) : [1];
+        if (!at || !span) return undefined;
+        return at.flatMap((start) =>
+          Array.from({ length: Math.max(1, ...span) }, (_, k) => start + k)
+        );
+      };
+      found.push({ row: reached('row', 'col'), col: reached('col', 'row') });
+    }
   };
   const every = (found: { row?: number[]; col?: number[] }[], axis: 'row' | 'col') =>
     found.length && found.every((cell) => cell[axis] !== undefined)

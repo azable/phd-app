@@ -1534,7 +1534,7 @@ function prepareViews(
     const labelledPlaces = new Set<string>();
     const placeWarnings: string[] = [];
     // Each grid coordinate whose values the build cannot work out (see gridExtents), warned of.
-    const unknownCoordinates: { axis: 'row' | 'col'; start: number; end: number }[] = [];
+    const unknownCoordinates: { axis: string; start: number; end: number }[] = [];
     const placeSlots = new Map<number, string>();
     const pointerPlaces = new Map<number, { view?: string; choice?: string; place: string }>();
     const aliases = new Map<number, { alias: string; callee: { start: number; end: number } }>();
@@ -2874,7 +2874,14 @@ export async function bundlePresentation(
       `The compiled presentation is ${megabytes(layoutBundle.contents.byteLength)}, over the ${megabytes(maximumBundleBytes)} limit; its ${master.length} steps' values take ${megabytes(trace.length)}. Give a smaller input, or keep less in the variables and labels the view reads at each step; scenes pausing at fewer labels give fewer steps.`
     );
   }
-  const { geometry, size, failure, drawing, ...laid } = await layOutOnServer(layoutBundle.text);
+  const {
+    geometry,
+    size,
+    failure,
+    drawing,
+    warnings: drawnWarnings = [],
+    ...laid
+  } = await layOutOnServer(layoutBundle.text);
   if (!geometry || failure) {
     const errors = laid.errors.length ? `; the view failed at ${laid.errors.join('; ')}` : '';
     console.warn(`[sverlin] seed ${seed} not laid out on the server: ${failure}${errors}`);
@@ -2894,6 +2901,7 @@ export async function bundlePresentation(
   // and a paused step drawing the step before it again (its motion from it aside).
   const drawnSteps = laid.scenes.steps;
   warnings.push(
+    ...drawnWarnings,
     ...unmarkedPointerWarnings(
       prepared.pointerMarks ?? [],
       new Set(drawnSteps.flatMap(({ nodes }) => nodes.flatMap(({ kind }) => kind ?? []))),
@@ -2960,7 +2968,7 @@ export async function bundlePresentation(
  * cannot keep room for a value another input brings or line the axis up with an array.
  */
 function unknownCoordinateWarnings(
-  unknown: readonly { axis: 'row' | 'col'; start: number; end: number }[],
+  unknown: readonly { axis: string; start: number; end: number }[],
   source: string
 ): string[] {
   return [
@@ -3411,6 +3419,8 @@ export const libraryProps: Record<'Node' | 'Link' | 'Pointed', PropNames> = {
     kind: null,
     row: null,
     col: null,
+    rowSpan: null,
+    colSpan: null,
     width: null,
     height: null
   },
@@ -3625,8 +3635,9 @@ function nodeAround(markup: unknown, target: unknown): boolean {
 }
 
 /**
- * A grid's children are nodes placed by row and col, through {#each} and {#if} as anywhere, and
- * row and col place only a grid's children.
+ * A grid's children are nodes, through {#each} and {#if} as anywhere, each placed by its row and
+ * col (see the cell in library/node/Node.svelte), and those, with rowSpan and colSpan, place only a
+ * grid's children.
  */
 function gridProblems(markup: unknown, source: string): InvalidSvelteSourceError[] {
   type Tag = {
@@ -3652,16 +3663,11 @@ function gridProblems(markup: unknown, source: string): InvalidSvelteSourceError
     if (tag.type === 'SnippetBlock') return walk(tag.children, false);
     if (tag.type === 'InlineComponent' && tag.name === 'Node') {
       const attribute = (name: string) => tag.attributes?.find((each) => each.name === name);
-      const placed = attribute('row') && attribute('col');
-      if (inGrid && !placed)
+      const placing = ['row', 'col', 'rowSpan', 'colSpan'].map(attribute).find(Boolean);
+      if (!inGrid && placing)
         reject(
-          'A node in a grid is placed by its row and col, whole numbers from 0, as <Node row={i} col={j}>: give it both.',
-          tag.start
-        );
-      if (!inGrid && (attribute('row') || attribute('col')))
-        reject(
-          'row and col place a node in a grid: they go on the nodes a <Node layout="grid"> holds, as <Node row={i} col={j}>.',
-          (attribute('row') ?? attribute('col'))?.start ?? tag.start
+          `${placing.name} places a node in a grid: row, col, rowSpan and colSpan go on the nodes a <Node layout="grid"> holds, as <Node row={i} col={j}>.`,
+          placing.start ?? tag.start
         );
       const layout = attribute('layout');
       const parts = Array.isArray(layout?.value) ? layout.value : [];
@@ -3683,7 +3689,7 @@ function gridProblems(markup: unknown, source: string): InvalidSvelteSourceError
         tag.type === 'InlineComponent';
       if (shown) {
         reject(
-          'A grid holds only nodes placed by row and col: put this in one, as <Node row={i} col={j}>…</Node>.',
+          'A grid holds only nodes, each placed by its row and col: put this in one, as <Node row={i} col={j}>…</Node>.',
           (tag.start ?? 0) + (tag.data ? tag.data.length - tag.data.trimStart().length : 0)
         );
         return;

@@ -44,6 +44,8 @@ export type ServerLayout = {
   failure?: string;
   /** Steps the view failed to draw, with why. */
   errors: string[];
+  /** What the steps draw that reads wrongly, as two grid cells drawn over each other. */
+  warnings?: string[];
   ms: number;
   /** Whether it was laid out before, by what it is made from. */
   cached: boolean;
@@ -111,7 +113,12 @@ export async function layOutOnServer(code: string, within = limits): Promise<Ser
  * every step out at a device pixel ratio, with design values in place of the variant's where given,
  * and `read` copies out what the last layout left in a global. The caller disposes of the isolate.
  */
-async function loadIsolated(code: string, within: Limits, errors: string[]) {
+async function loadIsolated(
+  code: string,
+  within: Limits,
+  errors: string[],
+  warnings = new Set<string>()
+) {
   const measure = serverMeasure();
   const isolate = new ivm.Isolate({ memoryLimit: within.memoryMb });
   const dispose = () => {
@@ -136,11 +143,18 @@ async function loadIsolated(code: string, within: Limits, errors: string[]) {
           errors.push(step === undefined ? message : `step ${step + 1}: ${message}`);
       })
     );
+    await global.set(
+      '__hostWarn',
+      new ivm.Callback((message: string) => {
+        if (warnings.size < 20) warnings.add(message);
+      })
+    );
     await context.eval(
       `globalThis.__sverlinHost = {
         width: (text, font) => __hostWidth(text, font),
         metrics: (font) => JSON.parse(__hostMetrics(font)),
-        report: (message, step) => __hostReport(message, step)
+        report: (message, step) => __hostReport(message, step),
+        warn: (message) => __hostWarn(message)
       };`
     );
     const script = await isolate.compileScript(code);
@@ -182,9 +196,10 @@ async function layOutIsolated(
   within: Limits
 ): Promise<Omit<ServerLayout, 'ms' | 'cached'>> {
   const errors: string[] = [];
+  const warnings = new Set<string>();
   let loaded: Awaited<ReturnType<typeof loadIsolated>> | undefined;
   try {
-    loaded = await loadIsolated(code, within, errors);
+    loaded = await loadIsolated(code, within, errors, warnings);
     const { at, read, measure } = loaded;
     const geometry = await at(1);
     const drawn = await read<string[]>('__sverlinDrawn');
@@ -202,7 +217,8 @@ async function layOutIsolated(
       ...(drawing ? { drawing } : {}),
       ...(size ? { size } : {}),
       ...(scenes ? { scenes } : {}),
-      errors
+      errors,
+      ...(warnings.size ? { warnings: [...warnings] } : {})
     };
   } catch (cause) {
     return { errors, failure: cause instanceof Error ? cause.message : String(cause) };

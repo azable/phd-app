@@ -115,6 +115,55 @@ describe('marks as grid cells', () => {
   });
 });
 
+describe('spans', () => {
+  const valuesBelow = `    {#each values as v, k}<Node row={1} col={k}>{v}</Node>{/each}`;
+  const lefts = (step: Parameters<typeof boxes>[0]) =>
+    boxes(step, 'IntCell').map(({ x }) => Math.round(x));
+
+  it('spans every column where col is left out, as a title over the values, widening none', async () => {
+    const plain = await drawnSteps(sort(valuesBelow));
+    const titled = await drawnSteps(sort(`${valuesBelow}\n    <Node row={0}>ab</Node>`));
+    expect(titled.built.warnings ?? []).not.toContainEqual(expect.stringMatching(/grid/u));
+    expect(lefts(titled.steps[1])).toEqual(lefts(plain.steps[1]));
+  });
+
+  it('shares a spanning cell’s size equally over its tracks', async () => {
+    const { steps } = await drawnSteps(
+      sort(
+        `${valuesBelow}\n    <Node row={0} col={1} colSpan={2}>a title wider than two cells</Node>`
+      )
+    );
+    const [first, second, third, fourth] = lefts(steps[1]);
+    // Each value sits centred in its column: columns 1 and 2 growing alike by e puts value 1 e/2
+    // further from value 0, value 2 e further from value 1, and value 3 e/2 further from value 2.
+    expect(Math.abs(second - first - (fourth - third))).toBeLessThanOrEqual(1);
+    expect(third - second).toBeGreaterThan(second - first);
+  });
+
+  it('places a node with neither row nor col at (0, 0), and warns of two cells covering one', async () => {
+    const { steps, built } = await drawnSteps(
+      sort(`${valuesBelow}\n    <Node>one</Node>\n    <Node>two</Node>`)
+    );
+    expect(built.warnings).toContainEqual(
+      expect.stringMatching(/^Two cells of a grid cover row 0, col 0 at one step/u)
+    );
+    const texts = steps[1].nodes.filter((node) =>
+      node.runs?.some((run) => run.text === 'one' || run.text === 'two')
+    );
+    expect(texts).toHaveLength(2);
+  });
+
+  it('keeps a column as wide as its widest cell at any step, so it does not shrink for a shorter one', async () => {
+    const { steps } = await drawnSteps(
+      sort(
+        `${valuesBelow}\n    {#each values as v, k}<Node row={0} col={k}>{k === j ? 'scanning' : '.'}</Node>{/each}`
+      )
+    );
+    const placed = steps.slice(1, -1).map((step) => JSON.stringify(lefts(step)));
+    expect(new Set(placed).size).toBe(1);
+  });
+});
+
 describe('place() in a view drawn in a cell', () => {
   const named = (cells: string) =>
     sort(`${valuesRow}\n${cells}`).replace(

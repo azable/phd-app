@@ -2867,14 +2867,14 @@ describe('grids', () => {
 
   it.each([
     [
-      'a node without col',
-      '<Node layout="grid"><Node row={0}>a</Node></Node>',
-      /placed by its row and col/
-    ],
-    [
       'row and col outside a grid',
       '<Node layout="row"><Node row={0} col={0}>a</Node></Node>',
-      /row and col place a node in a grid/
+      /row places a node in a grid/
+    ],
+    [
+      'a span outside a grid',
+      '<Node layout="row"><Node colSpan={2}>a</Node></Node>',
+      /colSpan places a node in a grid/
     ],
     ['text in a grid', '<Node layout="grid">a</Node>', /A grid holds only nodes/],
     ['a value in a grid', '<Node layout="grid">{i}</Node>', /A grid holds only nodes/],

@@ -402,34 +402,82 @@ function sizer(options: ReserveOptions) {
     (kept?.columns ?? []).forEach((size, index) => columns.set(index + keptColumnStart, size));
     (kept?.rows ?? []).forEach((size, index) => rows.set(index + keptRowStart, size));
     const allowed = [new Set<number>(), new Set<number>()];
+    // Cells covering more than one track of an axis, or all of them ('all'), by that axis.
+    type Spanning = { at: number | 'all'; span: number; size: number };
+    const spanning: [Spanning[], Spanning[]] = [[], []];
+    let gaps: [number, number] = [0, 0];
     for (const { at, element } of drawn) {
       const given = String(element.attributes['data-sv-extent'] ?? '').split(',');
       given.forEach((every, axis) => {
         for (const index of every.split(' ').filter(Boolean)) allowed[axis]?.add(Number(index));
       });
+      const look = at.styled.get(element)?.look;
+      gaps = [Math.max(gaps[0], look?.rowGap ?? 0), Math.max(gaps[1], look?.columnGap ?? 0)];
       for (const cell of elementsOf(element)) {
-        const row = Number(cell.attributes['data-sv-row']);
-        const column = Number(cell.attributes['data-sv-col']);
-        if (!Number.isInteger(row) || !Number.isInteger(column)) continue;
+        const coordinate = (name: string) => {
+          const value = cell.attributes[`data-sv-${name}`];
+          return value === 'all' ? 'all' : Number(value);
+        };
+        const [row, column] = [coordinate('row'), coordinate('col')];
+        if (![row, column].every((each) => each === 'all' || Number.isInteger(each))) continue;
         const { width, height } = sizeAlone(at, cell);
-        columns.set(column, Math.max(columns.get(column) ?? 0, width));
-        rows.set(row, Math.max(rows.get(row) ?? 0, height));
+        const spans = [
+          Number(cell.attributes['data-sv-row-span'] ?? 1),
+          Number(cell.attributes['data-sv-col-span'] ?? 1)
+        ];
+        [
+          [row, spans[0], height, rows],
+          [column, spans[1], width, columns]
+        ].forEach(([placed, span, size, tracks], axis) => {
+          const sized = tracks as Map<number, number>;
+          if (placed !== 'all' && span === 1)
+            sized.set(placed as number, Math.max(sized.get(placed as number) ?? 0, size as number));
+          else
+            spanning[axis].push({
+              at: placed as number | 'all',
+              span: span as number,
+              size: size as number
+            });
+        });
       }
     }
-    const filled = (tracks: ReadonlyMap<number, number>, allowed: ReadonlySet<number>) => {
-      const reached = [...tracks.keys()];
+    const filled = (
+      tracks: ReadonlyMap<number, number>,
+      allowed: ReadonlySet<number>,
+      spans: readonly Spanning[],
+      gap: number
+    ) => {
+      const reached = [
+        ...tracks.keys(),
+        ...spans.flatMap(({ at, span }) => (at === 'all' ? [] : [at, at + span - 1]))
+      ];
       const start = Math.min(0, ...reached, ...[...allowed]);
       const end = Math.max(-1, ...reached, ...[...allowed]) + 1;
       const largest = Math.max(0, ...tracks.values());
-      return {
-        start,
-        sizes: Array.from(
-          { length: end - start },
-          (_, index) => tracks.get(index + start) ?? (allowed.has(index + start) ? largest : 0)
+      const sizes = Array.from(
+        { length: end - start },
+        (_, index) => tracks.get(index + start) ?? (allowed.has(index + start) ? largest : 0)
+      );
+      // A cell spanning tracks larger than they are with their gaps shares the rest equally among
+      // them, the fewest-spanning first, as the layout model's grid does.
+      const ordered = spans
+        .map(({ at, span, size }) =>
+          at === 'all' ? { from: 0, span: sizes.length, size } : { from: at - start, span, size }
         )
-      };
+        .sort((a, b) => a.span - b.span);
+      for (const { from, span, size } of ordered) {
+        const room =
+          sizes.slice(from, from + span).reduce((total, each) => total + each, 0) +
+          (span - 1) * gap;
+        if (size > room && span > 0)
+          for (let track = from; track < from + span; track++) sizes[track] += (size - room) / span;
+      }
+      return { start, sizes };
     };
-    const [placedRows, placedColumns] = [filled(rows, allowed[0]), filled(columns, allowed[1])];
+    const [placedRows, placedColumns] = [
+      filled(rows, allowed[0], spanning[0], gaps[0]),
+      filled(columns, allowed[1], spanning[1], gaps[1])
+    ];
     memory.tracks.set(grid, {
       columns: placedColumns.sizes,
       rows: placedRows.sizes,
