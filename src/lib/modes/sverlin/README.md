@@ -1271,20 +1271,20 @@ has more room than its tracks need, `justify` start, center, or end puts the
 room after, around, or before them, and between, around, or evenly spreads the
 tracks over it; an array's kind starts at center where every value of its type
 keeps one length throughout, as an array being sorted, and at start where one
-grows or shrinks, as a queue, so no element moves as another comes or goes.
-Positions past an array's ends are drawn in end slots, kept only as far as drawn
-positions go: an array's kind has `overflow`, included (end slots are tracks of
-its box) or excluded (they hang outside, so centring it centres its elements),
-and a `<Pointed>` kind too, shown (drawn past the ends) or hidden (nothing
-there, keeping no room). A link's kind has `shown`, `stroke`, `strokeWidth`,
-`opacity`, and `strokeStyle`; `route`, `layout` (as its layout's arrows run, the
-start), `straight`, `curved` (each arrow choosing its own side and how far to
-bow round what is in its way), or `wire` (straight runs turning only at right
-angles, round the boxes, side by side apart); `head`, the mark at each end a
-link points to, `none`, `arrow` (a filled triangle), `open` (an outlined one),
-`vee`, `dot`, `diamond`, or `bar`, which starts at `none` where every link of
-the kind is a two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the
-start), 12, or 16 pixels. A label's look is its own nodes' kind.
+grows or shrinks, as a queue, so no element moves as another comes or goes. A
+row or column is a grid of one row or column (see Grid), so positions past an
+array's ends are drawn in end slots, tracks before its first element and after
+its last, kept only as far as drawn positions go. A `<Pointed>` kind has
+`overflow`, shown (drawn past the ends) or hidden (nothing there, keeping no
+room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and
+`strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
+`straight`, `curved` (each arrow choosing its own side and how far to bow round
+what is in its way), or `wire` (straight runs turning only at right angles,
+round the boxes, side by side apart); `head`, the mark at each end a link points
+to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
+`diamond`, or `bar`, which starts at `none` where every link of the kind is a
+two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16
+pixels. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -1862,9 +1862,10 @@ kind's (see Design). Props starting with `__` are reserved for the library.
 - `layout`: `'row'`, `'column'`, `'grid'` (placed by coordinates; see Grid),
   `'free'` (placed by layout; see Free layout and links), or `'stack'` (one over
   the other; see Stack); arranges a node's children.
-- `row` and `col`: in a grid, the cell a child is placed in, whole numbers from
-  0, as `row={i} col={j}`; only a grid's children take them, and each takes
-  both.
+- `row` and `col`: in a grid, the cell a child is placed in, whole numbers, as
+  `row={i} col={j}`; only a grid's children take them. One left out spans every
+  track of its axis, and both left out place it at row 0, col 0. `rowSpan` and
+  `colSpan` cover more tracks from there (see Grid).
 - `kind`: a kind of its own within its view or layout, written as it is, as
   `kind="Header"`, for the node and the nodes inside it (see Design), or chosen
   at each step by an expression of names written in the source, as
@@ -1895,69 +1896,246 @@ covers the layer.
 
 ## Grid
 
-`layout="grid"` lines up columns and rows, as a table, each child placed in its
-cell by `row` and `col`, usually loop indices or positions:
+`layout="grid"` places each child in a cell by its `row` and `col`, as a table.
+Sverlin's grid follows the rules of a CSS grid (CSS Grid Layout, levels 1 and
+2), with the differences that "Where a grid differs from CSS" lists. Rows and
+columns are grids too: a row is a grid of one row, its children in order, and a
+column a grid of one column.
+
+An insertion sort as one grid, a title across every column, a key down column −2
+from row 1, the values on row 1 through their view, and the marks `i` and `j` in
+lanes below them, `j` reaching −1 before the first cell:
 
 ```svelte
-<Layout name="Table">
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 6 });
+  const Position = index(Values);
+</script>
+
+<script input>
+  const values = Values;
+</script>
+
+<script algorithm>
+  for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
+    @take[const key = values[i];
+    let j = Position(i - 1);]
+    while (@front[j >= 0 && values[j] > key]) @shift{
+      @move[values[j + 1] = values[j];
+      j--;]
+    }
+    @drop[values[j + 1] = key;]
+  }
+</script>
+
+<View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<View of="Position" name="Arrow">
+  <Node layout="column"><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node>
+</View>
+
+<Layout name="Main" of="values, i, j">
   <Node layout="grid">
-    {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
-    {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
-    {#each t as cells, i}
-      {#each cells as cell, j}<Node row={i + 1} col={j + 1}>{cell}</Node>{/each}
-    {/each}
+    <Node kind="Title" row={0}>Insertion sort</Node>
+    <Node kind="Key" row={1} rowSpan={3} col={-2}><Node kind="Word">values</Node><Node kind="Word">i</Node><Node kind="Word">j</Node></Node>
+    <Node kind="Band" row={1}>{values}</Node>
+    <Node kind="Lane" row={2} col={i}>{i}</Node>
+    <Node kind="Lane" row={3} col={j}>{j}</Node>
   </Node>
 </Layout>
+
+<Case name="main" values={[5, 2, 4, 6, 1, 3]} />
+<Storyboard>
+  <Scene name="sort" case="main" pause="@insert.take, @insert.shift.move, @insert.drop"><Main /></Scene>
+</Storyboard>
 ```
 
+```json
+{ "{Position}": "Arrow", "{Values}": "Cells", "{Int}": "IntCell" }
+```
+
+### Cells and coordinates
+
 - A grid holds only nodes, from any number of `{#each}` and `{#if}` blocks, in
-  any order; a value or text goes inside one. Each is placed by its `row` and
-  `col`; a node with neither is at row 0, col 0.
-- A node with only `row` spans every column, and one with only `col` every row,
-  as a title across the table, `<Node kind="Title" row={0}>Sorted so far</Node>`
-  above values at `row={1}`. `colSpan` and `rowSpan` make a cell cover that many
-  columns or rows from its `col` and `row`, as
-  `<Node row={0} col={1} colSpan={2}>`. A cell covering several tracks takes no
-  room of its own in any of them: where it is larger than they are, with the
-  gaps between them, they share the rest equally.
+  any order; a value or text goes inside one.
 - A coordinate is a whole number: a position (`index(...)`), an expression over
   one, as `j - 1`, a loop's index, or a number written in the source. A
-  coordinate outside the array's range, as −1 for `j - 1` before the first cell,
-  or the length after the last, extends the grid by a track, so a mark there has
-  a place of its own; a position's type allows both, so a grid placed by
-  positions keeps a track before the first cell and after the last. A coordinate
-  whose values cannot be worked out, as `values.length - 1`, is still placed,
-  with a warning: the grid then keeps only the tracks the run reaches on that
-  axis.
-- A position in a cell placed by it, as `<Node row={1} col={i}>{i}</Node>`,
+  coordinate whose values cannot be worked out, as `values.length - 1`, is still
+  placed, with a warning: the grid then keeps only the tracks the run reaches on
+  that axis.
+- A coordinate outside the array's range, as −1 for `j - 1` before the first
+  cell, or the length after the last, extends the grid by a track, so a mark
+  there has a place of its own; a position's type allows both, so a grid placed
+  by positions keeps a track before the first cell and after the last.
+- A node with neither `row` nor `col` is at row 0, col 0. Two cells covering one
+  coordinate at one step are drawn over each other, and the build warns: give
+  each a `row` or `col` of its own.
+- A coordinate no node uses is a gap, as the corner above the headers, a
+  triangle of comparisons per pass, or a sparse adjacency matrix placing each
+  edge at `row={e.from} col={e.to}`: no placeholder nodes.
+- A position in a cell placed by it, as `<Node row={2} col={i}>{i}</Node>`,
   draws through the view the design chooses for its type, so a pointer view with
   no `<Pointed>`, as an arrow and a caption, draws a mark in a lane of its own,
   and slides from cell to cell as the position moves. A position moved by a
   number, as `{j - 1}`, is a position too, and so is a `{@const}` holding one,
-  so `{@const before = j - 1}` then `<Node row={2} col={before}>{before}</Node>`
-  draws a mark captioned `before` by `{place()}`, in the track before the first
-  cell when `j` is 0.
-- It may also hold `<Link>`s among its cells, each drawn straight from cell to
+  so `{@const before = j - 1}` then `<Node row={4} col={before}>{before}</Node>`
+  draws a mark captioned `before` by `{place()}`.
+- A cell's kind can come from an expression of names written in the source, as
+  `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}` on
+  `{#each values as v, k}<Node row={1} col={k}>{v}</Node>{/each}`, which shades
+  the cell at `j` and the sorted part with no `{#if}` doubling the node.
+- A grid may hold `<Link>`s among its cells, each drawn straight from cell to
   cell, its ends often computed from the index: a heap drawn as a tree places
   slot `k` by its depth and joins it to its children,
   `<Link from={k} to={2 * k + 1} />` and `<Link from={k} to={2 * k + 2} />`. A
   link belongs to the cells it joins, so it stays while values move through
   them.
-- A coordinate no node uses is a gap, as the corner above the headers, a
-  triangle of comparisons per pass, or a sparse adjacency matrix placing each
-  edge at `row={e.from} col={e.to}`: no placeholder nodes.
-- Two cells covering one coordinate at one step are drawn over each other, and
-  the build warns: give each a `row` or `col` of its own.
-- Every column is as wide as its widest cell and every row as tall as its
-  tallest at any step, and there are as many as the coordinates' types allow, an
-  `{#each}` index up to its array's `max`, so a table filling in, or drawn for a
-  longer input, never moves: a column no cell here reaches keeps room for one,
-  unless no value of its coordinate can place one there. A grid in a view sizes
-  them over every value of its type too, one set every copy shares, so two
-  tables drawn by one view line up column for column.
-- The grid's kind has `gap`, between columns and rows; `align`, where each cell
-  sits in its column and row; and `justify`, how the columns spread where the
-  grid has more room than they need.
+
+### Spans
+
+- A node with only `row` spans every column, and one with only `col` every row,
+  as CSS `grid-column: 1 / -1`: the title above spans the whole table.
+- `colSpan` and `rowSpan` make a cell cover that many columns or rows from its
+  `col` and `row`, as `<Node row={0} col={0} colSpan={6}>`, which keeps a band
+  off the key's column. A cell covering several tracks takes no room of its own
+  in any of them: where it is larger than they are, with the gaps between them,
+  they share the rest equally, as CSS grows them.
+
+### Subgrids
+
+A cell spanning tracks whose children are all nodes is a subgrid, as CSS
+`grid-template-columns: subgrid` makes one: it places its children on the grid's
+own tracks along the axis it spans, item `k` at coordinate `k` from its own
+`col` (or `row`), from 0 where it spans every track. So
+`<Node row={1}>{values}</Node>` puts `values[k]` in column `k`, through the row
+of items its view draws, and a mark at `col={i}` lines up under it; and the key
+above places its words down the rows. A cell whose children are text, as the
+title, is one box across its tracks. As in CSS:
+
+- the tracks along that axis are the grid's: every item sizes the track it is
+  in, as a cell there does;
+- its kind's `gap` applies between its items in place of the grid's, and its
+  `align` places each item in its cell;
+- its box is drawn as a band across its tracks, its padding and border pushing
+  its first and last items in;
+- along the other axis it is a cell of its own, as large as its largest item;
+- its `justify` between, around, or evenly cannot spread tracks it does not own:
+  it has no effect, and the build warns.
+
+### Sizes
+
+Every column is as wide as its widest cell and every row as tall as its tallest
+at any step, and there are as many as the coordinates' types allow, an `{#each}`
+index up to its array's `max`, so a table filling in, or drawn for a longer
+input, never moves: a column no cell here reaches keeps room for one, unless no
+value of its coordinate can place one there. A grid in a view sizes them over
+every value of its type too, one set every copy shares, so two tables drawn by
+one view line up column for column.
+
+The grid's kind has `gap`, between columns and rows; `align`, where each cell
+sits in its column and row; and `justify`, how the columns spread where the grid
+has more room than they need.
+
+### The basis
+
+The grid's kind also has a basis, the directions its columns and its rows run:
+`colX` and `colY` for the columns, `rowX` and `rowY` for the rows, each −1,
+−0.5, 0, 0.5, or 1, in pitches. A cell is at `col` times the column direction
+plus `row` times the row direction, so to turn or skew a table is a design
+choice, not a change to the source. The start, `colX` 1, `colY` 0, `rowX` 0,
+`rowY` 1, is a table. Any other basis places every cell at one pitch, the
+largest row's height and the largest column's width at any step, in a box round
+every coordinate the grid keeps, the contents upright; spans and subgrids then
+have no effect, and each cell is centred in its pitch. A col and a row that are
+parallel are refused, as every cell would fall on one line.
+
+| Shape     | `colX`, `colY` | `rowX`, `rowY` | Draws                                       |
+| --------- | -------------- | -------------- | ------------------------------------------- |
+| table     | 1, 0           | 0, 1           | rows and columns (the start)                |
+| diamond   | 0.5, 0.5       | −0.5, 0.5      | the table turned 45°                        |
+| staggered | 1, 0           | 0.5, 1         | rows shifted by half a cell, as a pyramid   |
+| skewed    | 1, 0           | 1, 1           | each row a cell further right than the last |
+
+A longest common subsequence table turned into a diamond, each cell below the
+two it is computed from:
+
+```svelte
+<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Char = type(['A', 'C', 'G', 'T']);
+  const Word = array(Char, { max: 4 });
+  const Row = array(Int, { max: 5 });
+  const Table = array(Row, { max: 5 });
+  const Count = type('integer', { min: 0, max: 5 });
+</script>
+
+<script input>
+  const x = Word;
+  const y = Word;
+  const t = Table;
+</script>
+
+<script algorithm>
+  for (@rowStart[let i = Count(1)]; @rowMore[i < t.length]; @rowNext[i++]) @row{
+    for (@cellStart[let j = Count(1)]; @cellMore[j < t[i].length]; @cellNext[j++]) @cell{
+      if (@same[x[i - 1] === y[j - 1]]) @diagonal[t[i][j] = t[i - 1][j - 1] + 1;]
+      else if (@up[t[i - 1][j] >= t[i][j - 1]]) @fromUp[t[i][j] = t[i - 1][j];]
+      else @fromLeft[t[i][j] = t[i][j - 1];]
+    }
+  }
+</script>
+
+<View of="Int" name="Numeral"><Node value={this} /></View>
+<View of="Char" name="Letter"><Node value={this} /></View>
+<View of="Count" name="CountText"><Node value={this} /></View>
+
+<Layout name="Main" of="y, x, t">
+  <Node layout="grid">
+    {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
+    {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
+    {#each t as cells, i}
+      {#each cells as cell, j}<Node kind="Cell" row={i + 1} col={j + 1}>{cell}</Node>{/each}
+    {/each}
+  </Node>
+</Layout>
+
+<Case name="main" x={'GATC'} y={'ATGC'} t={[
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ]} />
+
+<Storyboard>
+  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
+</Storyboard>
+```
+
+```json
+{ "Main": { "colX": 0.5, "colY": 0.5, "rowX": -0.5, "rowY": 0.5 } }
+```
+
+### Where a grid differs from CSS
+
+A model that knows CSS should not assume these:
+
+- A coordinate outside the range extends the grid by a track, before the first
+  or after the last; CSS puts an item at a line past the explicit grid in an
+  implicit track, and has no lines before the first.
+- A node with no coordinates goes to row 0, col 0, and two cells at one
+  coordinate are drawn over each other with a warning; CSS places such items
+  automatically in the next free cell.
+- A track keeps its largest size over every step and every value its
+  coordinates' types allow, so nothing moves; CSS sizes tracks for what the page
+  holds now.
+- An omitted `row` or `col` spans every track; in CSS an item with no line is
+  placed automatically in one track.
+- A subgrid is made by spanning tracks with nodes inside, not by a property, and
+  numbers its items from its own coordinate, each subgrid inside it going on
+  numbering where the last left off.
+- The basis has no CSS equivalent.
 
 ### Counts
 

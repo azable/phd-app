@@ -12,7 +12,6 @@
   import type { Direction, Form } from './forms';
   import Node from './Node.svelte';
   import ItemEnd from './ItemEnd.svelte';
-  import Overhang from './Overhang.svelte';
   import Pointing from './Pointing.svelte';
   import {
     designContext,
@@ -36,8 +35,6 @@
     layoutMemoryContext,
     movingIdentity,
     nodeIdsContext,
-    overhangContext,
-    provideOverhang,
     elementSlot,
     pointedContext,
     pointerAroundContext,
@@ -64,6 +61,7 @@
     throughContext,
     typeContext,
     wrappedContext,
+    type Basis,
     type Packing,
     type Pointer
   } from '../type-context';
@@ -121,6 +119,7 @@
     __math,
     __mathText,
     __extent,
+    __nodes = false,
     __domains,
     __packedAlong,
     ...bound
@@ -201,6 +200,8 @@
      * types, null where they cannot be worked out (see gridExtents in bound-props.server.ts).
      */
     __extent?: readonly [readonly number[] | null, readonly number[] | null];
+    /** Internal: set by the compiler on a grid's child whose children are all nodes, which can then be its items (see subgrid). */
+    __nodes?: boolean;
     [bound: `__bound_${string}`]: unknown;
   } = $props();
 
@@ -404,8 +405,6 @@
     endSlot && element?.collection === endSlot.collection ? endSlot.position : undefined;
   // End slots belong in a sequence; in a free layout, such as a graph, they would be loose boxes.
   const inSequence = sequenceContext() !== false;
-  // Where the collection this node is an item or element of hangs its end slots, if outside it.
-  const overhang = overhangContext();
   // Nodes a pointer draws where it is not keep their room, hidden, and the element inside shows.
   // Hidden at this step with every render it holds, keeping its room, its children with it.
   const hiddenHere = untrack(
@@ -540,8 +539,242 @@
     around === 'row' ? 'column' : around === 'column' ? 'row' : 'row'
   );
   const arrangement = $derived(layout ?? (collection ? collectionLayout : undefined));
+  // A grid's child is placed in the cell its row and col name, covering rowSpan rows and colSpan
+  // columns from there; an axis left out spans all its tracks, and a child with neither is at
+  // (0, 0). The nodes inside it are no grid's children, unless it is a subgrid. A grid keeps the
+  // tracks the page worked out over every step (see LayoutMemory), so it never moves as it fills in.
+  const gridAround = untrack(() => (__again ? undefined : gridContext()));
+  const grid = gridAround && !('subgrid' in gridAround) ? gridAround : undefined;
+  const inSubgrid = gridAround && 'subgrid' in gridAround ? gridAround : undefined;
+  const cell = untrack(() =>
+    grid
+      ? {
+          row: row ?? (col === undefined ? 0 : ('all' as const)),
+          col: col ?? (row === undefined ? 0 : ('all' as const)),
+          rowSpan,
+          colSpan
+        }
+      : undefined
+  );
+  // A cell spanning tracks along an axis whose children are all nodes places them on those tracks,
+  // as a CSS subgrid does: item k at coordinate k from the cell's own (from 0 where it spans every
+  // track), its gap and align its own, its box drawn as a band behind them. A collection among them
+  // running along that axis is a subgrid too, its items going on numbering, so {values} drawn by
+  // its view puts values[k] at coordinate k. A node drawn round pointers, or with room round it for
+  // its paint, is no subgrid: its cell holds it whole.
+  const shownHere = untrack(() => look('shown') !== false && !leftOut);
+  const subgrid = untrack((): 0 | 1 | undefined => {
+    if (!shownHere || pointers.length || reaches) return undefined;
+    if (inSubgrid) {
+      const along = inSubgrid.subgrid === 1 ? 'row' : 'column';
+      return collection && arrangement === along ? inSubgrid.subgrid : undefined;
+    }
+    if (!cell || !__nodes || grid?.basis) return undefined;
+    if (cell.col === 'all') return 1;
+    if (cell.row === 'all') return 0;
+    if (cell.colSpan > 1) return 1;
+    if (cell.rowSpan > 1) return 0;
+    return undefined;
+  });
+  // The coordinate a subgrid's numbering starts at, or a subgrid's item takes, along its axis.
+  const numbered = untrack(() => {
+    if (inSubgrid) {
+      if (!shownHere) return undefined;
+      const at = inSubgrid.next.at;
+      if (subgrid === undefined) inSubgrid.next.at += 1;
+      return at;
+    }
+    if (!cell || subgrid === undefined) return undefined;
+    const at = subgrid === 1 ? cell.col : cell.row;
+    return at === 'all' ? 0 : at;
+  });
+  // Two cells covering one coordinate at a step are drawn over each other, and the build warns
+  // (see warn in library/record.ts), as a grid places each cell where it is written. A subgrid is
+  // a band behind its items, which may lie over other cells.
+  const warning = untrack(() => {
+    if (subgrid !== undefined) {
+      const justify = look('justify');
+      return justify === 'between' || justify === 'around' || justify === 'evenly'
+        ? `A subgrid takes its grid's tracks, so justify ${String(justify)} cannot spread them: it has no effect along the ${subgrid === 1 ? 'columns' : 'rows'}.`
+        : undefined;
+    }
+    if (!cell || !grid) return undefined;
+    // A coordinate below 0 or past the last track extends the grid by a track (see widenTracks).
+    if (![cell.row, cell.col].every((at) => at === 'all' || Number.isInteger(at)))
+      throw new Error(
+        `A grid's cell is placed at whole numbers, not row ${cell.row}, col ${cell.col}.`
+      );
+    if (![cell.rowSpan, cell.colSpan].every((span) => Number.isInteger(span) && span >= 1))
+      throw new Error(
+        `A grid's cell covers a whole number of tracks from 1, not rowSpan ${cell.rowSpan}, colSpan ${cell.colSpan}.`
+      );
+    const covered = (at: number | 'all', span: number) =>
+      at === 'all' ? (['all'] as const) : Array.from({ length: span }, (_, k) => at + k);
+    const mine = covered(cell.row, cell.rowSpan).flatMap((r) =>
+      covered(cell.col, cell.colSpan).map((c) => [r, c] as const)
+    );
+    const meets = (a: number | 'all', b: number | 'all') => a === 'all' || b === 'all' || a === b;
+    const met = mine.find(([r, c]) => grid.cells.some(([r2, c2]) => meets(r, r2) && meets(c, c2)));
+    grid.cells.push(...mine);
+    if (!met) return undefined;
+    const axis = (name: string, at: number | 'all') =>
+      at === 'all' ? `every ${name}` : `${name} ${at}`;
+    return `Two cells of a grid cover ${axis('row', met[0])}, ${axis('col', met[1])} at one step, so they are drawn over each other: give each a row or col of its own.`;
+  });
+  // The CSS line a coordinate takes: tracks start at the smallest coordinate any step reaches, which
+  // the page knows once it has measured every step; while measuring, a cell is sized alone. A full
+  // span covers every track the page keeps, and one track while measuring, or, for a subgrid, the
+  // tracks its items reach. Inside a subgrid, lines count from its first track, and the other
+  // axis is its own single track.
+  const line = (at: number, start: number) => Math.max(1, at - start + 1);
+  const lines = (at: number | 'all', span: number, axis: 0 | 1) =>
+    at === 'all'
+      ? { start: 1, end: grid?.count?.[axis] ? `span ${grid.count[axis]}` : undefined }
+      : {
+          start: line(at, grid?.start[axis] ?? 0),
+          end: span > 1 ? `span ${span}` : undefined
+        };
+  const subgridLines = (axis: 0 | 1) => {
+    if (!inSubgrid || numbered === undefined) return undefined;
+    if (axis !== inSubgrid.subgrid) return { start: 1, end: undefined };
+    const count = subgrid === undefined ? 1 : (__items?.length ?? 0);
+    return {
+      start: line(numbered, inSubgrid.first),
+      end: count > 1 ? `span ${count}` : undefined
+    };
+  };
+  const rowLines = untrack(() => (cell ? lines(cell.row, cell.rowSpan, 0) : subgridLines(0)));
+  const colLines = untrack(() => (cell ? lines(cell.col, cell.colSpan, 1) : subgridLines(1)));
+  // The coordinates a cell's markup carries, by which the page sizes its grid's tracks (see
+  // widenTracks): a subgrid's item gives only those along the subgrid's axis.
+  const cellAttributes = untrack(() => {
+    if (cell)
+      return {
+        row: cell.row,
+        col: cell.col,
+        rowSpan: cell.rowSpan > 1 && cell.row !== 'all' ? cell.rowSpan : undefined,
+        colSpan: cell.colSpan > 1 && cell.col !== 'all' ? cell.colSpan : undefined
+      };
+    if (!inSubgrid || numbered === undefined || subgrid !== undefined) return undefined;
+    return {
+      row: inSubgrid.subgrid === 0 ? numbered : undefined,
+      col: inSubgrid.subgrid === 1 ? numbered : undefined,
+      rowSpan: undefined,
+      colSpan: undefined
+    };
+  });
+  // A grid in a typed view is drawn by every copy of the view and for every value it is probed
+  // with, so it keeps its tracks by its site, one set they all share and line up by.
+  const inView = untrack(() => Boolean(__component) || insideView());
   untrack(() => {
-    if (arrangement) provideSequence(arrangement === 'row' || arrangement === 'column');
+    if (__component) provideInView();
+  });
+  const gridKey = untrack(() =>
+    arrangement !== 'grid' ? undefined : inView ? (__ref ? `view:${__ref}` : undefined) : id
+  );
+  const tracks = untrack(() =>
+    gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
+  );
+  // A grid's basis, its kind's: the directions its columns and its rows run, each an x and a y in
+  // pitches; a square one is a table, which CSS lays out. Any other places every cell at one
+  // pitch, the largest row's height and the largest column's width at any step, in a box round
+  // every coordinate the grid keeps, so nothing moves; while the page measures, the cells are
+  // sized as a table's.
+  const basis = untrack((): Basis | undefined => {
+    if (arrangement !== 'grid') return undefined;
+    const component = (prop: string, start: number) => {
+      const value = look(prop);
+      return typeof value === 'number' ? value : start;
+    };
+    const vectors = {
+      col: [component('colX', 1), component('colY', 0)] as const,
+      row: [component('rowX', 0), component('rowY', 1)] as const
+    };
+    if (vectors.col[0] * vectors.row[1] - vectors.col[1] * vectors.row[0] === 0)
+      throw new Error(
+        `A grid's basis needs a col and a row that are not parallel: col [${vectors.col.join(', ')}] and row [${vectors.row.join(', ')}] put every cell on one line.`
+      );
+    const square =
+      vectors.col[0] === 1 && vectors.col[1] === 0 && vectors.row[0] === 0 && vectors.row[1] === 1;
+    if (square || !tracks) return undefined;
+    const [firstRow, firstColumn] = tracks.start ?? [0, 0];
+    const rows = [firstRow, firstRow + Math.max(0, tracks.rows.length - 1)];
+    const columns = [firstColumn, firstColumn + Math.max(0, tracks.columns.length - 1)];
+    const corners = rows.flatMap((r) => columns.map((c) => [r, c] as const));
+    const along = (axis: 0 | 1) =>
+      Math.min(...corners.map(([r, c]) => c * vectors.col[axis] + r * vectors.row[axis]));
+    return {
+      ...vectors,
+      pitch: [Math.max(0, ...tracks.rows), Math.max(0, ...tracks.columns)],
+      origin: [along(0), along(1)],
+      gap: typeof look('gap') === 'number' ? (look('gap') as number) : 0
+    };
+  });
+  // The box round a basis grid's cells: as far as its farthest corner, plus a pitch.
+  const basisBox = untrack(() => {
+    if (!basis || !tracks) return undefined;
+    const [firstRow, firstColumn] = tracks.start ?? [0, 0];
+    const corners = [firstRow, firstRow + Math.max(0, tracks.rows.length - 1)].flatMap((r) =>
+      [firstColumn, firstColumn + Math.max(0, tracks.columns.length - 1)].map((c) => [r, c])
+    );
+    const extent = (axis: 0 | 1) =>
+      Math.max(...corners.map(([r, c]) => c * basis.col[axis] + r * basis.row[axis])) -
+      basis.origin[axis];
+    const length = (axis: 0 | 1) => {
+      const pitch = axis === 0 ? basis.pitch[1] : basis.pitch[0];
+      return `calc(${extent(axis)} * (${pitch}px + ${basis.gap}em) + ${pitch}px)`;
+    };
+    return { width: length(0), height: length(1) };
+  });
+  // Where a basis grid places a cell: at its coordinates through the basis, from the box's corner,
+  // a pitch large, its node placed in it as the grid's align says.
+  const basisPlace = untrack(() => {
+    const placing = grid?.basis;
+    if (!placing || !cell) return undefined;
+    const at = (coordinate: number | 'all') => (coordinate === 'all' ? 0 : coordinate);
+    const offset = (axis: 0 | 1) => {
+      const pitch = axis === 0 ? placing.pitch[1] : placing.pitch[0];
+      const units =
+        at(cell.col) * placing.col[axis] + at(cell.row) * placing.row[axis] - placing.origin[axis];
+      return `calc(${units} * (${pitch}px + ${placing.gap}em))`;
+    };
+    return {
+      left: offset(0),
+      top: offset(1),
+      width: `${placing.pitch[1]}px`,
+      height: `${placing.pitch[0]}px`
+    };
+  });
+  // A subgrid's first track: its own coordinate, or, spanning every track, its grid's first.
+  const subgridFirst = untrack(() => {
+    if (subgrid === undefined || numbered === undefined) return undefined;
+    if (inSubgrid) return numbered;
+    const at = subgrid === 1 ? cell?.col : cell?.row;
+    return at === 'all' ? (grid?.start[subgrid] ?? 0) : numbered;
+  });
+  untrack(() =>
+    provideGrid(
+      subgrid !== undefined && numbered !== undefined && subgridFirst !== undefined
+        ? {
+            subgrid,
+            first: subgridFirst,
+            next: inSubgrid?.next ?? { at: numbered }
+          }
+        : arrangement === 'grid'
+          ? {
+              cells: [],
+              start: tracks?.start ?? [0, 0],
+              ...(tracks ? { count: [tracks.rows.length, tracks.columns.length] as const } : {}),
+              ...(basis ? { basis } : {})
+            }
+          : undefined
+    )
+  );
+  untrack(() => {
+    // A subgrid's items are its grid's cells, which need no end slots: a coordinate past the ends
+    // extends the grid.
+    if (subgrid !== undefined) provideSequence(false);
+    else if (arrangement) provideSequence(arrangement === 'row' || arrangement === 'column');
     if (collection) provideCollectionLayout(arrangement);
   });
   // Packing applies as a step shows; while the page measures, children keep their slots, so this
@@ -549,6 +782,7 @@
   const packs = untrack(
     () =>
       (arrangement === 'row' || arrangement === 'column') &&
+      subgrid === undefined &&
       look('spacing') === 'packed' &&
       !memory?.measuring
   );
@@ -581,83 +815,6 @@
       ? { width: along, height: across }
       : { width: across, height: along };
   });
-  // A grid's child is placed in the cell its row and col name, covering rowSpan rows and colSpan
-  // columns from there; an axis left out spans all its tracks, and a child with neither is at
-  // (0, 0). The nodes inside it are no grid's children. A grid keeps the tracks the page worked out
-  // over every step (see LayoutMemory), so it never moves as it fills in.
-  const grid = untrack(() => (__again ? undefined : gridContext()));
-  const cell = untrack(() =>
-    grid
-      ? {
-          row: row ?? (col === undefined ? 0 : ('all' as const)),
-          col: col ?? (row === undefined ? 0 : ('all' as const)),
-          rowSpan,
-          colSpan
-        }
-      : undefined
-  );
-  // Two cells covering one coordinate at a step are drawn over each other, and the build warns
-  // (see warn in library/record.ts), as a grid places each cell where it is written.
-  const collision = untrack(() => {
-    if (!cell || !grid) return undefined;
-    // A coordinate below 0 or past the last track extends the grid by a track (see widenTracks).
-    if (![cell.row, cell.col].every((at) => at === 'all' || Number.isInteger(at)))
-      throw new Error(
-        `A grid's cell is placed at whole numbers, not row ${cell.row}, col ${cell.col}.`
-      );
-    if (![cell.rowSpan, cell.colSpan].every((span) => Number.isInteger(span) && span >= 1))
-      throw new Error(
-        `A grid's cell covers a whole number of tracks from 1, not rowSpan ${cell.rowSpan}, colSpan ${cell.colSpan}.`
-      );
-    const covered = (at: number | 'all', span: number) =>
-      at === 'all' ? (['all'] as const) : Array.from({ length: span }, (_, k) => at + k);
-    const mine = covered(cell.row, cell.rowSpan).flatMap((r) =>
-      covered(cell.col, cell.colSpan).map((c) => [r, c] as const)
-    );
-    const meets = (a: number | 'all', b: number | 'all') => a === 'all' || b === 'all' || a === b;
-    const met = mine.find(([r, c]) => grid.cells.some(([r2, c2]) => meets(r, r2) && meets(c, c2)));
-    grid.cells.push(...mine);
-    if (!met) return undefined;
-    const axis = (name: string, at: number | 'all') =>
-      at === 'all' ? `every ${name}` : `${name} ${at}`;
-    return `Two cells of a grid cover ${axis('row', met[0])}, ${axis('col', met[1])} at one step, so they are drawn over each other: give each a row or col of its own.`;
-  });
-  // The CSS line a coordinate takes: tracks start at the smallest coordinate any step reaches, which
-  // the page knows once it has measured every step; while measuring, a cell is sized alone. A full
-  // span covers every track the page keeps, and one track while measuring.
-  const line = (at: number, start: number) => Math.max(1, at - start + 1);
-  const lines = (at: number | 'all', span: number, axis: 0 | 1) =>
-    at === 'all'
-      ? { start: 1, end: grid?.count?.[axis] ? `span ${grid.count[axis]}` : undefined }
-      : {
-          start: line(at, grid?.start[axis] ?? 0),
-          end: span > 1 ? `span ${span}` : undefined
-        };
-  const rowLines = untrack(() => (cell ? lines(cell.row, cell.rowSpan, 0) : undefined));
-  const colLines = untrack(() => (cell ? lines(cell.col, cell.colSpan, 1) : undefined));
-  // A grid in a typed view is drawn by every copy of the view and for every value it is probed
-  // with, so it keeps its tracks by its site, one set they all share and line up by.
-  const inView = untrack(() => Boolean(__component) || insideView());
-  untrack(() => {
-    if (__component) provideInView();
-  });
-  const gridKey = untrack(() =>
-    arrangement !== 'grid' ? undefined : inView ? (__ref ? `view:${__ref}` : undefined) : id
-  );
-  const tracks = untrack(() =>
-    gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
-  );
-  untrack(() =>
-    provideGrid(
-      arrangement === 'grid'
-        ? {
-            cells: [],
-            start: tracks?.start ?? [0, 0],
-            ...(tracks ? { count: [tracks.rows.length, tracks.columns.length] as const } : {})
-          }
-        : undefined
-    )
-  );
   const trackCss = (sizes: readonly number[] | undefined) =>
     sizes?.length ? sizes.map((size) => `${size}px`).join(' ') : undefined;
   const measured = (prop: string, unit: string) => {
@@ -780,18 +937,8 @@
         )
       : 0
   );
-  // A collection whose overflow is excluded hangs its end slots outside its box (see Overhang).
-  const excluded = $derived(collection && look('overflow') === 'excluded');
-  untrack(() => {
-    if (collection)
-      provideOverhang(
-        excluded && (arrangement === 'row' || arrangement === 'column')
-          ? { layout: arrangement, gap }
-          : undefined
-      );
-  });
-  // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS flex and
-  // grid, and their links never move their children: they are drawn over them (see LinkOverlay).
+  // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS grids,
+  // and their links never move their children: they are drawn over them (see LinkOverlay).
   const free = $derived(arrangement === 'free');
   const overlaid = $derived(
     __links && (arrangement === 'row' || arrangement === 'column' || arrangement === 'grid')
@@ -865,13 +1012,33 @@
     style:padding={boxPadding}
     style:width={sized(valueWidth)}
     style:height={sized(valueHeight)}
-    style:min-width={grown(least(valueWidth, 'width'))}
-    style:min-height={grown(least(valueHeight, 'height'))}
+    style:min-width={subgrid === undefined ? grown(least(valueWidth, 'width')) : undefined}
+    style:min-height={subgrid === undefined ? grown(least(valueHeight, 'height')) : undefined}
     style:opacity={look('opacity') as number | undefined}
     style:transform
     style:transform-origin={transformOrigin}
+    class:sv-subgrid={subgrid !== undefined}
+    data-sv-subgrid={subgrid === undefined ? undefined : subgrid === 1 ? 'col' : 'row'}
+    data-sv-row={subgrid !== undefined ? cellAttributes?.row : undefined}
+    data-sv-col={subgrid !== undefined ? cellAttributes?.col : undefined}
+    data-sv-row-span={subgrid !== undefined ? cellAttributes?.rowSpan : undefined}
+    data-sv-col-span={subgrid !== undefined ? cellAttributes?.colSpan : undefined}
+    data-sv-warning={subgrid !== undefined ? warning : undefined}
+    style:grid-row-start={subgrid !== undefined ? rowLines?.start : undefined}
+    style:grid-row-end={subgrid !== undefined ? rowLines?.end : undefined}
+    style:grid-column-start={subgrid !== undefined ? colLines?.start : undefined}
+    style:grid-column-end={subgrid !== undefined ? colLines?.end : undefined}
+    style:grid-template-columns={subgrid === 1 ? 'subgrid' : undefined}
+    style:grid-template-rows={subgrid === 0 ? 'subgrid' : undefined}
+    style:column-gap={subgrid === 1 ? `${gap}em` : undefined}
+    style:row-gap={subgrid === 0 ? `${gap}em` : undefined}
+    style:align-items={subgrid !== undefined ? alignment : undefined}
+    style:justify-items={subgrid !== undefined ? alignment : undefined}
   >
-    {#if free}
+    {#if subgrid !== undefined}
+      <!-- A subgrid's items are its grid's cells, placed on its tracks (see subgrid). -->
+      {@render contents()}
+    {:else if free}
       <Arranged
         {flow}
         form={look('form') as Form | undefined}
@@ -895,10 +1062,12 @@
         style:align-items={alignment}
         style:justify-items={alignment}
         style:justify-content={justification}
-        style:grid-template-columns={trackCss(tracks?.columns)}
-        style:grid-template-rows={trackCss(tracks?.rows)}
+        style:grid-template-columns={basis ? undefined : trackCss(tracks?.columns)}
+        style:grid-template-rows={basis ? undefined : trackCss(tracks?.rows)}
         data-sv-overlaid={overlaid ? '' : undefined}
-        style:position={overlaid ? 'relative' : undefined}
+        style:position={overlaid || basis ? 'relative' : undefined}
+        style:width={basisBox?.width}
+        style:height={basisBox?.height}
       >
         {@render contents()}
         {#if overlaid}
@@ -920,12 +1089,14 @@
         data-sv-collection={collection ? id : undefined}
         data-sv-overlaid={overlaid ? '' : undefined}
         style:gap={`${gap}em`}
-        style:align-items={collection && arrangement === 'column' ? 'center' : alignment}
-        style:justify-items={collection
-          ? arrangement === 'column'
-            ? alignment
-            : 'center'
-          : undefined}
+        style:align-items={arrangement === 'column' ? 'center' : alignment}
+        style:justify-items={arrangement === 'column'
+          ? collection && packs
+            ? 'center'
+            : alignment
+          : collection
+            ? 'center'
+            : undefined}
         style:justify-content={justification}
         style:width={collection && arrangement === 'row' && (packed || (packs && packRoom))
           ? 'max-content'
@@ -936,7 +1107,7 @@
         style:margin-inline-end={collection && arrangement === 'row' && roomAt !== 'flex-end'
           ? 'auto'
           : undefined}
-        style:position={excluded || overlaid ? 'relative' : undefined}
+        style:position={overlaid ? 'relative' : undefined}
       >
         {@render contents()}
         {#each { length: spares } as _, index (index)}
@@ -971,11 +1142,9 @@
 
 {#snippet drawn()}
   {#if eachItem && eachItem.index === 0 && inSequence && itemEnds.before.length}
-    <Overhang {overhang} side="before">
-      {#each itemEnds.before as end (end)}
-        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-      {/each}
-    </Overhang>
+    {#each itemEnds.before as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
   {/if}
   {#if atEnd !== undefined}
     {#if pointers.length}
@@ -983,19 +1152,15 @@
     {/if}
   {:else if pointers.length}
     {#if position === 0 && inSequence && before.length}
-      <Overhang {overhang} side="before">
-        {#each before as end (end)}
-          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-        {/each}
-      </Overhang>
+      {#each before as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
     {/if}
     <Pointing {pointers} {position} name={slot ?? ''} draw={pointed} />
     {#if position === length - 1 && inSequence && after.length}
-      <Overhang {overhang} side="after">
-        {#each after as end (end)}
-          <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
-        {/each}
-      </Overhang>
+      {#each after as end (end)}
+        <Pointing {pointers} position={end} name={slot ?? ''} draw={pointed} placeholder />
+      {/each}
     {/if}
   {:else if slotWidth || slotHeight || reaches}
     <!-- A box of its own size in the slot that keeps the largest it reaches (see varies), with room
@@ -1015,29 +1180,37 @@
     {@render nodeBox()}
   {/if}
   {#if eachItem && eachItem.index === itemLength - 1 && inSequence && itemEnds.after.length}
-    <Overhang {overhang} side="after">
-      {#each itemEnds.after as end (end)}
-        <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
-      {/each}
-    </Overhang>
+    {#each itemEnds.after as end (end)}
+      <ItemEnd collection={eachItem.collection} position={end} draw={itemCopy} />
+    {/each}
   {/if}
 {/snippet}
 
-{#if look('shown') === false || leftOut}
+{#if !shownHere}
   <!-- Left out of this presentation: drawn nowhere, keeping no room. -->
-{:else if cell}
-  <!-- A grid's child, in the cell its row and col place it in, over its spans. -->
+{:else if subgrid !== undefined}
+  <!-- A subgrid is a cell of its grid itself, a band behind its items. -->
+  {@render nodeBox()}
+{:else if cellAttributes}
+  <!-- A grid's child, in the cell its row and col place it in, over its spans; or a subgrid's. -->
   <div
     class="sv-cell"
-    data-sv-row={cell.row}
-    data-sv-col={cell.col}
-    data-sv-row-span={cell.rowSpan > 1 && cell.row !== 'all' ? cell.rowSpan : undefined}
-    data-sv-col-span={cell.colSpan > 1 && cell.col !== 'all' ? cell.colSpan : undefined}
-    data-sv-collision={collision}
-    style:grid-row-start={rowLines?.start}
-    style:grid-row-end={rowLines?.end}
-    style:grid-column-start={colLines?.start}
-    style:grid-column-end={colLines?.end}
+    data-sv-row={cellAttributes.row}
+    data-sv-col={cellAttributes.col}
+    data-sv-row-span={cellAttributes.rowSpan}
+    data-sv-col-span={cellAttributes.colSpan}
+    data-sv-warning={warning}
+    style:grid-row-start={basisPlace ? undefined : rowLines?.start}
+    style:grid-row-end={basisPlace ? undefined : rowLines?.end}
+    style:grid-column-start={basisPlace ? undefined : colLines?.start}
+    style:grid-column-end={basisPlace ? undefined : colLines?.end}
+    style:position={basisPlace ? 'absolute' : undefined}
+    style:left={basisPlace?.left}
+    style:top={basisPlace?.top}
+    style:width={basisPlace?.width}
+    style:height={basisPlace?.height}
+    style:align-items={basisPlace ? 'center' : undefined}
+    style:justify-content={basisPlace ? 'center' : undefined}
   >
     {@render drawn()}
   </div>
@@ -1092,14 +1265,20 @@
     text-transform: none;
     font-variant-caps: normal;
   }
+  /*
+    A row or column is a grid of one row or one column, each child a track as large as itself, in
+    order, an end slot a track before the first or after the last like the rest.
+  */
   .items {
-    display: flex;
+    display: grid;
   }
   .row {
-    flex-direction: row;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
   }
   .column {
-    flex-direction: column;
+    grid-auto-flow: row;
+    grid-auto-rows: max-content;
   }
   /*
     A grid places each cell by its row and col, each column as wide as its widest cell and each row
@@ -1112,6 +1291,15 @@
   }
   .sv-cell {
     display: flex;
+  }
+  /*
+    A subgrid takes its grid's tracks along one axis (see subgrid); its other axis is one track, as
+    large as its largest item.
+  */
+  .sv-subgrid {
+    display: grid;
+    grid-auto-columns: max-content;
+    grid-auto-rows: max-content;
   }
   /*
     A stack is one cell every child is placed in, as large as its largest child in each direction;
@@ -1131,11 +1319,7 @@
     sequence are evenly spaced however their labels differ; each item keeps its own size, centred
     in its track along the layout direction.
   */
-  .uniform {
-    display: grid;
-  }
   .uniform.row {
-    grid-auto-flow: column;
     grid-auto-columns: 1fr;
   }
   .uniform.column {

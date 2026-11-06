@@ -44,7 +44,9 @@ const valuesRow = `    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/e
 
 /** The boxes of a step's nodes of one kind, left to right. */
 const boxes = (
-  step: { nodes: { kind?: string; box: { x: number; y: number; width: number } }[] },
+  step: {
+    nodes: { kind?: string; box: { x: number; y: number; width: number; height: number } }[];
+  },
   kind: string
 ) =>
   step.nodes
@@ -263,5 +265,89 @@ describe('typed grid coordinates', () => {
       expect.stringMatching(/^col=\{values\.length - 1\} takes values the build cannot work out/u)
     );
     expect(steps[1].nodes.some((node) => node.runs?.some((run) => run.text === 'last'))).toBe(true);
+  });
+});
+
+describe('subgrids', () => {
+  const centres = (step: Parameters<typeof boxes>[0], kind: string) =>
+    boxes(step, kind).map(({ x, width }) => Math.round(x + width / 2));
+  const cellsView = `<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>`;
+
+  it('places {values} drawn by its view on the grid’s columns, values[k] in column k', async () => {
+    const { steps, built } = await drawnSteps(
+      sort(
+        `    <Node row={0}>{values}</Node>
+    <Node row={1} col={i}>{i}</Node>`,
+        cellsView
+      )
+    );
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/grid/u));
+    const step = steps[1];
+    const cells = centres(step, 'IntCell');
+    expect(cells).toHaveLength(5);
+    // i is 1 at @insert.init#1: its arrow is centred under values[1].
+    const [tip] = centres(step, 'Arrow.Tip');
+    expect(Math.abs(tip - cells[1])).toBeLessThanOrEqual(1);
+  });
+
+  it('numbers a key’s words down the rows, beside the cells they name', async () => {
+    const { steps } = await drawnSteps(
+      sort(`${valuesRow.replace('row={0}', 'row={1}')}
+    <Node row={2} col={i}>{i}</Node>
+    <Node col={-1}><Node>head</Node><Node>values</Node><Node>i</Node></Node>`)
+    );
+    const step = steps[1];
+    const word = (text: string) =>
+      step.nodes.find((node) => node.runs?.some((run) => run.text === text))?.box;
+    const [cell] = boxes(step, 'IntCell');
+    const middle = (box?: { y: number; height: number }) => (box ? box.y + box.height / 2 : NaN);
+    const values = word('values');
+    expect(
+      Math.abs(middle(values) - middle({ ...cell, height: values ? cell.width : 0 }))
+    ).toBeLessThan(cell.width);
+    expect(word('i')!.y).toBeGreaterThanOrEqual(values!.y + values!.height);
+    expect(word('head')!.y + word('head')!.height).toBeLessThanOrEqual(values!.y);
+    expect(values!.x + values!.width).toBeLessThanOrEqual(cell.x);
+  });
+
+  it('warns that justify cannot spread a subgrid’s tracks', async () => {
+    const { built } = await drawnSteps(
+      sort(`    <Node kind="Band" row={0}>{#each values as v}<Node>{v}</Node>{/each}</Node>`),
+      { chosen: { 'Main.Band.justify': 'between' } }
+    );
+    expect(built.warnings).toContainEqual(
+      expect.stringMatching(/^A subgrid takes its grid's tracks/u)
+    );
+  });
+});
+
+describe('the basis', () => {
+  const diagonal = sort(`    {#each values as v, k}<Node row={k} col={k}>{v}</Node>{/each}`);
+
+  it('is square at the start, drawing a table', async () => {
+    const { steps } = await drawnSteps(diagonal);
+    const cells = boxes(steps[1], 'IntCell');
+    expect(cells[1].x).toBeGreaterThanOrEqual(cells[0].x + cells[0].width);
+    expect(cells[1].y).toBeGreaterThan(cells[0].y);
+  });
+
+  it('places each cell at col times its col vector plus row times its row vector', async () => {
+    // A diamond: col runs right and down, row left and down, so cells on the diagonal fall in one
+    // column, a pitch apart.
+    const { steps, built } = await drawnSteps(diagonal, {
+      chosen: { 'Main.colX': 0.5, 'Main.colY': 0.5, 'Main.rowX': -0.5, 'Main.rowY': 0.5 }
+    });
+    expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/layout model/iu));
+    const cells = boxes(steps[1], 'IntCell').sort((a, b) => a.y - b.y);
+    expect(new Set(cells.map(({ x }) => Math.round(x))).size).toBe(1);
+    const pitches = cells.slice(1).map((cell, k) => Math.round(cell.y - cells[k].y));
+    expect(new Set(pitches).size).toBe(1);
+    expect(pitches[0]).toBeGreaterThanOrEqual(Math.round(cells[0].height));
+  });
+
+  it('refuses a col and a row that are parallel', async () => {
+    await expect(
+      drawnSteps(diagonal, { chosen: { 'Main.rowX': 1, 'Main.rowY': 0 } })
+    ).rejects.toThrow(/not parallel/u);
   });
 });

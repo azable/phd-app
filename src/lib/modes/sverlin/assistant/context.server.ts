@@ -16,7 +16,6 @@ import {
   groupOptions,
   isToken,
   levelFor,
-  overflowOptions,
   propOptions,
   styleOf,
   tagOf,
@@ -194,26 +193,19 @@ export function designVariables(
       key === 'listing.language' || key === 'listing.places'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
-    // A pointer's overflow and a collection's have options of their own, as does a listing's text
-    // colour, which can keep the listing's ink.
+    // A listing's text colour has options of its own, which can keep the listing's ink.
     const set =
-      prop === 'overflow'
-        ? (overflowOptions.pointer as readonly DesignValue[]).includes(value)
-          ? 'overflow.pointer'
-          : 'overflow.collection'
-        : prop === 'color' && key.startsWith('listing.')
-          ? 'listing.color'
-          : prop === 'form' && structures?.[key.slice(0, -'.form'.length)] !== 'layers'
-            ? 'form.unlayered'
-            : prop;
+      prop === 'color' && key.startsWith('listing.')
+        ? 'listing.color'
+        : prop === 'form' && structures?.[key.slice(0, -'.form'.length)] !== 'layers'
+          ? 'form.unlayered'
+          : prop;
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
       'listing.language': listingOptions['listing.language'],
       'listing.places': listingPlacesOptions,
       'listing.color': listingPropOptions('color') ?? [],
-      'overflow.pointer': overflowOptions.pointer,
-      'overflow.collection': overflowOptions.collection,
       // The forms of a layout whose links make no layers, which do not take layered.
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };

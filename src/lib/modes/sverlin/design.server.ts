@@ -11,11 +11,11 @@ import {
   colourParts,
   frameOptions,
   freeLayoutProps,
+  gridProps,
   isToken,
   listingOptions,
   listingPropOptions,
   listingRegionProps,
-  optionsOf,
   isPlaceLabel,
   placeLabelLength,
   placePaint,
@@ -30,6 +30,7 @@ import {
   roleProps,
   starterFrame,
   starterFreeLayout,
+  starterGrid,
   starterListing,
   starterLooks,
   starterTokens,
@@ -57,6 +58,8 @@ export type DesignKind = {
   key: string;
   role: KindRole;
   free?: { structure: LayoutStructure; flow?: 'x' | 'y' };
+  /** For a kind arranging a grid: its basis is its own too (see gridProps). */
+  grid?: true;
   lines?: true;
   /** For a collection's node, the axis its items run along and whether its length never changes. */
   collection?: { axis: 'x' | 'y'; steady: boolean };
@@ -65,19 +68,21 @@ export type DesignKind = {
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
 // the natural form of a structure it finds that the trace could not show. One whose flow sets the
 // way it runs has no direction.
-const propsOf = ({ role, free }: DesignKind) =>
-  free
-    ? [
-        ...roleProps[role],
-        ...freeLayoutProps.filter((prop) =>
-          prop === 'form'
-            ? free.structure !== 'none'
-            : prop === 'direction'
-              ? free.structure !== 'none' && !free.flow
-              : true
-        )
-      ]
-    : roleProps[role];
+const propsOf = ({ role, free, grid }: DesignKind) =>
+  grid
+    ? [...roleProps[role], ...gridProps]
+    : free
+      ? [
+          ...roleProps[role],
+          ...freeLayoutProps.filter((prop) =>
+            prop === 'form'
+              ? free.structure !== 'none'
+              : prop === 'direction'
+                ? free.structure !== 'none' && !free.flow
+                : true
+          )
+        ]
+      : roleProps[role];
 
 /**
  * A kind's starting value for a prop: a free layout runs right, across the wide stage, a tree too,
@@ -99,7 +104,7 @@ const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string
           ? collection.steady
             ? 'center'
             : 'start'
-          : (starterLooks[role][prop] ?? starterFreeLayout[prop]);
+          : (starterLooks[role][prop] ?? starterFreeLayout[prop] ?? starterGrid[prop]);
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
@@ -420,7 +425,7 @@ export function designSpace(
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
     ...Object.fromEntries(
       places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, optionsOf(kind.role, prop)])
+        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, propOptions[prop]])
       )
     ),
     ...layoutSpace(layouts)
@@ -432,7 +437,7 @@ export function designSpace(
  * one structure dagre's layered engine lays out (library/node/layered-engine.ts).
  */
 function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[] {
-  const options = optionsOf(kind.role, prop);
+  const options = propOptions[prop];
   return prop === 'form' && kind.free?.structure !== 'layers'
     ? options.filter((option) => option !== 'layered')
     : options;

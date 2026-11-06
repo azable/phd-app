@@ -51,6 +51,12 @@ export type Look = {
   /** Explicit tracks, in pixels, as grid-template-columns: 40px 32px gives them; none, implicit. */
   gridTemplateColumns: number[];
   gridTemplateRows: number[];
+  /**
+   * Whether a grid takes its parent grid's tracks along an axis, as grid-template-columns: subgrid
+   * gives (see subgrid in layout.ts).
+   */
+  subgridColumns: boolean;
+  subgridRows: boolean;
   /** The line a grid item starts at, from 1, as grid-row-start: 2 places it; none, auto-placed. */
   gridRowStart?: number;
   gridColumnStart?: number;
@@ -469,7 +475,7 @@ export function lookOf(
   // Tracks given in pixels, as a solved grid has them; any other track sizing is not modelled.
   const tracksOf = (property: string): number[] => {
     const value = get(property);
-    if (value === undefined || value === 'none') return [];
+    if (value === undefined || value === 'none' || value === 'subgrid') return [];
     return value
       .trim()
       .split(/\s+/u)
@@ -554,6 +560,8 @@ export function lookOf(
     gridAutoRows: get('grid-auto-rows') ?? 'auto',
     gridTemplateColumns: tracksOf('grid-template-columns'),
     gridTemplateRows: tracksOf('grid-template-rows'),
+    subgridColumns: get('grid-template-columns') === 'subgrid',
+    subgridRows: get('grid-template-rows') === 'subgrid',
     ...lineOf('gridRowStart', 'grid-row-start'),
     ...lineOf('gridColumnStart', 'grid-column-start'),
     ...spanOf('gridRowSpan', 'grid-row-end'),

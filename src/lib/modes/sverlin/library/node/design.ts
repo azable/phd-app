@@ -267,6 +267,12 @@ export function colourParts(name: string): { hue: string; shade: number } | unde
 const spacing = [0, 0.0625, 0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2];
 
 /**
+ * A component of a grid's basis vector, in pitches: halves give the shapes the guide names, as a
+ * diamond's [0.5, 0.5] and [−0.5, 0.5].
+ */
+const basisSteps = [-1, -0.5, 0, 0.5, 1];
+
+/**
  * Each prop's options: lengths in em, except textSize, radius, strokeWidth and headSize in
  * pixels; whether a box takes its slot's width and height or its own, and where its own sits in
  * the slot; whether a row or column places its children in their slots or packs them; how a pointer
@@ -301,7 +307,7 @@ export const propOptions = {
   align: ['start', 'center', 'end'],
   justify: ['start', 'center', 'end', 'between', 'around', 'evenly'],
   strokeStyle: ['solid', 'dashed', 'dotted'],
-  overflow: ['shown', 'hidden', 'included', 'excluded'],
+  overflow: ['shown', 'hidden'],
   shadow: ['none', 'soft', 'lifted', 'hard'],
   glow: ['none', 'on'],
   fillStyle: ['solid', 'hatched'],
@@ -314,7 +320,11 @@ export const propOptions = {
   head: headShapes,
   headSize: headSizes,
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
-  icon: iconNames
+  icon: iconNames,
+  colX: basisSteps,
+  colY: basisSteps,
+  rowX: basisSteps,
+  rowY: basisSteps
 } satisfies Record<string, readonly (string | number | boolean)[]>;
 
 export type DesignProp = keyof typeof propOptions;
@@ -452,7 +462,7 @@ const uniformSlot = {
 
 /** The props a kind of node has: a layout's own, nothing to hide a <Pointed> by, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
-  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing', 'overflow'],
+  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
   value: nodeProps,
   bar: nodeProps,
   vertex: nodeProps,
@@ -471,30 +481,19 @@ export const roleProps: Record<KindRole, readonly DesignProp[]> = {
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
 export const freeLayoutProps: readonly DesignProp[] = ['form', 'direction', 'curve', 'layoutSeed'];
 
+/**
+ * The props a kind arranging a grid has besides its role's: its basis, the x and y of the vector
+ * its columns run along and of the one its rows run along, starting square, as a table.
+ */
+export const gridProps: readonly DesignProp[] = ['colX', 'colY', 'rowX', 'rowY'];
+export const starterGrid: Record<string, number> = { colX: 1, colY: 0, rowX: 0, rowY: 1 };
+
 /** A free layout's starting look, but for its direction (see starterLook in design.server.ts). */
 export const starterFreeLayout: Record<string, string | number> = {
   form: 'natural',
   curve: 'straight',
   layoutSeed: 1
 };
-
-/**
- * A prop's options for a role: overflow says, for a pointer, whether it is drawn past its
- * collection's ends, and for a collection's node, whether its end slots are inside its box or hang
- * outside it.
- */
-export const overflowOptions = {
-  pointer: ['shown', 'hidden'],
-  collection: ['included', 'excluded']
-} as const;
-
-export function optionsOf(
-  role: KindRole,
-  prop: DesignProp
-): readonly (string | number | boolean)[] {
-  if (prop !== 'overflow') return propOptions[prop];
-  return role === 'pointed' ? overflowOptions.pointer : overflowOptions.collection;
-}
 
 /**
  * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
@@ -608,8 +607,7 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     gap: 0.5,
     align: 'center',
     justify: 'start',
-    spacing: 'slots',
-    overflow: 'included'
+    spacing: 'slots'
   },
   value: {
     shown: true,
@@ -823,27 +821,24 @@ export const listingAlias = (key: string): string =>
 export const groupProps = (role: KindRole): readonly DesignProp[] =>
   roleProps[role].filter((prop) => prop !== 'shown');
 
-/** Whether a role's prop can name a token: every value the token can hold is one of the prop's. */
-export function tokenFits(role: KindRole, prop: DesignProp, token: DesignToken): boolean {
-  const options = optionsOf(role, prop);
+/** Whether a prop can name a token: every value the token can hold is one of the prop's. */
+export function tokenFits(prop: DesignProp, token: DesignToken): boolean {
+  const options = propOptions[prop];
   return propOptions[tokenProps[token]].every((option) => options.includes(option as never));
 }
 
 /**
- * A group's options for a prop over the roles of the kinds it reaches: those every one of them
- * takes, and each token that fits them all.
+ * A group's options for a prop, where a role of the kinds it reaches has it: the prop's, and each
+ * token that fits it.
  */
 export function groupOptions(
   roles: readonly KindRole[],
   prop: DesignProp
 ): readonly (string | number | boolean)[] {
-  const reached = roles.filter((role) => groupProps(role).includes(prop));
-  const [first, ...rest] = reached.map((role) => optionsOf(role, prop));
+  if (!roles.some((role) => groupProps(role).includes(prop))) return [];
   return [
-    ...(first ?? []).filter((option) => rest.every((options) => options.includes(option as never))),
-    ...(Object.keys(tokenProps) as DesignToken[]).filter((token) =>
-      reached.every((role) => tokenFits(role, prop, token))
-    )
+    ...propOptions[prop],
+    ...(Object.keys(tokenProps) as DesignToken[]).filter((token) => tokenFits(prop, token))
   ];
 }
 

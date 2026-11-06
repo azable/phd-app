@@ -669,18 +669,6 @@ export function endSlotContext(): { collection: string; position: number } | und
  * Inside an {#each} item's node, which keeps the end slots of the collection it is an item of:
  * the element inside keeps none of its own.
  */
-/** How a collection whose overflow is excluded hangs its end slots outside its box. */
-export type Overhang = { layout: 'row' | 'column'; gap: number };
-
-/** Tell a collection's items whether its end slots hang outside its box, and how. */
-export function provideOverhang(overhang: Overhang | undefined): void {
-  setContext('sverlin:overhang', overhang);
-}
-
-export function overhangContext(): Overhang | undefined {
-  return getContext<Overhang | undefined>('sverlin:overhang');
-}
-
 export function provideItemEnds(collection: string): void {
   setContext('sverlin:item-ends', collection);
 }
@@ -728,14 +716,36 @@ export type GridCells = {
   cells: (readonly [number | 'all', number | 'all'])[];
   start: readonly [number, number];
   count?: readonly [number, number];
+  basis?: Basis;
 };
 
-export function provideGrid(grid: GridCells | undefined): void {
+/**
+ * A grid whose basis is not square places each cell itself: at col times the col vector plus row
+ * times the row vector, in pitches, from the corner of the box round every coordinate it keeps;
+ * a pitch is the largest row's height and the largest column's width, in pixels, with the gap, in
+ * em, between pitches (see basis in Node.svelte).
+ */
+export type Basis = {
+  col: readonly [number, number];
+  row: readonly [number, number];
+  pitch: readonly [number, number];
+  origin: readonly [number, number];
+  gap: number;
+};
+
+/**
+ * A subgrid around its items: the axis whose tracks it takes from its grid (0 rows, 1 columns), the
+ * coordinate of its first track, and the coordinate its next item takes, which the subgrids inside
+ * it share, so their items go on numbering (see subgrid in Node.svelte).
+ */
+export type Subgrid = { subgrid: 0 | 1; first: number; next: { at: number } };
+
+export function provideGrid(grid: GridCells | Subgrid | undefined): void {
   setContext('sverlin:grid', grid);
 }
 
-export function gridContext(): GridCells | undefined {
-  return getContext<GridCells | undefined>('sverlin:grid');
+export function gridContext(): GridCells | Subgrid | undefined {
+  return getContext<GridCells | Subgrid | undefined>('sverlin:grid');
 }
 
 /** The way the collection around a node runs, so a collection inside it runs across it, as rows in a column do. */

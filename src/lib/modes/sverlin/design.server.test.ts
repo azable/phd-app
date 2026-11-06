@@ -59,11 +59,11 @@ describe('design space', () => {
     expect(space['IntCell.gap']).toBeUndefined();
     expect(space['Highlight.Pointed.shown']).toBeUndefined();
     expect(space['Highlight.Pointed.fill']).toContain('amber-100');
-    // Overflow: a pointer's, drawn past the ends or not; a collection's, its end slots in its box
-    // or hanging outside it. Dashed borders are paint, for any node.
+    // Overflow: a pointer's, drawn past the ends or not; a collection's end slots are tracks of it,
+    // with no choice. Dashed borders are paint, for any node.
     expect(space['Highlight.Pointed.overflow']).toEqual(['shown', 'hidden']);
     expect(space['IntTally.Tally.overflow']).toBeUndefined();
-    expect(space['Row.overflow']).toEqual(['included', 'excluded']);
+    expect(space['Row.overflow']).toBeUndefined();
     expect(space['IntCell.overflow']).toBeUndefined();
     expect(space['IntCell.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
   });
