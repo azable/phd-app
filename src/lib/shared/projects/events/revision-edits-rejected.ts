@@ -20,11 +20,11 @@ export const revisionEditsRejectedEventSchema = v.object({
     /** The generation whose edits these were. */
     generationEventId: v.optional(positiveSchema),
     /**
-     * What was rejected: the comparisons, the picture, its warnings, a picture offering alternatives
-     * no comparison showed, or the edits where absent.
+     * What was rejected: the design values (not readable as JSON), the comparisons, the picture,
+     * its warnings, a picture offering alternatives no comparison showed, or the edits where absent.
      */
     rejected: v.optional(
-      v.picklist(['comparisons', 'picture', 'warnings', 'alternatives', 'helpers'])
+      v.picklist(['values', 'comparisons', 'picture', 'warnings', 'alternatives', 'helpers'])
     ),
     problems: v.pipe(v.array(v.string()), v.minLength(1)),
     /**

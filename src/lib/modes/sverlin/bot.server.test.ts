@@ -90,7 +90,7 @@ describe('single-component Svelte assistant', () => {
     expect(
       parse({
         action: 'vary',
-        values: [{ variable: 'look.radius', value: 'full' }],
+        values: '{"look": {"radius": "full"}}',
         randomise: ['Int'],
         summary: 'Rounds every cell'
       })
@@ -133,13 +133,13 @@ describe('single-component Svelte assistant', () => {
     const parse = (extra: object) =>
       aiAssistant.parseOutput({
         reply: [{ type: 'markdown', text: 'Done.' }],
-        decision: { action: 'vary', values: [], randomise: [], summary: 'Asks', ...extra },
+        decision: { action: 'vary', values: '{}', randomise: [], summary: 'Asks', ...extra },
         recovery: null
       });
     const comparison = {
       question: ' Cells or tallies? ',
-      left: { label: ' cells ', values: [{ variable: 'views.Int', value: 'IntCell' }] },
-      right: { label: 'tallies', values: [{ variable: 'views.Int', value: 'IntTally' }] }
+      left: { label: ' cells ', values: '{"{Int}": "IntCell"}' },
+      right: { label: 'tallies', values: '{"{Int}": "IntTally"}' }
     };
     expect(parse({ count: null, comparisons: [comparison] })).toMatchObject({
       decision: {
@@ -153,7 +153,8 @@ describe('single-component Svelte assistant', () => {
       { count: 4, comparisons: [comparison] },
       { comparisons: [] },
       { comparisons: Array(11).fill(comparison) },
-      right({ ...comparison.right, values: [] }),
+      // A side's values are one JSON string, never the older list (see design-patch.ts).
+      right({ ...comparison.right, values: [{ variable: 'views.Int', value: 'IntTally' }] }),
       right({ values: comparison.right.values }),
       right({ ...comparison.right, label: '  ' }),
       right({ ...comparison.right, label: 'tallies '.repeat(6) }),

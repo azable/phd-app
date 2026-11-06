@@ -56,7 +56,7 @@ import {
 } from '$lib/server/chat-bots/registry';
 import { modeCatalog } from '$lib/modes/catalog';
 import { locateElement } from '$lib/modes/sverlin/element-ref';
-import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { keptKey, writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
 import {
   bestCandidates,
   checkCandidate,
@@ -132,6 +132,12 @@ import { briefSteering, type BriefSteering } from '$lib/server/chat-bots/brief-c
 import { choiceStates, preferenceEvidence } from './preference-model';
 import { elementIdSchema } from '$lib/shared/projects/events/message-content';
 import * as v from 'valibot';
+import {
+  designPatch,
+  readDesignPatch,
+  withoutRemoved,
+  type DesignPatch
+} from '$lib/server/chat-bots/design-patch';
 import { applySourceEdits } from '$lib/server/chat-bots/source-edits';
 import type { ChatBotAttemptProfile } from '$lib/server/chat-bots/types';
 
@@ -945,12 +951,20 @@ async function runSverlinAssistantTurn(
       // A decision that cannot be built as given is recorded, as a failed build is, so the Timeline
       // holds every candidate set aside, and the next attempt repairs it.
       const reject = async (
-        kind: 'edits' | 'comparisons' | 'picture' | 'warnings' | 'alternatives' | 'helpers',
+        kind:
+          | 'edits'
+          | 'values'
+          | 'comparisons'
+          | 'picture'
+          | 'warnings'
+          | 'alternatives'
+          | 'helpers',
         problems: string[],
         failedSource: string
       ) => {
         const outcome = {
           edits: 'the edits could not be applied',
+          values: 'the design values could not be read',
           comparisons: 'the comparisons could not be built',
           picture: 'the picture drew too large to read',
           warnings: 'the picture built with warnings',
@@ -1000,6 +1014,7 @@ async function runSverlinAssistantTurn(
                   : ('error' as const),
               code: {
                 edits: 'edit_not_applied',
+                values: valuesUnreadable,
                 comparisons: 'comparison_not_built',
                 picture: 'picture_unreadable',
                 warnings: 'picture_warning',
@@ -1012,7 +1027,14 @@ async function runSverlinAssistantTurn(
           ],
           priorFailureSummaries: [...failureSummaries]
         };
-        return { document: current, done: false };
+        // Values written wrong are a slip as a source refused as written is (see refusedAsWritten).
+        return {
+          document: current,
+          done: false,
+          ...(kind === 'values'
+            ? { failure: { source: failedSource, diagnostics: buildFeedback.diagnostics } }
+            : {})
+        };
       };
       // The pairs a decision's comparisons ask, each built as given, and whether they were checked
       // against the design before building: a changed source's design is known only once built.
@@ -1068,6 +1090,16 @@ async function runSverlinAssistantTurn(
           ],
           buildFeedback?.failedSource ?? entrySource(current)
         );
+      // Values that are not one JSON object go back to be written again before anything is built.
+      const unreadableDesign = unreadableValues(decision);
+      if (unreadableDesign.length)
+        return reject(
+          'values',
+          unreadableDesign,
+          decision.action === 'revise'
+            ? decision.source
+            : (buildFeedback?.failedSource ?? entrySource(current))
+        );
       switch (decision.action) {
         case 'respond':
           break;
@@ -1093,7 +1125,11 @@ async function runSverlinAssistantTurn(
               designVariables(
                 viewedPresentation(current, contextSelection.interactionEventIds ?? [])
               ),
-              { tree: pictureTree(candidate), base: { ...viewed, ...variant.chosen }, settled: {} },
+              {
+                tree: pictureTree(candidate),
+                base: { ...variant.base, ...variant.chosen },
+                settled: {}
+              },
               briefSteering(projectBrief(current.events, brief))
             )
           );
@@ -1167,7 +1203,7 @@ async function runSverlinAssistantTurn(
       let differsAt: number[] | undefined;
       for (;;) {
         const requests = pairs
-          ? comparisonRequests(batchSeeds, viewed, variant.chosen ?? {}, pairs.slice(0, 1))
+          ? comparisonRequests(batchSeeds, variant.base, variant.chosen ?? {}, pairs.slice(0, 1))
           : basedRequests(
               batchSeeds.slice(0, queued ?? 1),
               variant.base,
@@ -1201,7 +1237,7 @@ async function runSverlinAssistantTurn(
         }
         const guard = {
           tree: pictureTree(candidate),
-          base: { ...viewed, ...variant.chosen },
+          base: { ...variant.base, ...variant.chosen },
           settled: {}
         };
         // A changed source's design is known only once built; a vary's was checked before.
@@ -1321,7 +1357,7 @@ async function runSverlinAssistantTurn(
               candidate,
               pairs,
               seeds: batchSeeds,
-              viewed,
+              viewed: variant.base,
               values: variant.chosen ?? {},
               operationId,
               attempt,
@@ -1957,13 +1993,17 @@ function comparisonRequests(
   pairs: Comparisons
 ): BuildRequest[] {
   return pairs.flatMap(({ left, right }, index) =>
-    [left, right].map((side, slot) => ({
-      seed: seeds[index * 2 + slot],
-      variant: {
-        ...(viewed ? { base: viewed } : {}),
-        chosen: { ...values, ...designValues(side.values) }
-      }
-    }))
+    [left, right].map((side, slot) => {
+      // A side's null returns that value to its level on this side alone.
+      const base = withoutPatched(viewed, side.values);
+      return {
+        seed: seeds[index * 2 + slot],
+        variant: {
+          ...(base ? { base } : {}),
+          chosen: { ...values, ...designValues(side.values) }
+        }
+      };
+    })
   );
 }
 
@@ -2196,12 +2236,44 @@ function comparisonBriefProblem({ brief }: Comparisons[number]): string | undefi
   return undefined;
 }
 
-function designValues(values: readonly { variable: string; value: string | number | boolean }[]) {
+/** The values a decision's patch sets, as kept (see design-patch.ts), as a build chooses them. */
+function designValues(values: unknown) {
   // Keys as written or kept, kept (see design-keys.ts): {Int} is views.Int, <Listing>.syntax
   // listing.syntax; the build sends a place's view to its pointer where only that is in the design.
   return Object.fromEntries(
-    values.map(({ variable, value }) => [keptKey(variable), value])
+    designPatch(values).set.map(({ variable, value }) => [keptKey(variable), value])
   ) as DesignValues;
+}
+
+/** A variant without the values decisions' patches remove with null, which return to their level. */
+function withoutPatched(base: DesignValues | undefined, ...patches: unknown[]) {
+  const remove = patches.flatMap((values) => designPatch(values).remove);
+  return withoutRemoved(
+    base,
+    remove,
+    (key) => keptKey(key),
+    (key) => writtenKey(key)
+  );
+}
+
+/**
+ * Why a decision's values cannot be read, each where it is: text that is not JSON or not one
+ * object (see readDesignPatch). Checked before anything is built, so the rest read them safely.
+ */
+export function unreadableValues(decision: SourceDecision): string[] {
+  const fields: [string, unknown][] = [
+    ...('values' in decision ? [['values', decision.values] as [string, unknown]] : []),
+    ...('comparisons' in decision ? (decision.comparisons ?? []) : []).flatMap(
+      ({ question, left, right }, index): [string, unknown][] => [
+        [`Comparison ${index + 1} (“${question}”), its first side’s values`, left.values],
+        [`Comparison ${index + 1} (“${question}”), its second side’s values`, right.values]
+      ]
+    )
+  ];
+  return fields.flatMap(([where, values]) => {
+    const read = readDesignPatch(values);
+    return 'problem' in read ? [`${where}: ${read.problem}`] : [];
+  });
 }
 
 /**
@@ -2219,7 +2291,10 @@ function comparisonProblems(
   return pairs.map((pair, index) => {
     const { question, left, right } = pair;
     const name = `Comparison ${index + 1} (“${question}”)`;
-    const problems = [...left.values, ...right.values].flatMap(({ variable, value }) =>
+    const set = [designPatch(left.values), designPatch(right.values)].flatMap(
+      ({ set }: DesignPatch) => set
+    );
+    const problems = set.flatMap(({ variable, value }) =>
       offeredOptions(design, variable)?.includes(value)
         ? []
         : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
@@ -3373,18 +3448,23 @@ const buildStage = (code: string | undefined): number | undefined =>
 /** A scene or listing naming a label: checked only once the run has given its labels. */
 const labelReferenceCodes = new Set(['listing_label', 'view_storyboard']);
 
+/** A decision's design values that are not one JSON object (see readDesignPatch): written wrong. */
+const valuesUnreadable = 'values_unreadable';
+
 /**
  * Whether the build refused a failed attempt's source as written: every problem from its first
- * stage (the source's blocks, labels, and views), or a scene or listing naming a label that does
- * not exist. Such a slip gets the ladder's quick retries (writtenRetries in
- * chat-bots/attempt-profiles.ts); a failure of the run or the layout, a problem with no code, or an
- * attempt set aside for another reason goes to the slower repairs.
+ * stage (the source's blocks, labels, and views), a scene or listing naming a label that does not
+ * exist, or design values that are not one JSON object. Such a slip gets the ladder's quick retries
+ * (writtenRetries in chat-bots/attempt-profiles.ts); a failure of the run or the layout, a problem
+ * with no code, or an attempt set aside for another reason goes to the slower repairs.
  */
 export function refusedAsWritten(failure: AttemptFailure | undefined): boolean {
   return (
     !!failure?.diagnostics.length &&
     failure.diagnostics.every(
-      ({ code }) => buildStage(code) === 0 || (code !== undefined && labelReferenceCodes.has(code))
+      ({ code }) =>
+        buildStage(code) === 0 ||
+        (code !== undefined && (labelReferenceCodes.has(code) || code === valuesUnreadable))
     )
   );
 }
@@ -3864,9 +3944,11 @@ function sourceValues(
   viewed: DesignValues | undefined,
   decision: SourceDecisionOf<'revise' | 'edit'>
 ): { base?: DesignValues; chosen?: DesignValues } {
+  const base = withoutPatched(viewed, decision.values);
+  const chosen = designValues(decision.values);
   return {
-    ...(viewed ? { base: viewed } : {}),
-    ...(decision.values?.length ? { chosen: designValues(decision.values) } : {})
+    ...(base ? { base } : {}),
+    ...(Object.keys(chosen).length ? { chosen } : {})
   };
 }
 
@@ -3874,8 +3956,9 @@ function variedValues(
   viewed: DesignValues | undefined,
   decision: SourceDecisionOf<'vary'>
 ): { base?: DesignValues; chosen: DesignValues; randomise: string[] } {
+  const base = withoutPatched(viewed, decision.values);
   return {
-    ...(viewed ? { base: viewed } : {}),
+    ...(base ? { base } : {}),
     chosen: designValues(decision.values),
     randomise: decision.randomise.map((key) => keptKey(key))
   };

@@ -1444,9 +1444,25 @@ no mark one kind. `@` names only a part of the run, a label, as in the source.
   }
   ```
 
-  Each value the assistant sets is still one variable, by its written key:
-  `{"variable": "$cell.radius", "value": 4}`,
-  `{"variable": "IntCell.inherit", "value": "$cell"}`.
+  The assistant writes the values it sets in the same nested form, as one JSON
+  object in a string, applied over the viewed variant's values as a JSON Merge
+  Patch: an object merges into what it names, and `null` removes a value, so it
+  returns to what it inherits or follows. To make the value cells rounder with a
+  darker frame, the goal's own fill removed, and every number shown as a tally:
+
+  ```json
+  {
+    "$cell": { "radius": 8, "stroke": "neutral-700" },
+    "IntCell": { "...": "$cell" },
+    "Goal": { "fill": null },
+    "{Int}": "IntTally"
+  }
+  ```
+
+  written in the decision as
+  `"values": "{\"$cell\": {\"radius\": 8, \"stroke\": \"neutral-700\"}, \"IntCell\": {\"...\": \"$cell\"}, \"Goal\": {\"fill\": null}, \"{Int}\": \"IntTally\"}"`,
+  and `"{}"` for none. Text that is not one JSON object goes back to be written
+  again.
 
 ### Variants
 

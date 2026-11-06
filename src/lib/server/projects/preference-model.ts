@@ -21,6 +21,7 @@ import {
 } from '$lib/shared/projects/events/visualization-presented';
 import { seededRandom } from '$lib/modes/sverlin/algorithm/random.server';
 import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { readDesignPatch } from '$lib/server/chat-bots/design-patch';
 
 type DesignValue = string | number | boolean;
 
@@ -174,14 +175,12 @@ export function varyValues(response: string): { variable: string; value: DesignV
       })
     ];
     for (const decision of decisions) {
-      const vary = decision as
-        | { action?: unknown; values?: { variable: string; value: DesignValue }[] }
-        | undefined;
-      if (vary?.action === 'vary' && Array.isArray(vary.values))
-        return vary.values.map(({ variable, value }) => ({
-          variable: keptKey(variable),
-          value
-        }));
+      const vary = decision as { action?: unknown; values?: unknown } | undefined;
+      if (vary?.action !== 'vary') continue;
+      // A JSON string of a nested design, or an older list of {variable, value}.
+      const patch = readDesignPatch(vary.values);
+      if ('problem' in patch) return [];
+      return patch.set.map(({ variable, value }) => ({ variable: keptKey(variable), value }));
     }
   } catch {
     // Not a recorded response with a decision.
