@@ -99,6 +99,7 @@ import {
   type ComponentSignatures
 } from './components.server';
 import { callTypes } from './calls.server';
+import { paddingWarnings } from './padding-warnings.server';
 import {
   overSteps,
   selectsOf,
@@ -2896,6 +2897,12 @@ export async function bundlePresentation(
         drawn: JSON.stringify({ ...drawnSteps[at], copies: undefined })
       })),
       scenes.length
+    ),
+    ...paddingWarnings(
+      drawnSteps,
+      design.roles,
+      values,
+      new Set(scenes.map(({ layout }) => layout))
     )
   );
   const arrangements =

@@ -1606,6 +1606,15 @@ describe('submitProjectFeedback', () => {
       expect(returnedWarnings([guessed, steps], false)).toEqual([guessed, steps]);
     });
 
+    it('never sends a picture back for padding nobody sees, a look only', async () => {
+      const { returnedWarnings } = await import('./commands');
+      const padding =
+        'NameText (padding 0.375) has padding but never shows a fill or a stroke, so the padding is space nobody sees. Use the parent’s gap for space between items, or give the kind a box. The picture is drawn as it is.';
+      const steps = 'Two paused steps draw the same picture.';
+      expect(returnedWarnings([padding, steps], false)).toEqual([steps]);
+      expect(returnedWarnings([padding], true)).toEqual([]);
+    });
+
     it('keeps a first source whose steps repeat the picture before them, as a merge sort’s singleton calls do', async () => {
       const { returnedWarnings } = await import('./commands');
       const repeated =

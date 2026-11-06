@@ -4,6 +4,7 @@ import { callTypes } from './calls.server';
 import { bundlePresentation, prepareSvelteComponent } from './compile.server';
 import framesFixture from './fixtures/call-frames.sverlin?raw';
 import fibFixture from './fixtures/fib-calls.sverlin?raw';
+import { designOnlyWarning } from './padding-warnings.server';
 
 const problemOf = (source: string) => {
   try {
@@ -37,7 +38,8 @@ describe('call types', () => {
     const { labels, warnings } = await bundlePresentation(prepareSvelteComponent(framesFixture), 1);
     expect(labels[0]).toBe(':before');
     expect(labels).toContain('@sort.merge#7');
-    expect(warnings).toBeUndefined();
+    // Its look's padding nobody sees aside, which the build tells too.
+    expect((warnings ?? []).filter((warning) => !warning.endsWith(designOnlyWarning))).toEqual([]);
   });
 
   it("gives a call's result once it has returned", async () => {

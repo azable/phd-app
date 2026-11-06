@@ -695,7 +695,8 @@ export const starterLooks: Record<KindRole, Record<string, string | number | boo
     font: fontValues.includes('mono') ? 'mono' : fontValues[0],
     textSize: 16,
     weight: 'normal',
-    padding: 0,
+    // A little room inside its tint, so the code does not touch the tint's edge.
+    padding: 0.125,
     radius: 4,
     minSize: 0,
     ...plainStyle,
