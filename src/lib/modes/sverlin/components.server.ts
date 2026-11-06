@@ -1498,16 +1498,45 @@ export function slotInsertions(
         inner.set(context.name, local);
         // A node holding all of an item, as its value and the labels under it, keeps the item's
         // end slots in the sequence the items are arranged in (see Node.svelte); a snippet the
-        // item declares for its parts draws nothing there.
-        const roots = ((part.children as Part[] | undefined) ?? []).filter(
-          (child) =>
-            child.type !== 'SnippetBlock' &&
-            !(child.type === 'Text' && String(child.data ?? '').trim() === '')
-        );
+        // item declares for its parts draws nothing there. An item drawn by one node in each
+        // branch of an {#if}, as a sorted cell or an unsorted one, has that node at every step,
+        // so each branch's node is the item's; else the element inside would keep the end slots
+        // within the branch's node, stacked against its own box.
+        const rootsOf = (children: Part[] | undefined) =>
+          (children ?? []).filter(
+            (child) =>
+              child.type !== 'SnippetBlock' &&
+              !(child.type === 'Text' && String(child.data ?? '').trim() === '')
+          );
+        const isNode = (child: Part | undefined) =>
+          child?.type === 'InlineComponent' && child.name === 'Node';
+        const branchNodes = (block: Part): Part[] | undefined => {
+          const own = rootsOf(block.children as Part[] | undefined);
+          if (own.length !== 1 || !isNode(own[0])) return undefined;
+          const otherwise = block.else as Part | undefined;
+          if (!otherwise) return own;
+          const rest = rootsOf(otherwise.children as Part[] | undefined);
+          const chained = rest.length === 1 && rest[0].type === 'IfBlock' && rest[0].elseif;
+          const after = chained
+            ? branchNodes(rest[0])
+            : rest.length === 1 && isNode(rest[0])
+              ? rest
+              : undefined;
+          return after ? [...own, ...after] : undefined;
+        };
+        const roots = rootsOf(part.children as Part[] | undefined);
         const [root] = roots;
-        if (roots.length === 1 && root.type === 'InlineComponent' && root.name === 'Node')
+        const itemNodes =
+          roots.length !== 1
+            ? []
+            : isNode(root)
+              ? [root]
+              : root.type === 'IfBlock'
+                ? (branchNodes(root) ?? [])
+                : [];
+        for (const node of itemNodes)
           insertions.push({
-            at: (root.start ?? 0) + '<Node'.length,
+            at: (node.start ?? 0) + '<Node'.length,
             text: ` __itemOf={${followedText(local.of, locals)}} __itemAt={${indexOf(local)}}`
           });
       } else for (const name of patternNames(context)) inner.set(name, { kind: 'other' });
