@@ -27,16 +27,15 @@ const option = (
     measure
   }) satisfies ScoringOption;
 
-/** A decision model that says yes with the probability each option's id names, as "o80" 0.8. */
+/** A decision model that says true with the probability each option's id names, as "o80" 0.8. */
 const decide = vi.fn(async (request: DecisionsRequest) => {
   const text = typeof request.input === 'string' ? request.input : JSON.stringify(request.input);
-  const yes = Number(/"o(\d+)/u.exec(text)?.[1] ?? 50) / 100;
+  const probability = Number(/"o(\d+)/u.exec(text)?.[1] ?? 50) / 100;
   return {
     answers: request.questions.map((question) => ({
-      type: 'choice',
+      type: 'predicate',
       name: question.name,
-      choice: yes >= 0.5,
-      probabilities: [yes, 1 - yes]
+      probability
     })),
     usage: { input_tokens: 900, output_tokens: 0 }
   };
@@ -59,7 +58,22 @@ describe('the scoring stage', () => {
     ]);
   });
 
-  it('scores each option by its mean probability of yes, and records pictures by size only', async () => {
+  it('leaves out a question the model refuses, scoring the option by the rest', async () => {
+    const refusing = vi.fn(async (request: DecisionsRequest) => ({
+      answers: request.questions.map((question, index) =>
+        index === 0
+          ? { type: 'refusal', name: question.name }
+          : { type: 'predicate', name: question.name, probability: 0.6 }
+      )
+    }));
+    const { scores } = await scoreOptions([option('a', 'g', 1)], 'm', refusing);
+    expect(scores.get('a')).toEqual({
+      score: 0.6,
+      answers: { text_readable: 0.6, focus_clear: 0.6 }
+    });
+  });
+
+  it('scores each option by its mean probability of true, and records pictures by size only', async () => {
     const options = [option('o80', 'g', 1), option('o30', 'g', 2)].map((each) => ({
       ...each,
       facts: `${each.id} "${each.id}"`
