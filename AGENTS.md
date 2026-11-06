@@ -125,11 +125,12 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   `<!-- note: … -->` (markdown on one line; code in backticks links to the
   source): while the page is open, each is saved, in name order, as a version in
   its chat, and removed from the inbox; one the app refuses is posted to the
-  chat with the reason instead. A version the developer names, as
-  `3fa2c1/Misty-Falcon-09` (its copy button, or Alt+Shift+C for the one shown,
-  copies it), maps to its example in `.demo/names.json`. When done,
-  `touch .demo/flush` to replace the project with a fresh one
-  ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
+  chat with the reason instead, and a variant value no kind has (as `Main.AtI`
+  for a kind inside `Board`, `Main.Board.AtI`) is left out with a warning posted
+  after it. A version the developer names, as `3fa2c1/Misty-Falcon-09` (its copy
+  button, or Alt+Shift+C for the one shown, copies it), maps to its example in
+  `.demo/names.json`. When done, `touch .demo/flush` to replace the project with
+  a fresh one ([`dev-demo.ts`](src/lib/server/dev-demo.ts)).
 
 ## Engineering rules
 

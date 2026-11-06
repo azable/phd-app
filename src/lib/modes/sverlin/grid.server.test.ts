@@ -198,6 +198,20 @@ describe('place() in a view drawn in a cell', () => {
     );
     expect(captions(steps[1])).toEqual(['before', 'j + 1']);
   });
+
+  it('hides a node reading a {@const} where a variable its value reads is absent, as a direct read does', async () => {
+    const { steps } = await drawnSteps(
+      named(`    {@const next = j + 1}
+    {@const after = next + 1}
+    <Node row={1} col={next}>{next}</Node>
+    <Node row={2} col={after}>{after}</Node>
+    <Node row={3} col={i}>{i}</Node>`)
+    );
+    // At :before, j and i do not exist yet: no mark draws, and the values still do.
+    expect(captions(steps[0])).toEqual([]);
+    expect(steps[0].nodes.filter((node) => node.kind === 'IntCell')).toHaveLength(5);
+    expect(captions(steps[1])).toEqual(['after', 'i', 'next']);
+  });
 });
 
 describe('kinds from expressions', () => {
@@ -228,6 +242,16 @@ describe('kinds from expressions', () => {
     expect(before.filter((node) => node.kind === 'IntCell')).toHaveLength(5);
     expect(before.filter((node) => node.kind === 'Main.Cell')).toHaveLength(5);
     expect(steps[1].nodes.some((node) => node.kind === 'Main.AtJ')).toBe(true);
+  });
+
+  it('reads a {@const} whose value reads an absent variable as undefined in a kind', async () => {
+    const source = sort(`    {@const next = j + 1}
+    {#each values as v, k}
+      <Node kind={k === next ? 'AtNext' : 'Cell'} row={0} col={k}>{v}</Node>
+    {/each}`);
+    const { steps } = await drawnSteps(source);
+    expect(steps[0].nodes.filter((node) => node.kind === 'Main.Cell')).toHaveLength(5);
+    expect(steps[1].nodes.filter((node) => node.kind === 'Main.AtNext')).toHaveLength(1);
   });
 
   it('refuses a kind built from text at run time', async () => {

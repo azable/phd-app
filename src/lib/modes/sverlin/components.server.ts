@@ -293,11 +293,20 @@ export function scopedReadsOf(
   const found: { name: string; start: number }[] = [];
   // Only reads of the variable itself: not a name an {#each}, {@const} or function declares there.
   const free = new Set(freeReads(markup).map(({ start }) => start));
+  // A {@const} name read counts as a read of each variable its value reads, where the name is
+  // read, so the node using it hides, not the one holding the {@const}.
+  const throughConsts = new Map(
+    constNameReads(markup).map(({ start, held }) => [
+      start,
+      held.filter((name) => scoped.has(name))
+    ])
+  );
   const walk = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) return value.forEach((item) => walk(item));
     const node = value as Record<string, unknown> & { type?: string; name?: string };
     if (node.type === 'RenderTag' || (node.type === 'SnippetBlock' && !isPart(node))) return;
+    if (node.type === 'ConstTag') return;
     if (node.type === 'EachBlock') {
       walk(node.body ?? node.children);
       walk(node.fallback ?? node.else);
@@ -312,6 +321,9 @@ export function scopedReadsOf(
     }
     if (node.type === 'Identifier' && scoped.has(node.name ?? '') && free.has(node.start as number))
       found.push({ name: node.name ?? '', start: (node.start as number | undefined) ?? 0 });
+    if (node.type === 'Identifier')
+      for (const name of throughConsts.get(node.start as number) ?? [])
+        found.push({ name, start: (node.start as number | undefined) ?? 0 });
     for (const [childKey, child] of Object.entries(node))
       if (childKey !== 'parent' && childKey !== 'loc') walk(child);
   };
@@ -332,12 +344,20 @@ export function guardInsertions(markup: unknown, absent: ReadonlySet<string>): I
       .filter(({ name }) => absent.has(name))
       .map(({ start }) => start)
   );
+  const throughConsts = new Map(
+    constNameReads(markup).map(({ start, held }) => [
+      start,
+      held.filter((name) => absent.has(name))
+    ])
+  );
   const readsIn = (value: unknown, into: Set<string>): Set<string> => {
     if (!value || typeof value !== 'object') return into;
     if (Array.isArray(value)) value.forEach((item) => readsIn(item, into));
     else {
       const node = value as Part & { name?: string };
       if (node.type === 'Identifier' && free.has(node.start ?? -1)) into.add(node.name ?? '');
+      if (node.type === 'Identifier')
+        for (const name of throughConsts.get(node.start ?? -1) ?? []) into.add(name);
       for (const [key, child] of Object.entries(node))
         if (key !== 'parent' && key !== 'loc') readsIn(child, into);
     }
@@ -401,7 +421,8 @@ export function unknownReadOf(
  */
 export function freeReads(
   markup: unknown,
-  given: readonly string[] = []
+  given: readonly string[] = [],
+  { constsDeclare = true }: { constsDeclare?: boolean } = {}
 ): { name: string; start: number }[] {
   type Part = Record<string, unknown> & { type?: string; name?: string };
   const read: { name: string; start: number }[] = [];
@@ -431,7 +452,7 @@ export function freeReads(
       const declared = (value as (Part | null)[]).flatMap((item) =>
         item?.type === 'SnippetBlock'
           ? [item.expression]
-          : item?.type === 'ConstTag'
+          : item?.type === 'ConstTag' && constsDeclare
             ? [(item.expression as { left?: unknown } | undefined)?.left]
             : []
       );
@@ -470,6 +491,57 @@ export function freeReads(
   };
   walk(markup, new Set(given));
   return read;
+}
+
+/**
+ * What each {@const} name holds: the names its value reads, a {@const} name among them replaced by
+ * what that one holds, so `{@const next = j + 1}` holds `j`. {@const} tags in different fragments
+ * declaring one name hold what all of them read.
+ */
+export function constValues(markup: unknown): Map<string, string[]> {
+  const direct = new Map<string, Set<string>>();
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    const node = value as Record<string, unknown> & { type?: string };
+    if (node.type === 'ConstTag') {
+      const { left, right } = (node.expression ?? {}) as { left?: unknown; right?: unknown };
+      const names = new Set<string>();
+      collectPattern(left, names);
+      const reads = freeReads(right).map(({ name }) => name);
+      for (const name of names) direct.set(name, new Set([...(direct.get(name) ?? []), ...reads]));
+    }
+    for (const [key, child] of Object.entries(node))
+      if (key !== 'parent' && key !== 'loc') walk(child);
+  };
+  walk(markup);
+  const held = new Map<string, string[]>();
+  const resolve = (name: string, seen: ReadonlySet<string>): string[] => {
+    const known = held.get(name);
+    if (known) return known;
+    const out = new Set<string>();
+    for (const read of direct.get(name) ?? [])
+      if (!direct.has(read)) out.add(read);
+      else if (!seen.has(read))
+        for (const inner of resolve(read, new Set([...seen, read]))) out.add(inner);
+    held.set(name, [...out]);
+    return [...out];
+  };
+  for (const name of direct.keys()) resolve(name, new Set([name]));
+  return held;
+}
+
+/**
+ * Each read of a {@const} name in the markup, with where it is and what the name holds (see
+ * constValues): the reads freeReads leaves out as declared where they are.
+ */
+export function constNameReads(markup: unknown): { name: string; start: number; held: string[] }[] {
+  const values = constValues(markup);
+  if (!values.size) return [];
+  const free = new Set(freeReads(markup).map(({ start }) => start));
+  return freeReads(markup, [], { constsDeclare: false })
+    .filter(({ name, start }) => values.has(name) && !free.has(start))
+    .map((read) => ({ ...read, held: values.get(read.name) ?? [] }));
 }
 
 /**

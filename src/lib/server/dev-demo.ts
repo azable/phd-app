@@ -117,6 +117,19 @@ async function saveWaiting(projectId: string): Promise<void> {
       command: command.output
     });
     await finished(projectId, operationId, document.events.length);
+    // A variant value the design lacks is left out of the build with a warning; say so in the chat,
+    // as the picture would otherwise show without it and no word why.
+    const leftOut = (await projectRepository.eventsAfter(projectId, document.events.length))
+      .flatMap((event) =>
+        event.operationId === operationId &&
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.format === 'browser-bundle-v1'
+          ? (event.payload.presentation.warnings ?? [])
+          : []
+      )
+      .filter((warning) => warning.endsWith('The value is left out.'));
+    if (leftOut.length)
+      await postNote(projectId, name, `${name}: ${leftOut.join(' ')}`.slice(0, 2000), 'warning');
     await recordNames(
       projectId,
       operationId,

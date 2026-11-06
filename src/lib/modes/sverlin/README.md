@@ -1190,7 +1190,8 @@ written in the source, or `undefined` for the view's or layout's own kind, as
 its expression gives at each step, so one node, not an `{#if}` doubling it,
 marks a cell; at a step where a variable the expression reads does not exist, as
 `j` at a `:before`, the node is still drawn and the expression reads that
-variable as `undefined`, so `k === j ? 'AtJ' : 'Cell'` gives `'Cell'`. The nodes
+variable as `undefined`, so `k === j ? 'AtJ' : 'Cell'` gives `'Cell'` (a
+`{@const}` name as well, where a variable its value reads does not). The nodes
 inside it keep the kind around it, and a kind built from text, as
 `kind={'At' + name}`, is refused. Nodes of one view or layout naming the same
 kind are one kind, and it is named apart from every view and layout. Name a kind
@@ -1206,12 +1207,14 @@ Every kind of node has these props, each with a fixed set of options:
   at one step hidden, keeping its room. A part that reads a variable which does
   not exist at a step, not declared yet, as at a `:before`, or out of scope, is
   not drawn there and keeps its room: a node by what it reads (its `kind`
-  aside), an `{#if}`, `{#key}` or `{#each}` with all it holds by its test. No
-  check for existence is needed. A node of only text and renders is one
-  statement that one missing render takes whole, a layout's tag in it counting
-  as a render, so `<Node>swap {@swap.a} and {@swap.b}</Node>` hides at a step
-  that swaps nothing; a node holding other nodes has parts, each node and render
-  in it, and goes only with all of them, so in
+  aside), an `{#if}`, `{#key}` or `{#each}` with all it holds by its test. A
+  `{@const}` name reads what its value reads, so after `{@const next = j + 1}` a
+  node reading `next` hides where `j` does not exist, and the node holding the
+  `{@const}` does not. No check for existence is needed. A node of only text and
+  renders is one statement that one missing render takes whole, a layout's tag
+  in it counting as a render, so `<Node>swap {@swap.a} and {@swap.b}</Node>`
+  hides at a step that swaps nothing; a node holding other nodes has parts, each
+  node and render in it, and goes only with all of them, so in
   `<Node layout="row"><Node>lo {lo}</Node><Node>mid {mid}</Node></Node>` only
   the `mid` part hides while `mid` is out of scope (a layout drawn by its tag in
   it counts as its nodes do). Split a sentence into parts to keep what is there.
