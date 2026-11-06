@@ -21,7 +21,7 @@ export type StudyCondition = {
   presentationBufferTarget?: number;
   /** No longer used: kept so that stored definitions naming a chooser still read. */
   chooser?: string;
-  /** Whether short parallel calls propose alternative views for the assistant; off when absent. */
+  /** Whether short parallel calls propose alternative views for the assistant; on when absent. */
   viewHelpers?: boolean;
   /** How many helpers a round of view or layout helpers runs; defaultHelperCounts when absent. */
   helperCounts?: HelperCounts;

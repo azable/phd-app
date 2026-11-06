@@ -37,14 +37,16 @@ export const mainStudy = defineStudy({
       // ProjectWorkspace.svelte).
       workspace: { view: 'participant', layout: 'comparison' },
       project: { templateId: 'blank' },
-      // Off: helpers would give the sverlin assistant extra model calls the html one lacks.
-      viewHelpers: false,
+      // On (the developer, 7 November 2026), though it gives the sverlin assistant model calls
+      // the html one lacks.
+      viewHelpers: true,
       durationSeconds: minutes(15)
     },
     html: {
       mode: 'html',
       workspace: { view: 'participant', layout: 'single' },
       project: { templateId: 'blank' },
+      // The html mode has no helpers.
       viewHelpers: false,
       durationSeconds: minutes(15)
     }

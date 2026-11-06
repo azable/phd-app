@@ -27,11 +27,6 @@ type Parameters = ChatBotParameters;
 export type HelperPipelineConfig = {
   /** Whether any turn runs the helpers; off overrides every study condition and dev switch. */
   helpers: boolean;
-  /**
-   * Whether every project runs the helpers whatever its study or trial condition says; a
-   * project's own dev switch still turns them off. Off, each condition's `viewHelpers` decides.
-   */
-  everyProject: boolean;
   /** The model and effort that fill each kind of hole. */
   holeModels: Readonly<Record<HoleKind, Parameters>>;
   scoring: {
@@ -86,9 +81,6 @@ const wholeSourceHelper = {
 
 export const helperPipeline: HelperPipelineConfig = {
   helpers: true,
-  // On for every project while the pipeline is tried in development (the developer, 6 November
-  // 2026); turn off before a study run, so each condition's viewHelpers decides again.
-  everyProject: true,
   holeModels: {
     view: cheapHelper,
     layout: cheapHelper,
