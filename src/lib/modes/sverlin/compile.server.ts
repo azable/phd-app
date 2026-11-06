@@ -45,6 +45,7 @@ import {
   viewThis,
   viewTags,
   viewThisValues,
+  oldWhenWarnings,
   whenTags,
   written as asWritten
 } from './label-values';
@@ -316,6 +317,8 @@ export type PreparedComponent = {
   ownListings: string[];
   /** Each label a scene pauses at that a listing marks no region for, told to the assistant. */
   listingWarnings?: string[];
+  /** <When> or <OneOf> written, the old forms, told to the assistant (see oldWhenWarnings). */
+  oldFormWarnings?: string[];
   /** Each input the view draws but neither the algorithm nor another input reads, told to the assistant. */
   inputWarnings?: string[];
   /** Each label on only a declaration's value that a scene pauses at, told to the assistant. */
@@ -899,6 +902,7 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
     ...scene,
     position: sourcePosition(written, scene.start)
   }));
+  const oldFormWarnings = oldWhenWarnings(authored);
   const captionAt = (place: string) =>
     sourcePosition(written, laid.captions.find((caption) => caption.place === place)?.start ?? 0);
   return {
@@ -917,6 +921,7 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
           )
       })
     ),
+    ...(oldFormWarnings.length ? { oldFormWarnings } : {}),
     source: written
   };
 }
@@ -1144,7 +1149,8 @@ function prepareViews(
     // A view whose links sit outside its nodes joins the children of the node it is rendered in,
     // which lays them out.
     const linkedTypes = new Set<string>();
-    for (const { type, node } of found.components) if (outerLinks(node).length) linkedTypes.add(type);
+    for (const { type, node } of found.components)
+      if (outerLinks(node).length) linkedTypes.add(type);
     const {
       insertions,
       problems,
@@ -1605,16 +1611,16 @@ function prepareViews(
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
-          const call = `<When of="${reference.moment ? `:${reference.moment}` : `@${reference.path ?? ''}`}">`;
+          const call = `when="${reference.moment ? `:${reference.moment}` : `@${reference.path ?? ''}`}"`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(`${call} is in a view, which draws only its value: write it in a layout.`);
           else if (reference.path === undefined && !reference.moment)
             problem(
-              '<When> takes a label by its full name, as <When of="@insert.swap">…</When>, and draws its contents at each step inside a span of that label; of=":before" and of=":after" draw them at the case\'s first step, the input as given, and its last.'
+              'when takes a label by its full name, as <Node when="@insert.swap">…</Node>, and shows the node at each step inside a span of that label; when=":before" and when=":after" show it at the case\'s first step, the input as given, and its last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
-              `${call} says at which steps its contents show, as ${call}…</When>; it is never part of a condition.`
+              `${call} says at which steps a node shows, as <Node ${call}>…</Node>; it is never part of a condition.`
             );
           else if (reference.moment) during[reference.key] = momentTarget(reference.moment);
           else if (reference.path !== undefined) {
@@ -1632,7 +1638,7 @@ function prepareViews(
           continue;
         if (reference.kind === 'value' && tested.has(reference.start)) {
           problem(
-            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <When of="${asWritten(reference.key)}">…</When> draws its contents at each step inside a span of the label.`
+            `{#if ${asWritten(reference.key)}} would choose what to draw by the label's value, which a view never does: <Node when="${asWritten(reference.key)}">…</Node> shows the node at each step inside a span of the label.`
           );
           continue;
         }
@@ -1661,7 +1667,7 @@ function prepareViews(
     for (const start of whens.elses)
       labelProblems.push(
         new InvalidSvelteSourceError(
-          'A <When> has no {:else}: what shows outside the label\'s runs goes beside the <When>, where it shows at every step, and another label\'s steps take a branch of their own, as <OneOf><When of="@insert.compare">…</When><When of="@insert.swap">…</When></OneOf>.',
+          'A node with when has no {:else}: what shows outside the label\'s runs goes beside it, where it shows at every step, and another label\'s steps take a node of their own, nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@insert.compare">…</Node><Node when="@insert.swap">…</Node></Node>.',
           { code: 'view_label', start: sourcePosition(source, start) }
         )
       );
@@ -1796,7 +1802,7 @@ function prepareViews(
     );
     if (unread)
       throw new InvalidSvelteSourceError(
-        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Listing, Layout, When, OneOf), Math, at(p), count(n), spans(@label), and place(); a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
+        `The view reads ${unread.name}, which is no variable or label of the algorithm, and nothing gives it: a view reads only its own value, this, and types, views, labels (@…), the library's components (Node, Link, Listing, Layout), Math, at(p), count(n), spans(@label), and place(); a layout also reads the input and algorithm variables; and any of them reads the names its {#each} blocks and {@const} tags declare. Browser globals, as window or self, are never in scope.`,
         { code: 'view_name', start: sourcePosition(source, unread.start) }
       );
     // at(p) reads the element a position points at, in the collection the steps say it points into.
@@ -1894,7 +1900,7 @@ function prepareViews(
             const steps = [...new Set(both.map(({ step }) => step))];
             return [
               new InvalidSvelteSourceError(
-                `The <OneOf>'s branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; a <OneOf>'s branches take turns in one place, so give each a label whose spans never meet the others', give each outcome a label of its own, or write them as <When>s of their own.`,
+                `The branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; branches take turns in one place, so give each a label whose spans never meet the others', give each outcome a label of its own, or write each as a node of its own, as <Node when="@found">…</Node>.`,
                 { code: 'view_label', start: sourcePosition(source, start) }
               )
             ];
@@ -2067,7 +2073,7 @@ function prepareViews(
         labelReads.map(
           ({ name, start }) =>
             new InvalidSvelteSourceError(
-              `The view reads ${asWritten(name)} itself, but a label's value is drawn only through a view, as {${asWritten(name)}}, never tested or computed with. A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <When of="${asWritten(name)}">…</When> draws its contents at each step inside a span of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).`,
+              `The view reads ${asWritten(name)} itself, but a label's value is drawn only through a view, as {${asWritten(name)}}, never tested or computed with. A view cannot choose what to draw by a label's value, as {#if ${asWritten(name)}}: <Node when="${asWritten(name)}">…</Node> shows the node at each step inside a span of the label, and to mark only what a test let through, label the positions the code it guards uses and render the type at those labels (see Views of what a step computed).`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -2148,10 +2154,7 @@ function prepareViews(
         ast.html,
         svelteSource,
         viewState,
-        new Set([
-          ...Object.keys(components),
-          ...Object.keys(chosen)
-        ]),
+        new Set([...Object.keys(components), ...Object.keys(chosen)]),
         new Set(Object.keys(components)),
         scoped,
         operators,
@@ -2481,6 +2484,7 @@ export async function bundlePresentation(
   // Each step a scene leaves out, drawing what the step before it drew, told to the assistant.
   const warnings: string[] = [
     ...(prepared.listingWarnings ?? []),
+    ...(prepared.oldFormWarnings ?? []),
     ...(prepared.inputWarnings ?? []),
     ...(prepared.initialiserWarnings ?? []),
     ...(prepared.positionWarnings ?? []),
@@ -3792,9 +3796,7 @@ function withNodeRefs(
       walk(tag.children, around, inNode, view, page, names);
       return;
     }
-    const library =
-      tag.type === 'InlineComponent' &&
-      (tag.name === 'Node' || tag.name === 'Link');
+    const library = tag.type === 'InlineComponent' && (tag.name === 'Node' || tag.name === 'Link');
     const element = tag.type === 'Element' || (tag.type === 'InlineComponent' && !library);
     const special = typeof tag.type === 'string' && Object.hasOwn(unsupportedMarkup, tag.type);
     // A view written as a tag, as <Cells values={values} />, the commonest unknown tag in the

@@ -73,7 +73,25 @@ const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(befor
 const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
 const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
 const tagsAdvice =
-  'write <When of="@insert.swap">…</When>, drawing its contents at each step inside a span of the label, or of=":before" or of=":after", the case\'s first and last steps, and branches taking turns in one place as <OneOf><When of="@a">…</When><When of="@b">…</When></OneOf>';
+  'write when on the node, as <Node when="@insert.swap">…</Node>, shown at each step inside a span of the label, or when=":before" or when=":after", the case\'s first and last steps, and nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>';
+
+/**
+ * A warning where the source's markup writes <When> or <OneOf>, the old forms a node's `when` and
+ * a stack replaced: they still build, so stored versions do, and the warning sends a new version
+ * back to be written in the current form.
+ */
+export function oldWhenWarnings(source: string): string[] {
+  const markup = source.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gu, '');
+  const count = (tag: string) => [...markup.matchAll(new RegExp(`<${tag}\\b`, 'gu'))].length;
+  const written = [
+    ['<When>', count('When')],
+    ['<OneOf>', count('OneOf')]
+  ].filter(([, n]) => n);
+  if (!written.length) return [];
+  return [
+    `The view writes ${written.map(([tag, n]) => `${tag} (${n})`).join(' and ')}, an old form that still builds: ${tagsAdvice}.`
+  ];
+}
 
 /**
  * The markup with each <When> as `{#if when(…)}…{/if}` and each <OneOf> as a chain of them, no
@@ -98,7 +116,7 @@ export function whenTags(source: string): {
   const between = (oneOf: Extract<Open, { kind: 'OneOf' }>, until: number) => {
     if (source.slice(oneOf.after, until).trim())
       problems.push({
-        message: `A <OneOf> holds only its <When> branches, side by side, which take turns in one place; put anything else inside a branch or beside the <OneOf>.`,
+        message: `<OneOf> is no more: ${tagsAdvice}.`,
         start: oneOf.after
       });
   };
@@ -111,8 +129,7 @@ export function whenTags(source: string): {
     }
     const parent = open.at(-1);
     if (kind === 'OneOf' && !closing) {
-      if (props.trim())
-        problems.push({ message: '<OneOf> takes no props: it holds its <When> branches.', start });
+      if (props.trim()) problems.push({ message: `<OneOf> is no more: ${tagsAdvice}.`, start });
       open.push({ kind: 'OneOf', start, branches: 0, after: start + whole.length });
       edit(start, whole.length, '');
       continue;
@@ -122,7 +139,7 @@ export function whenTags(source: string): {
       if (written === 'start' || written === 'end') {
         const stop = written === 'start' ? ':before' : ':after';
         problems.push({
-          message: `<When of="${written}"> names no stop: the case's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as <When of="${stop}">.`,
+          message: `when="${written}" names no stop: the case's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as when="${stop}".`,
           start
         });
         continue;
@@ -131,7 +148,7 @@ export function whenTags(source: string): {
       const of = written?.replace(/^:/u, '');
       if (!of || props.trimEnd().endsWith('/')) {
         problems.push({
-          message: `${whole} is no <When>: ${props.trimEnd().endsWith('/') ? 'it holds what it draws, so close it with </When>, as' : ''} ${tagsAdvice}.`,
+          message: `when="${/of="([^"]*)"/u.exec(props)?.[1] ?? ''}" names no label by its full name, as @insert.swap, or stop of the case: ${tagsAdvice}.`,
           start
         });
         continue;
@@ -167,8 +184,7 @@ export function whenTags(source: string): {
       }
       continue;
     }
-    if (!top.branches)
-      problems.push({ message: `A <OneOf> holds its <When> branches: ${tagsAdvice}.`, start });
+    if (!top.branches) problems.push({ message: `<OneOf> is no more: ${tagsAdvice}.`, start });
     between(top, start);
     edit(start, whole.length, '');
   }

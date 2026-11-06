@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
-import { markLabels, viewTags, viewThisValues, whenTags } from './label-values';
+import { markLabels, oldWhenWarnings, viewTags, viewThisValues, whenTags } from './label-values';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -174,6 +174,15 @@ describe('a for … of variable', () => {
 });
 
 describe('<When> and <OneOf>', () => {
+  it('still build, but warn with the current form, outside scripts only', () => {
+    const written =
+      '<script algorithm>/* <When> */</script><OneOf><When of="@a"><Node>x</Node></When></OneOf>';
+    const [warning] = oldWhenWarnings(written);
+    expect(warning).toContain('<When> (1) and <OneOf> (1)');
+    expect(warning).toContain('<Node when="@insert.swap">');
+    expect(oldWhenWarnings('<Node when="@a">x</Node>')).toEqual([]);
+  });
+
   it('become {#if when(…)} chains no longer than written, every line in place', () => {
     const one = '<When of="@swap"><Node>x</Node></When>';
     expect(whenTags(one).source.trimEnd()).toBe('{#if when(@swap)}<Node>x</Node>{/if}');
@@ -193,11 +202,13 @@ describe('<When> and <OneOf>', () => {
     expect(problem('{#if when(@a)}x{/if}')[0]).toContain('when() is not written in a view');
     expect(
       problem('<OneOf><When of="@a">a</When><Node>x</Node><When of="@b">b</When></OneOf>')[0]
-    ).toContain('A <OneOf> holds only its <When> branches');
+    ).toContain('<OneOf> is no more');
     expect(problem('<When of="@a">x')[0]).toBe(
       'The <When> is never closed: close it with </When>.'
     );
-    expect(problem('<When of="a">x</When>')[0]).toContain('<When of="a"> is no <When>');
+    expect(problem('<When of="a">x</When>')[0]).toContain(
+      'when="a" names no label by its full name'
+    );
   });
 });
 

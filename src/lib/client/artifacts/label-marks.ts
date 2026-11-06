@@ -110,7 +110,7 @@ const labelReference = /@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/gu;
 
 /**
  * The full name of the label at a position: an opening's, or a name written after `@` elsewhere
- * (`<When of="@insert.key">`, `pause="@insert.key"`) that some opening has; none at any other text.
+ * (`when="@insert.key"`, `pause="@insert.key"`) that some opening has; none at any other text.
  */
 export function labelAt(
   source: string,

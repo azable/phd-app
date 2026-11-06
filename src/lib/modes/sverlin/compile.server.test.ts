@@ -376,7 +376,9 @@ describe('single-component Svelte compilation', () => {
       prepareSvelteComponent(
         `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Position" name="Here"><Pointed /></View>\n<Layout name="Main" of="i, values"><Node>{#each values as v}{v}{/each}{i}</Node></Layout>`
       )
-    ).toThrow(/<Pointed> is no longer part of the library: draw a pointer as a link from the variable[^]*<Link to=\{this\} \/>/u);
+    ).toThrow(
+      /<Pointed> is no longer part of the library: draw a pointer as a link from the variable[^]*<Link to=\{this\} \/>/u
+    );
   });
 
   it('rejects props a library component does not take, and written values it cannot use', async () => {
@@ -1169,10 +1171,10 @@ describe('scope', () => {
         `{#snippet Held()}<Node>held</Node>{/snippet}<Layout name="Main"><Node>{#if ${test}}{@render Held()}{/if}</Node></Layout>`
       ).replace('@key[const key = values[i];]', '@key[const key = @at[values[i]];]');
     expect(() => prepareSvelteComponent(chosen('@key.at'))).toThrow(
-      `{#if @key.at} would choose what to draw by the label's value, which a view never does: <When of="@key.at">…</When>`
+      `{#if @key.at} would choose what to draw by the label's value, which a view never does: <Node when="@key.at">…</Node>`
     );
     expect(() => prepareSvelteComponent(chosen('@key.at > 0'))).toThrow(
-      `A view cannot choose what to draw by a label's value, as {#if @key.at}: <When of="@key.at">…</When> draws`
+      `A view cannot choose what to draw by a label's value, as {#if @key.at}: <Node when="@key.at">…</Node> shows`
     );
   });
 
@@ -2054,19 +2056,21 @@ describe('<When of="@label">', () => {
     expect(() =>
       prepareSvelteComponent(caption('{#if @pass.look.read}{@render Caption()}{/if}'))
     ).toThrow(
-      '{#if @pass.look.read} would choose what to draw by the label\'s value, which a view never does: <When of="@pass.look.read">…</When> draws its contents at each step inside a span of the label.'
+      '{#if @pass.look.read} would choose what to draw by the label\'s value, which a view never does: <Node when="@pass.look.read">…</Node> shows the node at each step inside a span of the label.'
     );
     expect(() =>
       prepareSvelteComponent(
         caption('<When of="@pass">{@render Caption()}{:else}{@render Caption()}</When>')
       )
-    ).toThrow('A <When> has no {:else}');
+    ).toThrow('A node with when has no {:else}');
     expect(() =>
       prepareSvelteComponent(caption('<When of="step">{@render Caption()}</When>'))
-    ).toThrow('<When of="step"> is no <When>: ');
+    ).toThrow('when="step" names no label by its full name');
     expect(() =>
       prepareSvelteComponent(caption('{#if when(@pass) && values}{@render Caption()}{/if}'))
-    ).toThrow('when() is not written in a view: write <When of="@insert.swap">…</When>');
+    ).toThrow(
+      'when() is not written in a view: write when on the node, as <Node when="@insert.swap">…</Node>'
+    );
     expect(() =>
       prepareSvelteComponent(
         caption('{values[0]}').replace(
@@ -2074,7 +2078,7 @@ describe('<When of="@label">', () => {
           '<View of="Int" name="IntCell"><Node value={this} /><When of="@pass"><Node>!</Node></When></View>'
         )
       )
-    ).toThrow('<When of="@pass"> is in a view, which draws only its value');
+    ).toThrow('when="@pass" is in a view, which draws only its value');
   });
 });
 
@@ -2134,17 +2138,17 @@ describe('<OneOf> branches', () => {
         )
       )
     ).toThrow(
-      "The <OneOf>'s branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3;"
+      'The branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3;'
     );
     expect(() =>
       prepareSvelteComponent(
         chain(looking.replace('</When></OneOf>', '{:else}<Node>!</Node></When></OneOf>'))
       )
-    ).toThrow('A <When> has no {:else}');
+    ).toThrow('A node with when has no {:else}');
     // A <OneOf> holds only its branches.
     expect(() =>
       prepareSvelteComponent(chain(looking.replace('</When><When', '</When><Node>!</Node><When')))
-    ).toThrow('A <OneOf> holds only its <When> branches');
+    ).toThrow('<OneOf> is no more');
     // A label of any length, as @n.
     const short = chain(looking.replace('of="@pass.note"', 'of="@pass.n"')).replace(
       '@note[',
