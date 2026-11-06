@@ -11,6 +11,8 @@ export function logModelCall(call: {
   purpose: string;
   model: string;
   failed: boolean;
+  /** Why this first call stepped up from the fast model (ai/turns/struggle.ts), where it did. */
+  escalation?: string;
   usage?: Readonly<Record<string, number>>;
 }): void {
   const costUsd = call.usage ? callCost(call.model, call.usage) : undefined;

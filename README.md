@@ -545,18 +545,30 @@ mode's assistant, asked for questions first, asks who it is for and what
 students should be able to do before building, and otherwise builds a first
 version. The assistants use a bounded ladder of at most six calls: one initial
 call, up to two quick retries on the same fast model where the build refuses the
-source as written (`refusedAsWritten`), two repairs at rising effort, and a
+source as written (each mode sorts its own refusals: Sverlin's
+`refusedAsWritten`, HTML's `htmlBuildStages`, so both conditions of the study
+have the same ladder and worst case), two repairs at rising effort, and a
 simpler fallback that explains what it reduced; any other failure goes to the
 repairs at once. A picture that builds goes back for its warnings or its
 readability only to a repair, never to the fallback (`softReturnLeft`). A
 Sverlin ladder whose repairs keep failing with new problems stops early, keeping
-the current version and saying so (`runAttemptLadder`). Provider retries are
-disabled. The default 180-second request ceiling and study deadline bound each
-attempt; see
+the current version and saying so (`runAttemptLadder`). Where the participant
+seems to be struggling to get a point across (an earlier version restored, an
+answer to a comparison reversed, the same request again, a question followed by
+another, or a short negative judgement pointing at nothing), every mode's first
+call steps up from the fast model to GPT-6.1 Sol at medium; the fast call may
+also flag the request as unclear (`needsMoreThought`), and the turn then runs
+once more stepped up, at most seven calls in all
+([`struggle.ts`](src/lib/server/ai/turns/struggle.ts)). Each step up is recorded
+on its generation request (`escalation`), on the `ai.call` log line, and in the
+developer's views of a turn's calls. Provider retries are disabled. The default
+180-second request ceiling and study deadline bound each attempt; see
 [`src/lib/server/ai/bots/attempt-profiles.ts`](src/lib/server/ai/bots/attempt-profiles.ts),
 [`src/lib/server/ai/turns/attempt-ladder.ts`](src/lib/server/ai/turns/attempt-ladder.ts),
 [`src/lib/modes/sverlin/assistant/turn.server.ts`](src/lib/modes/sverlin/assistant/turn.server.ts)
-(`refusedAsWritten`, `returnedWarnings`), and
+(`refusedAsWritten`, `returnedWarnings`),
+[`src/lib/modes/html/assistant/turn.server.ts`](src/lib/modes/html/assistant/turn.server.ts)
+(`htmlBuildStages`), and
 [`src/lib/server/projects/operations.ts`](src/lib/server/projects/operations.ts).
 Generated source, attempts, diagnostics, accepted artifacts, and presentations
 remain in the project Timeline. Each diagnostic records where the code it is

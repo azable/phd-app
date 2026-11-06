@@ -5,6 +5,7 @@
  */
 
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
+import type { EscalationReason } from '$lib/shared/projects/events/ai-generation';
 import type { BuildDiagnostic } from '$lib/shared/projects/events/values';
 import * as v from 'valibot';
 
@@ -54,6 +55,20 @@ export function parseRecoveryExplanation(value: unknown): RecoveryExplanation | 
     ? undefined
     : v.parse(recoveryExplanationSchema, value);
 }
+
+/**
+ * The model's own flag that the participant's request is unclear and needs more thought than the
+ * fast first call gives it: on that call, the app runs the turn once more on a higher-reasoning
+ * model (ai/turns/struggle.ts) instead of acting on the answer. Shared by both modes' responses.
+ */
+export const needsMoreThoughtJsonSchema = {
+  type: 'boolean',
+  description:
+    'true only when the participant’s request is unclear or they seem to be struggling to get a point across, and a slower, more careful reading is needed before answering; false otherwise.'
+} as const;
+
+/** The flag as parsed: true only for a literal true. */
+export const parseNeedsMoreThought = (value: unknown): boolean => value === true;
 
 /** JSON Schema shared by agent outputs that can report graceful degradation. */
 export const recoveryExplanationJsonSchema = {
@@ -165,9 +180,9 @@ export type ChatBotParameters = {
 export type ChatBotAttemptProfile = {
   purpose: ChatAttemptPurpose;
   /**
-   * Taken only straight after an attempt whose source the build refused as written (see
-   * refusedAsWritten in modes/sverlin/assistant/turn.server.ts), and skipped otherwise: a quick retry for a slip in
-   * the source, before the ladder's slower repairs.
+   * Taken only straight after an attempt whose source the build refused as written (see each
+   * mode's BuildStages, as sverlinBuildStages and htmlBuildStages in its assistant/turn.server.ts),
+   * and skipped otherwise: a quick retry for a slip in the source, before the slower repairs.
    */
   writtenRetry?: true;
   parameters: ChatBotParameters;
@@ -200,6 +215,8 @@ export type SourceArtifactChatOutput = {
   recovery?: RecoveryExplanation;
   /** What the view helpers should propose alternative views of, where they are on. */
   viewHelpers?: ViewHelpersRequest;
+  /** The model flagged the request as unclear (see needsMoreThoughtJsonSchema). */
+  needsMoreThought?: boolean;
 };
 
 /**
@@ -219,6 +236,8 @@ export type CandidateAssistantOutput = {
   reply: GeneratedMessageContent;
   candidates: Array<{ label: string; manifest: unknown }>;
   recovery?: RecoveryExplanation;
+  /** The model flagged the request as unclear (see needsMoreThoughtJsonSchema). */
+  needsMoreThought?: boolean;
 };
 
 export type ChatBotConfig<Project, Output extends object = SourceArtifactChatOutput> = {
@@ -244,6 +263,8 @@ export type ChatbotPrompt = {
   attempt: ChatAttempt;
   parameters: ChatBotParameters;
   responseFormat: ChatResponseFormat;
+  /** Why this first call stepped up from the fast model (ai/turns/struggle.ts), where it did. */
+  escalation?: EscalationReason;
 };
 
 /** Project conversation inputs accepted by a configured chatbot. */

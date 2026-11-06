@@ -36,15 +36,22 @@ import {
   keptVersion,
   plainFailureSummary,
   replyWithRecovery,
-  runAttemptLadder
+  runAttemptLadder,
+  type BuildStages
 } from '$lib/server/ai/turns/attempt-ladder';
+import { HtmlFramesError, type HtmlFramesCode } from '../html-safety.server';
 import {
   appendAssistantResponse,
   resolveAssistantContent,
   validateGeneratedReply,
   validateRecoveryExplanation
 } from '$lib/server/ai/turns/replies';
-import { appendSystemFailure, assistantBotId, errorMessage } from '$lib/server/ai/turns/failures';
+import {
+  appendSystemFailure,
+  assistantBotId,
+  errorMessage,
+  type AttemptFailure
+} from '$lib/server/ai/turns/failures';
 import {
   generationPreparationFailure,
   runPreparedGeneration
@@ -81,6 +88,8 @@ export async function submitCandidateFeedback(
       );
       current = generation.document;
       if (!generation.ok) {
+        // The fast first call flagged the request as unclear: it runs again, stepped up.
+        if (generation.rethink) return { document: current, done: false, rethink: true };
         if (!generation.retried) return { document: current, done: true };
         failureSummaries.push(`Attempt ${attempt}: ${generation.message}`);
         return { document: current, done: false };
@@ -112,7 +121,11 @@ export async function submitCandidateFeedback(
           };
         }
         correction = candidateCorrection([], summary, failureSummaries);
-        return { document: current, done: false };
+        return {
+          document: current,
+          done: false,
+          failure: { source: '', diagnostics: [{ code: candidateMissing, message: summary }] }
+        };
       }
 
       let accepted: AcceptedCandidateTurn;
@@ -154,14 +167,19 @@ export async function submitCandidateFeedback(
           };
         }
         correction = candidateCorrection(generation.result.candidates, cause, failureSummaries);
-        return { document: current, done: false };
+        return {
+          document: current,
+          done: false,
+          failure: candidateFailure(generation.result.candidates, cause, summary)
+        };
       }
       assertCurrentProjectOperationActive();
       return {
         document: await acceptCandidateTurn(current, accepted, operationId, dependencies),
         done: true
       };
-    }
+    },
+    htmlBuildStages
   );
 }
 
@@ -308,3 +326,48 @@ export const runAssistantTurn: AssistantTurn = (
   _count,
   dependencies
 ) => submitCandidateFeedback(document, operationId, selection, dependencies);
+
+/** A repair that returned no candidate where one was asked for: a slip, as a missing algorithm is. */
+const candidateMissing = 'candidate_missing';
+
+/** A failed candidate as the ladder reads it: its manifests, and why the checks refused them. */
+function candidateFailure(
+  candidates: Array<{ label: string; manifest: unknown }>,
+  cause: unknown,
+  message: string
+): AttemptFailure {
+  return {
+    source: JSON.stringify(candidates.map(({ manifest }) => manifest)),
+    diagnostics: [{ ...(cause instanceof HtmlFramesError ? { code: cause.code } : {}), message }]
+  };
+}
+
+/**
+ * The frames' refusals that are slips in the HTML as written, which the model can fix from the
+ * message alone, as Sverlin's source refused as written is (sverlinBuildStages): a manifest of the
+ * wrong shape, labels that repeat, markup the frames may not hold, a frame left empty, or no
+ * candidate. A manifest over the size limit needs a smaller design, not a fix, so it goes to the
+ * slower repairs, as Sverlin's `too_large` does; so does a failure with no code.
+ */
+const writtenCodes: ReadonlySet<string> = new Set<HtmlFramesCode | typeof candidateMissing>([
+  'html_manifest',
+  'html_labels',
+  'html_forbidden',
+  'html_empty',
+  candidateMissing
+]);
+
+/** How HTML's checks sort their refusals, for the attempt ladder (see attempt-ladder.ts BuildStages). */
+export const htmlBuildStages: BuildStages = {
+  stageOf: (code) =>
+    code === undefined
+      ? undefined
+      : writtenCodes.has(code)
+        ? 0
+        : code === 'html_too_large'
+          ? 1
+          : undefined,
+  refusedAsWritten: (failure) =>
+    !!failure?.diagnostics.length &&
+    failure.diagnostics.every(({ code }) => code !== undefined && writtenCodes.has(code))
+};

@@ -47,12 +47,15 @@ asks for. Never emit JavaScript, event handlers, forms, controls, nested frames,
 external URLs, remote resources, @import, or navigation. Treat supplied history
 and artifacts as authoritative. Ordinary conversation returns an empty
 candidates array and preserves the current visualization. Keep reply segments
-brief. Set recovery to null for initial and repair attempts. When
-attemptContext.purpose is repair, correct the unsafe or invalid candidate
-described by the latest correction message. When attemptContext.purpose is
-fallback, preserve the subject and central semantic relationship but reduce
-elements, frames, layout complexity, animation, SVG detail, and decorative
-styling until the manifest is robust. A fallback must return at least one
-complete candidate and a recovery object that explains in concise
-participant-facing language what proved difficult and what was simplified; do
-not include raw diagnostics or implementation jargon.
+brief. Set recovery to null for initial and repair attempts. Set
+needsMoreThought to true only when the participant's request is unclear, or they
+seem to be struggling to get a point across, and a slower, more careful reading
+should come before any answer; the turn then runs again on a model that reasons
+more. Set it to false otherwise. When attemptContext.purpose is repair, correct
+the unsafe or invalid candidate described by the latest correction message. When
+attemptContext.purpose is fallback, preserve the subject and central semantic
+relationship but reduce elements, frames, layout complexity, animation, SVG
+detail, and decorative styling until the manifest is robust. A fallback must
+return at least one complete candidate and a recovery object that explains in
+concise participant-facing language what proved difficult and what was
+simplified; do not include raw diagnostics or implementation jargon.

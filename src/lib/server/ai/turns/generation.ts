@@ -7,6 +7,7 @@ import type { NewProjectEvent } from '$lib/shared/projects/events';
 import type { ChatbotPrompt, ChatbotResult } from '$lib/server/ai/bots/types';
 
 import { logModelCall } from '$lib/server/ai/costs/ai-cost-log';
+import { escalateForFlag } from '$lib/server/ai/turns/struggle';
 import { recordText, sourceSha256 } from '$lib/server/projects/fingerprints';
 import { appendProjectEvents, draftEvent } from '$lib/server/projects/service';
 import type { ProjectCommandDependencies } from '$lib/server/projects/commands';
@@ -18,12 +19,17 @@ import {
   spentUsage
 } from '$lib/server/ai/turns/failures';
 
-/** A model call that failed: the document with its failure recorded, and whether it was retried. */
+/**
+ * A model call that failed: the document with its failure recorded, and whether it was retried; or
+ * a fast first call that flagged the request as unclear, which the turn runs once more stepped up
+ * (`rethink`, see ai/turns/struggle.ts).
+ */
 export type GenerationFailed = {
   ok: false;
   document: ProjectDocument;
   retried: boolean;
   message: string;
+  rethink?: true;
 };
 
 /** A model call's outcome: its result and the event recording it, or its failure. */
@@ -97,7 +103,8 @@ export async function runPreparedGeneration<Output extends object>(
       prompt: recordText(JSON.stringify(options.prompt), 'application/json'),
       promptTemplateSha256: sourceSha256(options.prompt.initialPrompt),
       requestedModel: options.prompt.parameters.model,
-      parameters: { ...options.prompt.parameters }
+      parameters: { ...options.prompt.parameters },
+      ...(options.prompt.escalation ? { escalation: options.prompt.escalation } : {})
     }
   });
   let document = await appendProjectEvents(
@@ -138,8 +145,23 @@ export async function runPreparedGeneration<Output extends object>(
       purpose: options.prompt.attempt.purpose,
       model: result.generation.model ?? options.prompt.parameters.model,
       failed: false,
+      ...(options.prompt.escalation ? { escalation: options.prompt.escalation } : {}),
       ...(result.generation.usage ? { usage: result.generation.usage } : {})
     });
+    // The fast first call flagged the request as unclear: the turn runs it once more stepped up,
+    // its answer recorded above but not acted on.
+    if (
+      options.prompt.attempt.purpose === 'initial' &&
+      (result as { needsMoreThought?: boolean }).needsMoreThought === true &&
+      escalateForFlag()
+    )
+      return {
+        ok: false as const,
+        document,
+        retried: true,
+        rethink: true as const,
+        message: 'The first call flagged the request as unclear; it runs again at a higher effort.'
+      };
     return { ok: true as const, document, result, generationEvent };
   } catch (error) {
     const details = generationErrorDetails(error);
@@ -165,6 +187,7 @@ export async function runPreparedGeneration<Output extends object>(
       purpose: options.prompt.attempt.purpose,
       model: options.prompt.parameters.model,
       failed: true,
+      ...(options.prompt.escalation ? { escalation: options.prompt.escalation } : {}),
       ...(usage ? { usage } : {})
     });
     // A response that cannot be used, incomplete, unparseable, or refused by validation, fails only

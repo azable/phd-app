@@ -9,6 +9,28 @@ import {
   type HtmlFramesManifest
 } from '$lib/shared/presentations';
 
+/**
+ * Why a manifest of HTML frames is refused, by code, so the attempt ladder can tell a slip in the
+ * frames as written from other failures (see htmlBuildStages in assistant/turn.server.ts); the
+ * message is what the model and the developer read.
+ */
+export type HtmlFramesCode =
+  | 'html_manifest'
+  | 'html_too_large'
+  | 'html_labels'
+  | 'html_forbidden'
+  | 'html_empty';
+
+export class HtmlFramesError extends Error {
+  constructor(
+    message: string,
+    readonly code: HtmlFramesCode
+  ) {
+    super(message);
+    this.name = 'HtmlFramesError';
+  }
+}
+
 // Several complete frames need more room than one component; cap sanitizer work and Timeline size.
 const maximumManifestBytes = 512 * 1024;
 const forbiddenMarkup =
@@ -50,13 +72,20 @@ export function validateHtmlFramesManifest(value: unknown): {
 } {
   const parsed = v.safeParse(htmlFramesManifestSchema, value);
   if (!parsed.success)
-    throw new Error(`Invalid HTML frame manifest: ${v.summarize(parsed.issues)}`);
+    throw new HtmlFramesError(
+      `Invalid HTML frame manifest: ${v.summarize(parsed.issues)}`,
+      'html_manifest'
+    );
   const serialized = JSON.stringify(parsed.output);
   if (Buffer.byteLength(serialized, 'utf8') > maximumManifestBytes) {
-    throw new Error(`HTML frame manifest exceeds the ${maximumManifestBytes} byte limit.`);
+    throw new HtmlFramesError(
+      `HTML frame manifest exceeds the ${maximumManifestBytes} byte limit.`,
+      'html_too_large'
+    );
   }
   const labels = parsed.output.frames.map(({ label }) => label);
-  if (new Set(labels).size !== labels.length) throw new Error('HTML frame labels must be unique.');
+  if (new Set(labels).size !== labels.length)
+    throw new HtmlFramesError('HTML frame labels must be unique.', 'html_labels');
 
   return {
     authored: parsed.output,
@@ -77,8 +106,9 @@ export function htmlFrameSourceDocument(html: string): string {
 
 function sanitizeFrame(html: string): string {
   if (forbiddenMarkup.test(html) || remoteCssUrl.test(html) || remoteMarkupUrl.test(html)) {
-    throw new Error(
-      'HTML frames must be static and cannot contain scripts, controls, frames, or remote resources.'
+    throw new HtmlFramesError(
+      'HTML frames must be static and cannot contain scripts, controls, frames, or remote resources.',
+      'html_forbidden'
     );
   }
   const rendered = sanitizeHtml(html, {
@@ -110,6 +140,7 @@ function sanitizeFrame(html: string): string {
     parser: { lowerCaseAttributeNames: false },
     disallowedTagsMode: 'discard'
   });
-  if (!rendered.trim()) throw new Error('HTML frames cannot be empty after validation.');
+  if (!rendered.trim())
+    throw new HtmlFramesError('HTML frames cannot be empty after validation.', 'html_empty');
   return rendered;
 }

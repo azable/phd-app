@@ -46,6 +46,19 @@ import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
  */
 export const writtenRetries = 2;
 
+/**
+ * The model a turn's first call steps up to when the participant seems to be struggling to get a
+ * point across, or the fast first call flags the request as unclear (ai/turns/struggle.ts): GPT-6.1
+ * Sol at medium, the ladder's first Sol repair, the same in both modes. On 2026-11-05's benchmark
+ * a Sol call at medium took about 15 s against Terra's 6 s, for about $0.025 against $0.010
+ * (prices above), and fixed as many failed sources (17 of 20); high would take longer still
+ * (project 7464186f's high fallback, the 91 s xhigh repair dropped above). Only the first call
+ * changes: the repairs after it are the same. A step up because of the Timeline costs no extra
+ * call; one because the model flagged the request adds one, so a turn makes at most seven calls,
+ * and the request ceiling and study deadline still bound it.
+ */
+export const steppedUpParameters = { model: 'gpt-6.1-sol', reasoningEffort: 'medium' } as const;
+
 export function visualizationAttemptProfiles(
   maxOutputTokens: number
 ): readonly [ChatBotAttemptProfile, ...ChatBotAttemptProfile[]] {
