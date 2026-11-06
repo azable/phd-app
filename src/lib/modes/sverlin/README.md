@@ -331,6 +331,17 @@ a varying count of values in one array of its own.
 
 ## Pointers
 
+Draw a pointer as a link from the variable to what it points at: a view of the
+position or reference with `<Link to={this} />`, as
+`<View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>`,
+rendered inside a node where the variable's label should stand: a grid's lane
+under the cells (`<Node row={1} col={i}>{i}</Node>`), a panel beside the
+structure, or a node of a free layout, which then follows the element it
+reaches. The link paints the element while it points there, in its kind's target
+paint, and reaches a dashed ghost one past either end of an array, so nothing
+needs room kept round the elements (see Link). The rest of this section is the
+older form, still working: a pointer view holding `<Pointed>`.
+
 A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a
 pointer: it holds one `<Pointed>`, standing for the element pointed at, drawn
 with its own view, and nodes around it, placed by layout, annotate it: a mark
@@ -1293,8 +1304,13 @@ what is in its way), or `wire` (straight runs turning only at right angles,
 round the boxes, side by side apart); `head`, the mark at each end a link points
 to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
 `diamond`, or `bar`, which starts at `none` where every link of the kind is a
-two-way line and `arrow` otherwise; and `headSize`, 6, 9 (the start), 12, or 16
-pixels. A label's look is its own nodes' kind.
+two-way line and `arrow` otherwise; `headSize`, 6, 9 (the start), 12, or 16
+pixels; and, for a link from a variable (see Link), how it paints the element it
+reaches while it is drawn: `targetFill`, `targetStroke` and `targetColor`, each
+`none` (leaving that paint as it is) or a colour, and `targetStrokeWidth`, a
+line's width; they start as the base's `<Pointed>` paint, and a place sets its
+own, as `Mark.Link:j.targetFill`. Like a pointer's, it is paint only, so no box
+changes size. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -2010,10 +2026,13 @@ lanes below them, `j` reaching −1 before the first cell:
 - A position in a cell placed by it, as `<Node row={2} col={i}>{i}</Node>`,
   draws through the view the design chooses for its type, so a pointer view with
   no `<Pointed>`, as an arrow and a caption, draws a mark in a lane of its own,
-  and slides from cell to cell as the position moves. A position moved by a
-  number, as `{j - 1}`, is a position too, and so is a `{@const}` holding one,
-  so `{@const before = j - 1}` then `<Node row={4} col={before}>{before}</Node>`
-  draws a mark captioned `before` by `{place()}`.
+  and slides from cell to cell as the position moves. With `<Link to={this} />`
+  in that view, the mark is a short arrow to the cell it points at, which it
+  paints, and one past the last cell it reaches a dashed ghost (see Link). A
+  position moved by a number, as `{j - 1}`, is a position too, and so is a
+  `{@const}` holding one, so `{@const before = j - 1}` then
+  `<Node row={4} col={before}>{before}</Node>` draws a mark captioned `before`
+  by `{place()}`.
 - A cell's kind can come from an expression of names written in the source, as
   `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}` on
   `{#each values as v, k}<Node row={1} col={k}>{v}</Node>{/each}`, which shades
@@ -2233,18 +2252,20 @@ participant liked ("keep this layout but …"), vary that kind's `form`,
 `<Link from={edge.from} to={edge.to} />` draws a link between two nodes. Put
 links among the children of the node whose children they join, or in a view
 rendered there, as of an edge, of a node (see Pools and references), or of what
-a labelled expression computed; never in a pointer view, which draws inside the
-element it marks. They take no space; give the node a `layout`, `"free"` for a
-linked structure or `"row"` or `"column"`, unless it holds an array's `{#each}`,
-which runs as the array. Only a free layout places its children by their links;
-in a row, column or grid links are drawn over the children, which stay where
-they would be without them: in a row or column each arcs over ends side by side
-or beside ends one above the other, clear of the boxes, and in a grid each runs
-straight from cell to cell, as a heap's edges (see Grid). The row, column or
-grid keeps room round its children for the largest arc its links draw at any
-step, so its children stay put as links come and go. Each link is selectable, as
-a node is, and its look, how it runs and its heads, is its kind's (see Design),
-never a prop, as `Arrow.Link` for a link in `Arrow`.
+a labelled expression computed, or in a view of a position or reference drawn at
+a variable (a link from a variable, below); never in a pointer view holding
+`<Pointed>`, which draws inside the element it marks. They take no space; give
+the node a `layout`, `"free"` for a linked structure or `"row"` or `"column"`,
+unless it holds an array's `{#each}`, which runs as the array. Only a free
+layout places its children by their links; in a row, column or grid links are
+drawn over the children, which stay where they would be without them: in a row
+or column each arcs over ends side by side or beside ends one above the other,
+clear of the boxes, and in a grid each runs straight from cell to cell, as a
+heap's edges (see Grid). The row, column or grid keeps room round its children
+for the largest arc its links draw at any step, so its children stay put as
+links come and go. Each link is selectable, as a node is, and its look, how it
+runs and its heads, is its kind's (see Design), never a prop, as `Arrow.Link`
+for a link in `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the
@@ -2265,6 +2286,24 @@ never a prop, as `Arrow.Link` for a link in `Arrow`.
   empty corner of a caption wider than the name cell to meet the cell, and
   crosses a pointer's fill round the vertex, so it keeps its place from step to
   step.
+- A link from a variable: `<Link to={this} />`, with no `from`, in a view of a
+  position or a reference, drawn at a variable, a label or a `{@const}` inside a
+  node, with no element of the state around it, as `{i}` in a grid's lane or
+  `<Node kind="Var">{cur}</Node>`. It runs from the node drawing the variable to
+  the element it points at, wherever that element is drawn, whatever layouts
+  hold the two, so it need not sit among the children it joins: the page draws
+  it straight over everything, met at the edges of both boxes, unless a free
+  layout holding both ends lays it out as its own. While it is drawn, its kind's
+  target paint paints that element (see Design), a link written later painting
+  over an earlier one at the same element. A position one past either end of its
+  array reaches a ghost: an empty dashed box one step on from the element at
+  that end, so the link visibly moves off the edge, as a search reporting not
+  found. A variable out of scope draws no link. In a free layout, the node
+  holding such a variable follows what it reaches: it is not placed by the
+  layout but drawn under the child holding that element, centred on it, the
+  layout's gap below, and every child it ever reaches keeps room for it there at
+  every step, so nothing moves as it comes and goes, as a pointer's label keeps
+  its slot.
 
 A link's children are its label, drawn at its middle over the line (on a wire,
 its longest run), the link long enough to hold it and other links bending round
