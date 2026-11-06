@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyedRandom, seededRandom } from './random.server';
+import { seededRandom } from '$lib/shared/random';
+import { keyedRandom } from './random.server';
 
 describe('seeded randomness', () => {
   it('gives neighbouring seeds unrelated draws', () => {

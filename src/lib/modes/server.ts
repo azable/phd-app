@@ -119,11 +119,22 @@ export type ExportSource = (
   target: string
 ) => Promise<ExportedFile | undefined>;
 
+/**
+ * How a mode with a design space names its variables: as the app keeps them and as people and the
+ * model write them, and which are tokens with the prop each holds.
+ */
+export type DesignKeys = {
+  kept(key: string, has?: (key: string) => boolean): string;
+  written(key: string, has?: (key: string) => boolean): string;
+  tokenProp(variable: string): string | undefined;
+};
+
 type ModeBuilders = {
   buildPresentation?: PresentationBuilder;
   buildBatch?: SourceBatchBuilder;
   scenes?: SceneSource;
   exportFile?: ExportSource;
+  designKeys?: DesignKeys;
 };
 
 const modules = import.meta.glob<ModeBuilders>('./*/build.server.ts', {
@@ -135,12 +146,24 @@ export const modeBuilders = Object.fromEntries(
   Object.keys(modeCatalog).map((id) => [id, limited(modules[`./${id}/build.server.ts`])])
 ) as Record<VisualizationMode, ModeBuilders>;
 
+/**
+ * The design keys of the mode that has a design space, for code that reads variants without a
+ * project's mode, as the preference model; keys pass unchanged where no mode has one. Only
+ * Sverlin has a design space: a second would need the project's mode passed instead.
+ */
+export const designKeys: DesignKeys = (() => {
+  const all = Object.values(modules).flatMap(({ designKeys }) => (designKeys ? [designKeys] : []));
+  if (all.length > 1) throw new Error('More than one mode has a design space; pass the mode.');
+  return all[0] ?? { kept: (key) => key, written: (key) => key, tokenProp: () => undefined };
+})();
+
 function limited(builders: ModeBuilders | undefined): ModeBuilders | undefined {
   if (!builders) return undefined;
-  const { buildPresentation, buildBatch, scenes, exportFile } = builders;
+  const { buildPresentation, buildBatch, scenes, exportFile, designKeys } = builders;
   return {
     ...(scenes && { scenes }),
     ...(exportFile && { exportFile }),
+    ...(designKeys && { designKeys }),
     ...(buildPresentation && {
       buildPresentation: (...options: Parameters<PresentationBuilder>) =>
         buildLimit.run(() => buildPresentation(...options))

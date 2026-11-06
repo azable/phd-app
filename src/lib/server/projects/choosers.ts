@@ -5,8 +5,7 @@
  */
 
 import type { AiDesign, SourceBuildFacts } from '$lib/server/chat-bots/project-context';
-import type { BuildRequest } from '$lib/modes/server';
-import { keptKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { designKeys, type BuildRequest } from '$lib/modes/server';
 import type { BrowserBundlePresentation, DesignValues } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 
@@ -92,7 +91,7 @@ export function offeredOptions(
   key: string
 ): AiDesign['options'][string] | undefined {
   const has = (name: string) => design.variables.some(({ variable }) => variable === name);
-  const kept = keptKey(key, has);
+  const kept = designKeys.kept(key, has);
   const found = design.variables.find(({ variable }) => variable === kept);
   if (!found) return undefined;
   return typeof found.options === 'string' ? design.options[found.options] : found.options;

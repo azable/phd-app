@@ -7,8 +7,7 @@
  * context whatever the design's size.
  */
 
-import { isToken, tokenProps } from '$lib/modes/sverlin/library/node/design';
-import { writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { designKeys } from '$lib/modes/server';
 import type { ChoiceFamily } from '$lib/shared/projects/brief';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import {
@@ -33,9 +32,7 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
   if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
   // A token is of the family of its prop, as $accent of colour.
-  const prop = isToken(variable)
-    ? tokenProps[variable]
-    : variable.slice(variable.lastIndexOf('.') + 1);
+  const prop = designKeys.tokenProp(variable) ?? variable.slice(variable.lastIndexOf('.') + 1);
   switch (prop) {
     case 'form':
     case 'direction':
@@ -250,7 +247,7 @@ export function preferenceSummary(
   if (!choices.length) return undefined;
   // The variables as the assistant writes them (see design-keys.ts), as {Int} for views.Int.
   const known = new Set(design.variables.map(({ variable }) => variable));
-  const written = (variable: string) => writtenKey(variable, (key) => known.has(key));
+  const written = (variable: string) => designKeys.written(variable, (key) => known.has(key));
   const showFirst = riskiest(standing, design, steering);
   const answered = new Set(
     evidence.duels.filter(({ weight }) => weight === 1).map(({ eventId }) => eventId)

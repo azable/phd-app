@@ -23,6 +23,9 @@ import * as v from 'valibot';
 import type { AiProjectContext } from '$lib/server/chat-bots/project-context';
 
 import assistant from './assistant.md?raw';
+
+/** How a recorded decision's design values are read (see ../../assistants.server.ts). */
+export { readDesignPatch as readDecisionValues } from './design-patch.server';
 import guide from '../README.md?raw';
 import { listingMapsOf, recordedTrace } from '../compile.server';
 

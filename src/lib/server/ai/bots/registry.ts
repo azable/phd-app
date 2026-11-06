@@ -4,6 +4,7 @@ import { openAIAdapter } from '$lib/server/ai/providers/openai';
 import { InvalidChatbotResponseError, type ChatAdapter } from '$lib/server/ai/providers/types';
 import { assistantMode, type AssistantId } from '$lib/shared/assistants';
 import type { ParticipantIntakeStepId } from '$lib/shared/projects/events';
+import { modeAssistants } from '$lib/modes/assistants.server';
 import { modeCatalog } from '$lib/modes/catalog';
 
 import {
@@ -72,17 +73,11 @@ export function createChatbot<Project, Output extends object>(
 }
 
 type ModeOutput = SourceArtifactChatOutput | CandidateAssistantOutput;
-const modules = import.meta.glob<{ default: ChatBotConfig<AiProjectContext, ModeOutput> }>(
-  '../../../modes/*/assistant/bot.server.ts',
-  { eager: true }
-);
 const modeChatbots = Object.fromEntries(
-  Object.keys(modeCatalog).map((mode) => {
-    const config = modules[`../../../modes/${mode}/assistant/bot.server.ts`]?.default;
-    if (!config || config.id !== modeCatalog[mode as keyof typeof modeCatalog].assistantId)
-      throw new Error(`Visualization mode ${mode} needs its own matching assistant.`);
-    return [mode, createChatbot(config, openAIAdapter)];
-  })
+  Object.entries(modeAssistants).map(([mode, { default: config }]) => [
+    mode,
+    createChatbot(config, openAIAdapter)
+  ])
 ) as Record<keyof typeof modeCatalog, Chatbot<AiProjectContext, ModeOutput>>;
 
 const intakeClassifier = createChatbot(participantIntakeClassifier, openAIAdapter);
