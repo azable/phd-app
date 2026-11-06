@@ -1,13 +1,18 @@
 /**
  * One operation's model calls and builds on a shared time axis, for the developer view: each
- * attempt of the ladder, each build it led to, and the view helpers' parallel calls, read from the
- * recorded events, so a turn's repairs and failures read at a glance.
+ * attempt of the ladder, each build it led to, and the helper round's calls (helpers, scoring,
+ * choosing), read from the recorded events, so a turn's agents, repairs and failures read at a
+ * glance. It is the developer view's one item for an operation's calls: each call's bar opens its
+ * request.
  *
  * @packageDocumentation
  */
 
+import { callCost, costText, costTotal, type AiCall } from '$lib/shared/projects/ai-costs';
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import { escalationText } from '$lib/shared/projects/events/ai-generation';
+import { backgroundOperationKinds } from '$lib/shared/projects/events/operation-lifecycle';
+import { isSverlinPresentation } from '$lib/shared/presentations';
 
 import { agentRequests } from './agent-requests';
 
@@ -16,7 +21,10 @@ export type ChartOutcome = 'ok' | 'failed' | 'rejected' | 'incomplete' | 'pendin
 /** One bar: a model call or a build, from its start to its end, in ms from the chart's start. */
 export type ChartBar = {
   id: string;
-  kind: 'call' | 'helper' | 'build';
+  /** The reply's ladder, a helper round's agents by their part, or a build. */
+  kind: 'call' | 'helper' | 'scoring' | 'choosing' | 'build';
+  /** The model request a call's bar stands for, by its event id; none for a build. */
+  requestId?: number;
   label: string;
   /** What a click shows: the error, the tokens, the model. */
   detail: string;
@@ -29,12 +37,20 @@ export type ChartBar = {
 export type ChartMark = { id: string; at: number; label: string };
 
 export type TurnChart = {
+  /** What ran: the operation's kind, as assistant-turn or prepare-answers. */
+  operation?: string;
+  /** Whether the system ran it in the background, which participant work cancels. */
+  background: boolean;
+  /** Its calls, tokens and cost in a line, where it called a model. */
+  cost?: string;
   /** Its length in ms, from the first bar's start to the last bar's or mark's end. */
   span: number;
   bars: ChartBar[];
   marks: ChartMark[];
   /** The turn the app started by itself once the helpers' candidates arrived. */
   followUp: boolean;
+  /** The warnings the presentations it built kept, each once, as the assistant is told them. */
+  warnings: string[];
 };
 
 /** One operation's chart, or none where it called no model and built nothing. */
@@ -44,6 +60,7 @@ export function turnChart(
 ): TurnChart | undefined {
   const time = (event: ProjectEvent) => Date.parse(event.createdAt);
   const bars: (Omit<ChartBar, 'start' | 'end'> & { from: number; to: number })[] = [];
+  const calls: AiCall[] = [];
 
   for (const request of agentRequests(related)) {
     const { attempt, purpose, parameters } = request.request.payload;
@@ -53,24 +70,36 @@ export function turnChart(
     // Helpers record their request once they are done, so a call runs back from its outcome.
     const to = outcome ? time(outcome) : time(request.request);
     const from = outcome ? to - outcome.payload.durationMs : to;
-    const usage = outcome?.type === 'ai.generation-succeeded' ? (outcome.payload.usage ?? {}) : {};
+    const usage = outcome?.payload.usage ?? {};
     const result = callResult(request.actions, outcome);
     const seconds = outcome ? `${Math.round(outcome.payload.durationMs / 1000)} s` : '…';
+    const cost = outcome?.payload.usage ? callCost(model, usage) : undefined;
+    if (outcome)
+      calls.push({
+        requestEventId: request.request.id,
+        operationId: request.request.operationId,
+        attempt,
+        purpose,
+        model,
+        failed: outcome.type === 'ai.generation-failed',
+        usage,
+        ...(cost !== undefined ? { costUsd: cost } : {})
+      });
+    // The pipeline's calls after the reply, its helpers, scoring and choosing, run beside it.
+    const agent = purpose === 'helper' || purpose === 'scoring' || purpose === 'choosing';
     bars.push({
       id: `call-${request.request.id}`,
-      // The pipeline's calls after the reply, its helpers, scoring and choosing, run beside it.
-      kind:
-        purpose === 'helper' || purpose === 'scoring' || purpose === 'choosing' ? 'helper' : 'call',
-      label:
-        purpose === 'helper' || purpose === 'scoring' || purpose === 'choosing'
-          ? `${purpose} ${shortModel(model)} ${seconds}`
-          : `${attempt} ${purpose} ${effort} ${seconds} → ${result.label}`,
+      kind: agent ? purpose : 'call',
+      requestId: request.request.id,
+      label: agent
+        ? `${purpose} ${shortModel(model)} ${seconds}${result.outcome === 'ok' ? '' : ` → ${result.label}`}`
+        : `${attempt} ${purpose} ${effort} ${seconds} → ${result.label}`,
       detail: [
-        `${shortModel(model)}${effort ? ` · ${effort}` : ''}`,
+        `attempt ${attempt} · ${purpose} · ${shortModel(model)}${effort ? ` · ${effort}` : ''}`,
         request.request.payload.escalation
           ? escalationText(request.request.payload.escalation)
           : '',
-        tokensText(usage),
+        tokensText(usage, cost),
         result.detail
       ]
         .filter(Boolean)
@@ -132,16 +161,36 @@ export function turnChart(
   if (!bars.length) return undefined;
 
   const origin = Math.min(...bars.map(({ from }) => from), ...marks.map(({ when }) => when));
+  const accepted = related.find((event) => event.type === 'operation.accepted');
+  const operation = accepted?.type === 'operation.accepted' ? accepted.payload.kind : undefined;
   const end = Math.max(...bars.map(({ to }) => to), ...marks.map(({ when }) => when));
   const candidates = new Set(
     all.filter(({ type }) => type === 'visualization.view-candidates').map(({ id }) => id)
   );
+  const warnings = new Set(
+    related.flatMap((event) =>
+      event.type === 'visualization.presented' && isSverlinPresentation(event.payload.presentation)
+        ? (event.payload.presentation.warnings ?? [])
+        : []
+    )
+  );
   return {
+    ...(operation ? { operation } : {}),
+    background: operation !== undefined && backgroundOperationKinds.has(operation),
+    ...(calls.length ? { cost: costText(costTotal(calls)) } : {}),
     span: Math.max(end - origin, 1),
     bars: bars
-      .map(({ from, to, ...bar }) => ({ ...bar, start: from - origin, end: to - origin }))
+      .map(({ from, to, ...bar }) => ({
+        ...bar,
+        start: from - origin,
+        end: to - origin,
+        detail: [`at ${inSeconds(from - origin)} for ${inSeconds(to - from)}`, bar.detail]
+          .filter(Boolean)
+          .join('\n')
+      }))
       .toSorted((a, b) => a.start - b.start),
     marks: marks.map(({ when, ...mark }) => ({ ...mark, at: when - origin })),
+    warnings: [...warnings],
     followUp: related.some(
       (event) =>
         event.type === 'assistant.turn-started' &&
@@ -181,17 +230,23 @@ function callResult(
   return { outcome: 'ok', label: 'ok', detail: '' };
 }
 
-/** The tokens a call used, and its cost where recorded. */
-function tokensText(usage: Record<string, number>): string {
+/** The tokens a call used, and its cost where its model has a price. */
+function tokensText(usage: Record<string, number>, cost: number | undefined): string {
   const parts = [
     usage.inputTokens !== undefined && `${usage.inputTokens.toLocaleString('en')} in`,
-    usage.cachedTokens !== undefined && `${usage.cachedTokens.toLocaleString('en')} cached`,
+    usage.cachedInputTokens !== undefined &&
+      `${usage.cachedInputTokens.toLocaleString('en')} cached`,
     usage.outputTokens !== undefined && `${usage.outputTokens.toLocaleString('en')} out`,
     usage.reasoningTokens !== undefined &&
       `${usage.reasoningTokens.toLocaleString('en')} reasoning`,
-    usage.costUsd !== undefined && `$${usage.costUsd.toFixed(4)}`
+    cost !== undefined && `${cost.toFixed(4)}`
   ].filter(Boolean);
   return parts.join(' · ');
+}
+
+/** A length of time in seconds, to a tenth. */
+function inSeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
 }
 
 /** A model's name without its family prefix: gpt-5.6-sol as sol. */

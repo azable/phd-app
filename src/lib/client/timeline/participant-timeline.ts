@@ -18,7 +18,6 @@ import {
 
 import { projectQuestions, type ProjectQuestion } from '$lib/shared/projects/questions';
 
-import { agentRequests, type AgentRequest } from './agent-requests';
 import { turnChart, type TurnChart } from './turn-chart';
 
 /** A side of an answered comparison: the participant's choice (both when either is fine) or not. */
@@ -97,12 +96,13 @@ export type ParticipantTimelineItem =
       /** The source whose build failed on its code, where one did: the assistant's or a save's. */
       failed?: { source: string; by: 'assistant' | 'save' };
     }
-  /** An operation's model calls and builds on one time axis, shown for audit in developer view. */
+  /**
+   * An operation's model calls and builds on one time axis, shown for audit in developer view: its
+   * one item for them, each call's bar opening its request.
+   */
   | { id: string; kind: 'chart'; value: TurnChart }
-  /** A request to a model, shown for audit in developer view. */
-  | { id: string; kind: 'request'; value: AgentRequest }
-  /** How a presentation loaded in a viewer's browser, shown for audit in developer view. */
-  | { id: string; kind: 'load'; event: ProjectEventOf<'visualization.loaded'> };
+  /** How presentations loaded in viewers' browsers, one after another, for audit in developer view. */
+  | { id: string; kind: 'loads'; events: ProjectEventOf<'visualization.loaded'>[] };
 
 type Turn = Extract<ParticipantTimelineItem, { kind: 'turn' }>;
 
@@ -284,12 +284,9 @@ export function participantTimeline(
       const chart = options.audit ? turnChart(related, events) : undefined;
       if (chart) items.push({ id: `chart-${related[0].id}`, kind: 'chart', value: chart });
       if (options.audit)
-        for (const value of agentRequests(related))
-          items.push({ id: `request-${value.request.id}`, kind: 'request', value });
-      if (options.audit)
         for (const event of related)
           if (event.type === 'visualization.loaded')
-            items.push({ id: `load-${event.id}`, kind: 'load', event });
+            items.push({ id: `load-${event.id}`, kind: 'loads', events: [event] });
       items.push(...turnItems(related));
       // A note is about the source presented before it.
       for (const event of related) {
@@ -321,7 +318,20 @@ export function participantTimeline(
         });
       }
       return items;
-    });
+    })
+    .reduce(withLoadsTogether, []);
+}
+
+/** The items, each load report after a run of them joining the run's item. */
+function withLoadsTogether(
+  items: ParticipantTimelineItem[],
+  item: ParticipantTimelineItem
+): ParticipantTimelineItem[] {
+  const last = items.at(-1);
+  if (item.kind === 'loads' && last?.kind === 'loads')
+    items[items.length - 1] = { ...last, events: [...last.events, ...item.events] };
+  else items.push(item);
+  return items;
 }
 
 /**

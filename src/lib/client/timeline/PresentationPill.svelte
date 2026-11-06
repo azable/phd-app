@@ -29,6 +29,8 @@
     sourceShown?: boolean;
     /** Add it to the feedback; absent where the feedback cannot change. */
     onAdd?: () => void;
+    /** The warnings its build kept, shown as a mark beside it, as in developer view. */
+    warnings?: readonly string[];
   };
 
   let {
@@ -40,7 +42,8 @@
     onView,
     onSource,
     sourceShown = false,
-    onAdd
+    onAdd,
+    warnings = []
   }: Props = $props();
   const tooltip = $derived(
     `${summary ? `${summary.replaceAll('`', '')}\n` : ''}View; Shift-click to compare`
@@ -66,6 +69,23 @@
   >
     <CandidateIdPill {...candidate} title={tooltip} />
   </button>
+  {#if warnings.length}
+    <!-- The warnings its build kept, for the developer: a mark beside it, the list on choosing. -->
+    <details class="relative ml-0.5 inline-block align-middle">
+      <summary
+        class="cursor-pointer list-none rounded px-1 font-mono text-xs leading-5 text-amber-700 hover:bg-amber-500/15 dark:text-amber-400"
+        aria-label={`${warnings.length} warnings in ${name}`}
+        title={warnings.join('\n')}
+      >
+        ⚠{warnings.length}
+      </summary>
+      <ul
+        class="absolute top-full left-0 z-30 mt-1 w-80 list-disc rounded-md border bg-popover py-1.5 pr-2 pl-6 text-xs break-words shadow-md"
+      >
+        {#each warnings as warning, index (index)}<li>{warning}</li>{/each}
+      </ul>
+    </details>
+  {/if}
   {#if candidate.values}
     <!-- Above the pill, out of the text's way; its padding bridges the gap so hover reaches it. -->
     <span
