@@ -120,6 +120,17 @@ layout, a view, or a node with a `kind`.
   own, as `<Node kind="Caption">Find the target</Node>`. Blocks in a node with
   no `layout` and no words, as `<Node><Goal /><Cells /></Node>`, wrap against
   each other with no gap, and the build warns: give it a layout.
+- A node shows data with `value=`, as `<Node value={this} />`: the app knows it
+  is a value of its type, so it shows the type's unit, is selected as that
+  value, can be styled at its place or for a value of its data (see Places), and
+  is followed from step to step. Words written in a node are the author's text,
+  as a caption or ∞ for a cost not yet known. A node with no `layout` holds one
+  block, its value or its words with what their line holds, centred in its box
+  (or as `align` says, where its kind has one), so a box larger than what it
+  holds (a slot shared with a larger value, as a union's members share one, or a
+  stack's child, as large as the largest) holds it in its middle. Its words keep
+  the largest size they reach at any step, so words that change do not move what
+  is set in their line.
 - `{@const name = expression}`, as the first child of the nearest component or
   block, names a value used more than once or too long to read inline.
 - Write text in the participant's words about what the algorithm does, never a
@@ -273,7 +284,11 @@ index, is text, and a value shown as plain text is a node's value,
 `<Node value={key} />`. A union's value is drawn by the view of the member it
 holds, as a `Dist` holding `'none'` by a view of `None`, so a union has no view
 of its own; one member drawn as a pointer, as a position beside `'none'`, marks
-where the value points. Name views after how they draw, as `IntCell` or
+where the value points. A union is one variable, so its members start with one
+look: where a member's view draws a value, as `<Node value={this} />`, a
+member's view of words, as `<Node>∞</Node>` for a cost not yet known, starts
+with a value's look too, a box like the numbers it stands beside; the design can
+still give it a look of its own. Name views after how they draw, as `IntCell` or
 `IntTally`. Which view draws a value is the variant's, so a view named as its
 type (`<View of="Int" name="Int">`) and a value whose type no view draws are
 errors; to draw one value with a view of its own, choose it for its place (see

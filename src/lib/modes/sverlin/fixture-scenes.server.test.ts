@@ -12,6 +12,12 @@
  *   names only a moment of the run (the boxes are as they were).
  * - links/*: added, each a fixture above with its pointers drawn as links from variables (see
  *   pointer-links.server.test.ts); no other fixture's scenes changed.
+ * - 27 fixtures: a node's words are one block centred in its box, as a value is: words sharing a
+ *   slot with longer ones ("seen" beside "unseen", up to 16 px), a stack's sentences (a status
+ *   line, up to 214 px), and sentences holding values (those values with them); the rest move by
+ *   under 1 px, from the block's rounding.
+ * - replay/ucs-ten: a union's members start with one look, so ∞ (UnknownCost) starts boxed like the
+ *   costs it stands beside (CostValue).
  */
 
 import { createHash } from 'node:crypto';

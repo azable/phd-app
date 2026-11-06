@@ -141,6 +141,12 @@ function sizer(options: ReserveOptions) {
         if (box) kinds.set(element, { kind: 'boxed', size: box });
         else if (!insideBox && id) kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
         inside ||= box !== undefined;
+      } else if (classes.includes('words') && element.attributes['data-sv-words']) {
+        // A node's words keep the largest size they reach, even inside a typed component's box,
+        // so the node's alignment places one block and words that change from step to step do
+        // not move what is set in their line (see the words in Node.svelte).
+        const words = `w:${element.attributes['data-sv-words']}`;
+        kinds.set(element, { kind: 'reserved', key: words, id: words });
       } else if (classes.includes('sv-chain') && !insideBox && id)
         kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
       else if (classes.includes('sv-grid') && element.attributes['data-sv-grid']) {
@@ -718,8 +724,12 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
     // inside them need at any step, which they are sized with.
     for (const key of keys.filter((each) => each.startsWith('n:')))
       for (const { at, element } of instances.get(key) ?? []) model.keepRooms(at, element);
-    for (const key of keys.filter((each) => each.startsWith('n:'))) {
-      const id = key.slice(2);
+    // A node's words before the node, which is sized with them.
+    for (const key of [
+      ...keys.filter((each) => each.startsWith('w:')),
+      ...keys.filter((each) => each.startsWith('n:'))
+    ]) {
+      const id = key.startsWith('w:') ? key : key.slice(2);
       for (const { at, element } of instances.get(key) ?? []) {
         const { width, height } = model.sizeAlone(at, element);
         const kept = memory.reserved.get(id);
@@ -870,7 +880,9 @@ export function describeDrawn(
     ...options,
     memory: {
       ...memory,
-      reserved: new Map([...memory.reserved].filter(([id]) => nodes.has(id))),
+      reserved: new Map(
+        [...memory.reserved].filter(([id]) => nodes.has(id.startsWith('w:') ? id.slice(2) : id))
+      ),
       components: new Map([...memory.components].filter(([name]) => components.has(name)))
     }
   });

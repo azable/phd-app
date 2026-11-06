@@ -452,6 +452,11 @@
     if (!memory || memory.measuring || insideBox || !id) return undefined;
     return memory.reserved.get(id);
   });
+  // Its words' largest size at any step (see model/reserve.ts), kept inside a typed component's box
+  // too, so words that change keep one block and what their line holds stays put.
+  const wordsKept = untrack(() =>
+    !memory || memory.measuring || !id ? undefined : memory.reserved.get(`w:${id}`)
+  );
   const leastOf = (scale: string | undefined, pixels: number | undefined) =>
     pixels === undefined ? scale : scale ? `max(${scale}, ${pixels}px)` : `${pixels}px`;
   // A pointer's transforms move and scale its whole drawing, the marks round the element with it:
@@ -942,6 +947,10 @@
   // Free layouts are placed by constraint layout (see Arranged); rows and columns are CSS grids,
   // and their links never move their children: they are drawn over them (see LinkOverlay).
   const free = $derived(arrangement === 'free');
+  // A node with no layout holding a value, words, or links of a field is a cell: what it holds is
+  // one box placed in its own by its alignment, centred unless its kind says otherwise, so a box
+  // larger than its content (a slot shared with a larger value, as a union's) holds it alike.
+  const holdsOne = $derived(__field || (!arrangement && subgrid === undefined));
   const overlaid = $derived(
     __links && (arrangement === 'row' || arrangement === 'column' || arrangement === 'grid')
       ? arrangement
@@ -991,8 +1000,7 @@
     data-sv-fill-style={fillStyle?.style}
     data-sv-decoration={decoration ? look('decoration') : undefined}
     data-sv-place={places.length ? places.join(' ') : undefined}
-    class:cell={(!arrangement && !children && !__text) || __field}
-    class:text={__text}
+    class:cell={holdsOne}
     class:math={__math !== undefined}
     style:font-size={measured('textSize', 'px')}
     style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
@@ -1035,8 +1043,8 @@
     style:grid-template-rows={subgrid === 0 ? 'subgrid' : undefined}
     style:column-gap={subgrid === 1 ? `${gap}em` : undefined}
     style:row-gap={subgrid === 0 ? `${gap}em` : undefined}
-    style:align-items={subgrid !== undefined ? alignment : undefined}
-    style:justify-items={subgrid !== undefined ? alignment : undefined}
+    style:align-items={subgrid !== undefined || holdsOne ? alignment : undefined}
+    style:justify-items={subgrid !== undefined || holdsOne ? alignment : undefined}
   >
     {#if subgrid !== undefined}
       <!-- A subgrid's items are its grid's cells, placed on its tracks (see subgrid). -->
@@ -1128,7 +1136,16 @@
       >
       <!-- eslint-enable svelte/no-at-html-tags -->
     {:else if children}
-      {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}{@render children()}
+      <!-- Words, with any views set in their line, are one box in the cell, as a value is. -->
+      <div
+        class="words"
+        class:text={__text}
+        data-sv-words={id}
+        style:min-width={wordsKept ? `${wordsKept.width}px` : undefined}
+        style:min-height={wordsKept ? `${wordsKept.height}px` : undefined}
+      >
+        {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}{@render children()}
+      </div>
     {:else if value !== undefined}
       <!-- ∅ shows a value that is not there yet, such as a variable read before its declaration. -->
       {#if icon}<span class="icon" aria-hidden="true">{icon}&nbsp;</span>{/if}<span
