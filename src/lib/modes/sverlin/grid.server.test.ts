@@ -219,12 +219,12 @@ describe('kinds from expressions', () => {
     expect(atJ?.colours?.fill).toBe('amber-100');
   });
 
-  it('draws every cell with the layout’s own kind where a variable its kind reads is absent', async () => {
-    const { steps } = await drawnSteps(kinded);
-    // At :before, i and j do not exist yet: the cells still show, none at j or sorted.
+  it('chooses a kind with each variable that is absent as undefined, still drawing the node', async () => {
+    const { steps } = await drawnSteps(kinded.replace(': undefined}', ": 'Cell'}"));
+    // At :before, i and j do not exist yet: k === j and k < i are false, so every cell is a Cell.
     const before = steps[0].nodes;
     expect(before.filter((node) => node.kind === 'IntCell')).toHaveLength(5);
-    expect(before.filter((node) => /^Main\.(AtJ|Sorted)$/u.test(node.kind ?? ''))).toEqual([]);
+    expect(before.filter((node) => node.kind === 'Main.Cell')).toHaveLength(5);
     expect(steps[1].nodes.some((node) => node.kind === 'Main.AtJ')).toBe(true);
   });
 

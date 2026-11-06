@@ -145,8 +145,12 @@
     flow?: 'x' | 'y';
     /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
     __view?: string;
-    /** Internal: set by the compiler on a node whose kind is an expression: the kind around it and the variables the expression reads. */
-    __kindOf?: { base: string; reads: readonly string[] };
+    /** Internal: set by the compiler on a node whose kind is an expression: the variables it reads, their values, and the expression over them. */
+    __kindOf?: {
+      reads: readonly string[];
+      values: readonly unknown[];
+      choose: (...values: unknown[]) => string;
+    };
     /**
      * Internal: the kind of the pointer drawing this node again, and whether it is at it: its paint
      * shows only where it is, and its other props hold in every slot, so slots keep one size.
@@ -201,9 +205,16 @@
   } = $props();
 
   const types = typeContext();
-  // Where a variable its kind expression reads is absent, the expression read a stand-in.
+  // Where a variable its kind expression reads is absent, the expression read a stand-in: it is
+  // chosen again with that variable undefined.
   const __view = $derived(
-    __kindOf?.reads.some((name) => types?.absent(name)) ? __kindOf.base : chosenView
+    __kindOf?.reads.some((name) => types?.absent(name))
+      ? __kindOf.choose(
+          ...__kindOf.values.map((value, n) =>
+            types?.absent(__kindOf.reads[n]) ? undefined : value
+          )
+        )
+      : chosenView
   );
   // This node's look: the variant's values for its kind, or for a pointer drawing it again.
   const design = designContext();

@@ -1189,7 +1189,8 @@ written in the source, or `undefined` for the view's or layout's own kind, as
 `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}`: the node takes the kind
 its expression gives at each step, so one node, not an `{#if}` doubling it,
 marks a cell; at a step where a variable the expression reads does not exist, as
-`j` at a `:before`, the node keeps its own kind and is still drawn. The nodes
+`j` at a `:before`, the node is still drawn and the expression reads that
+variable as `undefined`, so `k === j ? 'AtJ' : 'Cell'` gives `'Cell'`. The nodes
 inside it keep the kind around it, and a kind built from text, as
 `kind={'At' + name}`, is refused. Nodes of one view or layout naming the same
 kind are one kind, and it is named apart from every view and layout. Name a kind
