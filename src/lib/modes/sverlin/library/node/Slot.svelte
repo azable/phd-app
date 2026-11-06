@@ -17,6 +17,7 @@
     copyContext,
     elementOf,
     leftOutContext,
+    placeContext,
     movingIdentity,
     provideCopy,
     providePlace,
@@ -57,8 +58,19 @@
     children?: Snippet;
   } = $props();
   const leftOut = untrack(() => site !== undefined && (leftOutContext()?.has(site) ?? false));
-  untrack(() => providePlace(place));
-  untrack(() => provideRenderPlace(place && !place.within ? place.at : undefined));
+  // A component passing its own value on, as a union's view its member's (see unionViews), stays at
+  // the place it is drawn at: place() there names that place, as prev, not this, and its kinds take
+  // that place's values; the member's view is still the one chosen for it.
+  const enclosingPlace = placeContext();
+  const passingOn = untrack(() => inherit && place?.at === ':this' && enclosingPlace?.at);
+  untrack(() =>
+    providePlace(
+      passingOn && place && enclosingPlace
+        ? { ...place, within: enclosingPlace.within, at: enclosingPlace.at }
+        : place
+    )
+  );
+  if (!passingOn) untrack(() => provideRenderPlace(place && !place.within ? place.at : undefined));
 
   // Each step mounts afresh, so the props are read once. A hidden copy names no element.
   const types = typeContext();

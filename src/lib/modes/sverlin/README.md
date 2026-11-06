@@ -411,12 +411,14 @@ pointer that marks nothing at any step.
   the participant's words, as `:lo.label` "low" or
   `:@visit.look.neighbour.label` "next to visit", any text of up to 24
   characters, which `place()` gives instead. `place()` is written in any view,
-  as a mark drawn in a grid cell (see Grid). An expression with no name of its
-  own, as `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as
-  written, and the design cannot label it; name it with `{@const}` to label it.
-  A name written into a view, as `i` under the mark, is right only where the
-  variant chooses that view for that place, and a randomised variant can choose
-  it elsewhere; write `{place()}` instead.
+  as a mark drawn in a grid cell (see Grid), and in a union member's view names
+  the place the union's value is drawn at, as `prev` for `{prev}` holding a
+  `Next = union(NodeRef, End)`. An expression with no name of its own, as
+  `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as written, and
+  the design cannot label it; name it with `{@const}` to label it. A name
+  written into a view, as `i` under the mark, is right only where the variant
+  chooses that view for that place, and a randomised variant can choose it
+  elsewhere; write `{place()}` instead.
 - A pointer view's layout places its marks round the element: a column puts them
   under it, which suits a row of cells. For an array drawn in a column, give the
   type a second pointer view whose marks run across, as
