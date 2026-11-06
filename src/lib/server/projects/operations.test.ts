@@ -404,6 +404,40 @@ describe('ProjectOperationExecutor', () => {
     }
   });
 
+  it('completes a turn whose model call failed only after its reply, in its helper round', async () => {
+    const repository = new MemoryProjectRepository();
+    const projectId = randomUUID();
+    const operationId = randomUUID();
+    await repository.create(rootDocument(projectId, randomUUID()), 'owner');
+    const executor = new ProjectOperationExecutor(
+      repository,
+      { acquire: async () => ({ release: async () => undefined }) },
+      async ({ projectId: id, expectedHead, operationId: correlation }) => {
+        const appended = await repository.append(id, expectedHead, [
+          {
+            type: 'assistant.responded' as const,
+            actor: { kind: 'assistant' as const, botId: 'sverlin-assistant' },
+            operationId: correlation,
+            createdAt: '2026-08-30T00:00:01.000Z',
+            payload: { content: [{ type: 'markdown' as const, text: 'Noted.' }], inReplyTo: [] }
+          },
+          { ...aiFailure('provider'), operationId: correlation }
+        ]);
+        return { document: appended.document, appendedEvents: appended.events };
+      }
+    );
+    await executor.accept({
+      projectId,
+      operationId,
+      expectedHead: 1,
+      command: commandForFailureCase('assistant-turn', operationId)
+    });
+    await terminal(repository, projectId, operationId);
+    expect(
+      projectOperation(await repository.load(projectId), operationId)?.terminalEvent
+    ).toMatchObject({ type: 'operation.completed' });
+  });
+
   it('uses the sanitized system notice for a recorded build failure', async () => {
     const repository = new MemoryProjectRepository();
     const projectId = randomUUID();

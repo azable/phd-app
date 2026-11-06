@@ -904,7 +904,12 @@ function terminalFailureFor(
 ): { failureKind: 'domain' | 'infrastructure' | 'cancelled'; message: string } | undefined {
   if (kind === 'rename' || kind === 'advance-presentations' || kind === 'report-runtime-error')
     return undefined;
-  const outcome = events.findLast((event) => {
+  // A model call that fails after the turn's reply belongs to the helper round that runs after it
+  // (a helper, scoring or choosing call), which is recorded and skipped, never the turn's outcome:
+  // project 2c3573a3's follow-up failed on a scoring call's 503 after it had replied.
+  const replied = events.findLastIndex((event) => event.type === 'assistant.responded');
+  const outcome = events.findLast((event, index) => {
+    if (event.type === 'ai.generation-failed' && replied >= 0 && index > replied) return false;
     if (kind === 'feedback' || kind === 'prefer' || kind === 'assistant-turn') {
       return (
         event.type === 'assistant.responded' ||
@@ -924,7 +929,9 @@ function terminalFailureFor(
   const failure =
     outcome.type === 'system.notified'
       ? (events.findLast(
-          (event) => event.type === 'ai.generation-failed' || event.type === 'build.failed'
+          (event, index) =>
+            (event.type === 'ai.generation-failed' && (replied < 0 || index < replied)) ||
+            event.type === 'build.failed'
         ) ?? outcome)
       : outcome;
   if (failure.type === 'ai.generation-failed') {
