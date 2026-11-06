@@ -9,6 +9,9 @@ import { preferenceSummary } from '$lib/server/projects/preference-summary';
 import { layoutBlock } from '$lib/modes/sverlin/assistant/view-helpers.server';
 import { projectBrief } from '$lib/shared/projects/brief';
 import type { ProjectDocument } from '$lib/shared/projects/model';
+import { projectQuestions } from '$lib/shared/projects/questions';
+import type { ProjectEventOf } from '$lib/shared/projects/events';
+import { helperPipeline, type HelperPipelineConfig } from '$lib/server/ai/bots/helper-pipeline';
 
 /** How many proposals that did not build or read get one retry a round (see attempt-profiles.ts). */
 export const viewHelperCalls = 3;
@@ -33,8 +36,61 @@ export const candidatesGiven = 5;
  */
 export const viewHelperTimeoutMs = 30_000;
 
-const note =
-  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit. To try a new representation, or parts that must change together, set viewHelpers.skeleton instead: the whole source with <Hole name="…" kind="view|layout|case|algorithm|any" task="…" /> in place of each part to try (of="Type" or of="Layout" on a view or layout that replaces one, and group="…" on holes that must suit each other, as a layout and its input), with constraints the app checks, as "at most 30 steps", "every label runs", "no crossings" or "text at least 10 px". Each candidate then carries its fills by hole, the app’s facts, a score from pictures where they were judged, and, for a combination, why the designing model put its fills together; offer one by writing its fills into the source with edit. status says whether and when they have run in this project: never say they ran, or proposed nothing, where it says no round has run.';
+const firstRound = {
+  before:
+    'After a first version they run on its main type, or on the layout drawing its graph or tree;',
+  flow: 'After a first version they try whole pictures, one hole in place of its views and layouts, and their candidates come back as the comparison your first reply leaves out;'
+};
+
+const note = (flow: boolean) =>
+  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. ' +
+  (flow ? firstRound.flow : firstRound.before) +
+  ' otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit. To try a new representation, or parts that must change together, set viewHelpers.skeleton instead: the whole source with <Hole name="…" kind="view|layout|case|algorithm|any" task="…" /> in place of each part to try (of="Type" or of="Layout" on a view or layout that replaces one, and group="…" on holes that must suit each other, as a layout and its input), with constraints the app checks, as "at most 30 steps", "every label runs", "no crossings" or "text at least 10 px". Each candidate then carries its fills by hole, the app’s facts, a score from pictures where they were judged, and, for a combination, why the designing model put its fills together; offer one by writing its fills into the source with edit. status says whether and when they have run in this project: never say they ran, or proposed nothing, where it says no round has run.';
+
+/** A message's words, as an offered answer is sent: its markdown, trimmed, in lower case. */
+const plainWords = (event: ProjectEventOf<'feedback.submitted'>) =>
+  event.payload.content
+    .flatMap((part) => (part.type === 'markdown' ? [part.text] : []))
+    .join(' ')
+    .trim()
+    .toLowerCase();
+
+/**
+ * The answer the participant's latest message gave to a question offering answers, where it is one
+ * of them, by the reply asking it and the answer's label.
+ */
+function answerGiven(document: ProjectDocument): { question: number; label: string } | undefined {
+  const message = document.events.findLast(
+    (event): event is ProjectEventOf<'feedback.submitted'> => event.type === 'feedback.submitted'
+  );
+  if (!message?.payload.answers) return undefined;
+  const asked = projectQuestions(document.events).find(
+    ({ eventId }) => eventId === message.payload.answers
+  );
+  const words = plainWords(message);
+  const option = asked?.options?.find(({ label }) => label.trim().toLowerCase() === words);
+  return asked && option ? { question: asked.eventId, label: option.label } : undefined;
+}
+
+/**
+ * The round whose candidates the assistant is given: the one prepared for the answer the
+ * participant just gave, where one was (helper-pipeline.ts firstTurns.caching), else the latest
+ * round not prepared for an answer, as those wait for theirs.
+ */
+function roundGiven(document: ProjectDocument) {
+  const rounds = document.events.filter(
+    (event): event is ProjectEventOf<'visualization.view-candidates'> =>
+      event.type === 'visualization.view-candidates'
+  );
+  const answer = answerGiven(document);
+  const forAnswer =
+    answer &&
+    rounds.findLast(
+      ({ payload: { option } }) =>
+        option?.question === answer.question && option.label === answer.label
+    );
+  return forAnswer || rounds.findLast(({ payload }) => !payload.option);
+}
 
 /** A source's views of one type, as written: a candidate stays offerable while they are unchanged. */
 function viewsOf(source: string, type: string): string {
@@ -60,14 +116,14 @@ function sourceText(document: ProjectDocument, sha256: string): string | undefin
  */
 export function viewHelpersContext(
   document: ProjectDocument,
-  source: { sha256: string; text: string }
+  source: { sha256: string; text: string },
+  { firstTurns }: Pick<HelperPipelineConfig, 'firstTurns'> = helperPipeline
 ): AiViewHelpers {
-  const proposed = document.events.findLast(
-    (event) => event.type === 'visualization.view-candidates'
-  );
+  const proposed = roundGiven(document);
   const status = helpersStatus(document);
-  if (proposed?.type !== 'visualization.view-candidates') return { note, status, candidates: [] };
-  const { type, layout, task, candidates, sourceSha256, skeleton } = proposed.payload;
+  const shared = { note: note(firstTurns.flow), status, firstTurns: { ...firstTurns } };
+  if (!proposed) return { ...shared, candidates: [] };
+  const { type, layout, task, candidates, sourceSha256, skeleton, option } = proposed.payload;
   // What the candidates replace: the views of their type, their layout, or, for a skeleton the
   // assistant wrote, the whole source.
   const part = (text: string) =>
@@ -78,7 +134,7 @@ export function viewHelpersContext(
         : viewsOf(text, type ?? '');
   const written = sourceSha256 === source.sha256 ? source.text : sourceText(document, sourceSha256);
   if (written === undefined || part(written) !== part(source.text))
-    return { note, status, candidates: [] };
+    return { ...shared, candidates: [] };
   const offered = ({ markup, name, fills }: (typeof candidates)[number]) =>
     skeleton !== undefined
       ? Object.values(fills ?? { markup }).every((fill) => source.text.includes(fill.trim()))
@@ -86,16 +142,16 @@ export function viewHelpersContext(
         ? part(source.text).trim() === markup.trim()
         : source.text.includes(`name="${name}"`);
   const waiting = candidates.filter((candidate) => !offered(candidate));
-  if (!waiting.length) return { note, status, candidates: [] };
+  if (!waiting.length) return { ...shared, candidates: [] };
   const repliesSince = document.events.filter(
     (event) =>
       event.id > proposed.id && event.type === 'assistant.responded' && !event.payload.releases
   ).length;
   return {
-    note,
-    status,
+    ...shared,
     ...(skeleton !== undefined ? { skeleton } : layout !== undefined ? { layout } : { type }),
     ...(task ? { task } : {}),
+    ...(option ? { answer: option.label } : {}),
     candidates: waiting,
     repliesSince
   };

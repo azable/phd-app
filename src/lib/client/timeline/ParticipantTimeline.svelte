@@ -39,7 +39,7 @@
     MessageContent as Content,
     MessageContentSegment
   } from '$lib/shared/projects/events/message-content';
-  import type { ProjectQuestion } from '$lib/shared/projects/questions';
+  import { openQuestion, type ProjectQuestion } from '$lib/shared/projects/questions';
 
   import MessageContent from './MessageContent.svelte';
   import PresentationPill from './PresentationPill.svelte';
@@ -95,6 +95,8 @@
   // Chips and labels elsewhere hold only a presentation id; this names each candidate for them.
   $effect(() => rememberCandidates(timelinePresentations(session.events)));
   const items = $derived(participantTimeline(session.events, { audit }));
+  // Only the open question offers its answers as buttons; a newer question replaces it.
+  const openQuestionId = $derived(openQuestion(session.events)?.eventId);
   const activityProgress = $derived.by(() => {
     const pendingEvent = session.pendingEvent;
     if (pendingEvent) return presentProjectEvent(pendingEvent).progress;
@@ -167,6 +169,17 @@
     onChooseSource(undefined);
     selection.activate(presentation, session.events, layout);
     onQuestionElements(presentationId, question.elements ?? []);
+  }
+
+  /** Send one of a question's offered answers as the participant's message, which answers it. */
+  function answerWith(label: string) {
+    if (!session.atHead || session.pending || session.readOnly) return;
+    void session.runCommand({
+      type: 'feedback',
+      content: [{ type: 'markdown', text: label }],
+      focus: [],
+      presentationCount: 1
+    });
   }
 
   /** Show a comparison's pair side by side, as the stage shows a current one, to view or answer. */
@@ -280,6 +293,20 @@
                   () => showQuestion(question)
                 )}{/if}
             </p>
+            {#if question.options && openQuestionId === question.eventId}
+              <!-- Its offered answers, each sent as the participant's message when pressed; they can
+                still write their own. -->
+              <div class="mt-2 flex flex-wrap gap-2">
+                {#each question.options as { label } (label)}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!session.atHead || !!session.pending || session.readOnly}
+                    onclick={() => answerWith(label)}>{label}</Button
+                  >
+                {/each}
+              </div>
+            {/if}
           {/if}
         {:else}
           {#each item.summaries as summary (summary.sourceHash)}

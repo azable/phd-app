@@ -90,3 +90,88 @@ describe('the view helpers in the assistant context', () => {
     expect(names(viewHelpersContext(proposed(), { sha256: 'r', text: restyled }))).toEqual([]);
   });
 });
+
+describe('candidates prepared for an offered answer', () => {
+  const skeleton = '<Hole name="picture" kind="any" task="t" />';
+  const bars = '<View of="Int" name="Bar"><Node height={this} /></View>';
+  /** Whole-picture rounds: one the app started, one for an answer, then a message. */
+  function prepared(message?: string) {
+    const round = (id: number, name: string, option?: { question: number; label: string }) => ({
+      id,
+      type: 'visualization.view-candidates',
+      payload: {
+        sourceSha256: 'w',
+        skeleton,
+        generationEventIds: [],
+        candidates: [{ name, description: name, markup: '', fills: { picture: bars } }],
+        dropped: [],
+        ...(option ? { option } : {})
+      }
+    });
+    const events = [
+      {
+        id: 1,
+        type: 'artifact.version-created',
+        payload: {
+          changes: [{ operation: 'upsert', artifact: { content: { sha256: 'w', text: written } } }]
+        }
+      },
+      {
+        id: 2,
+        type: 'assistant.responded',
+        payload: {
+          content: [],
+          question: {
+            text: 'What should learners notice first?',
+            options: [{ label: 'The comparisons', task: 'comparisons' }, { label: 'The index' }]
+          }
+        }
+      },
+      round(3, 'Plain'),
+      round(4, 'Compared', { question: 2, label: 'The comparisons' }),
+      ...(message
+        ? [
+            {
+              id: 5,
+              type: 'feedback.submitted',
+              payload: { content: [{ type: 'markdown', text: message }], focus: [], answers: 2 }
+            }
+          ]
+        : [])
+    ];
+    return { events } as unknown as ProjectDocument;
+  }
+
+  it('gives the round prepared for the answer just given', () => {
+    const context = viewHelpersContext(prepared('the comparisons'), { sha256: 'w', text: written });
+    expect(names(context)).toEqual(['Compared']);
+    expect(context.answer).toBe('The comparisons');
+  });
+
+  it('gives the latest round prepared for no answer otherwise', () => {
+    for (const message of [undefined, 'The index', 'Something else']) {
+      const context = viewHelpersContext(prepared(message), { sha256: 'w', text: written });
+      expect(names(context)).toEqual(['Plain']);
+      expect(context.answer).toBeUndefined();
+    }
+  });
+
+  it('drops a prepared round once the source changes', () => {
+    const edited = written.replace('{values}', 'Values: {values}');
+    expect(
+      names(viewHelpersContext(prepared('The comparisons'), { sha256: 'e', text: edited }))
+    ).toEqual([]);
+  });
+
+  it('says what the first round tries, by the first-turns flow', () => {
+    const on = viewHelpersContext(prepared(), { sha256: 'w', text: written });
+    const off = viewHelpersContext(
+      prepared(),
+      { sha256: 'w', text: written },
+      { firstTurns: { flow: false, caching: false } }
+    );
+    expect(on.note).toContain('they try whole pictures');
+    expect(off.note).toContain('they run on its main type');
+    expect(off.firstTurns).toEqual({ flow: false, caching: false });
+  });
+});

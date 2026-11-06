@@ -773,12 +773,14 @@ describe('submitProjectFeedback', () => {
       writtenMeanwhile = false,
       adapter = helperAdapter,
       replies?: (source: string) => object[],
-      more: Partial<ProjectCommandDependencies> = {}
+      more: Partial<ProjectCommandDependencies> = {},
+      templateId = 'linear-search',
+      asked = 'Try other ways to draw the numbers.'
     ) {
       const { getProjectTemplate } = await import('./starter-catalog');
       const { createProject } = await import('./service');
       const created = await createProject(
-        { creation: { templateId: getProjectTemplate('linear-search').id } },
+        { creation: { templateId: getProjectTemplate(templateId).id } },
         serviceDependencies
       );
       const feedbackOperationId = crypto.randomUUID();
@@ -802,7 +804,7 @@ describe('submitProjectFeedback', () => {
           }
         ] as const;
       await serviceDependencies.repository.append(created.projectId, head, [
-        ...message(head + 1, 'Try other ways to draw the numbers.', '2026-08-30T12:00:00.000Z'),
+        ...message(head + 1, asked, '2026-08-30T12:00:00.000Z'),
         {
           type: 'operation.accepted',
           actor: { kind: 'system' },
@@ -1197,6 +1199,128 @@ describe('submitProjectFeedback', () => {
         true
       );
       expect(appendedEvents.some((event) => event.type === 'assistant.turn-requested')).toBe(false);
+    });
+
+    describe('the first turns', () => {
+      /** The linear-search starter's views and layouts, which fill a whole-picture hole as before. */
+      async function pictureOf() {
+        const { resolveProjectTemplate } = await import('./starter-catalog');
+        const source = resolveProjectTemplate({ templateId: 'linear-search' }).source;
+        const start = source.search(/<(?:View|Layout)\b/u);
+        const end = Math.max(
+          source.lastIndexOf('</View>') + '</View>'.length,
+          source.lastIndexOf('</Layout>') + '</Layout>'.length
+        );
+        return { source, picture: source.slice(start, end) };
+      }
+      /** Helpers that fill a whole-picture hole with the picture, and a view hole with a dot. */
+      const filling = (picture: string) =>
+        ({
+          id: 'test-helpers',
+          generateReply: async (prompt: unknown) => ({
+            output: JSON.stringify(prompt).includes('name=\\"picture\\"')
+              ? {
+                  proposals: [
+                    {
+                      name: 'Same',
+                      description: 'the same picture',
+                      fills: [{ hole: 'picture', markup: picture }],
+                      aimedAspect: '3:2'
+                    }
+                  ]
+                }
+              : proposal('<View of="Int" name="IntDot"><Node value={this} /></View>')
+          })
+        }) as unknown as NonNullable<ProjectCommandDependencies['viewHelperAdapter']>;
+      const wholePictures = (event: ProjectEvent | undefined) =>
+        event?.type === 'visualization.view-candidates' &&
+        (event.payload.skeleton ?? '').includes('<Hole name="picture" kind="any"');
+
+      it('tries whole pictures after a first version, or the main type with the flow off', async () => {
+        const { source, picture } = await pictureOf();
+        const { helperPipeline } = await import('$lib/server/ai/bots/helper-pipeline');
+        for (const flow of [true, false]) {
+          const { appendedEvents } = await claimedWithHelpers(
+            false,
+            filling(picture),
+            // Shown alone, it goes back once to offer a comparison with the flow off; sent again
+            // as it is, it stands.
+            () =>
+              Array.from({ length: 2 }, () => ({
+                ...generation(undefined, 'A first version.'),
+                decision: { action: 'revise' as const, source, summary: 'A first version.' }
+              })),
+            { helperPipeline: { ...helperPipeline, firstTurns: { flow, caching: false } } },
+            'blank',
+            'Linear search, please.'
+          );
+          const round = appendedEvents.find(
+            (event) => event.type === 'visualization.view-candidates'
+          );
+          expect(wholePictures(round)).toBe(flow);
+          // With the flow, the version shown alone is not sent back for a comparison.
+          expect(appendedEvents.some((event) => event.type === 'revision.edits-rejected')).toBe(
+            !flow
+          );
+          if (!flow) expect(round).toMatchObject({ payload: { type: 'Int' } });
+        }
+      });
+
+      it('prepares a round for each offered answer with a task while it waits, once', async () => {
+        const { picture } = await pictureOf();
+        const question = {
+          text: 'What should learners notice first?',
+          presentation: null,
+          elements: null,
+          options: [
+            { label: 'The comparisons', task: 'make the comparisons the focus' },
+            { label: 'The index', task: null }
+          ]
+        };
+        // A message written meanwhile holds back the follow-up, so this turn prepares the answers.
+        const { document, appendedEvents } = await claimedWithHelpers(
+          true,
+          filling(picture),
+          () => [
+            {
+              ...generation(undefined, 'Here it is.'),
+              decision: { action: 'respond' as const, question },
+              viewHelpers: { type: 'Int', task: 'draw each number another way' }
+            }
+          ]
+        );
+        const asked = appendedEvents.find((event) => event.type === 'assistant.responded');
+        const rounds = appendedEvents.filter(
+          (event): event is ProjectEventOf<'visualization.view-candidates'> =>
+            event.type === 'visualization.view-candidates'
+        );
+        expect(asked).toMatchObject({
+          payload: {
+            question: {
+              options: [
+                { label: 'The comparisons', task: 'make the comparisons the focus' },
+                { label: 'The index' }
+              ]
+            }
+          }
+        });
+        expect(rounds.map(({ payload }) => payload.option)).toEqual([
+          undefined,
+          { question: asked?.id, label: 'The comparisons' }
+        ]);
+        expect(wholePictures(rounds[1])).toBe(true);
+        expect(rounds[1].payload.task).toBe('make the comparisons the focus');
+        // For the same source, an answer prepared once is not prepared again.
+        const { prepareAnswers } =
+          await import('$lib/modes/sverlin/assistant/helpers/rounds.server');
+        const { entrySource } = await import('$lib/server/ai/turns/attempt-ladder');
+        const again = await prepareAnswers(document, crypto.randomUUID(), entrySource(document), {
+          ...commandDependencies,
+          viewHelperAdapter: filling(picture),
+          decide
+        });
+        expect(again.events).toHaveLength(document.events.length);
+      });
     });
   });
 

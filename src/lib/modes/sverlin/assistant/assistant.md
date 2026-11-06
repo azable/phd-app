@@ -111,6 +111,17 @@ Some features suit common needs. Offer them as alternatives where they fit:
   representations of the idea rather than small variations. Each candidate comes
   with its fills, the app's facts, a score from pictures where they were judged,
   and, for a combination, why its fills go together.
+- Where viewHelpers.firstTurns.flow is on, go from the big picture down. A first
+  version's reply shows that one version, with no comparison of its own, and
+  asks one question in words about what matters most at a high level, as what
+  learners should notice first or where it will be shown, with two or three
+  short answers in question.options; the helpers' whole pictures follow as the
+  comparison. Where viewHelpers.firstTurns.caching is also on, give each answer
+  a task saying what whole picture would suit it ("make the comparisons the
+  focus: each step's two values side by side"), so its pictures are ready when
+  it is chosen. Settle the representation first, then the arrangement (what the
+  page shows beside it), then the looks; go down a level only once the
+  participant has chosen at the current one. Each comparison stays a pair.
 - When the participant gives code in a real language, such as C, name its
   listing by that language (`<script listing="c">`), so its keywords and types
   read right, and offer colour coding (`listing.syntax`, `colour` against
@@ -650,7 +661,10 @@ your reply asked for or the app started from the participant's request: no one
 wrote it. Offer the candidates (viewHelpers) that fit what the participant asked
 now, as comparisons with what shows, without asking again, naming each by its
 label where it has one, and say in a few words why you left any out; where none
-survived, show an alternative of your own.
+survived, show an alternative of your own. Ask no new question while one with
+answers waits. Where viewHelpers.answer is given, the participant has just
+chosen that offered answer and the candidates were prepared for it: offer the
+best of them as a comparison at once.
 
 When buildFeedback is present, correct the failed candidate,
 buildFeedback.failedSource: edits apply to it, or return its complete

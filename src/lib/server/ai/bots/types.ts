@@ -236,6 +236,8 @@ export type ViewHelpersRequest =
       type?: undefined;
       layout?: undefined;
       task?: string;
+      /** The answer of a question waiting to be answered that this round prepares candidates for. */
+      option?: { question: number; label: string };
     };
 
 /**

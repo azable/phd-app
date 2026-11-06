@@ -130,9 +130,15 @@ import { buildCandidateBatch, shownInRandomOrder } from '$lib/server/ai/turns/co
 import type { ShownComparison } from '$lib/server/ai/turns/comparisons';
 import {
   followAfterHelpers,
+  prepareAnswers,
   runViewHelpers,
   withViewHelpers
 } from '$lib/modes/sverlin/assistant/helpers/rounds.server';
+import {
+  representationSkeleton,
+  representationTask
+} from '$lib/modes/sverlin/assistant/skeleton.server';
+import { helperPipeline } from '$lib/server/ai/bots/helper-pipeline';
 import {
   generationPreparationFailure,
   runPreparedGeneration
@@ -170,6 +176,12 @@ export async function runSverlinAssistantTurn(
   // What the assistant asked the view helpers to propose views of, where they are on.
   let helperRequest: ViewHelpersRequest | undefined;
   const startedFrom = entrySource(document);
+  // With the first-turns flow, a first version is shown alone on purpose, the helpers' whole
+  // pictures following as its comparison (helper-pipeline.ts firstTurns.flow).
+  const aloneByFlow =
+    turnViewHelpers(document) &&
+    (dependencies.helperPipeline ?? helperPipeline).firstTurns.flow &&
+    startedFrom === modeCatalog[projectSnapshotAt(document).mode].starter.source;
 
   const done = await runAttemptLadder(
     document,
@@ -610,6 +622,7 @@ export async function runSverlinAssistantTurn(
       // pointer or a free layout's arrangement, goes back once to offer a comparison; one the
       // participant directs is made as asked.
       const alternatives =
+        !aloneByFlow &&
         !pairs &&
         !droppedQuestions.length &&
         (decision.action === 'revise' || decision.action === 'edit') &&
@@ -745,6 +758,11 @@ export async function runSverlinAssistantTurn(
     ? (typeNamedIn(asked, source) ?? mainViewType(source))
     : undefined;
   const askedLayout = asksForLayouts(asked) ? pageLayoutName(source) : undefined;
+  // With the first-turns flow, a first version's round tries whole pictures instead, which its
+  // follow-up offers as the comparison the reply left out (helper-pipeline.ts firstTurns.flow).
+  const pipeline = dependencies.helperPipeline ?? helperPipeline;
+  const wholePicture =
+    pipeline.firstTurns.flow && firstVersion ? representationSkeleton(source) : undefined;
   const firstLayout = unexplored ? freeLayoutName(source) : undefined;
   const firstType = unexplored ? mainViewType(source) : undefined;
   const request: ViewHelpersRequest | undefined =
@@ -753,14 +771,20 @@ export async function runSverlinAssistantTurn(
       ? { type: askedType, ...(task ? { task } : {}) }
       : askedLayout
         ? { layout: askedLayout, ...(task ? { task } : {}) }
-        : firstLayout
-          ? { layout: firstLayout }
-          : firstType
-            ? { type: firstType }
-            : undefined);
-  if (!request || source === starter) return done;
+        : wholePicture
+          ? { skeleton: wholePicture, task: representationTask }
+          : firstLayout
+            ? { layout: firstLayout }
+            : firstType
+              ? { type: firstType }
+              : undefined);
+  if (source === starter) return done;
+  if (!request) return prepareAnswers(done, operationId, source, dependencies);
   const helped = await runViewHelpers(done, operationId, source, request, dependencies);
-  return followAfterHelpers(helped, operationId, contextSelection, dependencies);
+  const followed = await followAfterHelpers(helped, operationId, contextSelection, dependencies);
+  return followed.events.length > helped.events.length
+    ? followed
+    : prepareAnswers(followed, operationId, source, dependencies);
 }
 
 export async function runSverlinGeneration(
