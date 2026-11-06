@@ -10,7 +10,6 @@
   import Arranged from './Arranged.svelte';
   import LinkOverlay from './LinkOverlay.svelte';
   import type { Direction, Form } from './forms';
-  import Node from './Node.svelte';
   import {
     designContext,
     copyContext,

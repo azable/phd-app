@@ -891,6 +891,17 @@ export function describeDrawn(
     kindAbove?: string
   ) => {
     const { attributes } = element;
+    // A link from a variable paints what it reaches, which its hidden marker carries.
+    if (attributes['data-sv-reach'] === 'true' && !hiddenAbove)
+      parts.push({
+        value: () => [
+          'reach',
+          attributes['data-to'],
+          ...['fill', 'stroke', 'color', 'stroke-width'].map(
+            (name) => attributes[`data-target-${name}`]
+          )
+        ]
+      });
     if (attributes['data-sv-link'] !== undefined || attributes['data-sv-link-label'] !== undefined)
       return;
     const look = at.styled.get(element)?.look;

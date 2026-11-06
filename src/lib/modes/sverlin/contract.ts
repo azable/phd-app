@@ -44,7 +44,7 @@ export const linearSearchSource = `<script domain>
     {/each}
   </Node>
 </View>
-<View of="Index" name="Arrow">
+<View of="Index" name="Highlight">
   <Node layout="column">
     <Link to={this} />
     <Node kind="Name">{place()}</Node>

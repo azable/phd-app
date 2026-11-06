@@ -258,15 +258,6 @@ export function stepsOf(
   return { states, stepCount, stepOf, drawnLike, distinct, drawingOf };
 }
 
-/** The value at a path of a step's state, as edges[0].to. */
-function valueAt(state: Record<string, unknown>, path: string): unknown {
-  const [name, ...keys] = path.split(/[.[\]]+/u).filter(Boolean);
-  return keys.reduce<unknown>(
-    (value, key) => (value as Record<string, unknown> | undefined)?.[key],
-    state[name]
-  );
-}
-
 /** A step's state with the value at a path, such as i or edge.from, replaced. */
 export function withValue(state: StepState, path: string, value: unknown): StepState {
   // States are plain data from the trace, so a JSON copy is a whole one, where structuredClone is

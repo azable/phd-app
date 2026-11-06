@@ -16,7 +16,6 @@ import { isDuringKey, viewThis } from './label-values';
 import { layoutNameOf } from './layouts.server';
 import { countArgument } from './bound-props.server';
 import { siteOf } from './left-out';
-import { kindKey } from './library/node/design';
 
 /** Each component's type, by name. */
 export type ComponentSignatures = Record<string, string>;
@@ -1104,10 +1103,8 @@ export function slotInsertions(
     }
     const part = node as Part;
     // A field read through a reference, in what this part reads, reads its node.
-    const at = part.start ?? 0;
     if (references.size || atTargets.size) follow(part.expression, locals);
     if (part.type === 'RenderTag') {
-      const start = part.start ?? 0;
       const call = part.expression as Part;
       const callee = call?.callee as Part | undefined;
       const given = (call?.arguments as Part[] | undefined) ?? [];

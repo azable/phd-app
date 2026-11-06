@@ -36,7 +36,6 @@
     children,
     __view = 'root',
     __ref,
-    __component,
     __fromPath,
     __fromOf,
     __fromAt,
@@ -59,8 +58,6 @@
     __view?: string;
     /** Internal: the source position of this link's tag, added by the compiler. */
     __ref?: string;
-    /** Internal: set by the compiler on a typed component's root, naming the component. */
-    __component?: string;
     /** Internal: where a position at an end comes from, as a slot's (see Slot.svelte). */
     __fromPath?: string;
     __fromOf?: unknown;

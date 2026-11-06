@@ -41,7 +41,13 @@ const props = new Set([
   'gap',
   'align',
   'justify',
-  'overflow',
+  'route',
+  'head',
+  'headSize',
+  'targetFill',
+  'targetStroke',
+  'targetStrokeWidth',
+  'targetColor',
   'shadow',
   'glow',
   'fillStyle',
@@ -62,7 +68,7 @@ export function referenceRanges(
   text: string,
   design?: ReferenceDesign
 ): SourceRange[] {
-  const written = keptReference(text, design);
+  const written = keptReference(text);
   if (!written) return [];
   const line = /^(?:lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?|(\d+):(\d+))$/u.exec(written);
   if (line) {
@@ -104,7 +110,7 @@ export function referenceRanges(
  * the view markers after its renders show it.
  */
 export function ghostKey(text: string, design?: ReferenceDesign): string | undefined {
-  const written = keptReference(text, design);
+  const written = keptReference(text);
   if (!design?.variant || !Object.hasOwn(design.variant, written)) return undefined;
   return /^views\.[^:]+$/u.test(written) ? undefined : written;
 }
@@ -205,7 +211,7 @@ function codeAt(text: string, at: number): string[] {
  * A reference as the app keeps its keys: `{Int}` as views.Int, every other key as written (see
  * design-keys.ts), where the assistant writes them so.
  */
-function keptReference(text: string, design?: ReferenceDesign): string {
+function keptReference(text: string): string {
   const written = text.trim();
   return keptKey(written);
 }

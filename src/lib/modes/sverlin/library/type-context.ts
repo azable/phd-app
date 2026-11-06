@@ -5,7 +5,7 @@
 
 import { getContext, setContext, type Snippet } from 'svelte';
 
-import { placedKind, placeLabelKey, placeName, type DesignValues, type Place } from './node/design';
+import { placeLabelKey, placeName, type DesignValues, type Place } from './node/design';
 import type { ShownFrame } from './fit';
 import type { ArrangeEdge } from './node/arrange';
 import type { Layout } from './node/props';
