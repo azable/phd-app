@@ -2036,13 +2036,19 @@ title, is one box across its tracks. As in CSS:
 
 - the tracks along that axis are the grid's: every item sizes the track it is
   in, as a cell there does;
-- its kind's `gap` applies between its items in place of the grid's, and its
-  `align` places each item in its cell;
-- its box is drawn as a band across its tracks, its padding and border pushing
-  its first and last items in;
+- its `align` places each item in its cell;
 - along the other axis it is a cell of its own, as large as its largest item;
 - its `justify` between, around, or evenly cannot spread tracks it does not own:
   it has no effect, and the build warns.
+
+Unlike CSS, nothing moves an item off its track, so it lines up with every cell
+in its column (or row), a mark at `col={i}` included:
+
+- the gap between its items is the grid's; its kind's own `gap` has no effect
+  along that axis (CSS would move its items by half the difference);
+- its box is drawn as a band across its tracks reaching out past the first and
+  last by its padding and border, which the grid keeps room for at its edges
+  (CSS would push its first and last items in instead).
 
 ### Sizes
 
@@ -2156,6 +2162,8 @@ A model that knows CSS should not assume these:
 - A subgrid is made by spanning tracks with nodes inside, not by a property, and
   numbers its items from its own coordinate, each subgrid inside it going on
   numbering where the last left off.
+- A subgrid's own gap, padding and border move none of its items (see Subgrids);
+  in CSS they move its items off the tracks.
 - The basis has no CSS equivalent.
 
 ### Counts
