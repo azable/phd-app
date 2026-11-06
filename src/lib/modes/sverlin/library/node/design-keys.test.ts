@@ -125,7 +125,11 @@ describe('the nested form', () => {
     ['IntCell:target.fill.hue', { IntCell: { ':target': { 'fill.hue': 1 } } }],
     ['IntCell.inherit', { IntCell: { '...': 1 } }],
     ['Main.Problem.gap', { Main: { Problem: { gap: 1 } } }],
-    ['Stacked.ratio', { Stacked: { ratio: 1 } }]
+    ['Stacked.ratio', { Stacked: { ratio: 1 } }],
+    ['base', { '...': 1 }],
+    ['scale.spacing', { scale: { spacing: 1 } }],
+    ['palette.accent', { palette: { accent: 1 } }],
+    ['$Value.fill', { $Value: { fill: 1 } }]
   ];
 
   it.each(shapes)('nests %s and reads it back', (written, nested) => {

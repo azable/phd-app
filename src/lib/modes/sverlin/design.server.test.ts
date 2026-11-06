@@ -76,10 +76,13 @@ describe('design space', () => {
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
-    // A group, as <Node>.padding, and what a kind inherits are set only where a variant sets them.
+    // A group, as <Node>.padding, what a kind inherits, and a role's style in a base, as
+    // $Value.fill, are set only where a variant sets them.
     expect(Object.keys(starter).sort()).toEqual(
       Object.keys(space)
-        .filter((key) => !key.startsWith('<') && !key.endsWith('.inherit'))
+        .filter(
+          (key) => !key.startsWith('<') && !key.endsWith('.inherit') && !/^\$[A-Z]/u.test(key)
+        )
         .sort()
     );
     expect(starter['views.Int']).toBe('IntCell');
@@ -561,5 +564,59 @@ describe('design tokens and tag groups', () => {
     const drawn = build({ base, randomise: true });
     expect(drawn['IntCell.inherit']).toBe('$cell');
     expect(drawn['IntCell.radius']).toBe(drawn['$cell.radius']);
+  });
+
+  it('takes a role’s look from its style in the base, below a group and a kind’s own value', () => {
+    const based = build({ chosen: { '$Value.radius': 0, '$Value.fill': '$surface' } });
+    expect([based['IntCell.radius'], based['IntDot.radius']]).toEqual([0, 0]);
+    expect(based['IntCell.fill']).toBe('white');
+    // Words and pointers keep their own roles' looks.
+    expect(based['Arrow.Pointed.radius']).toBe(8);
+    const grouped = build({ chosen: { '$Value.radius': 0, '<Node>.radius': 4 } });
+    expect(grouped['IntCell.radius']).toBe(4);
+    const own = build({ chosen: { '$Value.radius': 0, 'IntCell.radius': 12 } });
+    expect([own['IntCell.radius'], own['IntDot.radius']]).toEqual([12, 0]);
+  });
+
+  it('gives each prop on a scale only its steps, refusing a value off the scale', () => {
+    const scaled = build({ chosen: { 'scale.radius': '0 6 999', '$Value.radius': 6 } });
+    expect(scaled['IntCell.radius']).toBe(6);
+    expect(() => build({ chosen: { 'scale.radius': '0 6 999', 'IntCell.radius': 8 } })).toThrow(
+      /IntCell\.radius cannot be 8; its options are 0, 6, 999/u
+    );
+    // A line also takes 0, for no line, though its scale starts higher.
+    expect(build({ chosen: { 'scale.line': '1 2', 'IntCell.strokeWidth': 0 } })).toBeDefined();
+    expect(() => build({ chosen: { 'scale.spacing': '0 0.5 0.25' } })).toThrow(
+      /scale\.spacing cannot be "0 0\.5 0\.25": a scale is rising numbers/u
+    );
+  });
+
+  it('takes the palette’s exact colours for every colour prop', () => {
+    const coloured = build({
+      chosen: { 'palette.accent': '#E69F00', 'IntCell.fill': '#E69F00', $text: '#E69F00' }
+    });
+    expect([coloured['IntCell.fill'], coloured['Arrow.Name.color']]).toEqual([
+      '#E69F00',
+      '#E69F00'
+    ]);
+    expect(() => build({ chosen: { 'IntCell.fill': '#E69F00' } })).toThrow(/cannot be "#E69F00"/u);
+    expect(() => build({ chosen: { 'palette.accent': 'orange' } })).toThrow(
+      /a palette colour is exact/u
+    );
+  });
+
+  it('records the base’s name, and leaves out a base’s value the source has no use for', () => {
+    const { values, dropped } = buildVariant(
+      levelled.space,
+      levelled.starter,
+      { chosen: { base: '$textbook', 'listing.lit.fill': 'neutral-200' } },
+      1,
+      levelled.fallbacks,
+      levelled.roles
+    );
+    expect(values.base).toBe('$textbook');
+    expect(values['listing.lit.fill']).toBeUndefined();
+    expect(dropped).toEqual([]);
+    expect(() => build({ chosen: { base: 'textbook' } })).toThrow(/names its base with \$/u);
   });
 });

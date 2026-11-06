@@ -8,7 +8,18 @@
 import { keyedRandom } from './algorithm/random.server';
 import type { LayoutStructure } from './structure.server';
 import {
+  baseKey,
+  baseName,
+  baseOptions,
   colourParts,
+  exactColour,
+  isBaseKey,
+  paletteKey,
+  roleOfStyle,
+  roleStyle,
+  scaleProps,
+  scaleSteps,
+  type ScaleName,
   frameOptions,
   freeLayoutProps,
   gridProps,
@@ -161,6 +172,12 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   const roles = rolesOf(kinds);
   return {
     ...Object.fromEntries(tokens.map((token) => [token, propOptions[tokenProps[token]]])),
+    // Every role's style in the base, the source's roles or not, as a base holds every value.
+    ...Object.fromEntries(
+      (Object.keys(roleProps) as KindRole[]).flatMap((role) =>
+        groupProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, groupOptions([role], prop)])
+      )
+    ),
     ...Object.fromEntries(
       (['<Node>', '<Pointed>', '<Link>'] as const).flatMap((tag) => {
         const reached = roles.filter((role) => tagOf(role) === tag);
@@ -218,7 +235,11 @@ function withStyles(
   roles: Readonly<Record<string, KindRole>>,
   values: Readonly<Record<string, unknown>>
 ): DesignSpace {
-  const named = Object.keys(values).flatMap((key) => styleOf(key) ?? []);
+  // A role's style is in the space already, with its role's options (see levelSpace).
+  const named = Object.keys(values).flatMap((key) => {
+    const style = styleOf(key);
+    return style && !roleOfStyle(style.style) ? [style] : [];
+  });
   const styles = [...new Set(named.map(({ style }) => style))];
   if (!styles.length) return space;
   const extended: Record<string, readonly DesignValue[]> = { ...space };
@@ -246,6 +267,57 @@ function withStyles(
     if (Object.hasOwn(space, key)) extended[key] = [...space[key], ...styles];
   }
   return extended;
+}
+
+/**
+ * The space under the base the values set (see baseKey, scaleKey, paletteKey in
+ * library/node/design.ts): the base's name, its scales and its palette, each a variable taking the
+ * value given where it is valid, and every prop on a scale taking that scale's steps, every colour
+ * prop the palette's colours too. Also why a base's own value is not valid, by key.
+ */
+function withBase(
+  space: DesignSpace,
+  values: Readonly<Record<string, unknown>>
+): { space: DesignSpace; problems: string[] } {
+  const problems: string[] = [];
+  const own: Record<string, readonly DesignValue[]> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const scale = /^scale\.([a-z]+)$/u.exec(key)?.[1];
+    if (key === baseKey) {
+      if (typeof value === 'string' && baseName.test(value)) own[key] = [value];
+      else
+        problems.push(
+          `${key} names its base with $ and a short name, as "$textbook", not ${JSON.stringify(value)}.`
+        );
+    } else if (scale !== undefined) {
+      if (!Object.hasOwn(scaleProps, scale))
+        problems.push(
+          `The design has no scale ${scale}; its scales are ${Object.keys(scaleProps).join(', ')}.`
+        );
+      else if (scaleSteps(scale as ScaleName, value)) own[key] = [value as string];
+      else
+        problems.push(
+          `${key} cannot be ${JSON.stringify(value)}: a scale is rising numbers, 0 or more, separated by spaces, as "0 0.25 0.5 1"${scale === 'opacity' ? ', each above 0 and at most 1' : ''}.`
+        );
+    } else if (paletteKey.test(key)) {
+      if (typeof value === 'string' && exactColour.test(value)) own[key] = [value];
+      else
+        problems.push(
+          `${key} cannot be ${JSON.stringify(value)}: a palette colour is exact, # and six hex digits, as "#E69F00".`
+        );
+    }
+  }
+  const sets = Object.keys(own).some((key) => key !== baseKey);
+  if (!sets) return { space: { ...space, ...own }, problems };
+  const governed = Object.fromEntries(
+    Object.entries(space).map(([key, options]) => [
+      key,
+      key.startsWith('views.') || key.startsWith('pointers.')
+        ? options
+        : baseOptions(propOf(key), options, values)
+    ])
+  );
+  return { space: { ...governed, ...own }, problems };
 }
 
 /**
@@ -540,6 +612,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
         Object.keys(space)
           .filter(
             (other) =>
+              /^[A-Z]/u.test(other) &&
               other.includes('.') &&
               !other.startsWith('views.') &&
               !other.startsWith('pointers.') &&
@@ -600,9 +673,14 @@ export function buildVariant(
     keptValues(entries ?? {}, (key) => Object.hasOwn(offered, key));
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
-  // The styles the base and the chosen values name join the space (see withStyles).
-  const space = withStyles(offered, roles, { ...base, ...chosenValues });
+  // The styles the base and the chosen values name join the space (see withStyles), and the base's
+  // scales and palette set its options (see withBase).
+  const { space, problems: baseProblems } = withBase(
+    withStyles(offered, roles, { ...base, ...chosenValues }),
+    { ...base, ...chosenValues }
+  );
   const has = (key: string) => Object.hasOwn(space, key);
+  if (baseProblems.length) throw new DesignValueError(writtenText(baseProblems.join(' '), has));
   const asGiven = Object.entries(chosenValues);
   const chosen = asGiven.filter(([key]) => has(key));
   // A style's prop outside what its heirs share names them, as a group's names the kinds it reaches.
@@ -636,7 +714,8 @@ export function buildVariant(
   const named = asked.filter((key) => Object.hasOwn(space, key));
   const dropped = [
     ...asGiven
-      .filter(([key]) => !Object.hasOwn(space, key))
+      // A base holds values the source may have no use for, as a listing's look (see isBaseKey).
+      .filter(([key]) => !Object.hasOwn(space, key) && !isBaseKey(key))
       .map(([key, value]) => unfit(space, key, value)),
     ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
   ].map((why) => writtenText(`${why} The value is left out.`, has));
@@ -774,8 +853,10 @@ function randomised(
   const groups = new Map<string, string[]>();
   const frames = framedKinds(space);
   for (const [key, value] of Object.entries(values)) {
-    // A place's label is words the participant chose, never drawn.
+    // A place's label is words the participant chose, never drawn; a base's name, scales and
+    // palette are what the drawn values are chosen from.
     if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
+    if (key === baseKey || key.startsWith('scale.') || paletteKey.test(key)) continue;
     const group =
       slotProps.has(propOf(key)) && !key.includes('@')
         ? key

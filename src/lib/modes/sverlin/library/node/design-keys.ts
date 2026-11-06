@@ -26,7 +26,7 @@
  * nestedDesign).
  */
 
-import { listingAlias } from './design';
+import { baseKey, listingAlias } from './design';
 
 /** The variables of an ordered bound prop (see bound.ts): its first option, hue, order and unit. */
 const orderParts = new Set(['from', 'hue', 'order', 'unit']);
@@ -194,6 +194,9 @@ export function keptValues<T>(
  * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |
  * | `Bar.height.from`              | `"Bar": { "height.from": … }`                 |
  * | `IntCell.inherit`              | `"IntCell": { "...": … }`                     |
+ * | `base`                         | `"...": "$textbook"` (at the top)             |
+ * | `scale.spacing`                | `"scale": { "spacing": … }`                   |
+ * | `palette.accent`               | `"palette": { "accent": … }`                  |
  *
  * A view choice stays one key, as it holds a view's name rather than props. Props start with a
  * lowercase letter, kinds with a capital, a place with `:`, a value with `=` and a label with `@`,
@@ -219,6 +222,9 @@ export type NestedDesign<T> = { [key: string]: T | NestedDesign<T> };
 /** A written key's path in the nested form (see nestedDesign). */
 function pathOf(key: string): string[] {
   if (key.startsWith('{')) return [key];
+  if (key === baseKey) return ['...'];
+  const ofBase = /^(scale|palette)\.([a-z]\w*)$/u.exec(key);
+  if (ofBase) return [ofBase[1], ofBase[2]];
   const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
   if (prefixed) return [prefixed[1], prefixed[2]];
   if (key.startsWith('listing.')) {
@@ -284,7 +290,9 @@ export function flatDesign(design: Readonly<Record<string, unknown>>): Record<st
   const flat: Record<string, unknown> = {};
   const walk = (prefix: string | undefined, object: Readonly<Record<string, unknown>>) => {
     for (const [segment, value] of Object.entries(object)) {
-      const key = prefix === undefined ? segment : joined(prefix, segment);
+      // `"..."` at the top names the design's base (see baseKey); under a kind, what it inherits.
+      const top = segment === '...' ? baseKey : segment;
+      const key = prefix === undefined ? top : joined(prefix, segment);
       if (value && typeof value === 'object' && !Array.isArray(value))
         walk(key, value as Record<string, unknown>);
       else flat[key] = value;

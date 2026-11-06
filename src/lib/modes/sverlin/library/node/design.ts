@@ -63,8 +63,12 @@ export const colours: readonly string[] = [
   ...hues.flatMap((hue) => shades.map((shade) => `${hue}-${shade}`))
 ];
 
-/** A colour's CSS, or undefined for none and anything not in the range. */
+/** An exact colour, as a base's palette writes it (see paletteKey): six hex digits after #. */
+export const exactColour = /^#[\da-f]{6}$/iu;
+
+/** A colour's CSS, or undefined for none and anything neither in the range nor exact. */
 export function colourCss(name: unknown): string | undefined {
+  if (typeof name === 'string' && exactColour.test(name)) return name.toLowerCase();
   if (name === 'white') return '#ffffff';
   if (name === 'black') return '#000000';
   const match = typeof name === 'string' ? /^([a-z]+)-(\d+)$/u.exec(name) : null;
@@ -880,13 +884,130 @@ export function styleOf(key: string): { style: `$${string}`; prop: string } | un
     : undefined;
 }
 
+/**
+ * The style holding a role's look in a design's base, as `$Value` for every value kind: each prop a
+ * kind of the role follows below its group and above the look the code starts it with (roleLooks),
+ * so a base written out sets every role's look as data. Capitalised, as a role's look is no token
+ * (`$text` is the text colour, `$Text` the text role's look).
+ */
+export const roleStyle = (role: KindRole): `$${string}` =>
+  `$${role[0].toUpperCase()}${role.slice(1)}`;
+
+/** The role a style holds the look of, as value for `$Value`, or undefined for any other style. */
+export function roleOfStyle(style: string): KindRole | undefined {
+  return (Object.keys(roleProps) as KindRole[]).find((role) => roleStyle(role) === style);
+}
+
+/**
+ * The base a design starts from, written `"...": "$textbook"` at its top: the name of the template
+ * the assistant wrote out in full into the design (see assistant/templates), or of a base the model
+ * wrote itself, so the base's values are the design's own and the name records where they came from.
+ */
+export const baseKey = 'base';
+
+/** A base's name: `$` and a short name, as `$textbook`, or `$mine` for a base the model wrote. */
+export const baseName = /^\$[a-z][\w-]{0,31}$/u;
+
+/**
+ * A base's scales, each the steps its props take (see scaleKey): spacing for padding and gaps, in
+ * em; radius, type (textSize) and line (strokeWidth) in pixels; opacity from 0 to 1. A kind, a
+ * group or a token then takes only a step on its prop's scale, so two kinds cannot drift to 13 px
+ * and 14 px, and a comparison or a random variant moves along the scale. A design without a scale
+ * keeps the prop's full option set (propOptions), as every design did before bases.
+ */
+export const scaleProps = {
+  spacing: ['padding', 'gap'],
+  radius: ['radius'],
+  type: ['textSize'],
+  line: ['strokeWidth'],
+  opacity: ['opacity']
+} as const satisfies Record<string, readonly DesignProp[]>;
+
+export type ScaleName = keyof typeof scaleProps;
+
+/** The variable holding a scale, as `scale.spacing`, written nested as `"scale": {"spacing": …}`. */
+export const scaleKey = (name: ScaleName): string => `scale.${name}`;
+
+/**
+ * A scale's steps from its value: numbers separated by spaces, as "0 0.25 0.5 1", since a design
+ * value is one string, number or boolean. Undefined unless every step is in the prop's range (0 or
+ * more; opacity above 0 and at most 1) and the steps rise.
+ */
+export function scaleSteps(name: ScaleName, value: unknown): number[] | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const steps = value.trim().split(/\s+/u).map(Number);
+  const inRange = (step: number) =>
+    Number.isFinite(step) && step >= 0 && (name !== 'opacity' || (step > 0 && step <= 1));
+  const rising = steps.every((step, at) => at === 0 || step > steps[at - 1]);
+  return steps.every(inRange) && rising ? steps : undefined;
+}
+
+/** The scale a prop takes its steps from, if any. */
+export const scaleOf = (prop: string): ScaleName | undefined =>
+  (Object.keys(scaleProps) as ScaleName[]).find((name) =>
+    (scaleProps[name] as readonly string[]).includes(prop)
+  );
+
+/**
+ * A base's palette: its exact colours, each under a name, as `palette.accent` "#E69F00", written
+ * nested as `"palette": {"accent": …}`. Each joins the options of every colour prop beside the named
+ * range, so a base can use colours from practice and sources, as the Okabe–Ito palette.
+ */
+export const paletteKey = /^palette\.[a-z]\w*$/u;
+
+/**
+ * Whether a variable belongs to a base, which holds every value whether the source uses it or not:
+ * a token, a role's style, a scale, a colour of the palette, the base's name, and the listing's
+ * look. A source with no use for one, as a listing's look where the view places no <Listing />,
+ * leaves it out without a word.
+ */
+export function isBaseKey(key: string): boolean {
+  const style = styleOf(key);
+  return (
+    isToken(key) ||
+    key === baseKey ||
+    paletteKey.test(key) ||
+    /^scale\.[a-z]+$/u.test(key) ||
+    (style !== undefined && roleOfStyle(style.style) !== undefined) ||
+    (key.startsWith('listing.') && key !== 'listing.language')
+  );
+}
+
+/**
+ * A prop's options under a design's base: its scale's steps where the design sets that scale (a
+ * line also takes 0, for no line), keeping the tokens and other names among `options`; and every
+ * colour prop also the palette's colours. Without a scale or a palette, `options` as they are.
+ */
+export function baseOptions(
+  prop: string,
+  options: readonly (string | number | boolean)[],
+  values: Readonly<Record<string, unknown>>
+): readonly (string | number | boolean)[] {
+  const scale = scaleOf(prop);
+  const steps = scale ? scaleSteps(scale, values[scaleKey(scale)]) : undefined;
+  const scaled = steps
+    ? [
+        ...(scale === 'line' && !steps.includes(0) ? [0] : []),
+        ...steps,
+        ...options.filter((option) => typeof option !== 'number')
+      ]
+    : options;
+  if (!['fill', 'stroke', 'color'].includes(prop)) return scaled;
+  const palette = Object.entries(values).flatMap(([key, value]) =>
+    paletteKey.test(key) && typeof value === 'string' && exactColour.test(value) ? [value] : []
+  );
+  const added = [...new Set(palette)].filter((colour) => !scaled.includes(colour));
+  return added.length ? [...scaled, ...added] : scaled;
+}
+
 /** The variable naming what a kind inherits: a style, a kind of its role, or none. */
 export const inheritKey = (kind: string): string => `${kind}.inherit`;
 
 /**
  * What a kind's prop follows, and the variable its value comes from: what the kind inherits where
  * that sets the prop (a style's prop, naming a token or a value, or a kind of its role's own value),
- * else its group's value where the variant sets it, else its role's look, through tokens. Undefined
+ * else its group's value where the variant sets it, else its role's style in the base where the
+ * variant sets it (see roleStyle), else its role's look, through tokens. Undefined
  * for a variable that is no kind's prop a group could set (a place's, a frame's, a view choice).
  * Shared by the build and the assistant's design, so both tell what follows what alike.
  */
@@ -909,10 +1030,15 @@ export function levelFor(
     }
   }
   const group = groupKey(tagOf(role), prop);
-  const set = Object.hasOwn(values, group);
-  const level = set ? values[group] : roleLooks[role][prop];
+  const base = `${roleStyle(role)}.${prop}`;
+  const from = Object.hasOwn(values, group)
+    ? group
+    : Object.hasOwn(values, base)
+      ? base
+      : undefined;
+  const level = from ? values[from] : roleLooks[role][prop];
   if (isToken(level)) return { value: values[level], from: level };
-  return set ? { value: level, from: group } : { value: level };
+  return from ? { value: level, from } : { value: level };
 }
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {

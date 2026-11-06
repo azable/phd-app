@@ -1222,7 +1222,9 @@ Every kind of node has these props, each with a fixed set of options:
   `shown`: to drop a pointer, leave out a node around its `<Pointed>`, give its
   type's view `none`, or render it in `{#if}`, its elements then drawn as
   without it.
-- `fill` and `stroke`: `none` or a colour; `color`: the text's colour.
+- `fill` and `stroke`: `none` or a colour; `color`: the text's colour. A colour
+  is white, black, a hue-shade, as `sky-200`, or an exact colour of the base's
+  palette, as `#E69F00` (see Shared values).
 - `strokeWidth`: 0, 0.5, 1, 1.5, 2, 3, or 4 pixels; `strokeStyle`: solid, dashed
   (suiting a place rather than a value), or dotted; `opacity`: 0.25, 0.5, 0.75,
   or 1.
@@ -1479,8 +1481,24 @@ no mark one kind. `@` names only a part of the run, a label, as in the source.
   token, as `"$cell.fill": "$surface"`, and fits every kind inheriting it. A
   kind cannot inherit a kind that inherits it back, and inherits nothing by
   default (`none`).
-- A kind's own value overrides what it inherits, that its group, and its group
-  the token: with
+- A base is what every kind starts from, written out in the design as values:
+  its tokens; a style for each role's look, as `$Value` for every framed value,
+  `$Container`, `$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon`, `$Pointed` and
+  `$Link`, which every kind of that role follows; its scales; its palette; and
+  the listing's look. `"..."` at the top names it, as `"...": "$textbook"`.
+  - A scale is the steps a prop takes, numbers separated by spaces:
+    `scale.spacing` for `padding` and `gap` (em), `scale.radius`, `scale.type`
+    for `textSize` and `scale.line` for `strokeWidth` (pixels), and
+    `scale.opacity`. Where a design sets one, every kind, group and token takes
+    only its steps (a line 0 too), so `"scale": {"radius": "0 4 999"}` refuses
+    `radius` 8.
+  - A palette names exact colours, as `"palette": {"accent": "#E69F00"}`, and
+    each is then an option of every `fill`, `stroke` and `color` beside the
+    named colours.
+  - A base holds values the source may not use, as the listing's look where no
+    `<Listing />` is placed; those are left out without a word.
+- A kind's own value overrides what it inherits, that its group, its group its
+  role's style in the base, and that the token: with
   `{"$spacing": 0.25, "<Node>.padding": 0.5, "IntCell.padding": 0}`, pointers
   take 0.25, every node's kind 0.5, and IntCell none. A kind set apart once
   stays apart when what it follows changes later, and a place, as
