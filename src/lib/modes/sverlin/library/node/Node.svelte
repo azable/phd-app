@@ -239,15 +239,23 @@
   untrack(() => {
     if (element && slot) provideDrawn(slot);
   });
-  // The value this node draws keeps its identity across steps, so it can be followed as it moves.
   // The places this node refers to, where a listing's token names them (see listing/places.ts):
   // the render at a place it is the outermost node of.
   const renderPlace = renderPlaceContext();
   if (renderPlace) provideRenderPlace(undefined);
   const listing = listingContext();
   const ownPlaces = untrack(() => namedPlaces(listing, [renderPlace]));
+  // The value this node draws keeps its identity across steps, so it can be followed as it moves.
+  // A position or reference a variable holds is drawn as that variable's label, as an arrow from
+  // i: it moves as its own node does, never as a value taking another's part.
+  const labelsVariable = untrack(
+    () =>
+      slot !== undefined &&
+      !/[.[]/u.test(slot) &&
+      (types?.targetOf(slot) !== undefined || types?.refOf(slot) !== undefined)
+  );
   const identity = untrack(() =>
-    slot === undefined ? undefined : movingIdentity(types, throughContext(), slot)
+    slot === undefined || labelsVariable ? undefined : movingIdentity(types, throughContext(), slot)
   );
   const eachItem = untrack(() =>
     __itemOf === undefined ? undefined : elementSlot(elementOf(types, __itemOf, __itemAt ?? 0))

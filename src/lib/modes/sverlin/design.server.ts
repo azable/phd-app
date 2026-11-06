@@ -852,7 +852,8 @@ const slotProps = new Set<string>(['width', 'height', 'xAnchor', 'yAnchor', 'spa
  * A fresh value for every variable, keeping the variant's equalities: variables of one prop that
  * share a value draw one new value together, so every white fill becomes one colour. Colours keep
  * their shade, so text stays as readable against its fill; lengths stay within two steps; nothing
- * shown or left out changes, nor anything that is none or 0.
+ * shown or left out changes, nor anything that is none or 0, nor a grid's basis, whose numbers
+ * drawn apart could lay every cell on one line.
  */
 function randomised(
   space: DesignSpace,
@@ -866,6 +867,7 @@ function randomised(
     // palette are what the drawn values are chosen from.
     if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
     if (key === baseKey || key.startsWith('scale.') || paletteKey.test(key)) continue;
+    if ((gridProps as readonly string[]).includes(propOf(key))) continue;
     const group =
       slotProps.has(propOf(key)) && !isPlacedOrValued(key)
         ? key

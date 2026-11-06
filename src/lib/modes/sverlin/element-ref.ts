@@ -19,9 +19,10 @@ export type ElementLocation = {
   markup: string;
 };
 
-// The key is URL-encoded (see keyedRef in library/type-context.ts).
+// The key is URL-encoded (see keyedRef in library/type-context.ts). A link from a variable past its
+// collection's end draws a ghost box, named by the link with :ghost after it (see scene-of.ts).
 const elementId =
-  /^(\d{1,5}):(\d{1,5})(?:@([\w.!~*'()%-]{1,24}))?(?:#(\d{1,5}))?((?:\/\d{1,5}){0,8})$/u;
+  /^(\d{1,5}):(\d{1,5})(?:@([\w.!~*'()%-]{1,24}))?(?:#(\d{1,5}))?((?:\/\d{1,5}){0,8})(?::ghost)?$/u;
 const maxMarkup = 200;
 // What an id's position can start: a library tag, a caption token, or inline maths.
 const drawnFrom = /^(?:<(?:Node|Link|Listing)(?:[\s/>]|$)|[:$][A-Za-z_][\w$.]*\[|\$\$)/u;

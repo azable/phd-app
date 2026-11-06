@@ -82,12 +82,26 @@ const representativeSteps = steps.distinct.length
     }
   : steps;
 
+// Design values in place of a variant's: a kind's prop reaches its places that still hold the
+// kind's value, as IntCell:key.fill follows IntCell.fill until a variant sets it apart.
+const overridden = (base: Record<string, unknown>, values: Record<string, unknown>) => {
+  const result = { ...base, ...values };
+  for (const [key, value] of Object.entries(values)) {
+    const dot = key.lastIndexOf('.');
+    const kind = key.slice(0, dot);
+    const prop = key.slice(dot);
+    for (const [placed, was] of Object.entries(base))
+      if (placed.startsWith(`${kind}:`) && placed.endsWith(prop) && was === base[key])
+        result[placed] = value;
+  }
+  return result;
+};
 scope.__sverlinLayOut = async (devicePixelRatio, design, representative, scenes) => {
   const values = design ? (JSON.parse(design) as Record<string, unknown>) : undefined;
   const request = scenes ? (JSON.parse(scenes) as SceneRequest) : undefined;
   scope.__sverlinScenes = undefined;
   states.forEach((state, phase) => {
-    state.__design = values ? { ...variant[phase], ...values } : variant[phase];
+    state.__design = values ? overridden(variant[phase], values) : variant[phase];
   });
   const host = scope.__sverlinHost;
   const borders = new Set<number>();

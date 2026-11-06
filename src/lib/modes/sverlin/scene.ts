@@ -112,7 +112,8 @@ const sceneNodeSchema = v.strictObject({
       direction: v.optional(text),
       curve: v.optional(text)
     })
-  )
+  ),
+  follows: v.optional(text)
 });
 
 const sceneHeadSchema = v.strictObject({
