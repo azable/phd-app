@@ -88,6 +88,23 @@ describe('the scoring stage', () => {
     expect(JSON.stringify(calls[0].request)).not.toContain('base64');
   });
 
+  it('judges a component on its state only where it shows one', async () => {
+    const answering = (showsState: number) =>
+      vi.fn(async (request: DecisionsRequest) => ({
+        answers: request.questions.map((question) => ({
+          type: 'predicate',
+          name: question.name,
+          probability: { shows_state: showsState, state_clear: 0.1 }[question.name] ?? 0.9
+        }))
+      }));
+    const number = await scoreOptions([option('a', 'g', 1, 'component')], 'm', answering(0.05));
+    // readable and distinct alone; the answers keep every statement, as recorded.
+    expect(number.scores.get('a')?.score).toBeCloseTo(0.9);
+    expect(number.scores.get('a')?.answers).toMatchObject({ shows_state: 0.05, state_clear: 0.1 });
+    const card = await scoreOptions([option('b', 'g', 1, 'component')], 'm', answering(0.95));
+    expect(card.scores.get('b')?.score).toBeCloseTo((0.9 + 0.1 + 0.9) / 3);
+  });
+
   it('gives an option whose call fails no score, and asks nothing of one with no pictures', async () => {
     const failing = vi.fn(async () => {
       throw new Error('unavailable');

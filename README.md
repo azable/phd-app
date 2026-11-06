@@ -525,8 +525,9 @@ When on, a turn runs a helper round after its reply: short calls fill the holes
 of a skeleton (another view of a type, another arrangement of a layout, or a
 source with holes the assistant wrote), the app builds and measures each fill, a
 decision model scores pictures of them into a shortlist, and the designing model
-picks which fills go together. Every stage, its models, the shortlist size and
-how long the reply waits are set in one place,
+picks which fills go together (skipped for a round of one hole group, which has
+nothing to combine). Every stage, its models, the shortlist size and how long
+the reply waits are set in one place,
 [`helper-pipeline.ts`](src/lib/server/ai/bots/helper-pipeline.ts):
 `helpers: false` turns all of it off whatever a condition says, and
 `scoring.enabled` or `choosing.enabled` false skips that stage. The pictures
