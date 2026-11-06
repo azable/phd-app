@@ -142,7 +142,7 @@ import {
 import { applySourceEdits } from '$lib/server/ai/decisions/source-edits';
 import type { ChatBotAttemptProfile } from '$lib/server/ai/bots/types';
 
-import { logModelCall } from './ai-cost-log';
+import { logModelCall } from '$lib/server/ai/costs/ai-cost-log';
 import { runProjectCommand } from './command-lock';
 import { formatDiagnosticSummary } from './diagnostics';
 import { recordText, sourceSha256 } from './fingerprints';

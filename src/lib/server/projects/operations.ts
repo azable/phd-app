@@ -39,7 +39,7 @@ import {
   projectOperationDeadlineError,
   runWithProjectOperationSignal
 } from './operation-context';
-import { logOperationCost } from './ai-cost-log';
+import { logOperationCost } from '$lib/server/ai/costs/ai-cost-log';
 import { recoveryEventsForInterruptedOperations } from './recovery';
 import { ProjectNotFoundError, projectRepository, type ProjectRepository } from './repository';
 import {
