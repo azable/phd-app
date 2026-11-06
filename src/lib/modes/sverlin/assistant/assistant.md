@@ -645,8 +645,8 @@ do it where it makes the source clearly simpler, for example a variable that
 keeps the end of the sorted part for the picture to read. Never use a stand-in
 value that means nothing, such as -1 for no position, or a workaround where the
 language has a direct way, such as a flag added solely to make something show or
-hide, or a cast to reach another view, where a label, `<When of="@label">`, a
-view chosen per place, or a pointer at a label does it (see Views of what a step
+hide, or a cast to reach another view, where a label, `when="@label"`, a view
+chosen per place, or a pointer at a label does it (see Views of what a step
 computed). Keep each structure as data in the domain and the input, for example
 a DFA’s transition table or a graph’s edges, never written into a view per
 index, so the picture follows the run, for example lighting the transition just
