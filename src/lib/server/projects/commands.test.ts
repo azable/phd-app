@@ -2444,6 +2444,56 @@ describe('submitProjectFeedback', () => {
     });
   });
 
+  it('keeps the words of feedback whose element its source does not show where its id says', async () => {
+    mocks.generatePrepared.mockReset().mockResolvedValue({
+      reply: markdownMessage('Noted.'),
+      decision: { action: 'respond' },
+      prompt: {},
+      generation: { botId: 'sverlin-assistant', adapterId: 'test-adapter', model: 'test-model' }
+    });
+    const { createProject } = await import('./service');
+    const { submitProjectFeedback } = await import('./commands');
+    const created = await createProject(
+      { title: 'Element lost', creation: { templateId: 'linear-search' } },
+      serviceDependencies
+    );
+    const presentation = presentedEvent(created).payload.presentation;
+    const result = await submitProjectFeedback(
+      {
+        projectId: created.projectId,
+        expectedHead: projectHead(created).id,
+        content: [
+          ...markdownMessage('Hide this'),
+          {
+            type: 'element-ref',
+            presentationId: presentation.presentationId,
+            step: 1,
+            element: {
+              id: '2:40',
+              label: 'Inspect neighbour B.',
+              layouts: [{ node: '1:1', seed: 7 }]
+            }
+          }
+        ],
+        focus: [],
+        presentationCount: 1,
+        operationId: '12345678-1234-4123-8123-123456789abc'
+      },
+      commandDependencies
+    );
+    const feedback = result.document.events.find((event) => event.type === 'feedback.submitted');
+    expect(feedback?.type === 'feedback.submitted' && feedback.payload.content).toEqual([
+      { type: 'markdown', text: 'Hide this' },
+      {
+        type: 'presentation-ref',
+        presentationId: presentation.presentationId,
+        step: 1,
+        stepName: expect.any(String)
+      },
+      { type: 'markdown', text: ' (the part showing “Inspect neighbour B.”)' }
+    ]);
+  });
+
   it('traces a referenced element to its node in the presentation source for the assistant', async () => {
     mocks.generatePrepared.mockReset().mockResolvedValue({
       reply: markdownMessage('Noted.'),
@@ -2485,15 +2535,7 @@ describe('submitProjectFeedback', () => {
         commandDependencies
       );
 
-    await expect(
-      submit([{ ...reference, element: { id: `${line}:2`, label: 'x' } }])
-    ).rejects.toThrow('is not a node of that presentation');
     await expect(submit([{ ...reference, step: 99 }])).rejects.toThrow('has no step 100');
-    await expect(
-      submit([
-        { ...reference, element: { ...reference.element, layouts: [{ node: '1:1', seed: 7 }] } }
-      ])
-    ).rejects.toThrow('Layout node 1:1 is not a node');
     expect(mocks.generatePrepared).not.toHaveBeenCalled();
 
     await submit([reference]);

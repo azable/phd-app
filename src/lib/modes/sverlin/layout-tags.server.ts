@@ -436,9 +436,16 @@ export function layoutTags(source: string): {
       });
       continue;
     }
-    const bare = opening.replace(when[0], '');
+    // <When> goes in before the tag and `when` is blanked in it, so the tag keeps its column once
+    // the shift the insertion adds is taken back, and its id names it where it is written.
+    const around = { start, length: 0, text: `<When of="${shownAt}">` };
+    const unwhen = {
+      start: start + '<Node'.length + (when.index ?? 0),
+      length: when[0].length,
+      text: blank(when[0])
+    };
     if (props.trimEnd().endsWith('/')) {
-      edits.push({ start, length: opening.length, text: `<When of="${shownAt}">${bare}</When>` });
+      edits.push(around, unwhen, { start: start + opening.length, length: 0, text: '</When>' });
       continue;
     }
     // Its closing tag, past the nodes inside it.
@@ -457,7 +464,7 @@ export function layoutTags(source: string): {
       at = tags.lastIndex;
     }
     if (!closing) continue; // left to Svelte, which names the unclosed node
-    edits.push({ start, length: opening.length, text: `<When of="${shownAt}">${bare}` });
+    edits.push(around, unwhen);
     edits.push({ start: closing.index, length: closing[0].length, text: `${closing[0]}</When>` });
   }
   // A token in a caption's text, $name[text], refers to the place @name as a listing's token does
