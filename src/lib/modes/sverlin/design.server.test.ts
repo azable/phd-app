@@ -89,7 +89,7 @@ describe('design space', () => {
 
 describe('variants', () => {
   it('takes chosen values, keeps a base where it fits, and gives the rest the starter', () => {
-    const { values, origins } = buildVariant(
+    const { values, origins, dropped } = buildVariant(
       space,
       starter,
       {
@@ -105,6 +105,12 @@ describe('variants', () => {
     expect(values['IntCell.fill']).toBe(starter['IntCell.fill']);
     expect(origins['IntCell.fill']).toBe('starter');
     expect(values).not.toHaveProperty('gone');
+    // A base value outside its variable's options is said; a variable the source lost goes quietly.
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toContain('IntCell.fill');
+    expect(dropped[0]).toContain('not-a-colour');
+    expect(dropped[0]).toContain('The value kept from the version built on is left out');
+    expect(dropped[0]).toMatch(/The picture is drawn as it is\.$/u);
   });
 
   it('rejects a chosen value outside its options, and leaves out one for no variable, saying why', () => {

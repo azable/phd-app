@@ -42,6 +42,7 @@ import {
   type KindRole
 } from './library/node/design';
 import { keptKey, keptValues, writtenText } from './library/node/design-keys';
+import { designOnlyWarning } from './padding-warnings.server';
 
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
@@ -632,7 +633,16 @@ export function buildVariant(
     if (fits(space, key, value)) {
       values[key] = value as DesignValue;
       origins[key] = 'kept';
-    }
+    } else if (Object.hasOwn(space, key))
+      // A variable the design still offers but not with this value, as a minSize between two of
+      // its steps, is said, not dropped unseen; a variable the source no longer has goes quietly,
+      // as a base from before an edit holds many. A look only, never sending a version back.
+      dropped.push(
+        writtenText(
+          `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`,
+          has
+        )
+      );
   }
   // A kind's prop set apart from its level stays its own; every other follows its level.
   const own = new Set(
