@@ -40,6 +40,11 @@ export const componentQuestions: PredicateQuestion[] = [
   },
   {
     type: 'predicate',
+    name: 'shows_state',
+    instructions: 'A drawing shows a state of its value, as current, visited, sorted or done.'
+  },
+  {
+    type: 'predicate',
     name: 'state_clear',
     instructions:
       'Where a drawing shows a state, as current, visited, sorted or done, that state is clear at a glance.'
@@ -74,7 +79,27 @@ export const contextQuestions: PredicateQuestion[] = [
   }
 ];
 
-/** What one option was scored: the mean probability of its statements, and each one's. */
+/**
+ * Statements that only say whether another counts, by the one they decide: a view showing no state,
+ * as a number, is not judged on how clear its state is (project f9cbf444's views of Int scored 0.06
+ * there, pulling each score to about 0.48). The domain cannot say this: an enumeration is a state
+ * (done) or a name (A), and a place's light is a state too, so the model judges it from the pictures.
+ */
+const countsWhere: Readonly<Record<string, string>> = { state_clear: 'shows_state' };
+const deciding = new Set(Object.values(countsWhere));
+
+/**
+ * The statements an option's score is the mean of: not those that only decide, nor one whose
+ * deciding statement is more likely false (one with no answer there counts).
+ */
+function counted(answers: Readonly<Record<string, number>>): number[] {
+  return Object.entries(answers).flatMap(([name, probability]) => {
+    const where = countsWhere[name];
+    return deciding.has(name) || (where && (answers[where] ?? 1) < 0.5) ? [] : [probability];
+  });
+}
+
+/** What one option was scored: the mean probability of its counted statements, and each one's. */
 export type OptionScore = { score: number; answers: Record<string, number> };
 
 /** One call to the decision model, for the Timeline and the logs. */
@@ -137,7 +162,7 @@ const trueProbability = (response: DecisionsResponse, question: PredicateQuestio
 
 /**
  * Score every option at once, one request each: the score is the mean probability of "true" over
- * its questions. An option whose call fails, or with no pictures, has no score.
+ * its counted questions. An option whose call fails, or with no pictures, has no score.
  */
 export async function scoreOptions(
   options: readonly ScoringOption[],
@@ -163,7 +188,7 @@ export async function scoreOptions(
               return probability === undefined ? [] : [[question.name, probability]];
             })
           );
-          const values = Object.values(answers);
+          const values = counted(answers);
           if (values.length)
             scores.set(option.id, {
               score: values.reduce((sum, value) => sum + value, 0) / values.length,
