@@ -507,6 +507,7 @@
       text-decoration={run.decoration === 'strike' ? 'line-through' : run.decoration}
       textLength={run.box.width > 0 ? run.box.width : undefined}
       lengthAdjust="spacing"
+      style:white-space="pre"
       data-sv-place={run.places?.join(' ')}
       opacity={node.opacity}>{cased(run)}</text
     >
