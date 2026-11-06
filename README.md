@@ -525,11 +525,13 @@ decision model scores pictures of them into a shortlist, and the designing model
 picks which fills go together. Every stage, its models, the shortlist size and
 how long the reply waits are set in one place,
 [`helper-pipeline.ts`](src/lib/server/ai/bots/helper-pipeline.ts):
-`helpers: false` turns all of it off whatever a condition says, and
-`scoring.enabled` or `choosing.enabled` false skips that stage. The pictures
-come from the server PDF, drawn by `pdfjs-dist` on `@napi-rs/canvas` (npm
-packages, no system package), so the Render host makes them too; if making them
-fails, the round skips scoring and ranks by the app's measures.
+`helpers: false` turns all of it off whatever a condition says,
+`everyProject: true` (on for now, in development) turns it on for every project
+unless its own dev switch is off, and `scoring.enabled` or `choosing.enabled`
+false skips that stage. The pictures come from the server PDF, drawn by
+`pdfjs-dist` on `@napi-rs/canvas` (npm packages, no system package), so the
+Render host makes them too; if making them fails, the round skips scoring and
+ranks by the app's measures.
 
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):
