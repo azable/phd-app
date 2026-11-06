@@ -5,11 +5,16 @@
  */
 
 import { basicSetup, EditorView } from 'codemirror';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { html } from '@codemirror/lang-html';
+import {
+  HighlightStyle,
+  LanguageSupport,
+  syntaxHighlighting,
+  type LRLanguage
+} from '@codemirror/language';
 import { javascript } from '@codemirror/lang-javascript';
 import type { Extension } from '@codemirror/state';
-import { tags } from '@lezer/highlight';
+import { styleTags, tags } from '@lezer/highlight';
+import { svelte } from 'codemirror-lang-svelte';
 
 import { sverlinLabelMarks } from './label-marks';
 
@@ -60,11 +65,24 @@ const sverlinHighlightStyle = HighlightStyle.define([
   }
 ]);
 
+/**
+ * Svelte's grammar, reading a label's value, as `{@scan.check}`, as a variable: Svelte knows only
+ * its own `{@…}` tags and marks any other as invalid. The support's completions stay, as they are
+ * the language's data, which a configured language shares.
+ */
+function sverlinLanguage(): LanguageSupport {
+  const support = svelte();
+  const language = (support.language as LRLanguage).configure({
+    props: [styleTags({ 'UnknownBlock/BlockType UnknownBlockContent': tags.variableName })]
+  });
+  return new LanguageSupport(language, support.support);
+}
+
 /** Return CodeMirror language support for a project artifact language. */
 export function artifactLanguageSupport(language: ArtifactLanguage): Extension {
   switch (language) {
     case 'svelte':
-      return html({ selfClosingTags: true });
+      return sverlinLanguage();
     case 'json':
       return javascript();
   }
