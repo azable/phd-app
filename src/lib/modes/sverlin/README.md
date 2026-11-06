@@ -59,20 +59,20 @@ Design). A plain `<script>`, or one with any other attribute, is refused.
 
 ## View
 
-The view is markup made only of `<Node>`, `<Link>`, and `<Pointed>` components,
-a `<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
+The view is markup made only of `<Node>` and `<Link>` components, a
+`<Listing />`, text inside nodes, and Svelte blocks and tags such as `{#if}`,
 `{#each}`, and `{@const}`, with no `<script>`, `<style>`, HTML, or SVG: every
 visible thing is a node or a link, so participants can select it and
 presentations can vary it. Nodes take no props that set a look: a node's kind is
 the view or layout it is in, or one it names with `kind`, and the design gives
 each kind its look. Every input and algorithm variable in scope at the selected
 step and the library components are already in scope; never write `import`, and
-never declare names `Node`, `Link`, `Pointed`, `Listing`, `View`, `Layout`,
-`When`, or `OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`);
-Sverlin's own constructs are capitalised tags, as `<Node>`, `<View>`,
-`<Layout>`, and `<When>`; and code is in `<script>` blocks named by an
-attribute. `{#snippet}` and `{@render}` are refused: what one would draw is a
-layout, a view, or a node with a `kind`.
+never declare names `Node`, `Link`, `Listing`, `View`, `Layout`, `When`, or
+`OneOf`. Blocks in `{#…}` are Svelte's own (`{#if}`, `{#each}`); Sverlin's own
+constructs are capitalised tags, as `<Node>`, `<View>`, `<Layout>`, and
+`<When>`; and code is in `<script>` blocks named by an attribute. `{#snippet}`
+and `{@render}` are refused: what one would draw is a layout, a view, or a node
+with a `kind`.
 
 - The top level holds views, at least one layout, and the storyboard (see
   Storyboard): every source declares its layouts, and one without is refused. A
@@ -315,12 +315,13 @@ a node around it, not beside the `{#each}`. Draw an array of the state with a
 view of its type and write its `layout`, as
 `<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>`
 with `{values}` in the page, rather than a layout looping over the variable: the
-design can then offer another view of it, as bars, and pointers into it mark its
-items as before. A layout's loop still works. Every view is measured for every
-input its type allows, so its box keeps one size and nothing moves between steps
-or inputs: with every value of its type where there are few, else the widest,
-and with each `{#if}`, `<When>`, and `<OneOf>` in it going each way, whatever
-its values say, so a branch no input here takes still has room.
+design can then offer another view of it, as bars, and links from variables
+still reach its items. Where a pointer's label should stand in a lane at its
+cell, the layout draws the array as a grid instead (see Pointers). Every view is
+measured for every input its type allows, so its box keeps one size and nothing
+moves between steps or inputs: with every value of its type where there are few,
+else the widest, and with each `{#if}`, `<When>`, and `<OneOf>` in it going each
+way, whatever its values say, so a branch no input here takes still has room.
 
 So a test of which member a union holds that reads inside it in a branch is an
 error, as `{#if this.next !== 'end'}{this.next.name}{/if}`: measured going the
@@ -347,105 +348,55 @@ a varying count of values in one array of its own.
 ## Pointers
 
 Draw a pointer as a link from the variable to what it points at: a view of the
-position or reference with `<Link to={this} />`, as
+position type (`index(...)`) or reference type (`ref(...)`) holding
+`<Link to={this} />` and a caption, as
 `<View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>`,
-rendered inside a node where the variable's label should stand: a grid's lane
-under the cells (`<Node row={1} col={i}>{i}</Node>`), a panel beside the
-structure, or a node of a free layout, which then follows the element it
-reaches. The link paints the element while it points there, in its kind's target
-paint, and reaches a dashed ghost one past either end of an array, so nothing
-needs room kept round the elements (see Link). The rest of this section is the
-older form, still working: a pointer view holding `<Pointed>`.
+rendered inside a node where the variable's label should stand:
 
-A view of a position type (`index(...)`) or reference type (`ref(...)`) can be a
-pointer: it holds one `<Pointed>`, standing for the element pointed at, drawn
-with its own view, and nodes around it, placed by layout, annotate it: a mark
-alone, `<Pointed />`; a bracket,
-`<Node layout="row"><Node>[</Node><Pointed /></Node>`; or a label below,
-`<Node layout="column"><Pointed /><Node kind="Caption">i</Node></Node>`, the
-label given a kind of its own. It marks the element only where the view draws it
-whole, with a view of its type, as `{vertex}`: a record drawn only by its
-fields, as `{vertex.name}`, has nothing to mark, and the build warns of a
-pointer that marks nothing at any step.
+- a grid's lane under or over the cells, `<Node row={1} col={i}>{i}</Node>` (see
+  Grid), so the label stands at its element. Give each variable a lane of its
+  own, as two labels in one cell are drawn over each other, and put one over the
+  cells (`row={-1}`) where an arrow from a lower lane would cross another label;
+- a node of a free layout, `<Node kind="Var">{current}</Node>`, which then
+  follows the element it reaches (see Free layout and links);
+- a row under a collection a view draws whole, as `{values}`, where no lane can
+  be written: the arrow then runs from the label to its element. A label's
+  value, as `{@pass.compare.left}`, sets no grid coordinate, so it is drawn so
+  too, each in a node of its own, `<Node>{@pass.compare.left}</Node>`, as a
+  label has a value only at some steps.
 
-- `<Pointed>` takes no props and is written in the pointer view itself. Where
-  the pointer is, the element is drawn in the pointer's kind, as `Here.Pointed`
-  for the view `Here`: its paint (fill, stroke colour, opacity, text colour,
-  shadow, glow, fill style, decoration, expand and the transforms below) shows
-  only there, the rest of its look in every slot, so every slot keeps one size;
-  a stroke keeps its width in every slot, drawn in no colour where none shows.
-  `expand`, 0, 2, 4, or 8 pixels on each side, enlarges the element where the
-  pointer is: in a row of slots it is painted, its fill spread and its stroke
-  drawn further out, in room every element keeps for it, so nothing moves; in a
-  packed row it takes room, growing from where the element's kind places it
-  along the row (`xAnchor`): about its centre by default, the elements before it
-  moving back as far as those after move on; the row keeps room for one
-  expansion for each pointer into it, at its ends as that anchor says (a packed
-  column keeps it at its end). Between steps an element changes size and paint
-  as it moves, so an expansion grows and a highlight fades from one element to
-  the next.
-- A pointer's kind transforms what it is at, where it is, taking no room:
-  `scale` (1, 1.1, 1.2, or 1.3) draws it larger from the element's anchors
-  (`xAnchor`, `yAnchor`), so with `yAnchor` end it grows upward, its bottom
-  level with the rest; `spread` (0, 2, 4, or 6 pixels) draws its fill and stroke
-  further out on every side, its text unchanged, as a painted `expand` is;
-  `offsetX` and `offsetY` (−12 to 12 pixels, in steps of 4) draw it moved,
-  negative being left or up, as a lift of `offsetY` −8. A scale and an offset
-  move the pointer's whole drawing, the marks round `<Pointed>` with the
-  element. Every element keeps room for their reach in every state, so nothing
-  is painted over or cut off and nothing moves; between steps an element grows,
-  shrinks and rises as the pointer comes and goes.
-- Render a pointer in a page layout's root itself, outside other nodes and
-  blocks other than `{#if}`, with a position from the state: a variable (`{i}`),
-  an element, a field (`{edges[e].to}`), or a label (see Views of what a step
-  computed). There a position type draws as a mark, through its pointer views
-  (`{Index}.pointer`), so every mark of it looks the same; inside another node,
-  as `<Node>at {i}</Node>`, as its number, through its other views (`{Index}`).
-  A pointer in a layout another layout draws by its tag draws nothing and keeps
-  no room.
-- The page draws the pointer around the element wherever that is drawn. Every
-  element keeps room for the pointers that can point into its array, and a
-  position shown past an end gets a slot there, so nothing moves as pointers
-  move. Pointers at one element nest, the one rendered last outermost; pointers
-  never at the same element at the same step share one slot, so an element keeps
-  room only for as many labels as are ever there together; a slot is as large as
-  the largest of the pointers sharing it, whichever is drawn, so the element
-  stays where it is in any layout, a free one included. A pointer out of scope,
-  pointing nowhere, or in an `{#if}` branch not taken draws nothing and keeps
-  its room.
-- A pointer view may read the input and algorithm variables, so its label can
-  follow the state. A pointer at an element drawn as a link, as the edge being
-  examined, gives the link its kind's stroke and width.
+The link paints the element while it points there, in its kind's target paint
+(see Link), and reaches a dashed ghost one past either end of an array, so
+nothing keeps room round the elements. It reaches the node drawing the element
+by a view of its type, as `{vertex}`, or else the node an `{#each}` draws the
+item in, as a bar drawn by its height; it reaches no element drawn as a link, as
+an edge.
+
+- One choice of view serves every render of a type, so a position drawn as an
+  arrow in a lane is an arrow in a sentence too: write a number in words as a
+  node of its value, `<Node kind="Number" value={i} />`, and a reference by what
+  it refers to, `{at(current).name}`.
 - A view names the place it is rendered at with `{place()}`: `lo` for `{lo}`,
   `pair.left` for a field in a part, `before` for a `{@const before = j - 1}`,
   and a label's last name, never its path, `neighbour` for
   `{@visit.look.neighbour}`, so a label named after what it marks captions
-  itself. So one view captions every pointer,
-  `<View of="Index" name="Mark"><Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node></View>`,
-  and a source declares one, not one for each name. The design labels a place in
-  the participant's words, as `:lo.label` "low" or
-  `:@visit.look.neighbour.label` "next to visit", any text of up to 24
-  characters, which `place()` gives instead. `place()` is written in any view,
-  as a mark drawn in a grid cell (see Grid), and in a union member's view names
+  itself. So one view captions every pointer, as `Arrow` above, and a source
+  declares one, not one for each name. The design labels a place in the
+  participant's words, as `:lo.label` "low" or `:@visit.look.neighbour.label`
+  "next to visit", any text of up to 24 characters, which `place()` gives
+  instead. `place()` is written in any view, and in a union member's view names
   the place the union's value is drawn at, as `prev` for `{prev}` holding a
   `Next = union(NodeRef, End)`. An expression with no name of its own, as
   `{j - 1}` or `{edges[e].to}`, has no place: `place()` gives it as written, and
   the design cannot label it; name it with `{@const}` to label it. A name
-  written into a view, as `i` under the mark, is right only where the variant
+  written into a view, as `i` under the arrow, is right only where the variant
   chooses that view for that place, and a randomised variant can choose it
   elsewhere; write `{place()}` instead.
-- A pointer view's layout places its marks round the element: a column puts them
-  under it, which suits a row of cells. For an array drawn in a column, give the
-  type a second pointer view whose marks run across, as
-  `<View of="Index" name="Side"><Node layout="row"><Pointed /><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node></View>`,
-  its tip's icon `arrow-left` in the design, and choose it with the column's
-  view of the array.
 
 <!-- Why place(): in a model test on 6 November (GPT-6.1 Terra low and Sol medium,
 five algorithms each), every output in the pointer form without it declared one
 pointer view per pointer only to type its label; given place(), 8 of 10 used one
-view for all pointers. Two outputs also chose a type's number view ({Position})
-where no position drew as a number, which the build leaves out with a warning. -->
+view for all pointers. -->
 
 - A reference follows its element as it moves: `{tracked}`, with
   `const tracked = Tracked(values[3]);`, marks that value wherever a sort takes
@@ -545,9 +496,9 @@ at the index, as
 `for (@first[let k = Slot(around, 0)]; @another[Within(k, Count(around))]; @step[k = Step(k)]) @look{ const w = around[k]; … }`,
 where `Slot = index(Neighbours)` and `around` is the list declared before the
 loop. A position names the array it points into, as `Slot(around, 0)`, where
-that is not the only one of its type at the top level, and draws as a pointer
-into it: with a pointer view of `Position`, `{i}` marks the cell `i` points at
-as an index loop walks `digits`.
+that is not the only one of its type at the top level, and a link from it
+reaches into that array: with a view of `Position` holding `<Link to={this} />`,
+`{i}` points at the cell `i` is at as an index loop walks `digits`.
 
 A function is declared at the top level of the algorithm block, as
 `function search(a, target) { ... }`, and sees only its parameters: give it the
@@ -585,22 +536,29 @@ Binary search, stopping where it finds the target:
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Index" name="IndexText"><Node value={this} /></View>
-<View of="Index" name="Mark">
-  <Node layout="column"><Pointed /><Node kind="Caption">{place()}</Node></Node>
+<View of="Index" name="Arrow">
+  <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
 </View>
-<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Title"><Node>Binary search for {target}</Node></Layout>
-<Layout name="Range"><Node>between {lo} and {hi}</Node></Layout>
+<Layout name="Cells">
+  <Node layout="grid">
+    <Node kind="Lane" row={-1} col={mid}>{mid}</Node>
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={lo}>{lo}</Node>
+    <Node kind="Lane" row={2} col={hi}>{hi}</Node>
+  </Node>
+</Layout>
+<Layout name="Range">
+  <Node layout="row">
+    <Node>between</Node><Node kind="Number" value={lo} /><Node>and</Node><Node kind="Number" value={hi} />
+  </Node>
+</Layout>
 
 <Layout name="Stacked">
-  <Node>
+  <Node layout="column">
     <Title />
-    {values}
+    <Cells />
     <Range />
-    {lo}
-    {mid}
-    {hi}
   </Node>
 </Layout>
 
@@ -611,10 +569,10 @@ Binary search, stopping where it finds the target:
 </Storyboard>
 ```
 
-Inside `Range`, `lo` and `hi` are numbers, drawn by `IndexText`; in the root
-they and `mid` are marks, drawn by `Mark`, each captioned with its own name by
-`{place()}`: one view for every pointer. The list is drawn by `Cells`, a view of
-its type, so a variant could offer another, as bars. The loop ends at `break`
+In `Cells`, `lo`, `mid` and `hi` stand in lanes of their own at their cells,
+each an arrow drawn by `Arrow` and captioned with its own name by `{place()}`:
+one view for every pointer. Inside `Range`, `lo` and `hi` are numbers, nodes of
+their values, as `Arrow` is the view of every `Index`. The loop ends at `break`
 with `mid` on the target; a search for a value not there ends with `lo` past
 `hi`.
 
@@ -781,16 +739,20 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<View of="NodeRef" name="Here"><Pointed /></View>
+<View of="NodeRef" name="Here">
+  <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
+</View>
 <Layout name="List">
-  <Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node>
+  <Node layout="free" flow="x">
+    {#each nodes as n}{n}{/each}
+    <Node kind="Var">{prev}</Node>
+    <Node kind="Var">{cur}</Node>
+  </Node>
 </Layout>
 
 <Layout name="Stacked">
   <Node>
     <List />
-    {prev}
-    {cur}
   </Node>
 </Layout>
 
@@ -838,8 +800,9 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   where it points back. A tree's children are placed in the order their links
   leave it, so the left field's child is on the left. Where the field is the
   end, the link draws the end with its type's view (`{End}`, as `EndMark`'s ∅).
-  A pointer view of the reference, as `Here`, marks the node a variable refers
-  to, and draws nothing at the end.
+  A view of the reference holding `<Link to={this} />`, as `Here`, drawn in a
+  node of the free layout, points at the node a variable refers to and follows
+  it; at the end it waits in a row under the layout, drawing ∅.
 - References suit nodes added and linked as the algorithm runs; where it does
   arithmetic on places, or the structure is an array (an array-based tree, a
   graph over a fixed list of vertices), keep a position instead, `index(Nodes)`.
@@ -996,8 +959,8 @@ inserts, `{@insert.key}`, out of scope once its block ends. Its step ends before
 the declaration's name holds the value, so `key` does not exist there: to pause
 where a view draws `key`, label the whole statement,
 `@key[const key = values[i];]`, and the build warns of a pause on the value
-alone where the view draws the name. A label giving a position is drawn by a
-pointer, pointing while that code runs.
+alone where the view draws the name. A label giving a position is drawn by its
+type's view, a link pointing while that code runs.
 
 To mark what a step used, label it and render the position's type at each label,
 so every mark looks the same, marking with a label rather than a loop variable
@@ -1010,8 +973,10 @@ for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
 ```
 
 ```svelte
-{@pair.compare.left}
-{@pair.compare.right}
+<Node kind="Marks" layout="row">
+  <Node>{@pair.compare.left}</Node>
+  <Node>{@pair.compare.right}</Node>
+</Node>
 ```
 
 A label gives a value only where its code ran, `&&` skipping it included, so the
@@ -1023,11 +988,11 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
-`Highlight.Pointed:@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
-the pairs found out of order red, and with `@insert.swap.to` in the scene's
+`Arrow.Link:@insert.swap.from.targetFill` and `…to.targetFill` `red-300`, turns
+only the pairs found out of order red, and with `@insert.swap.to` in the scene's
 pause, as a step of their own before anything is written. Showing or hiding
 something at some steps needs no flag, sentinel, or cast in the algorithm: a
-label, a pointer at a label, a view chosen per place, or `<When of="@label">`
+label, a link from a label, a view chosen per place, or `<When of="@label">`
 below does it.
 
 `<Node when="@insert.swap">…</Node>` shows the node at each step inside a span
@@ -1187,23 +1152,20 @@ The design space is every variable of a component's look, found in its markup:
 
 - `{Int}`, for each type rendered by name: its views and `none` (see Views of
   types).
-- `{Index}.pointer`, for each position type rendered by name as a pointer: its
-  pointer views and `none` (see Pointers).
 - Each layout's frame, its kind's: `ratio`, `justify`, `align`, `padding`, and
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
   node a layout writes beside what it draws, as a row in its root, is of its
   kind too.
 - A listing's, where the view places a `<Listing />`: `listing.language`, its
   lit look, as `listing.lit.radius`, and each region's paint, as
-  `listing.lit@insert.compare.left.fill`, which follows its label's mark until
-  set, and where it has tokens, `listing.places` (see Listing).
+  `listing.lit@insert.compare.left.fill`, which follows the listing's lit look
+  until set, and where it has tokens, `listing.places` (see Listing).
 - Each kind of node's props. A kind is the view or layout a node is in, its
   name, as `Items` or `Title`; every node of a view or layout is of its kind. A
   node naming its kind, as `<Node kind="Header">` in `Table`, is of the kind
   `Table.Header`, with the nodes inside it; in a view, as `IntTally.Tally`. A
-  pointer view's `<Pointed>` is a kind of its own, as `Here.Pointed`, and so is
-  a layout's or view's `<Link>`, as `Graph.Link`. A variable is its kind and
-  prop, as `Here.Pointed.fill` or `Items.Under.shown`.
+  layout's or view's `<Link>` is a kind of its own, as `Graph.Link`. A variable
+  is its kind and prop, as `Arrow.Link.targetFill` or `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard=true.fill` or
   `LevelCell.textSize.from`, or a length's unit, as `Bar.height.unit` (see Props
@@ -1214,11 +1176,11 @@ The design space is every variable of a component's look, found in its markup:
 A view's or layout's name is its kind, and so is a node's `kind`, so each names
 what its nodes are, never how they look: `Caption`, `Visited`, `Under`, not
 `Amber` or `Big`. Each has a name of its own in the whole view, nested ones
-included, as `CurrentCaption` and `NeighbourCaption` inside two pointer views,
-never `Caption` in both; a layout is not named as a type, and a tag names a
-layout, so every kind is known before the view runs. A `kind` is written as it
-is, one capitalised word, or as an expression whose every result is such a word
-written in the source, or `undefined` for the view's or layout's own kind, as
+included, as `CurrentCaption` and `NeighbourCaption` inside two views, never
+`Caption` in both; a layout is not named as a type, and a tag names a layout, so
+every kind is known before the view runs. A `kind` is written as it is, one
+capitalised word, or as an expression whose every result is such a word written
+in the source, or `undefined` for the view's or layout's own kind, as
 `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}`: the node takes the kind
 its expression gives at each step, so one node, not an `{#if}` doubling it,
 marks a cell; at a step where a variable the expression reads does not exist, as
@@ -1251,10 +1213,7 @@ Every kind of node has these props, each with a fixed set of options:
   `<Node layout="row"><Node>lo {lo}</Node><Node>mid {mid}</Node></Node>` only
   the `mid` part hides while `mid` is out of scope (a layout drawn by its tag in
   it counts as its nodes do). Split a sentence into parts to keep what is there.
-  A node holding no render, as a title, stays. A `<Pointed>` kind has no
-  `shown`: to drop a pointer, leave out a node around its `<Pointed>`, give its
-  type's view `none`, or render it in `{#if}`, its elements then drawn as
-  without it.
+  A node holding no render, as a title, stays.
 - `fill` and `stroke`: `none` or a colour; `color`: the text's colour. A colour
   is white, black, a hue-shade, as `sky-200`, or an exact colour of the base's
   palette, as `#E69F00` (see Shared values).
@@ -1292,29 +1251,24 @@ Every kind of node has these props, each with a fixed set of options:
   so a varying box changes size in its slot and nothing around it moves.
   `xAnchor` and `yAnchor`, start, center, or end, place a varying box in its
   slot, left to right and top to bottom, and so say which edges of boxes side by
-  side line up. A `<Pointed>` kind has none of these. Uniform suits a place, as
-  a cell of an array; varying a node whose size or shape means something, as a
-  tag hugging a name, or an array whose box shows its length, not its `max` (an
-  array's kind starts anchored at `start` along its axis, so the slots in use
-  never move as it grows).
+  side line up. Uniform suits a place, as a cell of an array; varying a node
+  whose size or shape means something, as a tag hugging a name, or an array
+  whose box shows its length, not its `max` (an array's kind starts anchored at
+  `start` along its axis, so the slots in use never move as it grows).
 
 A kind arranging its children, with a `layout`, an array, or links, also has
 `spacing`, slots (each child in its slot, a `gap` between slots) or packed (each
 at its own size along the row or column, a `gap` between them, so a growing
-child moves the next; the node itself keeps room for every child's largest, and
-for its pointers' `expand`, so nothing outside it moves), `gap` (as `padding`),
-`align` (start, center, or end, across) and `justify` (start, center, end,
-between, around, or evenly, along; for a grid, see Grid); where an array's node
-has more room than its tracks need, `justify` start, center, or end puts the
-room after, around, or before them, and between, around, or evenly spreads the
-tracks over it; an array's kind starts at center where every value of its type
-keeps one length throughout, as an array being sorted, and at start where one
-grows or shrinks, as a queue, so no element moves as another comes or goes. A
-row or column is a grid of one row or column (see Grid), so positions past an
-array's ends are drawn in end slots, tracks before its first element and after
-its last, kept only as far as drawn positions go. A `<Pointed>` kind has
-`overflow`, shown (drawn past the ends) or hidden (nothing there, keeping no
-room). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and
+child moves the next; the node itself keeps room for every child's largest, so
+nothing outside it moves), `gap` (as `padding`), `align` (start, center, or end,
+across) and `justify` (start, center, end, between, around, or evenly, along;
+for a grid, see Grid); where an array's node has more room than its tracks need,
+`justify` start, center, or end puts the room after, around, or before them, and
+between, around, or evenly spreads the tracks over it; an array's kind starts at
+center where every value of its type keeps one length throughout, as an array
+being sorted, and at start where one grows or shrinks, as a queue, so no element
+moves as another comes or goes. A row or column is a grid of one row or column
+(see Grid). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and
 `strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
 `straight`, `curved` (each arrow choosing its own side and how far to bow round
 what is in its way), or `wire` (straight runs turning only at right angles,
@@ -1325,9 +1279,9 @@ two-way line and `arrow` otherwise; `headSize`, 6, 9 (the start), 12, or 16
 pixels; and, for a link from a variable (see Link), how it paints the element it
 reaches while it is drawn: `targetFill`, `targetStroke` and `targetColor`, each
 `none` (leaving that paint as it is) or a colour, and `targetStrokeWidth`, a
-line's width; they start as the base's `<Pointed>` paint, and a place sets its
-own, as `Mark.Link:j.targetFill`. Like a pointer's, it is paint only, so no box
-changes size. A label's look is its own nodes' kind.
+line's width; they start as the base's `$Link` sets them, and a place sets its
+own, as `Mark.Link:j.targetFill`. It is paint only, so no box changes size. A
+label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -1438,10 +1392,8 @@ no values to bind: give it a type where the algorithm computes it, as `Int(2)`.
   `arrow-up`, `arrow-down`, `arrow-left`, `arrow-right`, `plus`, `minus`,
   `infinity`, `user`.
 - `icon` written bare, as `<Node kind="Arrow" icon />`, draws one icon its
-  kind's design chooses, the variable `Arrow.icon` over the same options. In a
-  pointer view it marks where the pointer is, for example
-  `<View of="Index" name="CurrentMark"><Node layout="column"><Pointed /><Node kind="Arrow" icon /></Node></View>`,
-  and starts as `arrow-up`. A written name, as `icon="flag"`, is refused.
+  kind's design chooses, the variable `Arrow.icon` over the same options. A
+  written name, as `icon="flag"`, is refused.
 
 ```svelte
 <View of="Vertex" name="VertexCard">
@@ -1469,7 +1421,7 @@ value is drawn apart with nothing declared:
   draws, as `{Index}:found` or `{Int}:@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
   can draw, the kinds its nodes name included, as
-  `Highlight.Pointed:@pair.compare.left.fill` or
+  `Arrow.Link:@pair.compare.left.targetFill` or
   `IntTally.Tally:@swap.held.shown`, though not for another view that view
   renders.
 
@@ -1477,23 +1429,20 @@ A place sets only paint and whether it is shown, never how much room anything
 takes: its padding, text size, font, weight, stroke width, corners, sizes, and
 anchors are its kinds', at every step and in every place, so a place lit at one
 step and not the next moves nothing. The same holds for whatever changes a look
-from step to step: a pointer's paint shows only where it is, the rest of its
-look in every slot, and a listing's lit regions set their own fill, stroke, and
-colour only.
+from step to step: a link from a variable paints only what it reaches, and a
+listing's lit regions set their own fill, stroke, and colour only.
 
 ```json
 {
-  "{Index}.pointer": "Highlight",
-  "{Index}:found": "Arrow",
-  "Highlight.Pointed:@pair.compare.left.fill": "sky-100",
+  "{Index}": "Arrow",
+  "{Index}:found": "Flag",
+  "Arrow.Link:@pair.compare.left.targetFill": "sky-100",
   "IntCell:@swap.held.fill": "neutral-100"
 }
 ```
 
-In a key the last part is the prop, and the dots after `:` the place's. A place
-drawn both as a mark and as a number writes its mark's view
-`{Index}.pointer:found`. A label and a variable of one name are two places,
-`:@held` and `:held`.
+In a key the last part is the prop, and the dots after `:` the place's. A label
+and a variable of one name are two places, `:@held` and `:held`.
 
 ### Shared values
 
@@ -1504,15 +1453,15 @@ it says when, as `:` says where, so a place drawn from a label's value is
 `:@label`.
 
 - A token is one value the starter's kinds share: `$text` (text colour),
-  `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight` (a
-  pointer's stroke and fill), `$spacing` (framed values' and pointers' padding),
-  `$radius` and `$lineWidth`. Every kind that starts with a token's value
-  follows it, so `{"$spacing": 0.25}` tightens every framed value and pointer.
+  `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight`
+  (the stroke and fill a link from a variable paints what it reaches with),
+  `$spacing` (framed values' padding), `$radius` and `$lineWidth`. Every kind
+  that starts with a token's value follows it, so `{"$spacing": 0.25}` tightens
+  every framed value.
 - A group sets one prop for every kind its tag makes that has it:
-  `<Node>.padding` for every node's kind (never a `<Pointed>`'s or a
-  `<Link>`'s), `<Pointed>.fill` for every pointer, `<Link>.strokeWidth` for
-  every link, and `<Listing>.syntax` for the listing, as `listing.syntax`. Its
-  value is one of the prop's options or a token, as
+  `<Node>.padding` for every node's kind (never a `<Link>`'s),
+  `<Link>.strokeWidth` for every link, and `<Listing>.syntax` for the listing,
+  as `listing.syntax`. Its value is one of the prop's options or a token, as
   `{"<Node>.fill": "$highlight"}`. A group is set only where a variant sets it,
   and never sets `shown`.
 - A style is a `$` name holding a group of props, as a CSS class does:
@@ -1524,13 +1473,13 @@ it says when, as `:` says where, so a place drawn from a label's value is
   default (`none`).
 - A base is what every kind starts from, written out in the design as values:
   its tokens; a style for each role's look, as `$Value` for every framed value,
-  `$Container`, `$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon`, `$Pointed` and
-  `$Link`, which every kind of that role follows; its scales; its palette; and
-  the listing's look. `"..."` at the top names it, as `"...": "$textbook"`.
-  Every design names its base and holds every role's look: the app has no look
-  of its own. A design that comes in naming none, as a first version's or a demo
-  example's, gets the starter base, `"...": "$starter"`, written in; one naming
-  a base but missing a role's look is refused, naming what is missing.
+  `$Container`, `$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon` and `$Link`, which
+  every kind of that role follows; its scales; its palette; and the listing's
+  look. `"..."` at the top names it, as `"...": "$textbook"`. Every design names
+  its base and holds every role's look: the app has no look of its own. A design
+  that comes in naming none, as a first version's or a demo example's, gets the
+  starter base, `"...": "$starter"`, written in; one naming a base but missing a
+  role's look is refused, naming what is missing.
   - A scale is the steps a prop takes, numbers separated by spaces:
     `scale.spacing` for `padding` and `gap` (em), `scale.radius`, `scale.type`
     for `textSize` and `scale.line` for `strokeWidth` (pixels), and
@@ -1747,16 +1696,15 @@ the scenes' pauses decide whether to pause there.
   (a label's place apart, see below) is an error. When a step's own code, not
   code kept lit from earlier, overlaps a token, the step touches its place:
   every token naming it and its references in the picture light together, in the
-  colour of the place's mark, its pointer view's `<Pointed>` fill
-  (`Mark.Pointed:i.fill`) or its value's view's (`IntCell:key.fill`), or its
-  stroke where the fill is none or white. In the picture, a place is the element
-  a pointer at it points at, or the outermost node of a value rendered there or
-  of a pointer view with nodes around its `<Pointed>`, a caption's number
-  included. Hovering any reference outlines the others, dashed in the place's
-  stroke (its fill where it has none), drawn in a darker shade of its hue where
-  it would show at less than 3:1 on the page, so a pale fill still outlines.
-  `listing.places`, there only where a listing has tokens, says how places
-  light: `fill` (the start: the token filled, a 3px band round the node),
+  colour of the place's view: the target paint of the link it points with
+  (`Arrow.Link:i.targetFill`), or its value's view's fill (`IntCell:key.fill`),
+  or its stroke where the fill is none or white. In the picture, a place is the
+  outermost node of a value rendered there, as an arrow and its caption, a
+  caption's number included. Hovering any reference outlines the others, dashed
+  in the place's stroke (its fill where it has none), drawn in a darker shade of
+  its hue where it would show at less than 3:1 on the page, so a pale fill still
+  outlines. `listing.places`, there only where a listing has tokens, says how
+  places light: `fill` (the start: the token filled, a 3px band round the node),
   `underline`, `outline` (a ring), or `none`, which lights nothing and links
   nothing on hover; none takes room.
 - A token can also go in the text of a layout or a view, for example
@@ -1837,21 +1785,27 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<View of="Position" name="Mark"><Pointed /></View>
+<View of="Position" name="Arrow">
+  <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
+</View>
 <Layout name="Key"><Node>key {key}</Node></Layout>
-<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
+<Layout name="Cells">
+  <Node layout="grid">
+    <Node kind="Lane" row={-1} col={i}>{i}</Node>
+    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
+    <Node kind="Lane" row={1} col={j}>{j}</Node>
+  </Node>
+</Layout>
 <Layout name="Board">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Key />{values}</Node>
+    <Node layout="column"><Key /><Cells /></Node>
   </Node>
 </Layout>
 
 <Layout name="Stacked">
   <Node>
     <Board />
-    {i}
-    {j}
   </Node>
 </Layout>
 
@@ -2056,15 +2010,14 @@ lanes below them, `j` reaching −1 before the first cell:
   triangle of comparisons per pass, or a sparse adjacency matrix placing each
   edge at `row={e.from} col={e.to}`: no placeholder nodes.
 - A position in a cell placed by it, as `<Node row={2} col={i}>{i}</Node>`,
-  draws through the view the design chooses for its type, so a pointer view with
-  no `<Pointed>`, as an arrow and a caption, draws a mark in a lane of its own,
-  and slides from cell to cell as the position moves. With `<Link to={this} />`
-  in that view, the mark is a short arrow to the cell it points at, which it
-  paints, and one past the last cell it reaches a dashed ghost (see Link). A
-  position moved by a number, as `{j - 1}`, is a position too, and so is a
-  `{@const}` holding one, so `{@const before = j - 1}` then
-  `<Node row={4} col={before}>{before}</Node>` draws a mark captioned `before`
-  by `{place()}`.
+  draws through the view the design chooses for its type, so a view of an arrow
+  and a caption draws a mark in a lane of its own, and slides from cell to cell
+  as the position moves. With `<Link to={this} />` in that view, the mark is a
+  short arrow to the cell it points at, which it paints, and one past the last
+  cell it reaches a dashed ghost (see Link). A position moved by a number, as
+  `{j - 1}`, is a position too, and so is a `{@const}` holding one, so
+  `{@const before = j - 1}` then `<Node row={4} col={before}>{before}</Node>`
+  draws a mark captioned `before` by `{place()}`.
 - A cell's kind can come from an expression of names written in the source, as
   `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}` on
   `{#each values as v, k}<Node row={1} col={k}>{v}</Node>{/each}`, which shades
@@ -2285,19 +2238,18 @@ participant liked ("keep this layout but …"), vary that kind's `form`,
 links among the children of the node whose children they join, or in a view
 rendered there, as of an edge, of a node (see Pools and references), or of what
 a labelled expression computed, or in a view of a position or reference drawn at
-a variable (a link from a variable, below); never in a pointer view holding
-`<Pointed>`, which draws inside the element it marks. They take no space; give
-the node a `layout`, `"free"` for a linked structure or `"row"` or `"column"`,
-unless it holds an array's `{#each}`, which runs as the array. Only a free
-layout places its children by their links; in a row, column or grid links are
-drawn over the children, which stay where they would be without them: in a row
-or column each arcs over ends side by side or beside ends one above the other,
-clear of the boxes, and in a grid each runs straight from cell to cell, as a
-heap's edges (see Grid). The row, column or grid keeps room round its children
-for the largest arc its links draw at any step, so its children stay put as
-links come and go. Each link is selectable, as a node is, and its look, how it
-runs and its heads, is its kind's (see Design), never a prop, as `Arrow.Link`
-for a link in `Arrow`.
+a variable (a link from a variable, below). They take no space; give the node a
+`layout`, `"free"` for a linked structure or `"row"` or `"column"`, unless it
+holds an array's `{#each}`, which runs as the array. Only a free layout places
+its children by their links; in a row, column or grid links are drawn over the
+children, which stay where they would be without them: in a row or column each
+arcs over ends side by side or beside ends one above the other, clear of the
+boxes, and in a grid each runs straight from cell to cell, as a heap's edges
+(see Grid). The row, column or grid keeps room round its children for the
+largest arc its links draw at any step, so its children stay put as links come
+and go. Each link is selectable, as a node is, and its look, how it runs and its
+heads, is its kind's (see Design), never a prop, as `Arrow.Link` for a link in
+`Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node
   drawing the element each points at (or, where only its fields are drawn, the
@@ -2422,15 +2374,18 @@ at marked and the queue drawn by number:
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Flag" name="SeenMark"><Node>{this ? '✓' : '·'}</Node></View>
 <View of="Vertex" name="VertexCard"><Node layout="column">{this.name}{this.seen}</Node></View>
-<View of="VertexRef" name="RefCard"><Node value={this} /></View>
-<View of="Queue" name="QueueItems"><Node>{#each this as v}{v}{/each}</Node></View>
-<View of="VertexRef" name="Marked"><Pointed /></View>
+<View of="VertexRef" name="Marked">
+  <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
+</View>
+<View of="Queue" name="QueueItems"><Node>{#each this as v}<Node kind="Entry">{at(v).name}</Node>{/each}</Node></View>
 <Layout name="Graph">
   <Node layout="free">
     {#each vertices as v, k}
       <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
       {#each out[k] as w}<Link from={k} to={w} />{/each}
     {/each}
+    <Node kind="Var">{current}</Node>
+    <Node kind="Var">{@visit.look.check.next}</Node>
   </Node>
 </Layout>
 <Layout name="QueueLine"><Node>queue {queue}</Node></Layout>
@@ -2439,8 +2394,6 @@ at marked and the queue drawn by number:
   <Node>
     <Graph />
     <QueueLine />
-    {current}
-    {@visit.look.check.next}
   </Node>
 </Layout>
 

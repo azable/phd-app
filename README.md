@@ -47,11 +47,11 @@ library changes do not rewrite existing artifacts.
 
 Sverlin components are written in the language described in that guide:
 `domain`, `input`, and algorithm blocks in `<script lang="sverlin">`, followed
-by a view drawn only with `<Node>`, `<Pointed>`, and `<Link>`: the compiler
-rejects view scripts, `<style>`, HTML and SVG elements, text outside a node, and
-props that set a look, so every visible thing is selectable and its look is the
-design's. The server parses each block with acorn, rejects anything outside a
-small JavaScript subset, and runs it in its own interpreter in
+by a view drawn only with `<Node>` and `<Link>`: the compiler rejects view
+scripts, `<style>`, HTML and SVG elements, text outside a node, and props that
+set a look, so every visible thing is selectable and its look is the design's.
+The server parses each block with acorn, rejects anything outside a small
+JavaScript subset, and runs it in its own interpreter in
 [`src/lib/modes/sverlin/algorithm/`](src/lib/modes/sverlin/algorithm/) under
 step, operation, size, and string limits. The input and algorithm do not see the
 seed, so every presentation of a source shares one master trace; its labels form
@@ -286,20 +286,20 @@ and step viewed, the pair compared, or a source chosen on its own) is recorded
 beside it as `feedback.submitted` `viewing`
 ([`feedback-context.ts`](src/lib/client/timeline/feedback-context.ts)), not
 shown in the chat, and given to the assistant as a note before those words. The
-compiler stamps every `<Node>`, `<Pointed>`, and `<Link>` with its view as
-`__view`, which with its `tags` gives its kind, and each node draws the
-variant's values for its kind. The compiler injects the library components and
-every input and algorithm value, the view each type rendered by name draws,
-`step`, and `seed` as props. Presentations record their source's `steps`, each
-by every name it has, their `variant`, where each value came from (`origins`),
-each type's views, and the kinds each tag can be, which the source editor shows
-as a chip in each tag that opens its kind's values in each visible presentation,
-flagging those a pair has differently, after each render of a type the view each
-visible presentation draws it with, and in the first top-level node's chip the
-page frame ([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)).
-Views of a type no visible presentation chose are greyed out. Comparisons align
-each side's step names among the source's steps, showing the previous step on
-the side that omits one; presentations of two sources are never shown together.
+compiler stamps every `<Node>` and `<Link>` with its view as `__view`, which
+with its `tags` gives its kind, and each node draws the variant's values for its
+kind. The compiler injects the library components and every input and algorithm
+value, the view each type rendered by name draws, `step`, and `seed` as props.
+Presentations record their source's `steps`, each by every name it has, their
+`variant`, where each value came from (`origins`), each type's views, and the
+kinds each tag can be, which the source editor shows as a chip in each tag that
+opens its kind's values in each visible presentation, flagging those a pair has
+differently, after each render of a type the view each visible presentation
+draws it with, and in the first top-level node's chip the page frame
+([`drawn-values.ts`](src/lib/client/artifacts/drawn-values.ts)). Views of a type
+no visible presentation chose are greyed out. Comparisons align each side's step
+names among the source's steps, showing the previous step on the side that omits
+one; presentations of two sources are never shown together.
 
 Laying a presentation out, the server also describes what each step draws: each
 element's box, font, paint and text, and each free layout's places and links,
