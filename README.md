@@ -512,10 +512,21 @@ interaction-capture policy; the comments beside its limits explain their
 sampling and delivery tradeoffs.
 
 View helpers are off unless a study condition sets `viewHelpers: true` or an
-administrator turns them on for a project in dev mode. When on, a turn may add
-up to three short calls that propose alternative views for the assistant to
-offer; each turn records whether they were on
+administrator turns them on for a project in dev mode; each turn records whether
+they were on
 ([`view-helpers-config.ts`](src/lib/server/projects/view-helpers-config.ts)).
+When on, a turn runs a helper round after its reply: short calls fill the holes
+of a skeleton (another view of a type, another arrangement of a layout, or a
+source with holes the assistant wrote), the app builds and measures each fill, a
+decision model scores pictures of them into a shortlist, and the designing model
+picks which fills go together. Every stage, its models, the shortlist size and
+how long the reply waits are set in one place,
+[`helper-pipeline.ts`](src/lib/server/ai/bots/helper-pipeline.ts):
+`helpers: false` turns all of it off whatever a condition says, and
+`scoring.enabled` or `choosing.enabled` false skips that stage. The pictures
+come from the server PDF through poppler's `pdftoppm`, which devenv provides;
+where it is missing, as on the Render host today, the round skips scoring and
+ranks by the app's measures.
 
 The stage says what it is waiting for
 ([`PresentationStage.svelte`](src/lib/client/visualization/PresentationStage.svelte)):

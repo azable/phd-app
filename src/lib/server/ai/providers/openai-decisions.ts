@@ -3,6 +3,13 @@
  * a choice and the probability of every option. Called through the SDK's generic request, as the
  * installed SDK predates its decisions resource.
  *
+ * The input is text, or one user message of text and image parts, each image an inline base64
+ * data URL (the endpoint takes no hosted links or file IDs), up to 128 a request. That shape is
+ * from OpenAI's guide (https://developers.openai.com/api/docs/guides/decisions) as quoted by
+ * third-party summaries and the TrueFoundry and LiteLLM gateway docs
+ * (https://www.truefoundry.com/docs/ai-gateway/decisions, https://docs.litellm.ai/docs/decisions),
+ * read 2026-11-06; no request with images has been sent from this app yet.
+ *
  * @packageDocumentation
  */
 
@@ -18,9 +25,16 @@ export type ChoiceQuestion = {
   choices: DecisionChoice[];
 };
 
+export type DecisionsInputPart =
+  | { type: 'input_text'; text: string }
+  | { type: 'input_image'; image_url: string };
+
+/** The most images one request may carry. */
+export const maximumDecisionImages = 128;
+
 export type DecisionsRequest = {
   model: string;
-  input: string;
+  input: string | [{ role: 'user'; content: DecisionsInputPart[] }];
   questions: ChoiceQuestion[];
 };
 

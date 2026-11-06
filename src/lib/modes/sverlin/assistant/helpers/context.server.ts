@@ -21,8 +21,9 @@ export const viewHelperCalls = 3;
 export const helperBuildBudgetMs = 5_000;
 
 /**
- * The most candidates the assistant is given from a round, the best by readability: enough for a
- * few comparisons, few enough to read in its context.
+ * The most candidates the assistant is given from a round, after the pipeline's shortlists and
+ * choice (ai/bots/helper-pipeline.ts): enough for a few comparisons, few enough to read in its
+ * context.
  */
 export const candidatesGiven = 5;
 
@@ -33,7 +34,7 @@ export const candidatesGiven = 5;
 export const viewHelperTimeoutMs = 30_000;
 
 const note =
-  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit. status says whether and when they have run in this project: never say they ran, or proposed nothing, where it says no round has run.';
+  'The view helpers are on: short calls that propose alternative views of one type, or arrangements of one layout, each built with the source and readable, for you to offer as alternatives. After a first version they run on its main type, or on the layout drawing its graph or tree; otherwise set viewHelpers to a type of the source and a task when an alternative view would help, as for a request whose look is open or a participant asking for particular graphics, or to a layout and a task when the arrangement of the page is open or the participant asks where things go, and they run after your reply. The task says in one short sentence what they should show, from what the participant asked, settled and turned down, as "draw each card as a playing card: its suit as a symbol and its rank" or "put the queue beside the graph"; leave it empty when the look is open. The best few arrive in candidates with the next turn, with the task they answered and how each draws. Choose which, if any, to offer: add a view with edit, as written, and compare it with vary; put an arrangement in place of its layout with edit and compare it with the current one; leave out any that would not suit. To try a new representation, or parts that must change together, set viewHelpers.skeleton instead: the whole source with <Hole name="…" kind="view|layout|case|algorithm|any" task="…" /> in place of each part to try (of="Type" or of="Layout" on a view or layout that replaces one, and group="…" on holes that must suit each other, as a layout and its input), with constraints the app checks, as "at most 30 steps", "every label runs", "no crossings" or "text at least 10 px". Each candidate then carries its fills by hole, the app’s facts, a score from pictures where they were judged, and, for a combination, why the designing model put its fills together; offer one by writing its fills into the source with edit. status says whether and when they have run in this project: never say they ran, or proposed nothing, where it says no round has run.';
 
 /** A source's views of one type, as written: a candidate stays offerable while they are unchanged. */
 function viewsOf(source: string, type: string): string {
@@ -66,18 +67,25 @@ export function viewHelpersContext(
   );
   const status = helpersStatus(document);
   if (proposed?.type !== 'visualization.view-candidates') return { note, status, candidates: [] };
-  const { type, layout, task, candidates, sourceSha256 } = proposed.payload;
-  // What the candidates replace: the views of their type, or their layout.
+  const { type, layout, task, candidates, sourceSha256, skeleton } = proposed.payload;
+  // What the candidates replace: the views of their type, their layout, or, for a skeleton the
+  // assistant wrote, the whole source.
   const part = (text: string) =>
-    layout !== undefined ? (layoutBlock(text, layout) ?? '') : viewsOf(text, type ?? '');
+    skeleton !== undefined
+      ? text
+      : layout !== undefined
+        ? (layoutBlock(text, layout) ?? '')
+        : viewsOf(text, type ?? '');
   const written = sourceSha256 === source.sha256 ? source.text : sourceText(document, sourceSha256);
   if (written === undefined || part(written) !== part(source.text))
     return { note, status, candidates: [] };
-  const offered = (markup: string, name: string) =>
-    layout !== undefined
-      ? part(source.text).trim() === markup.trim()
-      : source.text.includes(`name="${name}"`);
-  const waiting = candidates.filter(({ name, markup }) => !offered(markup, name));
+  const offered = ({ markup, name, fills }: (typeof candidates)[number]) =>
+    skeleton !== undefined
+      ? Object.values(fills ?? { markup }).every((fill) => source.text.includes(fill.trim()))
+      : layout !== undefined
+        ? part(source.text).trim() === markup.trim()
+        : source.text.includes(`name="${name}"`);
+  const waiting = candidates.filter((candidate) => !offered(candidate));
   if (!waiting.length) return { note, status, candidates: [] };
   const repliesSince = document.events.filter(
     (event) =>
@@ -86,7 +94,7 @@ export function viewHelpersContext(
   return {
     note,
     status,
-    ...(layout !== undefined ? { layout } : { type }),
+    ...(skeleton !== undefined ? { skeleton } : layout !== undefined ? { layout } : { type }),
     ...(task ? { task } : {}),
     candidates: waiting,
     repliesSince
@@ -126,9 +134,11 @@ function helpersStatus(document: ProjectDocument): string {
       ? `The helpers are ${on}; a round ran, and nothing it proposed built.`
       : `The helpers are ${on}; no round has run yet.`;
   const of =
-    last.payload.layout !== undefined
-      ? `arrangements of ${last.payload.layout}`
-      : `views of ${last.payload.type}`;
+    last.payload.skeleton !== undefined
+      ? 'fills of your skeleton'
+      : last.payload.layout !== undefined
+        ? `arrangements of ${last.payload.layout}`
+        : `views of ${last.payload.type}`;
   return `The helpers are ${on}; ${rounds.length} round${rounds.length === 1 ? '' : 's'} so far, the last at event ${last.id}: ${of}, ${last.payload.candidates.length} kept, ${last.payload.dropped.length} left out.`;
 }
 

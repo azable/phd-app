@@ -20,6 +20,11 @@ import {
   getParticipantIntakeClassifier
 } from '$lib/server/ai/bots/registry';
 import type { ChatAdapter } from '$lib/server/ai/providers/types';
+import type {
+  DecisionsRequest,
+  DecisionsResponse
+} from '$lib/server/ai/providers/openai-decisions';
+import type { HelperPipelineConfig } from '$lib/server/ai/bots/helper-pipeline';
 import { sourceBuildFacts, type AiContextSelection } from '$lib/server/ai/context/project-context';
 import { heldQuestion } from '$lib/shared/projects/questions';
 
@@ -65,6 +70,10 @@ export type ProjectCommandDependencies = {
   comparisonOrder?: () => number;
   /** The provider the view helpers call, the default's where absent. */
   viewHelperAdapter?: ChatAdapter;
+  /** The Decisions API the helpers' scoring stage calls, the real one where absent. */
+  decide?: (request: DecisionsRequest, signal?: AbortSignal) => Promise<DecisionsResponse>;
+  /** The helper pipeline's stages and models, ai/bots/helper-pipeline.ts's where absent. */
+  helperPipeline?: HelperPipelineConfig;
 };
 
 export const defaultProjectCommandDependencies: ProjectCommandDependencies = {

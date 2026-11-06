@@ -19,7 +19,7 @@ const wide: Readability = {
 };
 
 describe('the shape layouts aim at', () => {
-  it('ranks a layout near 16:9 above a square one filling more, and a tall one last', async () => {
+  it('ranks a layout near the stage’s 3:2 above a square one filling more, and a tall one last', async () => {
     const { rankedArrangements } = await import('./arrangements.server');
     const shaped = (width: number, height: number, fill: number) => ({
       values: { 'Graph.form': `${width}x${height}` },
@@ -29,10 +29,10 @@ describe('the shape layouts aim at', () => {
     const ranked = rankedArrangements([
       shaped(600, 1800, 0.9),
       shaped(800, 800, 0.85),
-      shaped(1120, 400, 0.6)
+      shaped(960, 640, 0.6)
     ]);
     expect(ranked.map(({ values }) => values['Graph.form'])).toEqual([
-      '1120x400',
+      '960x640',
       '800x800',
       '600x1800'
     ]);

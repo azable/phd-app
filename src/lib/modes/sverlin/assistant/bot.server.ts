@@ -7,6 +7,7 @@ import {
   needsMoreThoughtJsonSchema,
   parseNeedsMoreThought,
   generatedMessageContentJsonSchema,
+  maximumViewHelpersSkeleton,
   maximumViewHelpersTask,
   type ChatBotConfig,
   type ChatResponseFormat,
@@ -139,14 +140,25 @@ const responseFormatWithViewHelpers = {
                 type: 'string',
                 description:
                   'What the views should show, in one short sentence from what the participant asked and settled, or an empty string.'
+              },
+              skeleton: {
+                type: 'string',
+                description:
+                  'A whole source with <Hole name kind task /> where the helpers fill parts, with type and layout empty; or an empty string.'
+              },
+              constraints: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'What every fill of the skeleton must keep to, as "at most 30 steps" or "every label runs"; empty without a skeleton.'
               }
             },
-            required: ['type', 'layout', 'task']
+            required: ['type', 'layout', 'task', 'skeleton', 'constraints']
           },
           { type: 'null' }
         ],
         description:
-          'What the view helpers should propose alternative views of after this reply, or null.'
+          'What the helpers should propose after this reply: views of a type, arrangements of a layout, or fills of a skeleton; or null.'
       }
     },
     required: [...responseFormat.schema.required, 'viewHelpers']
@@ -205,16 +217,38 @@ export default {
 } satisfies ChatBotConfig<AiProjectContext>;
 
 /**
- * The view helpers' request in a reply: a type and a task, or, from turns before tasks, a type
- * alone. None where it names no type.
+ * The view helpers' request in a reply: a skeleton with holes and its constraints, a type and a
+ * task, a layout and a task, or, from turns before tasks, a type alone. None where it names none.
  */
 export function viewHelpersRequest(value: unknown): { viewHelpers?: ViewHelpersRequest } {
-  const { type, layout, task } =
+  const { type, layout, task, skeleton, constraints } =
     typeof value === 'string'
-      ? { type: value, layout: undefined, task: undefined }
-      : ((value ?? {}) as { type?: unknown; layout?: unknown; task?: unknown });
+      ? { type: value, layout: undefined, task: undefined, skeleton: undefined, constraints: [] }
+      : ((value ?? {}) as {
+          type?: unknown;
+          layout?: unknown;
+          task?: unknown;
+          skeleton?: unknown;
+          constraints?: unknown;
+        });
   const asked = typeof task === 'string' ? task.trim().slice(0, maximumViewHelpersTask) : '';
   const tasked = asked ? { task: asked } : {};
+  if (
+    typeof skeleton === 'string' &&
+    /<Hole\b/u.test(skeleton) &&
+    skeleton.length <= maximumViewHelpersSkeleton
+  ) {
+    const kept = Array.isArray(constraints)
+      ? constraints.filter((line): line is string => typeof line === 'string' && !!line.trim())
+      : [];
+    return {
+      viewHelpers: {
+        skeleton,
+        ...(kept.length ? { constraints: kept.map((line) => line.trim().slice(0, 200)) } : {}),
+        ...tasked
+      }
+    };
+  }
   if (typeof layout === 'string' && layout.trim())
     return { viewHelpers: { layout: layout.trim(), ...tasked } };
   if (typeof type !== 'string' || !type.trim()) return {};

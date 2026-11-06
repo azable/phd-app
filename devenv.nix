@@ -19,6 +19,9 @@ in
   packages = with pkgs; [
     nodejs_24 pnpm_10
     git jq curl
+    # pdftoppm turns the server PDF into the pictures the helpers' scoring stage judges
+    # (src/lib/modes/sverlin/targets/png.server.ts).
+    poppler-utils
   ];
 
   env = {

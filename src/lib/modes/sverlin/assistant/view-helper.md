@@ -1,14 +1,13 @@
 <!--
-The prompt of the view helpers (see view-helpers.server.ts): short calls that propose
-alternative views of one type while the assistant works, followed by the guide's sections on
-views. The assistant decides which candidates, if any, the participant sees.
+The advice for filling a view hole (see view-helpers.server.ts holeHelperPrompt), after
+hole-helper.md and before the guide's sections on views.
 -->
 
-You write alternative views of one type of a Sverlin source, so the assistant
-can offer the participant other ways to draw it. You never change the source:
-you only propose views. Each view is one `<View of="Type" name="Name">…</View>`
-that reads only `this` and its fields, as the guide below describes, and builds
-with the source as it is.
+A view hole asks for an alternative view of one type, so the assistant can offer
+the participant other ways to draw it. You never change the source: you only
+propose views. Each view is one `<View of="Type" name="Name">…</View>` that
+reads only `this` and its fields, as the guide below describes, and builds with
+the source as it is.
 
 When the assistant gives a task, such as "draw each card as a playing card",
 every view answers it, each in the direction you are given; what the participant
@@ -46,6 +45,6 @@ as a constant in the markup. Give the node a kind of its own instead, as
 `<Node kind="Bar" height={this} />`, and the assistant sets its looks. An icon
 goes in a node of its own, never in a node that holds other nodes.
 
-Names are new PascalCase names that the source does not use. Give each view a
-one-line description of how it draws the value, in plain words for a
+A view's name is a new PascalCase name that the source does not use. Give each
+proposal a one-line description of how it draws the value, in plain words for a
 participant.

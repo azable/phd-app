@@ -39,10 +39,43 @@ export const visualizationViewCandidatesEventSchema = v.object({
         readability: v.optional(v.string()),
         /** What its helper tried, as "the main structure beside the other parts": arrangements of
          * one layout share its name, so this tells them apart. */
-        label: v.optional(v.pipe(v.string(), v.maxLength(200)))
+        label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+        /** Its fill of each hole, by the hole's name, where the round filled a skeleton. */
+        fills: v.optional(v.record(v.string(), v.string())),
+        /** The group of holes it fills, or the groups a combination joins. */
+        group: v.optional(v.string()),
+        /** What the app measured of it, in a line (candidate-facts.server.ts). */
+        facts: v.optional(v.string()),
+        /** The decision model's score, 0 to 1, and each question's probability of yes. */
+        score: v.optional(v.number()),
+        answers: v.optional(v.record(v.string(), v.number())),
+        /** Why the designing model put these fills together, for a combination. */
+        why: v.optional(v.pipe(v.string(), v.maxLength(500)))
       })
     ),
     /** How many were proposed and left out, and why. */
-    dropped: v.array(v.object({ name: v.string(), reason: v.string() }))
+    dropped: v.array(v.object({ name: v.string(), reason: v.string() })),
+    /** The skeleton the main agent wrote, where it wrote one rather than naming a type or layout. */
+    skeleton: v.optional(v.string()),
+    /**
+     * Which stages ran and how long each took (ai/bots/helper-pipeline.ts): scoring and choosing
+     * on, off by the configuration, or skipped (no pictures, a failed call, or past the wait).
+     */
+    stages: v.optional(
+      v.object({
+        scoring: v.picklist(['on', 'off', 'skipped']),
+        choosing: v.picklist(['on', 'off', 'skipped']),
+        /** Why a stage was skipped, where one was. */
+        skipped: v.optional(v.string()),
+        /** Whether the round finished after the reply's wait, joining as a further comparison. */
+        late: v.boolean(),
+        ms: v.object({
+          calls: v.number(),
+          builds: v.number(),
+          scoring: v.number(),
+          choosing: v.number()
+        })
+      })
+    )
   })
 });

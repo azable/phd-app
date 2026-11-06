@@ -15,7 +15,7 @@ import type { FrameRatio } from './library/node/props';
  * 1440×900 laptop screen (ProjectWorkspace.svelte), less the browser's and the app's bars. A
  * comparison stacks its two sides, each half as tall, so this is the larger of the two cases.
  */
-const typicalStage = { width: 960, height: 640 };
+export const typicalStage = { width: 960, height: 640 };
 // The margin Frame.svelte keeps round the frame on its stage.
 const stageMargin = 16;
 

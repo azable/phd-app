@@ -109,7 +109,9 @@ const presenters = {
             ? 'Considering your response…'
             : event.payload.purpose === 'choosing'
               ? 'Choosing how the visualizations look…'
-              : 'Generating a visualization…'
+              : event.payload.purpose === 'scoring'
+                ? 'Scoring the helpers’ candidates…'
+                : 'Generating a visualization…'
     ),
   'ai.generation-succeeded': (event) =>
     details(
