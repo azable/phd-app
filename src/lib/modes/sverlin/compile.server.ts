@@ -1394,7 +1394,7 @@ function prepareViews(
     if (wrongRender)
       throw new InvalidSvelteSourceError(
         wrongRender.argued
-          ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each runs(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
+          ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each spans(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
           : `{@${labelOfOperator(wrongRender.name)}} draws what a step's code labelled @${labelOfOperator(wrongRender.name)} gave, which only layouts know: write it in a layout, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
@@ -1633,7 +1633,7 @@ function prepareViews(
         }
         if (reference.kind === 'applied') {
           problem(
-            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
+            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; spans(@check.equal) lists its values so far.`
           );
           continue;
         }
