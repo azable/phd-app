@@ -183,8 +183,9 @@ export type LayoutMemory = {
    */
   probing?: boolean;
   /**
-   * The largest size each node reaches at any step, by id. Nodes keep it as their least size, so a box
-   * whose content changes keeps one size and nothing around it moves.
+   * The largest size each node reaches at any step, by id, or inside a typed component's box by its
+   * site (`view:` and its tag's position), for any value the view is probed with too. Nodes keep it
+   * as their least size, so a box whose content changes keeps one size and nothing around it moves.
    */
   reserved: Map<string, { width: number; height: number }>;
   /**
@@ -240,7 +241,7 @@ export function layoutMemoryContext(): LayoutMemory | undefined {
 
 /**
  * Mark the nodes inside a component whose box is known from rendering all its inputs: they keep
- * their natural sizes, since the box already holds every way they can be drawn.
+ * the largest size their site reaches, shared by every copy of the view (see LayoutMemory.reserved).
  */
 export function provideComponentBox(): void {
   setContext('sverlin:in-component-box', true);

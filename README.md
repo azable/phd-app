@@ -266,10 +266,11 @@ that same frame and scale, which the assistant sees with each version and gets
 back once when its text would be too small to read. Sizes compose bottom up: a
 typed component's root keeps its component's box, any other node keeps the
 largest size it reaches at any step, laid out with the sizes the nodes inside it
-keep, so changing content never resizes a box, every item of a collection keeps
-the largest size any of them reaches, so items line up even when only some
-change, and each arrangement is solved once over the union of every step, with
-every child and link that ever appears
+keep, so changing content never resizes a box (inside a component's box, also
+for every value the component is sized with, one size every copy shares), every
+item of a collection keeps the largest size any of them reaches, so items line
+up even when only some change, and each arrangement is solved once over the
+union of every step, with every child and link that ever appears
 ([`library/node/span.ts`](src/lib/modes/sverlin/library/node/span.ts)), the node
 holding it sized with it; nodes alike are laid out once. Each step's scene
 places children where that solution put them, drawing only that step's links, at

@@ -274,9 +274,10 @@
   const leftOut = untrack(() => __ref !== undefined && (leftOutContext()?.has(__ref) ?? false));
   // A node keeps a least size so that changing content never moves anything around it. A typed
   // component's root keeps the largest box the component reaches for any of its inputs (see
-  // assembly/entry.ts), and the nodes inside it keep their natural sizes, since that box already
-  // holds every way they can be drawn; any other node keeps the largest size it reaches at any step
-  // (see LayoutMemory).
+  // probeComponent in model/reserve.ts); a node inside that box keeps the largest size its site
+  // reaches for those inputs and at any step, one size every copy of the view shares, so a bar's
+  // slot is as long as its type's largest value in each; any other node keeps the largest size it
+  // reaches at any step (see LayoutMemory).
   const memory = layoutMemoryContext();
   // Inside a value of a union, a member's view takes the box the union's members share.
   const union = unionContext();
@@ -288,10 +289,18 @@
   );
   const insideBox = insideComponentBox();
   if (box) provideComponentBox();
+  // A node in a typed view is drawn by every copy of the view and for every value it is probed
+  // with, so it keeps what it keeps (its size inside the box, a grid's tracks) by its site.
+  const inView = untrack(() => Boolean(__component) || insideView());
+  untrack(() => {
+    if (__component) provideInView();
+  });
+  const site = untrack(() => (inView && __ref ? `view:${__ref}` : undefined));
   const reserved = untrack(() => {
     if (box) return box;
-    if (!memory || memory.measuring || insideBox || !id) return undefined;
-    return memory.reserved.get(id);
+    const key = insideBox ? site : id;
+    if (!memory || memory.measuring || !key) return undefined;
+    return memory.reserved.get(key);
   });
   // Its words' largest size at any step (see model/reserve.ts), kept inside a typed component's box
   // too, so words that change keep one block and what their line holds stays put.
@@ -442,15 +451,8 @@
       colSpan: undefined
     };
   });
-  // A grid in a typed view is drawn by every copy of the view and for every value it is probed
-  // with, so it keeps its tracks by its site, one set they all share and line up by.
-  const inView = untrack(() => Boolean(__component) || insideView());
-  untrack(() => {
-    if (__component) provideInView();
-  });
-  const gridKey = untrack(() =>
-    arrangement !== 'grid' ? undefined : inView ? (__ref ? `view:${__ref}` : undefined) : id
-  );
+  // A grid in a typed view keeps its tracks by its site (see site), one set every copy lines up by.
+  const gridKey = untrack(() => (arrangement !== 'grid' ? undefined : inView ? site : id));
   const tracks = untrack(() =>
     gridKey && memory && !memory.measuring ? memory.tracks.get(gridKey) : undefined
   );
@@ -668,6 +670,7 @@
     data-sv-node={id}
     data-sv-kind={__view}
     data-sv-component={__component}
+    data-sv-site={site}
     data-sv-own={ownAxes}
     data-sv-slot={slot}
     data-sv-identity={identity}

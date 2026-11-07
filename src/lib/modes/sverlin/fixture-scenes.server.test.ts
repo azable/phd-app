@@ -70,13 +70,25 @@
  *   layout model had kept the Bar component's box (its largest value, 9) on the bar itself, so
  *   every bar was drawn 9 long. A node keeps its size only along the axes it keeps a slot on, and
  *   the room round it along the others (data-sv-own). No other fixture's scenes changed.
+ * - 13 fixtures: a node inside a typed component's box keeps the largest size its site reaches
+ *   for the values the view is probed with and at any step, one size every copy shares, where it
+ *   kept none. insertion-decisions: IntColumn's bars stand on one baseline in a slot as long as 9,
+ *   their values in one line, the lit column painting the slot and its value. bst: each TreeCard's
+ *   L and R fields keep their ∅ width as a child becomes a link, so its row no longer moves
+ *   (bst left the moving-rows test's exceptions) and the tree is 2 px taller. bubble-arrow,
+ *   bubble-layouts: a mark's caption keeps its widest place, so its link needs no room past it and
+ *   the mark's box is 1.6 px narrower; captions and links move by 2 px. bfs-cards, bfs-neighbours,
+ *   bfs-references, bfs-visit-order, dfa-loops, list-markers, replay/bfs-icons,
+ *   replay/binary-search-compact, replay/merge-sort-fallback: only boxes that draw nothing (a
+ *   caption's, an empty field's) widen round their centred text; no text, painted box or link
+ *   moves.
  */
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
-import type { SceneStep } from './library';
+import type { SceneNode, SceneStep } from './library';
 import { drawnSteps, ofKind } from './testing/scenes';
 
 const root = join(import.meta.dirname, 'fixtures');
@@ -149,14 +161,6 @@ function movedInScenes(steps: readonly SceneStep[], labels: readonly string[]): 
   return [...moved.values()];
 }
 
-/**
- * Fixtures whose rows move for a reason not yet fixed: in bst, each TreeCard's row of children is
- * centred in the card's fixed box, and grows as a child changes from ∅ to a link. Nodes inside a
- * typed component's box keep no size of their own, as some are sized by their value (a bar with
- * height={this}), so the row moves 12 to 24 pixels (6 November 2026).
- */
-const movingRows = new Set(['bst.sverlin']);
-
 test(
   'a row, column, grid or stack keeps its place in its scene',
   { timeout: 600_000 },
@@ -164,7 +168,6 @@ test(
     const moved: Record<string, string[]> = {};
     for (const file of fixtures(root).sort()) {
       const name = relative(root, file);
-      if (movingRows.has(name)) continue;
       const drawing = await drawn(file).then(
         (each) => each,
         () => undefined
@@ -185,4 +188,36 @@ test('a bar is its value long, on the bottom of a slot as long as the largest', 
   const lengths = bars.map(({ box }) => Math.round(box.height / unit));
   expect(lengths).toEqual([6, 2, 9, 4, 0, 7]);
   expect(new Set(bars.map(({ box }) => Math.round(box.y + box.height))).size).toBe(1);
+});
+
+test('a labelled bar in a typed view keeps a slot as long as its type allows, in every copy', async () => {
+  const { steps } = await drawn(join(root, 'insertion-decisions.sverlin'));
+  const bottom = ({ box }: SceneNode) => Math.round(box.y + box.height);
+  let lit = 0;
+  for (const step of steps) {
+    // Each copy of IntColumn: a column holding a bar and its value, by the line it is drawn in.
+    const lines = Map.groupBy(
+      ofKind(step, 'IntColumn.ColumnLength').map((bar) => {
+        const column = step.nodes.find(({ id }) => id === bar.parent)!;
+        const label = step.nodes.find(({ parent, value }) => parent === column.id && value)!;
+        return { bar, column, label, value: Number(label.value) };
+      }),
+      ({ column }) => Math.round(column.box.y)
+    );
+    for (const copies of lines.values()) {
+      // The bars stand on one baseline, and their values sit in one line under it.
+      expect(new Set(copies.map(({ bar }) => bottom(bar))).size).toBe(1);
+      expect(new Set(copies.map(({ label }) => Math.round(label.box.y))).size).toBe(1);
+      // A lit column paints its slot, as long as Int's largest value (9), and its value: no more.
+      const longest = copies.reduce((a, b) => (b.value > a.value ? b : a));
+      const unit = longest.bar.box.height / longest.value;
+      for (const { bar, column, label } of copies) {
+        if (!column.look.fill) continue;
+        lit++;
+        expect(Math.round(column.box.y)).toBe(Math.round(bottom(bar) - 9 * unit));
+        expect(bottom(column)).toBe(bottom(label));
+      }
+    }
+  }
+  expect(lit).toBeGreaterThan(0);
 });

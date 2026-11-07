@@ -5,7 +5,8 @@
  * - a typed component's root keeps its component's box, the largest it draws over the values of
  *   its parameters (see components.server.ts), one fixed box wherever it is used;
  * - any other node keeps the largest size it reaches at any step, laid out with the sizes the nodes
- *   inside it keep, so it holds them at every step;
+ *   inside it keep, so it holds them at every step; inside a component's box, by its site, for any
+ *   value the view is probed with too, one size every copy shares, as a bar's slot;
  * - the items of a collection all keep the largest any of them reaches;
  * - a grid's columns and rows each keep the largest any of their cells reaches at any step and, for
  *   a grid in a typed view, for any value the view is probed with, in one set every copy shares;
@@ -104,7 +105,8 @@ function sizer(options: ReserveOptions) {
     return id;
   };
 
-  function read(drawing: Drawing): Read | undefined {
+  /** `probed` names a component drawn to be sized, whose roots hold its box before it is known. */
+  function read(drawing: Drawing, probed?: string): Read | undefined {
     const frame = find(drawing.markup, 'sv-frame');
     const flow = frame && find(frame, 'sv-flow');
     if (!frame || !flow) return undefined;
@@ -126,20 +128,22 @@ function sizer(options: ReserveOptions) {
       chain.pop();
     };
     style(drawing.markup, above);
-    // As Node takes least sizes from the memory: a component's box wherever it applies,
-    // and the largest size reached for any other node not inside a component's box.
+    // As Node takes least sizes from the memory: a component's box wherever it applies, and the
+    // largest size reached for any other node, by its site inside a component's box.
     const kinds = new Map<ModelElement, Kind>();
     const collections = new Map<string, Set<string>>();
     const classify = (element: ModelElement, insideBox: boolean) => {
       const classes = classesOf(element);
-      const id = element.attributes['data-sv-node'];
       let inside = insideBox;
       if (classes.includes('sv-node')) {
         const component = element.attributes['data-sv-component'];
         const box = component ? memory.components.get(component) : undefined;
+        const id = insideBox
+          ? element.attributes['data-sv-site']
+          : element.attributes['data-sv-node'];
         if (box) kinds.set(element, { kind: 'boxed', size: box });
-        else if (!insideBox && id) kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
-        inside ||= box !== undefined;
+        else if (id) kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
+        inside ||= box !== undefined || (component !== undefined && component === probed);
       } else if (classes.includes('words') && element.attributes['data-sv-words']) {
         // A node's words keep the largest size they reach, even inside a typed component's box,
         // so the node's alignment places one block and words that change from step to step do
@@ -592,6 +596,66 @@ function sizer(options: ReserveOptions) {
   };
 }
 
+type Instances = Map<string, { at: Read; element: ModelElement }[]>;
+
+/**
+ * What the drawings size, by key, with where each is drawn, in levels: each one more than the most
+ * of those inside it, so everything inside a node or a free layout has its size before it is laid
+ * out.
+ */
+function levelled(reads: readonly Read[]): { instances: Instances; levels: string[][] } {
+  const inside = new Map<string, Set<string>>();
+  const instances: Instances = new Map();
+  for (const at of reads)
+    for (const [element, kind] of at.kinds) {
+      if (kind.kind === 'boxed') continue;
+      instances.set(kind.key, [...(instances.get(kind.key) ?? []), { at, element }]);
+      const held = inside.get(kind.key) ?? new Set<string>();
+      const walk = (parent: ModelElement) => {
+        for (const child of elementsOf(parent)) {
+          const own = at.kinds.get(child);
+          if (own && own.kind !== 'boxed') held.add(own.key);
+          else walk(child);
+        }
+      };
+      walk(element);
+      inside.set(kind.key, held);
+    }
+  const known = new Map<string, number>();
+  const levelOf = (key: string, visiting = new Set<string>()): number => {
+    const level = known.get(key);
+    if (level !== undefined) return level;
+    visiting.add(key);
+    let found = 0;
+    for (const held of inside.get(key) ?? [])
+      if (!visiting.has(held)) found = Math.max(found, levelOf(held, visiting) + 1);
+    visiting.delete(key);
+    known.set(key, found);
+    return found;
+  };
+  const levels: string[][] = [];
+  for (const key of instances.keys()) (levels[levelOf(key)] ??= []).push(key);
+  return { instances, levels: levels.filter(Boolean) };
+}
+
+/** Keep, for a node or its words, the largest size any of its drawings reaches. */
+function keepLargest(
+  model: Sizer,
+  memory: LayoutMemory,
+  key: string,
+  drawn: readonly { at: Read; element: ModelElement }[]
+) {
+  const id = key.startsWith('w:') ? key : key.slice(2);
+  for (const { at, element } of drawn) {
+    const { width, height } = model.sizeAlone(at, element);
+    const kept = memory.reserved.get(id);
+    memory.reserved.set(id, {
+      width: Math.max(kept?.width ?? 0, width),
+      height: Math.max(kept?.height ?? 0, height)
+    });
+  }
+}
+
 /**
  * Size a typed component from markup drawing it for its cases (see probeMarkup in
  * components.server.ts): the largest box any of its roots reaches, rounded up to whole pixels, so
@@ -605,21 +669,17 @@ export function probeComponent(
   options: ReserveOptions
 ): { box?: Size; font?: string } {
   const model = sizer(options);
-  const at = model.read({ markup });
+  const at = model.read({ markup }, name);
   if (!at) return {};
-  // Its grids first, the innermost before those around them, each keeping tracks for every value it
-  // is drawn with here, which the box is then laid out with and the steps widen further.
-  const grids = new Map<string, { at: Read; element: ModelElement }[]>();
-  const depthOf = (element: ModelElement): number => {
-    const parent = at.parents.get(element);
-    return parent ? depthOf(parent) + 1 : 0;
-  };
-  const inGrids = [...at.kinds].filter(
-    (entry): entry is [ModelElement, Extract<Kind, { kind: 'grid' }>] => entry[1].kind === 'grid'
-  );
-  for (const [element, kind] of inGrids.sort(([a], [b]) => depthOf(b) - depthOf(a)))
-    grids.set(kind.id, [...(grids.get(kind.id) ?? []), { at, element }]);
-  for (const [grid, drawn] of grids) model.widenTracks(grid, drawn);
+  // Its grids and the nodes inside its box first, the innermost before those around them, each
+  // keeping tracks, or the largest size its site reaches, for every value it is drawn with here,
+  // which the box is then laid out with and the steps widen further.
+  const { instances, levels } = levelled([at]);
+  for (const keys of levels)
+    for (const key of keys)
+      if (key.startsWith('g:')) model.widenTracks(key.slice(2), instances.get(key) ?? []);
+      else if (key.startsWith('n:view:'))
+        keepLargest(model, options.memory, key, instances.get(key) ?? []);
   let box = options.memory.components.get(name);
   let font: string | undefined;
   const holdsArrangement = (element: ModelElement): boolean =>
@@ -652,51 +712,14 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
   const { memory } = options;
   const model = sizer(options);
   const reads = drawings.flatMap((drawing) => model.read(drawing) ?? []);
-
-  // Each sized thing's level: one more than the most of those inside it, so everything inside a
-  // node or a free layout has its size before it is laid out.
-  const inside = new Map<string, Set<string>>();
-  const instances = new Map<string, { at: Read; element: ModelElement }[]>();
-  for (const at of reads)
-    for (const [element, kind] of at.kinds) {
-      if (kind.kind === 'boxed') continue;
-      instances.set(kind.key, [...(instances.get(kind.key) ?? []), { at, element }]);
-      const held = inside.get(kind.key) ?? new Set<string>();
-      const walk = (parent: ModelElement) => {
-        for (const child of elementsOf(parent)) {
-          const own = at.kinds.get(child);
-          if (own && own.kind !== 'boxed') held.add(own.key);
-          else walk(child);
-        }
-      };
-      walk(element);
-      inside.set(kind.key, held);
-    }
-  const levels = new Map<string, number>();
-  const levelOf = (key: string, visiting = new Set<string>()): number => {
-    const known = levels.get(key);
-    if (known !== undefined) return known;
-    visiting.add(key);
-    let level = 0;
-    for (const held of inside.get(key) ?? [])
-      if (!visiting.has(held)) level = Math.max(level, levelOf(held, visiting) + 1);
-    visiting.delete(key);
-    levels.set(key, level);
-    return level;
-  };
-  const byLevel = [...instances.keys()].sort((a, b) => levelOf(a) - levelOf(b));
+  const { instances, levels } = levelled(reads);
 
   const collections = new Map<string, Set<string>>();
   for (const at of reads)
     for (const [collection, items] of at.collections)
       collections.set(collection, new Set([...(collections.get(collection) ?? []), ...items]));
 
-  for (let start = 0; start < byLevel.length; ) {
-    const level = levelOf(byLevel[start]);
-    let end = start;
-    while (end < byLevel.length && levelOf(byLevel[end]) === level) end++;
-    const keys = byLevel.slice(start, end);
-    start = end;
+  for (const keys of levels) {
     // Free layouts first, each solved over every step it is recorded at.
     for (const key of keys.filter((each) => each.startsWith('a:'))) {
       const scope = key.slice(2);
@@ -730,17 +753,8 @@ export function reserveSizes(drawings: readonly Drawing[], options: ReserveOptio
     for (const key of [
       ...keys.filter((each) => each.startsWith('w:')),
       ...keys.filter((each) => each.startsWith('n:'))
-    ]) {
-      const id = key.startsWith('w:') ? key : key.slice(2);
-      for (const { at, element } of instances.get(key) ?? []) {
-        const { width, height } = model.sizeAlone(at, element);
-        const kept = memory.reserved.get(id);
-        memory.reserved.set(id, {
-          width: Math.max(kept?.width ?? 0, width),
-          height: Math.max(kept?.height ?? 0, height)
-        });
-      }
-    }
+    ])
+      keepLargest(model, memory, key, instances.get(key) ?? []);
     // A collection's items all keep the largest size any of them reaches: an item's own largest
     // depends on the steps it took part in, and items of different sizes would not line up.
     for (const items of collections.values()) {
@@ -875,7 +889,7 @@ export function describeDrawn(
   const seen = [...elementsUnder(shown)].filter((element) => seenBox(element, ownText(element)));
   const kept = (attribute: string) =>
     new Set(seen.flatMap(({ attributes }) => attributes[attribute] ?? []));
-  const nodes = kept('data-sv-node');
+  const nodes = new Set([...kept('data-sv-node'), ...kept('data-sv-site')]);
   const components = kept('data-sv-component');
   const { memory } = options;
   const model = sizer({
