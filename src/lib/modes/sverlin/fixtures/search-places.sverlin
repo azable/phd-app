@@ -33,7 +33,7 @@
     <Node kind="Caption">{place()}</Node>
   </Node>
 </View>
-<Layout name="Cells" of="values, lo, hi, mid">
+<Layout name="Cells">
   <Node layout="grid">
     {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
     <Node kind="Lane" row={1} col={lo}>{lo}</Node>
@@ -41,14 +41,14 @@
     <Node kind="Lane" row={3} col={hi}>{hi}</Node>
   </Node>
 </Layout>
-<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
-<Layout name="Main" of="lo, hi, mid, target, values">
+<Layout name="Goal"><Node>target {target}</Node></Layout>
+<Layout name="Main">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Goal target={target} /><Cells values={values} lo={lo} hi={hi} mid={mid} /></Node>
+    <Node layout="column"><Goal /><Cells /></Node>
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>

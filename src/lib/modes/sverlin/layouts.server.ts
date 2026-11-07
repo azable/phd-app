@@ -49,7 +49,7 @@ function openingProblem(line: string): string {
   if (named && /\/>/u.test(line.split('>', 1)[0] + '>'))
     return `<Layout name="${named[1]}" /> holds nothing: a layout's body is its root <Node>, as <Layout name="${named[1]}"><Node>…</Node></Layout>.`;
   const written = /^<Layout[^>]*>?/u.exec(line)![0];
-  return `${written} is no layout: write <Layout name="Name" of="…">, named in one word after the arrangement, with the state it reads, as <Layout name="Side" of="values, i">.`;
+  return `${written} is no layout: write <Layout name="Name">, named in one word after the arrangement, as <Layout name="Side">; it reads the state its body names.`;
 }
 
 /**

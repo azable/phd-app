@@ -43,8 +43,8 @@ describe('pictureTree', () => {
   it('reads the kinds a view’s nodes name as what it draws', () => {
     const viewed =
       pictureTree(`<View of="Values" name="Row"><Node><Node kind="Under">i</Node></Node></View>
-<Layout name="Shown" of="values"><Node>{values}</Node></Layout>
-<Layout name="Main" of="values"><Node><Shown values={values} /></Node></Layout>`);
+<Layout name="Shown"><Node>{values}</Node></Layout>
+<Layout name="Main"><Node><Shown /></Node></Layout>`);
     expect(viewed.snippets.get('Row')).toEqual(['Under']);
     expect(viewed.layouts.get('Main')).toEqual(['Shown']);
     expect([...viewed.layouts.keys()]).toEqual(['Main']);

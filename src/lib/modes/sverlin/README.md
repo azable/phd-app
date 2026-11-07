@@ -79,13 +79,12 @@ refused: what one would draw is a layout, a view, or a node with a `kind`.
   reads the input and algorithm variables and the labels its body names, as `lo`
   and `{@insert.compare}`, and those of the layouts it draws; a name that is
   none of them is refused where it is written. Its name is written as it is,
-  never computed. An `of` listing variables, as `of="lo, hi"`, is still read,
-  and then the layout reads only those.
-- A layout is drawn in another by its tag, `<Range />`, reading the state at
-  that step. A tag may pass a variable by its own name, `<Range />`, as older
-  sources do, never another value. A tag is closed at once, `/>`, and a layout
-  drawn inside itself is refused. A tag in a node of text and values is drawn
-  inline, as a value is, as `<Node>Searching for <Target /> in the list</Node>`.
+  never computed, and it takes no other prop: an `of` is refused.
+- A layout is drawn in another by its bare tag, `<Range />`, reading the state
+  at that step; a tag passing props, as `<Range lo={lo} />`, is refused. A tag
+  is closed at once, `/>`, and a layout drawn inside itself is refused. A tag in
+  a node of text and values is drawn inline, as a value is, as
+  `<Node>Searching for <Target /> in the list</Node>`.
 - A layout a scene shows (see Storyboard) arranges the whole page: its body is
   one root `<Node>`, the frame (see Page frame), which holds values, layout
   tags, with `{#if}` and `{#each}` around them, a `<Listing />`, and nodes
@@ -883,10 +882,9 @@ its room, where it computed nothing. A node's words and renders are one
 statement, so a node is hidden at each step where a label it reads computed
 nothing, and a node reading two labels that never give values at one step, as
 `<Node>{@insert.front} {@insert.cmp}</Node>`, is drawn at no step and warned of:
-give each its own node. A layout's `of` lists variables; it reads its labels
-whether listed or not. A view typed by a label no step evaluates is refused. The
-view never computes itself: label the expression, as `@next[i + 1]`, and read
-the label.
+give each its own node. A view typed by a label no step evaluates is refused.
+The view never computes itself: label the expression, as `@next[i + 1]`, and
+read the label.
 
 A label on a block or a statement is a type too. Its view draws one span of the
 label: the variables in scope where the span ends, each read as `this.name`. For
@@ -1984,7 +1982,7 @@ lanes below them, `j` reaching −1 before the first cell:
   <Node layout="column"><Node kind="Tip" icon /><Node kind="Caption">{place()}</Node></Node>
 </View>
 
-<Layout name="Main" of="values, i, j">
+<Layout name="Main">
   <Node layout="grid">
     <Node kind="Title" row={0}>Insertion sort</Node>
     <Node kind="Key" row={1} rowSpan={3} col={-2}><Node kind="Word">values</Node><Node kind="Word">i</Node><Node kind="Word">j</Node></Node>
@@ -2147,7 +2145,7 @@ two it is computed from:
 <View of="Char" name="Letter"><Node value={this} /></View>
 <View of="Count" name="CountText"><Node value={this} /></View>
 
-<Layout name="Main" of="y, x, t">
+<Layout name="Main">
   <Node layout="grid">
     {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
     {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
@@ -2166,7 +2164,7 @@ two it is computed from:
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
+  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main /></Scene>
 </Storyboard>
 ```
 

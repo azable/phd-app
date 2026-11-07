@@ -36,12 +36,12 @@
   </Node>
 </View>
 
-<Layout name="Main" of="heap">
+<Layout name="Main">
   <Node>{heap}</Node>
 </Layout>
 
 <Case name="main" heap={[12, 40, 7, 55, 31, 68, 23]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.sift.swap"><Main heap={heap} /></Scene>
+  <Scene name="main" case="main" pause="@insert.sift.swap"><Main /></Scene>
 </Storyboard>

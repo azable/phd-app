@@ -27,7 +27,7 @@ type Problem = { message: string; start: number };
 
 /** How a query is written, for messages. */
 export const selectAdvice =
-  'a query is written <Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />, naming the label whose spans it reads, and a scene gives its result to a layout as any input, as <Stack stack={stack} />';
+  'a query is written <Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />, naming the label whose spans it reads, and a layout reads its result by name, as {#each stack as call}';
 
 const selectName = /^[A-Za-z_$][\w$]*$/u;
 const attribute = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;

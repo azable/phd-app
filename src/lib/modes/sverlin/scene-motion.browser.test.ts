@@ -255,12 +255,12 @@ describe('SceneView’s motion', () => {
   @copy[values[1] = values[0];]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Main" of="values">
+<Layout name="Main">
   <Node layout="row">{#each values as v}{v}{/each}</Node>
 </Layout>
 <Case name="main" values={[3, 8, 5]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@copy"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@copy"><Main /></Scene>
 </Storyboard>`;
       const built = await bundlePresentation(prepareSvelteComponent(copying), 1);
       const page = await openPresentation(built);

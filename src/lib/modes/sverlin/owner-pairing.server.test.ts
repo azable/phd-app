@@ -23,7 +23,7 @@ const items = (algorithm: string, caption = 'cost') => `<script domain>
 </script>
 <View of="Name" name="NameText"><Node value={this} /></View>
 <View of="Cost" name="CostCell"><Node value={this} /></View>
-<Layout name="Main" of="items">
+<Layout name="Main">
   <Node layout="row">
     {#each items as item, k}
       <Node layout="column"><Node kind="Caption">${caption}</Node>{item.cost}</Node>
@@ -32,7 +32,7 @@ const items = (algorithm: string, caption = 'cost') => `<script domain>
 </Layout>
 <Case name="main" items={[{ name: 'A', cost: 1 }, { name: 'B', cost: 5 }, { name: 'C', cost: 9 }]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@move"><Main items={items} /></Scene>
+  <Scene name="main" case="main" pause="@move"><Main /></Scene>
 </Storyboard>`;
 
 /** Where each value's caption is, across from the value, halfway through the move to `to`. */

@@ -53,11 +53,11 @@ LINEAR-SEARCH(A, target)
   </Node>
 </View>
 
-<Layout name="Heading" of="target">
+<Layout name="Heading">
   <Node kind="Title">Linear search for {target}</Node>
 </Layout>
 
-<Layout name="SearchRow" of="values, i">
+<Layout name="SearchRow">
   <Node layout="grid">
     {#each values as value, k}
       <Node row={0} col={k}>{value}</Node>
@@ -66,7 +66,7 @@ LINEAR-SEARCH(A, target)
   </Node>
 </Layout>
 
-<Layout name="Status" of="target, i, @scan.check, @scan.found, @missing">
+<Layout name="Status">
   <Node layout="column">
     <OneOf>
       <When of="@scan.check">
@@ -87,15 +87,14 @@ LINEAR-SEARCH(A, target)
 
 <Layout
   name="Stacked"
-  of="values, target, i, @scan.check, @scan.found, @missing"
 >
   <Node layout="column">
-    <Heading target={target} />
+    <Heading />
     <Node layout="row">
       <Listing />
       <Node layout="column">
-        <SearchRow values={values} i={i} />
-        <Status target={target} i={i} />
+        <SearchRow />
+        <Status />
       </Node>
     </Node>
   </Node>
@@ -113,6 +112,6 @@ LINEAR-SEARCH(A, target)
     case="present"
     pause="@scan.check, @scan.found, @missing"
   >
-    <Stacked values={values} target={target} i={i} />
+    <Stacked />
   </Scene>
 </Storyboard>

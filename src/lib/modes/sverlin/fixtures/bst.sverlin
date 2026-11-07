@@ -48,19 +48,19 @@
   </Node>
 </View>
 <Layout name="Title"><Node>Binary search tree insertion</Node></Layout>
-<Layout name="Tree" of="nodes">
+<Layout name="Tree">
   <Node layout="free" flow="y">
     {#each nodes as node}{node}{/each}
   </Node>
 </Layout>
-<Layout name="Status" of="@sequence.pick">
+<Layout name="Status">
   <Node>Insert next value {@sequence.pick}</Node>
 </Layout>
 
-<Layout name="Main" of="nodes, @sequence.pick">
+<Layout name="Main">
   <Node>
     <Title />
-    <Tree nodes={nodes} />
+    <Tree />
     <Status />
   </Node>
 </Layout>
@@ -72,5 +72,5 @@
   }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.attach, @sequence.pick"><Main nodes={nodes} /></Scene>
+  <Scene name="main" case="main" pause="@insert.attach, @sequence.pick"><Main /></Scene>
 </Storyboard>

@@ -29,16 +29,9 @@ const blocks = `<script domain>
 <View of="Index" name="IndexText"><Node value={this} /></View>
 `;
 
-const target = '<Layout name="Target" of="target"><Node>{target}</Node></Layout>\n';
-const main = (body: string, of = 'values, target, lo, hi') =>
-  `<Layout name="Main" of="${of}">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n    {hi}\n  </Node>\n</Layout>\n${scene(of)}`;
-/** One scene showing Main, passing the variables it declares. */
-const scene = (of: string) =>
-  `<Storyboard><Scene name="main" case="main"><Main${of
-    .split(', ')
-    .filter((input) => input && !input.startsWith('@'))
-    .map((input) => ` ${input}={${input}}`)
-    .join('')} /></Scene></Storyboard>`;
+const target = '<Layout name="Target"><Node>{target}</Node></Layout>\n';
+const main = (body: string) =>
+  `<Layout name="Main">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n    {hi}\n  </Node>\n</Layout>\n<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`;
 
 const problemOf = (view: string) => {
   try {
@@ -50,10 +43,10 @@ const problemOf = (view: string) => {
   return '';
 };
 
-describe('layouts with inputs', () => {
+describe('layouts', () => {
   it('draws a layout by its tag, inline in a line of text as a value is', () => {
     const prepared = prepareSvelteComponent(
-      `${blocks}${target}${main('<Target target={target} /><Node>Searching for <Target target={target} /> in the list</Node>')}`
+      `${blocks}${target}${main('<Target /><Node>Searching for <Target /> in the list</Node>')}`
     );
     expect(prepared.design.space).toHaveProperty('Target.fill');
     expect(Object.keys(prepared.design.space)).not.toContain('Main.Target.fill');
@@ -71,17 +64,11 @@ describe('layouts with inputs', () => {
     expect(prepared.storyboard.scenes[0].layout).toBe('Main');
   });
 
-  it('infers what a layout with no of reads, a tag or scene passing none of it', () => {
-    const page = (body: string) =>
-      `<Layout name="Target"><Node>{target}</Node></Layout>\n<Layout name="Main">\n  <Node>\n    ${body}\n    {values}\n    {lo}\n  </Node>\n</Layout>\n<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`;
-    expect(problemOf(page('<Target />'))).toBe('');
-    // A tag may still pass a value by its own name, as old sources do.
-    expect(problemOf(page('<Target target={target} />'))).toBe('');
-    // An old source declaring of builds as before, its tags passing what it declares or nothing.
+  it('reads the variables its body names, a tag or scene passing none of them', () => {
     expect(problemOf(`${target}${main('<Target />')}`)).toBe('');
   });
 
-  it('names a misspelt variable in a layout with no of', () => {
+  it('names a misspelt variable in a layout', () => {
     const misspelt =
       '<Layout name="Main"><Node>{values}{taget}</Node></Layout>\n<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>';
     expect(problemOf(misspelt)).toContain(
@@ -91,31 +78,31 @@ describe('layouts with inputs', () => {
 
   it('takes a label declared by a shorter one around it', () => {
     const reading =
-      '<Layout name="Asked" of="@probe"><When of="@probe.check"><Node>checking</Node></When></Layout>\n' +
-      main('<Asked />', 'values, target, lo, hi, @probe');
+      '<Layout name="Asked"><Node when="@probe.check">checking</Node></Layout>\n' +
+      main('<Asked />');
     expect(problemOf(reading)).toBe('');
   });
 
   it.each([
     [
-      'a tag passing an input the layout has not',
-      `${target}${main('<Target target={target} lo={lo} />')}`,
-      'Target has no input lo: it reads target.'
+      'a tag passing props',
+      `${target}${main('<Target target={target} />')}`,
+      "<Target target={target} /> passes props, and a layout's tag takes none: the layout reads the state its body names, so draw it by its bare tag, <Target />."
     ],
     [
-      'an input passed another value',
-      `${target}${main('<Target target={values[0]} />')}`,
-      'target={values[0]} passes target another value: an input is passed as the state of its own name, as target={target}'
+      'a scene passing props',
+      main('').replace('<Main />', '<Main values={values} />'),
+      "The scene main passes Main props, and a layout's tag takes none"
     ],
     [
-      'an input the drawing layout does not declare',
-      `${target}${main('<Target target={target} />', 'values, lo, hi')}`,
-      'Main passes target to Target without reading it: add target to Main\'s inputs, of="values, lo, hi, target".'
+      'an of',
+      `<Layout name="Shown" of="values"><Node>{values}</Node></Layout>\n${main('<Shown />')}`,
+      'A <Layout> takes no of: it reads the variables and labels its body names, so write <Layout name="Shown">.'
     ],
     [
       'a tag left open',
-      `${target}${main('<Target target={target}></Target>')}`,
-      "<Target> holds nothing: a layout's tag passes its inputs and draws the layout, so close it at once, as <Target target={target} />."
+      `${target}${main('<Target></Target>')}`,
+      "<Target> holds nothing: a layout's tag draws the layout, so close it at once, as <Target />."
     ],
     [
       'a layout drawn inside itself',
@@ -124,32 +111,22 @@ describe('layouts with inputs', () => {
     ],
     [
       'a tag in a view',
-      `<View of="Int" name="Labelled"><Node><Target target={target} /></Node></View>\n${target}${main('')}`,
+      `<View of="Int" name="Labelled"><Node><Target /></Node></View>\n${target}${main('')}`,
       "<Target … /> draws a layout, which reads the algorithm's state, and a view reads only its value"
     ],
     [
       'two layouts of one name',
-      `${target}${target}${main('<Target target={target} />')}`,
+      `${target}${target}${main('<Target />')}`,
       'Two layouts are named Target'
     ],
     [
-      'an input that is no variable',
-      `<Layout name="Shown" of="nothing"><Node>shown</Node></Layout>\n${main('')}`,
-      'Shown declares nothing, which is no variable of the input or algorithm'
-    ],
-    [
-      'a variable read without declaring it',
-      main('', 'values, lo'),
-      'Main reads hi without declaring it: a layout reads only its inputs, so add it, of="values, lo, hi".'
-    ],
-    [
-      'a prop other than name and of',
+      'a prop other than name',
       `<Layout name="Shown" kind="X"><Node>shown</Node></Layout>\n${main('')}`,
-      'A <Layout> takes only name and of'
+      'A <Layout> takes only name'
     ],
     [
-      'inputs computed',
-      `<Layout name="Shown" of={inputs}><Node>shown</Node></Layout>\n${main('')}`,
+      'a name computed',
+      `<Layout name={shown}><Node>shown</Node></Layout>\n${main('')}`,
       'is written as it is, not computed'
     ]
   ])('refuses %s', (_, view, message) => {
@@ -207,7 +184,7 @@ describe('snippets', () => {
     [
       'a snippet at the top level',
       '{#snippet Title()}<Node>Binary search</Node>{/snippet}',
-      '{#snippet Title()} is written as a layout: <Layout name="Title" of="…">…</Layout>, declaring the state it reads, rendered where it is drawn as <Title … />.'
+      '{#snippet Title()} is written as a layout: <Layout name="Title">…</Layout>, drawn where it is wanted by its bare tag, <Title />.'
     ],
     [
       'a render of a value',
@@ -217,7 +194,7 @@ describe('snippets', () => {
     [
       'a render of a layout',
       `${target}${main('{@render Target()}')}`,
-      "{@render Target()} is written as the layout's tag, <Target … />, passing the state it declares."
+      "{@render Target()} is written as the layout's bare tag, <Target />."
     ],
     [
       'a render worked out as the view runs',

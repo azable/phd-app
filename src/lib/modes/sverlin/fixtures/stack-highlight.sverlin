@@ -25,7 +25,7 @@
     <Node kind="Caption">{place()}</Node>
   </Node>
 </View>
-<Layout name="Board" of="values, sorted, key, j, @next">
+<Layout name="Board">
   <Node layout="column">
     <Node layout="grid">
       {#each values as v, k}{#if k < sorted}<Node kind="Sorted" layout="stack" row={0} col={k}><Node when="@next" kind="SortedMark"></Node>{v}</Node>{:else}<Node kind="Unsorted" row={0} col={k}>{v}</Node>{/if}{/each}
@@ -34,9 +34,9 @@
     <Node kind="KeyRow" layout="row"><Node>key</Node>{key}</Node>
   </Node>
 </Layout>
-<Layout name="Story" of="values, sorted, key, j, @next">
+<Layout name="Story">
   <Node layout="column">
-    <Board values={values} sorted={sorted} key={key} j={j} />
+    <Board />
     <Node layout="stack">
       <Node when="@next" kind="Note">The blue part is always sorted. Each pass adds one more value to it.</Node>
       <Node when=":after" kind="Note">Pass i compares the key with at most i values, so n passes take about n²/2 comparisons: O(n²) time.</Node>
@@ -45,5 +45,5 @@
 </Layout>
 <Case name="main" values={[31, 12, 25, 8, 17, 4]} />
 <Storyboard>
-  <Scene name="sort" case="main" pause="@pass.key, @pass.shift, @pass.put, @next"><Story values={values} sorted={sorted} key={key} j={j} /></Scene>
+  <Scene name="sort" case="main" pause="@pass.key, @pass.shift, @pass.put, @next"><Story /></Scene>
 </Storyboard>

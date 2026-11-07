@@ -1058,7 +1058,7 @@ describe('submitProjectFeedback', () => {
     it('offers the combination of two groups the designing model chose, with why', async () => {
       decide.mockClear();
       const title = '<Layout name="Title"><Node>Searching</Node></Layout>';
-      const caption = '<Layout name="Caption" of="target"><Node>Look for {target}.</Node></Layout>';
+      const caption = '<Layout name="Caption"><Node>Look for {target}.</Node></Layout>';
       const choosing = {
         id: 'test-helpers',
         generateReply: async ({
@@ -1109,7 +1109,7 @@ describe('submitProjectFeedback', () => {
                 '<Hole name="title" kind="layout" of="Title" />'
               )
               .replace(
-                /<Layout name="Caption" of="target">.*?<\/Layout>/u,
+                /<Layout name="Caption">.*?<\/Layout>/u,
                 '<Hole name="caption" kind="layout" of="Caption" />'
               )
           }
@@ -3393,23 +3393,23 @@ describe('assistant edits', () => {
     // The caption is a layout of its own, drawn by its tag in Main.
     const captioned = source
       .replace(
-        '<Layout name="Main" of=',
-        '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
+        '<Layout name="Main"',
+        '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main"'
       )
       .replace(
-        '<Result target={target} found={found} />',
-        '<Result target={target} found={found} /><Note />'
+        '<Result />',
+        '<Result /><Note />'
       );
     mocks.generatePrepared.mockReset().mockResolvedValue(
       edit(
         [
           {
-            find: '<Layout name="Main" of=',
-            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
+            find: '<Layout name="Main"',
+            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main"'
           },
           {
-            find: '<Result target={target} found={found} />',
-            replace: '<Result target={target} found={found} /><Note />'
+            find: '<Result />',
+            replace: '<Result /><Note />'
           }
         ],
         'Adds a caption'
@@ -3435,12 +3435,12 @@ describe('assistant edits', () => {
         action: 'edit' as const,
         edits: [
           {
-            find: '<Layout name="Main" of=',
-            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
+            find: '<Layout name="Main"',
+            replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main"'
           },
           {
-            find: '<Result target={target} found={found} />',
-            replace: '<Result target={target} found={found} /><Note />'
+            find: '<Result />',
+            replace: '<Result /><Note />'
           }
         ],
         values: [{ variable: 'Note.fill', value: 'sky-100' }],
@@ -4042,12 +4042,12 @@ describe('several variants from chat', () => {
       '</script>',
       '<View of="Int" name="Cell"><Node value={this} /></View>',
       '<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
-      '<Layout name="Scan" of="values, i">',
+      '<Layout name="Scan">',
       '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
       '</Layout>',
       '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
       '<Storyboard>',
-      '  <Scene name="scan" case="main" pause="@start, @compare:before"><Scan values={values} i={i} /></Scene>',
+      '  <Scene name="scan" case="main" pause="@start, @compare:before"><Scan /></Scene>',
       '</Storyboard>'
     ].join('\n');
     const result = await attempts(
@@ -4187,12 +4187,12 @@ describe('several variants from chat', () => {
       '</script>',
       views,
       '<View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>',
-      '<Layout name="Scan" of="values, i">',
+      '<Layout name="Scan">',
       '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
       '</Layout>',
       '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
       '<Storyboard>',
-      '  <Scene name="scan" case="main" pause="@next"><Scan values={values} i={i} /></Scene>',
+      '  <Scene name="scan" case="main" pause="@next"><Scan /></Scene>',
       '</Storyboard>'
     ].join('\n');
   const cellOrWord =
@@ -4317,12 +4317,12 @@ describe('several variants from chat', () => {
 
   const caption = [
     {
-      find: '<Layout name="Main" of=',
-      replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main" of='
+      find: '<Layout name="Main"',
+      replace: '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main"'
     },
     {
-      find: '<Result target={target} found={found} />',
-      replace: '<Result target={target} found={found} /><Note />'
+      find: '<Result />',
+      replace: '<Result /><Note />'
     }
   ];
 

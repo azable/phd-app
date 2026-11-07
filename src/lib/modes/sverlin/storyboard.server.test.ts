@@ -39,7 +39,7 @@ const blocks = `<script domain>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Search" of="values, lo, hi">
+<Layout name="Search">
   <Node>
     {values}
     {lo}
@@ -49,12 +49,12 @@ const blocks = `<script domain>
 <Layout name="Card"><Node><Node>When the target is missing, lo passes hi.</Node></Node></Layout>
 `;
 
-const search = '<Search values={values} lo={lo} hi={hi} />';
+const search = '<Search />';
 const storyboard = (...scenes: string[]) =>
   `${blocks}\n<Storyboard>\n${scenes.join('\n')}\n</Storyboard>`;
-// A scene showing state shows the case main, unless it names its own.
+// A scene showing state, any layout but the card, shows the case main, unless it names its own.
 const scene = (props: string, shows = search) =>
-  `  <Scene ${props}${/=\{/u.test(shows) && !/\bcase=/u.test(props) ? ' case="main"' : ''}>${shows}</Scene>`;
+  `  <Scene ${props}${shows !== '<Card />' && !/\bcase=/u.test(props) ? ' case="main"' : ''}>${shows}</Scene>`;
 
 const problemOf = (source: string) => {
   try {
@@ -224,9 +224,9 @@ describe('storyboards', () => {
       'The scene then shows Card, which reads no state, so it is one frame'
     ],
     [
-      'state passed to a single frame',
+      "props on a scene's layout",
       storyboard(scene('name="then"', '<Card lo={lo} />')),
-      'The scene then passes lo to Card, which reads no state'
+      "The scene then passes Card props, and a layout's tag takes none"
     ],
     [
       'two scenes of one name',
@@ -240,7 +240,7 @@ describe('storyboards', () => {
     ],
     [
       'a layout shown by a scene and drawn by another',
-      `${blocks}<Layout name="Both" of="values, lo, hi"><Node>${search}</Node></Layout>\n<Storyboard>\n${scene('name="a"')}\n${scene('name="b"', '<Both values={values} lo={lo} hi={hi} />')}\n</Storyboard>`,
+      `${blocks}<Layout name="Both"><Node>${search}</Node></Layout>\n<Storyboard>\n${scene('name="a"')}\n${scene('name="b"', '<Both />')}\n</Storyboard>`,
       'Search is shown by a scene, so it arranges the whole page, and is drawn inside another layout too'
     ]
   ])('refuses %s', (_, source, message) => {
@@ -357,7 +357,7 @@ describe('steps drawing the same picture', () => {
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Scan" of="values, i">
+<Layout name="Scan">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>
     ${layout}
@@ -366,7 +366,7 @@ describe('steps drawing the same picture', () => {
 </Layout>
 <Case name="main" values={[4, 9, 2, 7]} target={7} />
 <Storyboard>
-  <Scene name="scan" case="main" pause="${pause}"><Scan values={values} i={i} /></Scene>
+  <Scene name="scan" case="main" pause="${pause}"><Scan /></Scene>
 </Storyboard>`;
 
   it("leaves out the scene's :after where it draws what the last pause drew, unwarned, as no pause chose it", async () => {
@@ -424,7 +424,7 @@ describe('steps drawing the same picture', () => {
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
 ${views}
-<Layout name="Scan" of="items, i">
+<Layout name="Scan">
   <Node>
     <Node>{#each items as item}${item}{/each}</Node>
     {i}
@@ -432,7 +432,7 @@ ${views}
 </Layout>
 <Case name="main" items={[{ value: 4 }, { value: 9 }, { value: 2 }, { value: 7 }]} target={7} />
 <Storyboard>
-  <Scene name="scan" case="main" pause="@next"><Scan items={items} i={i} /></Scene>
+  <Scene name="scan" case="main" pause="@next"><Scan /></Scene>
 </Storyboard>`;
 
   it('warns of the paused steps a link reaching nothing leaves alike, its elements drawn only by their fields', async () => {
@@ -465,7 +465,7 @@ ${views}
 </script>
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Scan" of="values, mid">
+<Layout name="Scan">
   <Node>
     <Node>{#each values as v}{v}{/each}</Node>
     {mid}
@@ -473,7 +473,7 @@ ${views}
 </Layout>
 <Case name="main" values={[4, 9, 2, 7]} />
 <Storyboard>
-  <Scene name="scan" case="main" pause="${pause}"><Scan values={values} mid={mid} /></Scene>
+  <Scene name="scan" case="main" pause="${pause}"><Scan /></Scene>
 </Storyboard>`;
     const value = '@probe[const mid = @mid[Index(Math.floor(values.length / 2))];]';
     const before = await bundlePresentation(prepareSvelteComponent(search(value, '@probe.mid')), 1);

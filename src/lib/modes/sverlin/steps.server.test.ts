@@ -25,18 +25,18 @@ it('shows a step forward straight at the state after its code', { timeout: 60_00
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="At" of="i"><Node>at {i}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="At"><Node>at {i}</Node></Layout>
 
-<Layout name="Main" of="values, i">
+<Layout name="Main">
   <Node>
-    <Cells values={values} />
-    <At i={i} />
+    <Cells />
+    <At />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@write"><Main values={values} i={i} /></Scene>
+  <Scene name="main" case="main" pause="@write"><Main /></Scene>
 </Storyboard>`;
   const prepared = prepareSvelteComponent(pausingEveryLabel(source));
   // Step 0 is the input as given, before any of the algorithm runs.
@@ -77,19 +77,19 @@ it(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <Layout name="Title"><Node>Pass</Node></Layout>
-<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
-<Layout name="Cells" of="values"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
+<Layout name="Key"><Node>key {key}</Node></Layout>
+<Layout name="Cells"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
 
-<Layout name="Main" of="key, values">
+<Layout name="Main">
   <Node>
     <Title />
-    <Key key={key} />
-    <Cells values={values} />
+    <Key />
+    <Cells />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@pass.pick, @pass.put"><Main key={key} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@pass.pick, @pass.put"><Main /></Scene>
 </Storyboard>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.

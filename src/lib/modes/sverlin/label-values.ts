@@ -467,7 +467,7 @@ export function viewTags(source: string): {
     problems.push({
       message: type
         ? `${name} takes a value, as only a view does: write it as a view, <View of="${type}" name="${name}">…</View>, its value this.`
-        : `${name} takes a parameter: a layout takes none, reading the state it declares, as <Layout name="Caption" of="target">…</Layout>, and ${viewAdvice}.`,
+        : `${name} takes a parameter: a layout takes none, reading the state its body names, as <Layout name="Caption">…</Layout>, and ${viewAdvice}.`,
       start: match.index ?? 0
     });
   }

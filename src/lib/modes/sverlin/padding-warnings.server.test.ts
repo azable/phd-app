@@ -92,7 +92,7 @@ const page = (inner: string) => `<script domain>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Position" name="PositionText"><Node value={this} /></View>
-<Layout name="Main" of="values, i">
+<Layout name="Main">
   <Node layout="column">
     ${inner}
   </Node>

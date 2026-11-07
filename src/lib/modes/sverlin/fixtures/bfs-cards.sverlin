@@ -73,7 +73,7 @@ while @more[the :queue[queue] is not empty]
 </View>
 
 <Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
-<Layout name="Graph" of="vertices, neighbours, start, current">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -85,26 +85,26 @@ while @more[the :queue[queue] is not empty]
     <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
-<Layout name="QueueLine" of="queue">
+<Layout name="QueueLine">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
 </Layout>
-<Layout name="Board" of="vertices, neighbours, queue, start, current">
+<Layout name="Board">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Graph vertices={vertices} neighbours={neighbours} start={start} current={current} />
-      <QueueLine queue={queue} />
+      <Graph />
+      <QueueLine />
     </Node>
   </Node>
 </Layout>
 
-<Layout name="Main" of="start, current, vertices, neighbours, queue">
+<Layout name="Main">
   <Node>
     <Title />
-    <Board vertices={vertices} neighbours={neighbours} queue={queue} start={start} current={current} />
+    <Board />
   </Node>
 </Layout>
 
@@ -117,5 +117,5 @@ while @more[the :queue[queue] is not empty]
   ]} neighbours={[[1, 2], [3], [3], [4], []]} start={0} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main start={start} current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main /></Scene>
 </Storyboard>

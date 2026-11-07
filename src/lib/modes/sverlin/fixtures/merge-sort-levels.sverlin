@@ -44,7 +44,7 @@
 <Select name="levels" from="@sort" where="ended <= now" group="depth"
         order="depth, lo" max="8" />
 
-<Layout name="Level" of="level">
+<Layout name="Level">
   <Node layout="row">{#each level as call}{call}{/each}</Node>
 </Layout>
 
@@ -53,6 +53,6 @@
 
 <Storyboard>
   <Scene name="levels" case="eight" over={levels} as="level">
-    <Level level={level} />
+    <Level />
   </Scene>
 </Storyboard>

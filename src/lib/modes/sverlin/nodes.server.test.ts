@@ -27,16 +27,16 @@ const list = (algorithm: string) => `<script domain>
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<Layout name="List" of="nodes"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout>
+<Layout name="List"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout>
 
-<Layout name="Main" of="nodes">
+<Layout name="Main">
   <Node>
-    <List nodes={nodes} />
+    <List />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main nodes={nodes} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 /**

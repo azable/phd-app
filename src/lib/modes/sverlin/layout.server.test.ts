@@ -212,10 +212,10 @@ describe('laying out on the server', () => {
 while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Main" of="values, i"><Node>{values}{i}</Node></Layout>
+<Layout name="Main"><Node>{values}{i}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} i={i} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
       const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
         chosen: { 'Cell.shadow': shadow, 'Row.gap': 0, 'Cell.glow': 'on' }
@@ -234,10 +234,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a view’s room for every branch it could draw, not only those the input takes', async () => {
     const box = async (cell: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = array(Int, { max: 2 });</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main" of="values"><Node>{values}</Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 999 }); const Values = array(Int, { max: 2 });</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell">${cell}</View>\n<View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>\n<Layout name="Main"><Node>{values}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
       const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
@@ -255,10 +255,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a grid’s columns for every coordinate its type allows, not only those the input reaches', async () => {
     const tracks = async (col: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 5 });</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node layout="grid">{#each values as v, i}<Node row={0} col={${col}}>{v}</Node>{/each}</Node></Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 5 });</script><script input>const values = Values;</script><Case name="main" values={[1, 2]} /><script algorithm>@run[values[0] = Int(3);]</script><View of="Int" name="Cell"><Node value={this} /></View>\n<Layout name="Main"><Node><Node layout="grid">{#each values as v, i}<Node row={0} col={${col}}>{v}</Node>{/each}</Node></Node></Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
       const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
@@ -277,10 +277,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 
   it('keeps a collection’s room at its type’s max, whatever the input’s length', async () => {
     const widest = async (max: number, input: string) => {
-      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: ${max} });</script><script input>const values = Values;</script><Case name="main" values={${input}} /><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main" of="values"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>
+      const source = `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: ${max} });</script><script input>const values = Values;</script><Case name="main" values={${input}} /><script algorithm>@run[values[0] = Int(9);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Main"><Node><Node>{#each values as v}{v}{/each}</Node></Node></Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
       const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
       expect(layout.errors).toEqual([]);
@@ -325,10 +325,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <View of="Table" name="Grid">
   <Node layout="grid">{#each this as cells, i}{#each cells as cell, j}<Node row={i} col={j}>{cell}</Node>{/each}{/each}</Node>
 </View>
-<Layout name="Main" of="a, b"><Node layout="row">{a}{b}</Node></Layout>
+<Layout name="Main"><Node layout="row">{a}{b}</Node></Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main a={a} b={b} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
     const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
     expect(layout.errors).toEqual([]);
@@ -449,7 +449,7 @@ describe('link labels', () => {
   it('keep the box of a type also drawn elsewhere, only unboxed on the line', () => {
     const shared = source.replace(
       '<View of="Weight" name="WeightText"><Node value={this} /></View>',
-      '<View of="Weight" name="WeightText"><Node value={this} /></View>\n<Layout name="Extra" of="edges"><Node>{edges[0].weight}</Node></Layout>'
+      '<View of="Weight" name="WeightText"><Node value={this} /></View>\n<Layout name="Extra"><Node>{edges[0].weight}</Node></Layout>'
     );
     expect(prepareSvelteComponent(shared).design.starter['WeightText.minSize']).not.toBe(0);
   });

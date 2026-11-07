@@ -44,6 +44,11 @@
  *   words, as a token draws its words as inline code. bars and merge-sort-stack label each
  *   statement of a clumped label inside it (label.clumped), which leaves their scenes as they were.
  *   replay/* stay as the assistant wrote them.
+ * - 12 fixtures (bfs-neighbours, bfs-references, dfa-loops, dfa-panels, linear-search,
+ *   search-places, replay/bfs-reveal, replay/binary-search-bars, replay/binary-search-recursive,
+ *   replay/linear-search, replay/merge-sort-overview, replay/ucs-ten): written with no of and bare
+ *   layout tags, as both are refused, so their node ids move with their lines and columns; with ids
+ *   masked, each draws the same scenes as before (checked against main, 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';

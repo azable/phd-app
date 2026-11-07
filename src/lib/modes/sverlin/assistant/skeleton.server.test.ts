@@ -26,7 +26,7 @@ const source = `<script domain>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 
-<Layout name="Main" of="values">
+<Layout name="Main">
   <Node layout="row">{#each values as v}{v}{/each}</Node>
 </Layout>
 
@@ -35,7 +35,7 @@ const source = `<script domain>
   <Scene name="look" case="main"><Main /></Scene>
 </Storyboard>`;
 
-const layout = `<Layout name="Main" of="values">
+const layout = `<Layout name="Main">
   <Node layout="column">{#each values as v}{v}{/each}</Node>
 </Layout>`;
 

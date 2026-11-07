@@ -32,18 +32,18 @@ const list = `<script domain>
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<Layout name="List" of="nodes">
+<Layout name="List">
   <Node layout="free">{#each nodes as node}{node}{/each}</Node>
 </Layout>
 
-<Layout name="Main" of="nodes">
+<Layout name="Main">
   <Node>
-    <List nodes={nodes} />
+    <List />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main nodes={nodes} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const ring = `<script domain>
@@ -62,20 +62,20 @@ const ring = `<script domain>
   @second[at = next[at];]
 </script>
 <View of="Name" name="NameCell"><Node value={this} /></View>
-<Layout name="Ring" of="names, next">
+<Layout name="Ring">
   <Node layout="free">
     {#each names as name, k}{name}<Link from={k} to={next[k]} />{/each}
   </Node>
 </Layout>
 
-<Layout name="Main" of="names, next">
+<Layout name="Main">
   <Node>
-    <Ring names={names} next={next} />
+    <Ring />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main names={names} next={next} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const unlinked = `<script domain>
@@ -91,16 +91,16 @@ const unlinked = `<script domain>
   @move[i = Position(1);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Cells" of="values"><Node layout="free">{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Cells"><Node layout="free">{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main" of="values">
+<Layout name="Main">
   <Node>
-    <Cells values={values} />
+    <Cells />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const designOf = (source: string) => prepareSvelteComponent(source).design;

@@ -102,11 +102,11 @@
   <Node>{#each this as vertex}<Node kind="Entry">{at(vertex).name}</Node>{/each}</Node>
 </View>
 
-<Layout name="Title" of="start">
+<Layout name="Title">
   <Node>Breadth-first search from {at(start).name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, out, current, next">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex, k}
       <Node kind="VertexPlace" layout="stack">
@@ -124,7 +124,7 @@
   </Node>
 </Layout>
 
-<Layout name="QueueLine" of="frontier">
+<Layout name="QueueLine">
   <Node layout="row">
     <Node kind="QueueLabel">frontier</Node>
     {frontier}
@@ -133,8 +133,6 @@
 
 <Layout
   name="Status"
-  of="start, current, next, @init, @visit.take,
-      @visit.look.unseen, @visit.look.discover, @done"
 >
   <Node>
     <OneOf>
@@ -175,18 +173,15 @@
 
 <Layout
   name="Stacked"
-  of="vertices, out, start, frontier, current, next, @init,
-      @visit.take, @visit.look.unseen,
-      @visit.look.discover, @done"
 >
   <Node>
-    <Title start={start} />
+    <Title />
     <Node kind="Content" layout="row">
-      <Graph vertices={vertices} out={out} current={current} next={next} />
+      <Graph />
       <Node kind="Side" layout="column">
         <Listing />
-        <QueueLine frontier={frontier} />
-        <Status start={start} current={current} next={next} />
+        <QueueLine />
+        <Status />
       </Node>
     </Node>
   </Node>
@@ -213,13 +208,6 @@
     pause="@init, @visit.take, @visit.look.unseen,
       @visit.look.discover, @done"
   >
-    <Stacked
-      vertices={vertices}
-      out={out}
-      start={start}
-      frontier={frontier}
-      current={current}
-      next={next}
-    />
+    <Stacked />
   </Scene>
 </Storyboard>

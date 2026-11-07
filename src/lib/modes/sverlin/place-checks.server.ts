@@ -40,7 +40,7 @@ export function drawnVariables(source: string): Set<string> {
   const drawn = new Set<string>();
   // A render draws the variable itself, `{i}` or `value={i}`; one inside an expression, as
   // `{#each values as v}`, draws what the expression gives, and a prop passed on, as
-  // `<Row values={values} />`, draws nothing itself.
+  // `<Row />`, draws nothing itself.
   for (const match of markup.matchAll(/(?:(?<!=)|\bvalue=)\{\s*([A-Za-z_$][\w$]*)\s*\}/gu))
     if (variables.has(match[1])) drawn.add(match[1]);
   return drawn;

@@ -18,16 +18,16 @@ const typedIn = search
   )
   .replace('target={42} />', "target={42} parts={['3 8 15', '23 42']} />")
   .replace(
-    '<Layout name="Main" of="lo, hi, values">',
-    '<Layout name="Main" of="lo, hi, values, parts">'
+    '<Layout name="Main">',
+    '<Layout name="Main">'
   )
   .replace(
-    '<Bounds lo={lo} hi={hi} />',
-    '<Bounds lo={lo} hi={hi} />\n    {#each parts as part}{part}{/each}'
+    '<Bounds />',
+    '<Bounds />\n    {#each parts as part}{part}{/each}'
   )
   .replace(
-    '<Main lo={lo} hi={hi} values={values} />',
-    '<Main lo={lo} hi={hi} values={values} parts={parts} />'
+    '<Main />',
+    '<Main />'
   );
 
 describe('inputs the view draws but nothing reads', () => {

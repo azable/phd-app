@@ -112,7 +112,7 @@ MERGE-SORT(A, lo, hi)
   <Node>Merge sort: split, then merge</Node>
 </Layout>
 
-<Layout name="Cells" of="values">
+<Layout name="Cells">
   <Node>
     {#each values as value}
       {value}
@@ -120,13 +120,13 @@ MERGE-SORT(A, lo, hi)
   </Node>
 </Layout>
 
-<Layout name="SplitNote" of="lo, mid, hi">
+<Layout name="SplitNote">
   <Node kind="SplitCaption">
     Split the range {lo} to {hi} at {mid}.
   </Node>
 </Layout>
 
-<Layout name="SplitTree" of="values">
+<Layout name="SplitTree">
   <Node layout="column">
     <Node kind="TreeTitle">Intermediate lists as a tree</Node>
     <Node kind="TreeLevel">
@@ -179,27 +179,24 @@ MERGE-SORT(A, lo, hi)
   </Node>
 </Layout>
 
-<Layout name="TreePage" of="values">
+<Layout name="TreePage">
   <Node>
-    <SplitTree values={values} />
+    <SplitTree />
   </Node>
 </Layout>
 
-<Layout name="Board" of="values, lo, mid, hi, i, j, k,
-    @sort.split, @sort.merge.ordered,
-    @sort.merge.insert.shift.move, @sort.merge.insert.place,
-    @complete">
+<Layout name="Board">
   <Node layout="row">
     <Listing />
     <Node layout="column">
       <Title />
-      <Cells values={values} />
+      <Cells />
       {i}
       {j}
       {k}
       <OneOf>
         <When of="@sort.split">
-          <SplitNote lo={lo} mid={mid} hi={hi} />
+          <SplitNote />
         </When>
         <When of="@sort.merge.ordered">
           {@sort.merge.ordered}
@@ -222,20 +219,9 @@ MERGE-SORT(A, lo, hi)
   </Node>
 </Layout>
 
-<Layout name="Stacked" of="values, lo, mid, hi, i, j, k,
-    @sort.split, @sort.merge.ordered,
-    @sort.merge.insert.shift.move, @sort.merge.insert.place,
-    @complete">
+<Layout name="Stacked">
   <Node>
-    <Board
-      values={values}
-      lo={lo}
-      mid={mid}
-      hi={hi}
-      i={i}
-      j={j}
-      k={k}
-    />
+    <Board />
   </Node>
 </Layout>
 
@@ -251,7 +237,7 @@ MERGE-SORT(A, lo, hi)
     case="main"
     at=":before"
   >
-    <TreePage values={values} />
+    <TreePage />
   </Scene>
   <Scene
     name="merge-sort"
@@ -261,14 +247,6 @@ MERGE-SORT(A, lo, hi)
       @sort.merge.insert.shift.move,
       @sort.merge.insert.place, @complete"
   >
-    <Stacked
-      values={values}
-      lo={lo}
-      mid={mid}
-      hi={hi}
-      i={i}
-      j={j}
-      k={k}
-    />
+    <Stacked />
   </Scene>
 </Storyboard>

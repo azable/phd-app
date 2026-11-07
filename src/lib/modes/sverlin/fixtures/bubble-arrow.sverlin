@@ -42,7 +42,7 @@
 <View of="Values" name="Cells">
   <Node>{#each this as v}{v}{/each}</Node>
 </View>
-<Layout name="Board" of="values, @pass.pair.swap, @pass.pair.compare">
+<Layout name="Board">
   <Node layout="column">
     {values}
     <Node kind="Marks" layout="row">
@@ -57,15 +57,15 @@
   </Node>
 </Layout>
 
-<Layout name="Main" of="values, @pass.pair.swap, @pass.pair.compare">
+<Layout name="Main">
   <Node>
     <Title />
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
 <Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Main /></Scene>
 </Storyboard>

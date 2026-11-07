@@ -27,7 +27,7 @@
 <View of="Char" name="Letter"><Node value={this} /></View>
 <View of="Count" name="CountText"><Node value={this} /></View>
 
-<Layout name="Lcs" of="y, x, t">
+<Layout name="Lcs">
   <Node layout="grid">
     {#each y as c, j}<Node kind="Header" row={0} col={j + 2}>{c}</Node>{/each}
     {#each x as c, i}<Node kind="Header" row={i + 2} col={0}>{c}</Node>{/each}
@@ -37,8 +37,8 @@
   </Node>
 </Layout>
 
-<Layout name="Main" of="y, x, t">
-  <Node><Lcs y={y} x={x} t={t} /></Node>
+<Layout name="Main">
+  <Node><Lcs /></Node>
 </Layout>
 
 <Case name="main" x={'GATC'} y={'ATGC'} t={[
@@ -50,5 +50,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main y={y} x={x} t={t} /></Scene>
+  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main /></Scene>
 </Storyboard>

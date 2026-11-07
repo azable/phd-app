@@ -28,12 +28,12 @@ ${listing}
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
-<Layout name="Main" of="lo, hi, mid, target, values">
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Goal"><Node>target {target}</Node></Layout>
+<Layout name="Main">
   <Node layout="row">
     <Listing />
-    <Node><Goal target={target} /><Cells values={values} /></Node>
+    <Node><Goal /><Cells /></Node>
     {lo}
     {hi}
     {mid}
@@ -41,7 +41,7 @@ ${listing}
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main lo={lo} hi={hi} mid={mid} target={target} values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const tokened = `  @run[start:] lo = 0, hi = n - 1
@@ -73,18 +73,18 @@ const linearSearch = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Goal" of="target"><Node>target {target}</Node></Layout>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Main" of="i, target, values">
+<Layout name="Goal"><Node>target {target}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Main">
   <Node layout="row">
     <Listing />
-    <Node><Goal target={target} /><Cells values={values} /></Node>
+    <Node><Goal /><Cells /></Node>
     {i}
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main i={i} target={target} values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 /** Each step's touched places, as the starter shows them, pausing at the labels given. */
@@ -263,19 +263,19 @@ describe('tokens naming places in a listing', () => {
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Key" of="key"><Node>key {key}</Node></Layout>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Stacked" of="i, j, key, values">
+<Layout name="Key"><Node>key {key}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Stacked">
   <Node layout="row">
     <Listing />
-    <Node layout="column"><Key key={key} /><Cells values={values} /></Node>
+    <Node layout="column"><Key /><Cells /></Node>
     {i}
     {j}
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Stacked i={i} j={j} key={key} values={values} /></Scene>
+  <Scene name="main" case="main"><Stacked /></Scene>
 </Storyboard>`;
     const steps = touched(insertion, ['insert.key', 'insert.shift.copy', 'insert.place']);
     expect(steps[1]).toEqual([':key', ':i']);

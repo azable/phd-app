@@ -37,7 +37,7 @@ for i = 1 to n − 1
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
 
-<Layout name="Main" of="values, key">
+<Layout name="Main">
   <Node layout="row">
     <Listing />
     <Node kind="Board" layout="column">

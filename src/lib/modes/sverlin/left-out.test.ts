@@ -20,21 +20,21 @@ const source = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <Layout name="Title"><Node>Pass</Node></Layout>
-<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>
-<Layout name="Both" of="v, values"><Node>{v} and {values[0]}</Node></Layout>
-<Layout name="Cells" of="values"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
+<Layout name="Picked"><Node>picked {v}</Node></Layout>
+<Layout name="Both"><Node>{v} and {values[0]}</Node></Layout>
+<Layout name="Cells"><Node layout="row">{#each values as x}{x}{/each}</Node></Layout>
 
-<Layout name="Main" of="v, values">
+<Layout name="Main">
   <Node>
     <Title />
-    <Picked v={v} />
-    <Both v={v} values={values} />
-    <Cells values={values} />
+    <Picked />
+    <Both />
+    <Cells />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main v={v} values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const prepared = prepareSvelteComponent(source);
@@ -79,8 +79,8 @@ describe('left out', () => {
       nodes: [node('Picked'), node('Both')],
       // v is in scope at no step, so it has no type to draw it by: its reads are left out as text.
       renders: [
-        site('<Picked v={v} />'),
-        site('<Both v={v} values={values} />'),
+        site('<Picked />'),
+        site('<Both />'),
         `read ${site('v}</Node>')}`,
         `read ${site('v} and')}`
       ]
@@ -103,9 +103,9 @@ describe('left out', () => {
         site('{v} and'),
         site('{values[0]}'),
         site('{x}'),
-        site('<Picked v={v} />'),
-        site('<Both v={v} values={values} />'),
-        site('<Cells values={values} />')
+        site('<Picked />'),
+        site('<Both />'),
+        site('<Cells />')
       ]
     };
     expect(left(prepared, { 'views.Int': 'none' })).toEqual(expected);
@@ -126,11 +126,11 @@ describe('left out', () => {
   it('hide at a step a node one of whose own renders is hidden, and a row only with all its parts', () => {
     const nested = source
       .replace(
-        '<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>',
-        '<Layout name="Outer" of="v"><Node><Node>picked {v}</Node></Node></Layout>' +
-          '<Layout name="Parts" of="v, values"><Node><Node>v {v}</Node><Node>first {values[0]}</Node></Node></Layout>'
+        '<Layout name="Picked"><Node>picked {v}</Node></Layout>',
+        '<Layout name="Outer"><Node><Node>picked {v}</Node></Node></Layout>' +
+          '<Layout name="Parts"><Node><Node>v {v}</Node><Node>first {values[0]}</Node></Node></Layout>'
       )
-      .replace('<Picked v={v} />', '<Outer v={v} /><Parts v={v} values={values} />');
+      .replace('<Picked />', '<Outer /><Parts />');
     const at = siteIn(nested);
     const first = nodeIn(nested);
     const hidden = (absent: string[]) => hiddenIn(prepareSvelteComponent(nested), absent);
@@ -151,11 +151,11 @@ describe('left out', () => {
       .replace('for (@setup[let i', '@start[let found = Flag(false);]\n  for (@setup[let i')
       .replace(
         '<Layout name="Title"><Node>Pass</Node></Layout>',
-        '<Layout name="Status" of="found"><Node>{#if found}found{:else}looking{/if}</Node></Layout>'
+        '<Layout name="Status"><Node>{#if found}found{:else}looking{/if}</Node></Layout>'
       )
-      .replace('<Layout name="Main" of="v, values">', '<Layout name="Main" of="v, values, found">')
-      .replace('<Title />', '<Status found={found} />')
-      .replace('<Main v={v} values={values} />', '<Main v={v} values={values} found={found} />');
+      .replace('<Layout name="Main">', '<Layout name="Main">')
+      .replace('<Title />', '<Status />')
+      .replace('<Main />', '<Main />');
     const built = prepareSvelteComponent(reading);
     const status = nodeIn(reading)('Status');
     expect(hiddenIn(built, ['found'])).toContain(status);
@@ -165,14 +165,14 @@ describe('left out', () => {
   it('take each render in a node holding nodes as a part, a column losing only its caption', () => {
     const shaped = source
       .replace(
-        '<Layout name="Picked" of="v"><Node>picked {v}</Node></Layout>',
-        '<Layout name="Column" of="values, v"><Node layout="column"><Node>{#each values as x}{x}{/each}</Node>{v}</Node></Layout>' +
+        '<Layout name="Picked"><Node>picked {v}</Node></Layout>',
+        '<Layout name="Column"><Node layout="column"><Node>{#each values as x}{x}{/each}</Node>{v}</Node></Layout>' +
           // Accepted: a sentence with a node in it is parts too, so only its loose render goes.
-          '<Layout name="Mixed" of="v, values"><Node>picked {v} <Node>first {values[0]}</Node></Node></Layout>'
+          '<Layout name="Mixed"><Node>picked {v} <Node>first {values[0]}</Node></Node></Layout>'
       )
       .replace(
-        '<Picked v={v} />',
-        '<Column values={values} v={v} /><Mixed v={v} values={values} />'
+        '<Picked />',
+        '<Column /><Mixed />'
       );
     const built = prepareSvelteComponent(shaped);
     const first = nodeIn(shaped);
@@ -192,10 +192,10 @@ describe('left out', () => {
     const inside = source
       .replace(
         '<Layout name="Cells"',
-        '<Layout name="Board" of="values, v"><Node layout="column"><Cells values={values} /><Picked v={v} /></Node></Layout><Layout name="Cells"'
+        '<Layout name="Board"><Node layout="column"><Cells /><Picked /></Node></Layout><Layout name="Cells"'
       )
-      .replace('    <Picked v={v} />\n', '')
-      .replace('<Cells values={values} />\n', '<Board values={values} v={v} />\n');
+      .replace('    <Picked />\n', '')
+      .replace('<Cells />\n', '<Board />\n');
     const built = prepareSvelteComponent(inside);
     // Picked goes with v, but the board keeps the cells.
     expect(hiddenIn(built, ['v'])).not.toContain(nodeIn(inside)('Board'));

@@ -43,7 +43,7 @@
 </View>
 <View of="VertexRef" name="RefCard"><Node value={this} /></View>
 <View of="Queue" name="QueueItems"><Node>{#each this as v}<Node kind="Entry">{at(v).name}</Node>{/each}</Node></View>
-<Layout name="Graph" of="vertices, out, current, @visit.look.check.next">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as v, k}
       <Node layout="column">{v}<Node kind="VertexNumber">{k}</Node></Node>
@@ -53,12 +53,12 @@
     <Node kind="Var">{@visit.look.check.next}</Node>
   </Node>
 </Layout>
-<Layout name="QueueLine" of="queue"><Node>queue {queue}</Node></Layout>
+<Layout name="QueueLine"><Node>queue {queue}</Node></Layout>
 
-<Layout name="Main" of="current, vertices, out, queue, @visit.look.check.next">
+<Layout name="Main">
   <Node>
-    <Graph vertices={vertices} out={out} current={current} />
-    <QueueLine queue={queue} />
+    <Graph />
+    <QueueLine />
   </Node>
 </Layout>
 
@@ -71,5 +71,5 @@
   ]} out={[[1, 2], [3], [3], [4], []]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main current={current} vertices={vertices} out={out} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main /></Scene>
 </Storyboard>
