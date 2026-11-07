@@ -954,8 +954,8 @@ function prepareViews(
     const extracted = extractBlocks(source);
     const { blocks, listings: listingBlocks } = extracted;
     listingAlone = () => listingProblemsAlone(source, blocks, listingBlocks);
-    // <When> and <OneOf> become {#if when(…)} chains no longer than written, and the labels the
-    // markup reads identifiers of the same length (see label-values.ts).
+    // Each <When>, a node's when by now, becomes an {#if when(…)} no longer than written, and the
+    // labels the markup reads identifiers of the same length (see label-values.ts).
     const asIfs = whenTags(extracted.svelteSource);
     if (asIfs.problems.length)
       throw InvalidSvelteSourceError.combine(
@@ -1657,14 +1657,6 @@ function prepareViews(
         if (filter) narrowed.set(reference.key, labelSpan(found.label));
         else labelled[reference.key] = { label: found.label.full };
       }
-    const whens = whenChainsOf(ast.html);
-    for (const start of whens.elses)
-      labelProblems.push(
-        new InvalidSvelteSourceError(
-          'A node with when has no {:else}: what shows outside the label\'s runs goes beside it, where it shows at every step, and another label\'s steps take a node of their own, nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@insert.compare">…</Node><Node when="@insert.swap">…</Node></Node>.',
-          { code: 'view_label', start: sourcePosition(source, start) }
-        )
-      );
     // Operators run in the algorithm: the view reads what a label on an application gave.
     if (!algorithmLabels.problems.length)
       for (const { name, start } of viewOperatorCalls(ast.html, operators)) {
@@ -1870,32 +1862,6 @@ function prepareViews(
             })
         )
       ]);
-    // A chain's branches take turns in one place: none may show at a step another shows at, among
-    // the steps each scene plays.
-    const overlaps =
-      storyboard.scenes.length && !viewProblems.length
-        ? whens.chains.flatMap(({ start, keys }) => {
-            const labels = keys.map((key) => during[key]).filter((label) => label !== undefined);
-            const both = storyboard.scenes.flatMap((scene) => {
-              if (scene.frame) return [];
-              const own = tracedSteps(scenePauses(scene), sceneEdges(scene), scene.case);
-              return sceneSteps(scene, own, sceneView).flatMap((at) => {
-                const shown = labels.filter((label) => atWhen(label, own, at));
-                return shown.length > 1 ? [{ step: own[at].name ?? '', shown }] : [];
-              });
-            });
-            if (!both.length) return [];
-            const [{ shown }] = both;
-            const steps = [...new Set(both.map(({ step }) => step))];
-            return [
-              new InvalidSvelteSourceError(
-                `The branches ${shown.map(whenText).join(' and ')} would both show at ${steps.slice(0, 3).join(', ')}${steps.length > 3 ? ` and ${steps.length - 3} more` : ''}; branches take turns in one place, so give each a label whose spans never meet the others', give each outcome a label of its own, or write each as a node of its own, as <Node when="@found">…</Node>.`,
-                { code: 'view_label', start: sourcePosition(source, start) }
-              )
-            ];
-          })
-        : [];
-    if (overlaps.length) throw InvalidSvelteSourceError.combine(overlaps);
     const steps = storyboard.steps;
     // Pausing at every label, the finest the steps go, whose states those of any other pauses are
     // among.
@@ -4746,64 +4712,6 @@ function viewOperatorCalls(
   return found;
 }
 
-type IfPart = {
-  type?: string;
-  start?: number;
-  elseif?: boolean;
-  expression?: { type?: string; name?: string };
-  else?: { start?: number; children?: IfPart[] };
-};
-
-/** A <OneOf>'s next branch, an {:else if when(…)} after a <When> as rewritten, on a key by now. */
-function nextBranch(part: IfPart): IfPart | undefined {
-  const [next, ...rest] = (part.else?.children ?? []).filter(
-    (child) => child.type !== 'Text' || String((child as { data?: string }).data ?? '').trim()
-  );
-  return !rest.length &&
-    next?.type === 'IfBlock' &&
-    next.elseif &&
-    next.expression?.type === 'Identifier' &&
-    isDuringKey(next.expression.name ?? '')
-    ? next
-    : undefined;
-}
-
-/**
- * Each <When>'s chain of branches, a <OneOf>'s as rewritten, by where it starts, its keys in order; and where each
- * {:else} of one starts, as no branch (see label-values.ts).
- */
-function whenChainsOf(markup: unknown): {
-  chains: { start: number; keys: string[] }[];
-  elses: number[];
-} {
-  const chains: { start: number; keys: string[] }[] = [];
-  const elses: number[] = [];
-  const walk = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach(walk);
-    const part = node as IfPart;
-    if (
-      part.type === 'IfBlock' &&
-      !part.elseif &&
-      part.expression?.type === 'Identifier' &&
-      isDuringKey(part.expression.name ?? '')
-    ) {
-      const keys = [part.expression.name ?? ''];
-      let last = part;
-      for (let next = nextBranch(part); next; next = nextBranch(next)) {
-        keys.push(next.expression?.name ?? '');
-        last = next;
-      }
-      chains.push({ start: part.start ?? 0, keys });
-      if (last.else) elses.push(last.else.start ?? 0);
-    }
-    for (const [key, child] of Object.entries(part))
-      if (key !== 'parent' && key !== 'metadata' && typeof child === 'object') walk(child);
-  };
-  walk(markup);
-  return { chains, elses };
-}
-
 /**
  * Where each {#if} or {:else if} whose test is one key alone starts its test, as {#if @insert.swap}
  * for a label read or <When of="@insert.swap"> for its runs.
@@ -5064,10 +4972,6 @@ function labelRuns(
   }
   return runs;
 }
-
-/** What a <When> names, as its `of` is written. */
-const whenText = (target: string) =>
-  target.startsWith('#') ? `:${target.slice(1)}` : `@${target}`;
 
 /**
  * The pool each reference refers into, by the path of the value with its indices as [], as

@@ -196,26 +196,22 @@ describe('<When> and <OneOf>', () => {
     expect(oldWhenProblems('<Node when="@a">x</Node>')).toEqual([]);
   });
 
-  it('become {#if when(…)} chains no longer than written, every line in place', () => {
+  it('become {#if when(…)} blocks no longer than written, every line in place', () => {
     const one = '<When of="@swap"><Node>x</Node></When>';
     expect(whenTags(one).source.trimEnd()).toBe('{#if when(@swap)}<Node>x</Node>{/if}');
-    const two =
-      '<OneOf>\n  <When of="@a"><Node>a</Node></When>\n  <When of="@case.end"><Node>b</Node></When>\n</OneOf>';
+    const two = '<When of="@a">\n  <When of="@case.end"><Node>b</Node></When>\n</When>';
     const { source, problems } = whenTags(two);
     expect(problems).toEqual([]);
     expect(source).toHaveLength(two.length);
     expect(source.split('\n')).toHaveLength(two.split('\n').length);
     expect(source.replace(/\s+/gu, ' ').trim()).toBe(
-      '{#if when(@a)}<Node>a</Node>{:else if when(after)} <Node>b</Node>{/if}'
+      '{#if when(@a)} {#if when(after)} <Node>b</Node>{/if} {/if}'
     );
   });
 
-  it('refuse when(), anything between branches, and unpaired tags', () => {
+  it('refuse when(), a when naming no label, and unpaired tags', () => {
     const problem = (text: string) => whenTags(text).problems.map(({ message }) => message);
     expect(problem('{#if when(@a)}x{/if}')[0]).toContain('when() is not written in a view');
-    expect(
-      problem('<OneOf><When of="@a">a</When><Node>x</Node><When of="@b">b</When></OneOf>')[0]
-    ).toContain('<OneOf> is no more');
     expect(problem('<When of="@a">x')[0]).toBe(
       'The <When> is never closed: close it with </When>.'
     );

@@ -2,16 +2,15 @@
  * Labels read in the view's markup (labels as values): `@swap.a` is the value the expression
  * labelled `swap.a` gave in a step's own code; `spans(@check.at)` every value it has given so far;
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
- * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
- * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
- * steps, taking turns in one place; `of="@case.start"` and `of="@case.end"` name the moments of the
- * case shown, the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is
- * found, to be refused, as are `runs(@check.at)`, which spans replaced, and `applied(Equal, @inner)`,
- * which a label's view replaced.
+ * `<When of="@swap">…</When>`, which a node's `when="@swap"` stands for by now, draws its contents
+ * at the steps inside a run of `@swap`; `of="@case.start"` and `of="@case.end"` name the moments of
+ * the case shown, the first step, the input as given, and the last. `all(Node)`, which a pool
+ * replaced, is found, to be refused, as are `runs(@check.at)`, which spans replaced, and
+ * `applied(Equal, @inner)`, which a label's view replaced; an authored <When> or <OneOf> is refused
+ * before (see oldWhenProblems).
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
- * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
- * when(@b)}` in place of the tags between them (see whenTags); then `@swap.a` as `ℓswapˑa`,
+ * <When> as `{#if when(@swap)}` and `{/if}` (see whenTags); then `@swap.a` as `ℓswapˑa`,
  * `spans(@check.at)` as `ϟcheckˑat` and spaces, and `when(@swap)` as `ʬswap` and spaces. The page
  * is given each as a prop of that name.
  */
@@ -61,8 +60,8 @@ const appliedCall =
   /^applied\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*)?\)/u;
 const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(before|after))\s*\)/u;
 
-/** Each <When>, <OneOf>, and their closings, and any when( written, which only the tags make. */
-const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
+/** Each <When> and its closing, and any when( written, which only the tags make. */
+const whenTag = /<(\/?)When\b([^>]*)>|\bwhen\(/gu;
 const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
 const caseMoments: Record<string, string> = { '@case.start': 'before', '@case.end': 'after' };
 const tagsAdvice =
@@ -83,47 +82,28 @@ export function oldWhenProblems(source: string): { message: string; start: numbe
 }
 
 /**
- * The markup with each <When> as `{#if when(…)}…{/if}` and each <OneOf> as a chain of them, no
- * longer than as written and every line in place: a later branch's opening becomes `if when(…)}`
- * and the closing before it `{:else`, which Svelte reads as one `{:else if when(…)}` across the
- * spaces between them, as a <OneOf> holds only its branches. The problems: a when() written, and a
- * tag written otherwise or left unpaired.
+ * The markup with each <When>, which a node's `when` stands for by now (see layout-tags.server.ts),
+ * as `{#if when(…)}…{/if}`, no longer than as written and every line in place. The problems: a
+ * when() written, a `when` naming no label or stop of the case, and a tag left unpaired.
  */
 export function whenTags(source: string): {
   source: string;
   problems: { message: string; start: number }[];
 } {
   const problems: { message: string; start: number }[] = [];
-  const edits = new Map<number, { length: number; text: string }>();
+  const edits: { start: number; length: number; text: string }[] = [];
   const edit = (start: number, length: number, text: string) =>
-    edits.set(start, { length, text: text.padEnd(length) });
-  type Open =
-    | { kind: 'When'; start: number; oneOf?: Extract<Open, { kind: 'OneOf' }> }
-    | { kind: 'OneOf'; start: number; branches: number; after: number; closed?: number };
-  const open: Open[] = [];
-  // Only spaces between a <OneOf>'s branches, as each takes the place in turn.
-  const between = (oneOf: Extract<Open, { kind: 'OneOf' }>, until: number) => {
-    if (source.slice(oneOf.after, until).trim())
-      problems.push({
-        message: `<OneOf> is no more: ${tagsAdvice}.`,
-        start: oneOf.after
-      });
-  };
+    edits.push({ start, length, text: text.padEnd(length) });
+  // Where each <When> still open starts.
+  const open: number[] = [];
   for (const match of source.matchAll(whenTag)) {
     const start = match.index ?? 0;
-    const [whole, closing, kind, props] = match;
+    const [whole, closing, props] = match;
     if (whole === 'when(') {
       problems.push({ message: `when() is not written in a view: ${tagsAdvice}.`, start });
       continue;
     }
-    const parent = open.at(-1);
-    if (kind === 'OneOf' && !closing) {
-      if (props.trim()) problems.push({ message: `<OneOf> is no more: ${tagsAdvice}.`, start });
-      open.push({ kind: 'OneOf', start, branches: 0, after: start + whole.length });
-      edit(start, whole.length, '');
-      continue;
-    }
-    if (kind === 'When' && !closing) {
+    if (!closing) {
       const written = whenOf.exec(props)?.[1];
       if (
         written === 'start' ||
@@ -147,46 +127,24 @@ export function whenTags(source: string): {
         });
         continue;
       }
-      const oneOf = parent?.kind === 'OneOf' ? parent : undefined;
-      if (oneOf && oneOf.branches > 0 && oneOf.closed !== undefined) {
-        between(oneOf, start);
-        // The branch before closes with {:else, and this one opens with if when(…)}.
-        edit(oneOf.closed, '</When>'.length, '{:else');
-        edit(start, whole.length, `if when(${of})}`);
-      } else {
-        if (oneOf) between(oneOf, start);
-        edit(start, whole.length, `{#if when(${of})}`);
-      }
-      if (oneOf) oneOf.branches++;
-      open.push({ kind: 'When', start, ...(oneOf ? { oneOf } : {}) });
+      edit(start, whole.length, `{#if when(${of})}`);
+      open.push(start);
       continue;
     }
-    const top = open.pop();
-    if (!top || top.kind !== kind) {
+    if (open.pop() === undefined) {
       problems.push({
-        message: `This </${kind}> closes ${top ? `the <${top.kind}> opened before it` : `no <${kind}>`}: close each tag in the order it opened.`,
+        message: 'This </When> closes no <When>: close each tag in the order it opened.',
         start
       });
-      if (top) open.push(top);
       continue;
     }
-    if (top.kind === 'When') {
-      edit(start, whole.length, '{/if}');
-      if (top.oneOf) {
-        top.oneOf.closed = start;
-        top.oneOf.after = start + whole.length;
-      }
-      continue;
-    }
-    if (!top.branches) problems.push({ message: `<OneOf> is no more: ${tagsAdvice}.`, start });
-    between(top, start);
-    edit(start, whole.length, '');
+    edit(start, whole.length, '{/if}');
   }
-  for (const { kind, start } of open)
-    problems.push({ message: `The <${kind}> is never closed: close it with </${kind}>.`, start });
+  for (const start of open)
+    problems.push({ message: 'The <When> is never closed: close it with </When>.', start });
   let out = '';
   let at = 0;
-  for (const [start, { length, text }] of [...edits].sort(([a], [b]) => a - b)) {
+  for (const { start, length, text } of edits) {
     out += source.slice(at, start) + text;
     at = start + length;
   }

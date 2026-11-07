@@ -3,13 +3,4 @@
 // diagnostic line numbers still match the authored source). These names are reserved: authored
 // components use them without importing and cannot import anything themselves.
 
-import {
-  Link,
-  Listing,
-  Node,
-  SverlinBranch,
-  SverlinChain,
-  SverlinSlot,
-  SverlinUnion,
-  sverlinPlace
-} from 'sverlin';
+import { Link, Listing, Node, SverlinSlot, SverlinUnion, sverlinPlace } from 'sverlin';

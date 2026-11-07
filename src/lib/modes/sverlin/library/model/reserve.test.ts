@@ -17,7 +17,7 @@ const measure: TextMeasure = {
   }
 };
 
-/** The rules of Frame, Node and Chain that lay out what these markups draw. */
+/** The rules of Frame and Node that lay out what these markups draw. */
 const rules = parseSheet(`
   .sv-frame { display: flex; flex-direction: column; box-sizing: border-box }
   .sv-flow { display: flex; box-sizing: border-box; width: max-content }

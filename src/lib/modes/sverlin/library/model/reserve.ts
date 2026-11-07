@@ -126,7 +126,7 @@ function sizer(options: ReserveOptions) {
       chain.pop();
     };
     style(drawing.markup, above);
-    // As Node and Chain take least sizes from the memory: a component's box wherever it applies,
+    // As Node takes least sizes from the memory: a component's box wherever it applies,
     // and the largest size reached for any other node not inside a component's box.
     const kinds = new Map<ModelElement, Kind>();
     const collections = new Map<string, Set<string>>();
@@ -146,9 +146,7 @@ function sizer(options: ReserveOptions) {
         // not move what is set in their line (see the words in Node.svelte).
         const words = `w:${element.attributes['data-sv-words']}`;
         kinds.set(element, { kind: 'reserved', key: words, id: words });
-      } else if (classes.includes('sv-chain') && !insideBox && id)
-        kinds.set(element, { kind: 'reserved', key: `n:${id}`, id });
-      else if (classes.includes('sv-grid') && element.attributes['data-sv-grid']) {
+      } else if (classes.includes('sv-grid') && element.attributes['data-sv-grid']) {
         const grid = element.attributes['data-sv-grid'];
         kinds.set(element, { kind: 'grid', key: `g:${grid}`, id: grid });
       } else if (classes.includes('sv-arranged')) {
