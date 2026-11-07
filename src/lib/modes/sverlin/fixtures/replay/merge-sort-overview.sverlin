@@ -194,27 +194,27 @@ MERGE-SORT(A, lo, hi)
       {i}
       {j}
       {k}
-      <OneOf>
-        <When of="@sort.split">
+      <Node layout="stack">
+        <Node when="@sort.split">
           <SplitNote />
-        </When>
-        <When of="@sort.merge.ordered">
+        </Node>
+        <Node when="@sort.merge.ordered">
           {@sort.merge.ordered}
-        </When>
-        <When of="@sort.merge.insert.shift.move">
+        </Node>
+        <Node when="@sort.merge.insert.shift.move">
           <Node kind="MoveCaption">
             Shift a value right to open a place.
           </Node>
-        </When>
-        <When of="@sort.merge.insert.place">
+        </Node>
+        <Node when="@sort.merge.insert.place">
           <Node kind="PlaceCaption">
             Put the held value into the open place.
           </Node>
-        </When>
-        <When of="@complete">
+        </Node>
+        <Node when="@complete">
           <Node kind="CompleteCaption">The array is sorted.</Node>
-        </When>
-      </OneOf>
+        </Node>
+      </Node>
     </Node>
   </Node>
 </Layout>

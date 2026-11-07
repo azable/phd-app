@@ -1,4 +1,4 @@
-/** <When of="@label"> and <OneOf> in the scenes the server draws of each step. */
+/** <Node when="@label"> and <Node layout="stack"> in the scenes the server draws of each step. */
 
 import { expect, it } from 'vitest';
 
@@ -30,7 +30,7 @@ const insertion = `<script domain>
 <Layout name="Board">
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
-    <When of="@insert.swap"><Caption /></When>
+    <Node when="@insert.swap"><Caption /></Node>
   </Node>
 </Layout>
 
@@ -97,8 +97,8 @@ it(
         '<View of="Flag" name="FlagWord"><Node>{this ? \'yes\' : \'no\'}</Node></View>\n<View of="@insert.test.compare" name="Ask"><Node>Is {this.left} greater than {this.right}? {this.value}</Node></View>\n<Layout name="Caption">'
       )
       .replace(
-        '<When of="@insert.swap"><Caption /></When>',
-        '<OneOf><When of="@insert.test.compare">{@insert.test.compare}</When><When of="@insert.swap"><Caption /></When></OneOf>'
+        '<Node when="@insert.swap"><Caption /></Node>',
+        '<Node layout="stack"><Node when="@insert.test.compare">{@insert.test.compare}</Node><Node when="@insert.swap"><Caption /></Node></Node>'
       )
       .replaceAll('of="values, @insert.swap"', 'of="values, @insert"');
     const steps = await stepsOf('@insert.test.compare, @insert.swap', 4, chained);

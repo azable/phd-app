@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { traceAlgorithm, interpretDomain, interpretInput } from './algorithm/interpret.server';
 import { compileSvelteComponent, prepareSvelteComponent } from './compile.server';
-import { markLabels, oldWhenWarnings, viewTags, viewThisValues, whenTags } from './label-values';
+import { markLabels, oldWhenProblems, viewTags, viewThisValues, whenTags } from './label-values';
 
 const domain = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -174,13 +174,17 @@ describe('a for … of variable', () => {
 });
 
 describe('<When> and <OneOf>', () => {
-  it('still build, but warn with the current form, outside scripts only', () => {
+  it('are refused, each giving the current form, outside scripts only', () => {
     const written =
       '<script algorithm>/* <When> */</script><OneOf><When of="@a"><Node>x</Node></When></OneOf>';
-    const [warning] = oldWhenWarnings(written);
-    expect(warning).toContain('<When> (1) and <OneOf> (1)');
-    expect(warning).toContain('<Node when="@insert.swap">');
-    expect(oldWhenWarnings('<Node when="@a">x</Node>')).toEqual([]);
+    const problems = oldWhenProblems(written);
+    expect(problems.map(({ message }) => message.slice(0, 22))).toEqual([
+      '<OneOf> is not written',
+      '<When> is not written:'
+    ]);
+    expect(problems[0].message).toContain('<Node when="@insert.swap">');
+    expect(problems[0].start).toBe(written.indexOf('<OneOf>'));
+    expect(oldWhenProblems('<Node when="@a">x</Node>')).toEqual([]);
   });
 
   it('become {#if when(…)} chains no longer than written, every line in place', () => {

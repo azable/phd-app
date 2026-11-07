@@ -76,21 +76,17 @@ const tagsAdvice =
   'write when on the node, as <Node when="@insert.swap">…</Node>, shown at each step inside a span of the label, or when=":before" or when=":after", the case\'s first and last steps, and nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>';
 
 /**
- * A warning where the source's markup writes <When> or <OneOf>, the old forms a node's `when` and
- * a stack replaced: they still build, so stored versions do, and the warning sends a new version
- * back to be written in the current form.
+ * The old forms a node's `when` and a stack replaced, <When> and <OneOf>, where the markup writes
+ * one: each is refused, giving the current form.
  */
-export function oldWhenWarnings(source: string): string[] {
-  const markup = source.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gu, '');
-  const count = (tag: string) => [...markup.matchAll(new RegExp(`<${tag}\\b`, 'gu'))].length;
-  const written = [
-    ['<When>', count('When')],
-    ['<OneOf>', count('OneOf')]
-  ].filter(([, n]) => n);
-  if (!written.length) return [];
-  return [
-    `The view writes ${written.map(([tag, n]) => `${tag} (${n})`).join(' and ')}, an old form that still builds: ${tagsAdvice}.`
-  ];
+export function oldWhenProblems(source: string): { message: string; start: number }[] {
+  const markup = source.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gu, (block) =>
+    block.replace(/[^\n]/gu, ' ')
+  );
+  return [...markup.matchAll(/<(When|OneOf)\b/gu)].map((match) => ({
+    message: `<${match[1]}> is not written: ${tagsAdvice}.`,
+    start: match.index ?? 0
+  }));
 }
 
 /**

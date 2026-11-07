@@ -136,32 +136,32 @@
 
 <Layout name="Explanation">
   <Node layout="column">
-    <OneOf>
-      <When of="@probe.equal">
+    <Node layout="stack">
+      <Node when="@probe.equal">
         <Node layout="row">
           <Node>Compare {target} with {values[mid]} at index</Node>
           <Node kind="Number" value={mid} />
         </Node>
-      </When>
-      <When of="@probe.right">
+      </Node>
+      <Node when="@probe.right">
         <Node>The target is larger, so move lo to the right.</Node>
-      </When>
-      <When of="@probe.left">
+      </Node>
+      <Node when="@probe.left">
         <Node>The target is smaller, so move hi to the left.</Node>
-      </When>
-      <When of="@probe.found">
+      </Node>
+      <Node when="@probe.found">
         <Node layout="row">
           <Node>Found {target} at index</Node>
           <Node kind="Number" value={mid} />
         </Node>
-      </When>
-      <When of="@missing">
+      </Node>
+      <Node when="@missing">
         <Node>{target} is not in the array.</Node>
-      </When>
-      <When of=":after">
+      </Node>
+      <Node when=":after">
         <Node>Search result: {result}</Node>
-      </When>
-    </OneOf>
+      </Node>
+    </Node>
   </Node>
 </Layout>
 

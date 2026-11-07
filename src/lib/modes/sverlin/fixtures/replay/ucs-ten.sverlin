@@ -139,27 +139,27 @@
   name="StatusLine"
 >
   <Node>
-    <OneOf>
-      <When of="@setup">
+    <Node layout="stack">
+      <Node when="@setup">
         <Node>Begin with S in the frontier at cost 0.</Node>
-      </When>
-      <When of="@search.take">
+      </Node>
+      <Node when="@search.take">
         <Node>
           Settle {at(current).name}, the lowest-cost frontier node,
           at cost {settledCost}.
         </Node>
-      </When>
-      <When of="@search.edges.consider.relax">
+      </Node>
+      <Node when="@search.edges.consider.relax">
         <Node>
           Improve {at(next).name}: its new cost is {candidate}.
         </Node>
-      </When>
-      <When of="@search.goal">
+      </Node>
+      <Node when="@search.goal">
         <Node>
           Goal reached at {at(current).name} with cost {settledCost}.
         </Node>
-      </When>
-    </OneOf>
+      </Node>
+    </Node>
   </Node>
 </Layout>
 

@@ -411,7 +411,7 @@ export function leftOutWarning(
   scenes: number
 ): string {
   const name = (index: number) => steps[index].name ?? `step ${index + 1}`;
-  return `${scenes > 1 ? `In the scene ${scene.name}, ` : ''}${name(like)} and ${name(step)} draw the same picture, so ${name(step)} is left out: pause at what changes the picture, or show what this step means with <When of="@label">.`;
+  return `${scenes > 1 ? `In the scene ${scene.name}, ` : ''}${name(like)} and ${name(step)} draw the same picture, so ${name(step)} is left out: pause at what changes the picture, or show what this step means with a node with when, as <Node when="@label">…</Node>.`;
 }
 
 /** At most this many labels' repeats are told, so a long run of them never buries other warnings. */

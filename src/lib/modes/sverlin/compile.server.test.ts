@@ -1190,18 +1190,14 @@ describe('scope', () => {
   ])('takes a variable declared later read itself %s, hidden until it is declared', (_, part) => {
     expect(() =>
       prepareSvelteComponent(
-        source(
-          `<Layout name="D">${part}</Layout><Layout name="Main"><Node><D /></Node></Layout>`
-        )
+        source(`<Layout name="D">${part}</Layout><Layout name="Main"><Node><D /></Node></Layout>`)
       )
     ).not.toThrow();
   });
 
   it('hides a block testing an absent variable with all it holds, through a slot reading it', () => {
     const { component } = prepareSvelteComponent(
-      source(
-        '<Layout name="Main"><Node>{key}{#if done}<Node>Done</Node>{/if}</Node></Layout>'
-      )
+      source('<Layout name="Main"><Node>{key}{#if done}<Node>Done</Node>{/if}</Node></Layout>')
     );
     expect(component).toMatch(/inherit: true,\s*reads: \["done"\]/u);
   });
@@ -1228,9 +1224,7 @@ describe('scope', () => {
   it('refuses a name the algorithm never declares', () => {
     expect(() =>
       prepareSvelteComponent(
-        source(
-          '<Layout name="Main"><Node>{key}{#if never}<Node>Never</Node>{/if}</Node></Layout>'
-        )
+        source('<Layout name="Main"><Node>{key}{#if never}<Node>Never</Node>{/if}</Node></Layout>')
       )
     ).toThrow('The view reads never, which is no variable or label of the algorithm');
   });
@@ -1968,7 +1962,7 @@ describe('the view reaching the code only through labels', () => {
   });
 });
 
-describe('<When of="@label">', () => {
+describe('<Node when="@label">', () => {
   const caption = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 8 });
@@ -2001,7 +1995,7 @@ describe('<When of="@label">', () => {
   it('takes :before and :after for the first and the last step, :before chained with a label', () => {
     const prepared = prepareSvelteComponent(
       caption(
-        '<OneOf><When of=":before">{@render Caption()}</When><When of="@pass">{@render Caption()}</When></OneOf><When of=":after">{@render Caption()}</When>'
+        '<Node layout="stack"><Node when=":before">{@render Caption()}</Node><Node when="@pass">{@render Caption()}</Node></Node><Node when=":after">{@render Caption()}</Node>'
       )
     );
     expect(Object.values(prepared.during ?? {})).toEqual(['#before', 'pass', '#after']);
@@ -2009,7 +2003,7 @@ describe('<When of="@label">', () => {
     expect(() =>
       prepareSvelteComponent(
         caption(
-          '<OneOf><When of="@finish">{@render Caption()}</When><When of=":after">{@render Caption()}</When></OneOf>'
+          '<Node layout="stack"><Node when="@finish">{@render Caption()}</Node><Node when=":after">{@render Caption()}</Node></Node>'
         )
       )
     ).not.toThrow();
@@ -2029,25 +2023,26 @@ describe('<When of="@label">', () => {
     );
     const chain = (block: string) =>
       rows.replace('<Node>{#each values', `${block}\n    <Node>{#each values`);
-    // Every pass of the loop is inside the run of @scan, so the two branches would show together.
-    expect(() =>
-      prepareSvelteComponent(
-        chain(
-          '<OneOf><When of="@scan.step">{@render Caption()}</When><When of="@scan">{@render Caption()}</When></OneOf>'
-        )
+    // Every pass of the loop is inside the run of @scan, so a node with when="@scan" shows at each.
+    const prepared = prepareSvelteComponent(
+      chain(
+        '<Node when="@scan.step">{@render Caption()}</Node><Node when="@scan">{@render Caption()}</Node>'
       )
-    ).toThrow('branches @scan.step and @scan would both show');
+    );
+    expect(Object.values(prepared.during ?? {})).toEqual(['scan.step', 'scan']);
   });
 
   it('takes any label, a statement’s or an expression’s, keeping every position', () => {
     for (const label of ['@pass.look', '@pass.look.read', '@pass']) {
       const prepared = prepareSvelteComponent(
-        caption(`<When of="${label}">{@render Caption()}</When>`)
+        caption(`<Node when="${label}">{@render Caption()}</Node>`)
       );
       expect(Object.values(prepared.during ?? {})).toEqual([label.slice(1)]);
     }
     // A problem after the block points where it is written.
-    const source = currentForm(caption('<When of="@pass.look">{@render Caption()}</When><Bad />'));
+    const source = currentForm(
+      caption('<Node when="@pass.look">{@render Caption()}</Node><Bad />')
+    );
     const before = source.slice(0, source.indexOf('<Bad />')).split('\n');
     expect(() => prepareSvelteComponent(source)).toThrow(
       expect.objectContaining({
@@ -2066,11 +2061,11 @@ describe('<When of="@label">', () => {
     );
     expect(() =>
       prepareSvelteComponent(
-        caption('<When of="@pass">{@render Caption()}{:else}{@render Caption()}</When>')
+        caption('<Node when="@pass">{@render Caption()}{:else}{@render Caption()}</Node>')
       )
-    ).toThrow('A node with when has no {:else}');
+    ).toThrow('{:...} block is invalid');
     expect(() =>
-      prepareSvelteComponent(caption('<When of="step">{@render Caption()}</When>'))
+      prepareSvelteComponent(caption('<Node when="step">{@render Caption()}</Node>'))
     ).toThrow('when="step" names no label by its full name');
     expect(() =>
       prepareSvelteComponent(caption('{#if when(@pass) && values}{@render Caption()}{/if}'))
@@ -2081,14 +2076,14 @@ describe('<When of="@label">', () => {
       prepareSvelteComponent(
         caption('{values[0]}').replace(
           '<View of="Int" name="IntCell"><Node value={this} /></View>',
-          '<View of="Int" name="IntCell"><Node value={this} /><When of="@pass"><Node>!</Node></When></View>'
+          '<View of="Int" name="IntCell"><Node value={this} /><Node when="@pass"><Node>!</Node></Node></View>'
         )
       )
     ).toThrow('when="@pass" is in a view, which draws only its value');
   });
 });
 
-describe('<OneOf> branches', () => {
+describe('<Node layout="stack"> branches', () => {
   const chain = (block: string) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 8 });
@@ -2119,7 +2114,7 @@ describe('<OneOf> branches', () => {
   </Node>
 </Layout>`;
   const looking =
-    '<OneOf><When of="@pass.look">{@render Looking()}</When><When of="@pass.note">{@render Noting()}</When></OneOf>';
+    '<Node layout="stack"><Node when="@pass.look">{@render Looking()}</Node><Node when="@pass.note">{@render Noting()}</Node></Node>';
 
   it('takes a branch per label, keeping every position', () => {
     const prepared = prepareSvelteComponent(chain(looking));
@@ -2136,27 +2131,14 @@ describe('<OneOf> branches', () => {
     );
   });
 
-  it('refuses branches shown at one step and an {:else}, and takes labels of any length', () => {
+  it('refuses <OneOf> and <When>, and takes labels of any length', () => {
     expect(() =>
       prepareSvelteComponent(
-        chain(
-          '<OneOf><When of="@pass">{@render Looking()}</When><When of="@pass.look">{@render Noting()}</When></OneOf>'
-        )
+        chain('<OneOf><When of="@pass.look">{@render Looking()}</When></OneOf>')
       )
-    ).toThrow(
-      'The branches @pass and @pass.look would both show at @pass.look#1, @pass.look#2, @pass.look#3;'
-    );
-    expect(() =>
-      prepareSvelteComponent(
-        chain(looking.replace('</When></OneOf>', '{:else}<Node>!</Node></When></OneOf>'))
-      )
-    ).toThrow('A node with when has no {:else}');
-    // A <OneOf> holds only its branches.
-    expect(() =>
-      prepareSvelteComponent(chain(looking.replace('</When><When', '</When><Node>!</Node><When')))
-    ).toThrow('<OneOf> is no more');
+    ).toThrow('<OneOf> is not written: write when on the node');
     // A label of any length, as @n.
-    const short = chain(looking.replace('of="@pass.note"', 'of="@pass.n"')).replace(
+    const short = chain(looking.replace('when="@pass.note"', 'when="@pass.n"')).replace(
       '@note[',
       '@n['
     );
@@ -2261,17 +2243,14 @@ ${markup}`;
       }
       return undefined;
     };
-    expect(
-      problem('<Layout name="Shown"><Node>{queue[0].name}</Node></Layout>')
-    ).toMatchObject({
+    expect(problem('<Layout name="Shown"><Node>{queue[0].name}</Node></Layout>')).toMatchObject({
       code: 'view_position',
       message: expect.stringContaining(
         'read the element it points at with at(), as at(queue[0]).name'
       )
     });
     expect(
-      problem('<Layout name="Shown"><Node>{at(queue[0]).weight}</Node></Layout>')
-        ?.message
+      problem('<Layout name="Shown"><Node>{at(queue[0]).weight}</Node></Layout>')?.message
     ).toContain('A Vertex has no field weight; its fields are name, seen.');
     expect(problem('<Layout name="Shown"><Node>{at(n)}</Node></Layout>')?.message).toContain(
       'at(n) reads through a position, and n is of type Int'
@@ -2357,9 +2336,9 @@ describe('kinds named by nodes', () => {
   });
 
   it("refuses a kind on a layout's root node, its frame", () => {
-    expect(() =>
-      component('<Layout name="Main"><Node kind="Page">{i}</Node></Layout>')
-    ).toThrow(/root <Node> of the layout Main is the frame/);
+    expect(() => component('<Layout name="Main"><Node kind="Page">{i}</Node></Layout>')).toThrow(
+      /root <Node> of the layout Main is the frame/
+    );
   });
 });
 

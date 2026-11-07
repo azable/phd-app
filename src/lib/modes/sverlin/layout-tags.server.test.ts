@@ -56,9 +56,9 @@ describe('layouts', () => {
     // Quicksort's first source in benchmark run 4 read @partition.less in a <When> of its root
     // layout, unlisted, and was refused; labels are the whole algorithm's.
     const asked =
-      '<Layout name="Asked"><When of="@probe.check"><Node>checking</Node></When></Layout>\n';
+      '<Layout name="Asked"><Node when="@probe.check"><Node>checking</Node></Node></Layout>\n';
     expect(
-      problemOf(`${asked}${main('<Asked /><When of="@probe.right"><Node>right</Node></When>')}`)
+      problemOf(`${asked}${main('<Asked /><Node when="@probe.right"><Node>right</Node></Node>')}`)
     ).toBe('');
     const prepared = prepareSvelteComponent(`${blocks}${asked}${main('<Asked />')}`);
     expect(prepared.storyboard.scenes[0].layout).toBe('Main');
@@ -140,12 +140,12 @@ describe('nodes shown at a label', () => {
       `${blocks}${main('<Node when="@probe.check">checking</Node>')}`
     );
     const wrapped = prepareSvelteComponent(
-      `${blocks}${main('<When of="@probe.check"><Node>checking</Node></When>')}`
+      `${blocks}${main('<Node when="@probe.check"><Node>checking</Node></Node>')}`
     );
     expect(Object.keys(shown.design.space)).toEqual(Object.keys(wrapped.design.space));
   });
 
-  it('takes turns in one place with a stack of nodes with when, and still reads <OneOf>', () => {
+  it('takes turns in one place with a stack of nodes with when, and still reads <Node layout="stack">', () => {
     expect(
       problemOf(
         main(
@@ -156,7 +156,7 @@ describe('nodes shown at a label', () => {
     expect(
       problemOf(
         main(
-          '<OneOf><When of="@probe.right"><Node>right</Node></When><When of="@probe.left"><Node>left</Node></When></OneOf>'
+          '<Node layout="stack"><Node when="@probe.right"><Node>right</Node></Node><Node when="@probe.left"><Node>left</Node></Node></Node>'
         )
       )
     ).toBe('');

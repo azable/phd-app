@@ -45,7 +45,7 @@ import {
   viewThis,
   viewTags,
   viewThisValues,
-  oldWhenWarnings,
+  oldWhenProblems,
   whenTags,
   written as asWritten
 } from './label-values';
@@ -319,8 +319,6 @@ export type PreparedComponent = {
   ownListings: string[];
   /** Each label a scene pauses at that a listing marks no region for, told to the assistant. */
   listingWarnings?: string[];
-  /** <When> or <OneOf> written, the old forms, told to the assistant (see oldWhenWarnings). */
-  oldFormWarnings?: string[];
   /** Each input the view draws but neither the algorithm nor another input reads, told to the assistant. */
   inputWarnings?: string[];
   /** Each label on only a declaration's value that a scene pauses at, told to the assistant. */
@@ -853,6 +851,17 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
   if (Buffer.byteLength(authored, 'utf8') > maximumSourceBytes) {
     throw new InvalidSvelteSourceError('The Svelte component is too large.', { code: 'too_large' });
   }
+  const old = oldWhenProblems(authored);
+  if (old.length)
+    throw InvalidSvelteSourceError.combine(
+      old.map(
+        ({ message, start }) =>
+          new InvalidSvelteSourceError(message, {
+            code: 'view_markup',
+            start: sourcePosition(authored, start)
+          })
+      )
+    );
   // A call type declared in the domain names its function's body label (see calls.server.ts).
   const called = callTypes(authored);
   if (called.problems.length)
@@ -904,7 +913,6 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
     ...scene,
     position: sourcePosition(written, scene.start)
   }));
-  const oldFormWarnings = oldWhenWarnings(authored);
   const captionAt = (place: string) =>
     sourcePosition(written, laid.captions.find((caption) => caption.place === place)?.start ?? 0);
   return {
@@ -923,7 +931,6 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
           )
       })
     ),
-    ...(oldFormWarnings.length ? { oldFormWarnings } : {}),
     source: written
   };
 }
@@ -2470,7 +2477,6 @@ export async function bundlePresentation(
   const warnings: BuildWarning[] = [
     ...coded('listing.label-without-region', prepared.listingWarnings),
     ...placeWarnings(prepared.source),
-    ...coded('view.old-form', prepared.oldFormWarnings),
     ...coded('input.unread', prepared.inputWarnings),
     ...coded('algorithm.initialiser', prepared.initialiserWarnings),
     ...coded('algorithm.position', prepared.positionWarnings),

@@ -68,20 +68,20 @@ LINEAR-SEARCH(A, target)
 
 <Layout name="Status">
   <Node layout="column">
-    <OneOf>
-      <When of="@scan.check">
+    <Node layout="stack">
+      <Node when="@scan.check">
         {@scan.check}
-      </When>
-      <When of="@scan.found">
+      </Node>
+      <Node when="@scan.found">
         <Node kind="Outcome" layout="row">
           <Node>Found {target} at index</Node>
           <Node kind="Number" value={i} />
         </Node>
-      </When>
-      <When of="@missing">
+      </Node>
+      <Node when="@missing">
         <Node kind="Outcome">{target} is not in the array.</Node>
-      </When>
-    </OneOf>
+      </Node>
+    </Node>
   </Node>
 </Layout>
 

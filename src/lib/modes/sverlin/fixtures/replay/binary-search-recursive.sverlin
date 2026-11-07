@@ -104,26 +104,26 @@
 </Layout>
 <Layout name="Status">
   <Node>
-    <OneOf>
-      <When of="@probe.equal">
+    <Node layout="stack">
+      <Node when="@probe.equal">
         {@probe.equal}
-      </When>
-      <When of="@probe.right">
+      </Node>
+      <Node when="@probe.right">
         <Node>The middle value is too small, so search right.</Node>
-      </When>
-      <When of="@probe.left">
+      </Node>
+      <Node when="@probe.left">
         <Node>The middle value is too large, so search left.</Node>
-      </When>
-      <When of="@probe.found">
+      </Node>
+      <Node when="@probe.found">
         <Node layout="row">
           <Node>Found {target} at index</Node>
           <Node kind="Number" value={mid} />
         </Node>
-      </When>
-      <When of="@missing">
+      </Node>
+      <Node when="@missing">
         <Node>{target} is not in the array.</Node>
-      </When>
-    </OneOf>
+      </Node>
+    </Node>
   </Node>
 </Layout>
 

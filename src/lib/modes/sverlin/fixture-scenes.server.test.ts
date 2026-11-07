@@ -49,6 +49,10 @@
  *   replay/linear-search, replay/merge-sort-overview, replay/ucs-ten): written with no of and bare
  *   layout tags, as both are refused, so their node ids move with their lines and columns; with ids
  *   masked, each draws the same scenes as before (checked against main, 7 November 2026).
+ * - replay/bfs-reveal, binary-search-bars, binary-search-recursive, linear-search,
+ *   merge-sort-overview, ucs-ten: written with a node's when and a stack instead of <When> and
+ *   <OneOf>, which are now refused, so their ids move with their lines and each status stack keeps
+ *   the room of its largest branch, as a stack does.
  */
 
 import { createHash } from 'node:crypto';

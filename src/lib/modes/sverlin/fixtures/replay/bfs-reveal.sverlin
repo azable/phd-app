@@ -135,39 +135,39 @@
   name="Status"
 >
   <Node>
-    <OneOf>
-      <When of="@init">
+    <Node layout="stack">
+      <Node when="@init">
         <Node kind="StatusLine" layout="row">
           <Node>Begin by adding</Node>
           <Node kind="StatusVertex">{at(start).name}</Node>
           <Node>to the frontier.</Node>
         </Node>
-      </When>
-      <When of="@visit.take">
+      </Node>
+      <Node when="@visit.take">
         <Node kind="StatusLine" layout="row">
           <Node>Remove</Node>
           <Node kind="StatusVertex">{at(current).name}</Node>
           <Node>from the front of the frontier.</Node>
         </Node>
-      </When>
-      <When of="@visit.look.unseen">
+      </Node>
+      <Node when="@visit.look.unseen">
         <Node kind="StatusLine" layout="row">
           <Node>Check whether neighbour</Node>
           <Node kind="StatusVertex">{at(next).name}</Node>
           <Node>is undiscovered.</Node>
         </Node>
-      </When>
-      <When of="@visit.look.discover">
+      </Node>
+      <Node when="@visit.look.discover">
         <Node kind="StatusLine" layout="row">
           <Node>Discover</Node>
           <Node kind="StatusVertex">{at(next).name}</Node>
           <Node>and add it to the frontier.</Node>
         </Node>
-      </When>
-      <When of="@done">
+      </Node>
+      <Node when="@done">
         <Node>The frontier is empty, so BFS is complete.</Node>
-      </When>
-    </OneOf>
+      </Node>
+    </Node>
   </Node>
 </Layout>
 
