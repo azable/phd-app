@@ -396,6 +396,7 @@
               ...(presentation.renders ? { renders: presentation.renders } : {}),
               ...(presentation.leftOut ? { leftOut: presentation.leftOut } : {}),
               ...(presentation.origins ? { origins: presentation.origins } : {}),
+              ...(presentation.roles ? { roles: presentation.roles } : {}),
               ...(visiblePresentations.length > 1 ? { label: index === 0 ? 'top' : 'bottom' } : {})
             }
           ]

@@ -98,8 +98,14 @@ change the first presentation keeps the viewed variant's values and the second
 is randomised; a manual change can also edit the viewed variant's choices as
 nested JSON (the Choices tab while editing): the values it changes or adds are
 built as chosen and those it removes or sets to null are no longer kept, so the
-rest still follow what they inherit, their groups and tokens (`choiceEdits`);
-refills of the presentation buffer stay random, as most are never shown
+rest still follow what they inherit, their groups and tokens (`choiceEdits`).
+Choices shows a version's design in short by default, the base's name and only
+the values that differ from what it gives, as the assistant's context does; its
+All values switch shows every stored value. In short, a value removed returns to
+what the base gives and the values it leaves out are kept (`shortValues`,
+`shortChoiceEdits` in
+[`variant-diff.ts`](src/lib/client/artifacts/variant-diff.ts)); refills of the
+presentation buffer stay random, as most are never shown
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
 `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,
 each drawn at random around the values the `vary` sets, and queues them in the

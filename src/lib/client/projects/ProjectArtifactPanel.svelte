@@ -12,6 +12,8 @@
     choiceEdits,
     choiceRows,
     differingKeys,
+    shortChoiceEdits,
+    shortValues,
     variantDocument
   } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
@@ -131,6 +133,14 @@
   // The choices of the candidate a draft starts from, and their nested document as edited: saving
   // builds with only what the edit changes (see choiceEdits).
   let choicesBase = $state<DesignValues | undefined>();
+  let choicesRoles = $state<Readonly<Record<string, string>> | undefined>();
+  // Whether Choices shows every value of the stored design, rather than the base's name and only
+  // the values that differ from what it gives (see shortValues).
+  let allChoices = $state(false);
+  const choicesOf = (variant: DesignValues, roles?: Readonly<Record<string, string>>) =>
+    allChoices ? variant : shortValues(variant, roles);
+  // The choices the draft's document was written from, in the form shown: an edit is read against it.
+  const choicesShown = $derived(choicesBase && choicesOf(choicesBase, choicesRoles));
   let choicesDraft = $state('');
   let choicesError = $state('');
   let discardRequested = $state(false);
@@ -153,7 +163,7 @@
   const baseSource = $derived(candidateSource ?? artifact?.content.text ?? '');
   const displayedSource = $derived(editMode === 'editing' ? draft : baseSource);
   const choicesChanged = $derived(
-    choicesBase !== undefined && choicesDraft !== variantDocument(choicesBase)
+    choicesShown !== undefined && choicesDraft !== variantDocument(choicesShown)
   );
   const dirty = $derived(
     editMode === 'editing' &&
@@ -198,8 +208,10 @@
   });
   // The shown presentations' variants, by the label each has on the stage.
   const shownVariants = $derived(
-    drawnSources.flatMap(({ label, variant, presentationId }, index) =>
-      variant ? [{ label: label ?? (index ? 'bottom' : 'top'), variant, presentationId }] : []
+    drawnSources.flatMap(({ label, variant, roles, presentationId }, index) =>
+      variant
+        ? [{ label: label ?? (index ? 'bottom' : 'top'), variant, roles, presentationId }]
+        : []
     )
   );
   // A pair's choices are shown as their differences until one of the two is picked; a new pair
@@ -226,7 +238,8 @@
   const variantJson = $derived.by(() => {
     if (!shownVariants.length) return undefined;
     const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
-    return variantDocument(shownVariants[index]?.variant ?? {});
+    const shown = shownVariants[index];
+    return variantDocument(shown ? choicesOf(shown.variant, shown.roles) : {});
   });
   const shownVariantOptions = $derived([
     { id: 'differences' as const, name: 'Differences' },
@@ -245,7 +258,8 @@
       };
     }
     const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
-    const variant = shownVariants[index]?.variant ?? {};
+    const shown = shownVariants[index];
+    const variant = shown ? choicesOf(shown.variant, shown.roles) : {};
     const keys = Object.keys(variant).sort((x, y) => x.localeCompare(y));
     return { caption: 'Choices of the version', columns: [], rows: choiceRows([variant], keys) };
   });
@@ -280,8 +294,10 @@
       chosen?.presentationId ??
       picked?.presentationId ??
       drawnSources.find(({ source }) => source === baseSource)?.presentationId;
-    choicesBase = drawnSources.find(({ presentationId }) => presentationId === draftFrom)?.variant;
-    choicesDraft = choicesBase ? variantDocument(choicesBase) : '';
+    const from = drawnSources.find(({ presentationId }) => presentationId === draftFrom);
+    choicesBase = from?.variant;
+    choicesRoles = from?.roles;
+    choicesDraft = choicesShown ? variantDocument(choicesShown) : '';
     choicesError = '';
     draftSummary = '';
     expanded = true;
@@ -299,7 +315,7 @@
 
   function discardDraft() {
     draft = draftBase;
-    choicesDraft = choicesBase ? variantDocument(choicesBase) : '';
+    choicesDraft = choicesShown ? variantDocument(choicesShown) : '';
     choicesError = '';
     discardRequested = false;
     editMode = 'readonly';
@@ -308,7 +324,11 @@
   async function saveDraft() {
     if (!artifact || !dirty || session.pending || !session.atHead || session.readOnly) return;
     const edits =
-      choicesBase && choicesChanged ? choiceEdits(choicesBase, choicesDraft) : undefined;
+      choicesBase && choicesChanged
+        ? allChoices
+          ? choiceEdits(choicesBase, choicesDraft)
+          : shortChoiceEdits(choicesBase, choicesRoles, choicesDraft)
+        : undefined;
     if (edits && 'error' in edits) {
       choicesError = edits.error;
       tab = 'variant';
@@ -328,6 +348,14 @@
       editMode = 'readonly';
       onSaved();
     }
+  }
+
+  // Switch Choices between the short form and every value; while editing, only an unchanged draft
+  // switches, written again in the other form, so the text is always read against what it shows.
+  function toggleAllChoices() {
+    if (editMode === 'editing' && choicesChanged) return;
+    allChoices = !allChoices;
+    if (editMode === 'editing' && choicesShown) choicesDraft = variantDocument(choicesShown);
   }
 
   function updateDraft(source: string) {
@@ -547,6 +575,31 @@
         <!-- The choices of the candidate the draft starts from, to edit: a
           value changed or added is chosen, one removed returns to what it follows. -->
         <div class="flex min-h-48 flex-1 flex-col overflow-hidden">
+          <div
+            class="flex items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
+          >
+            <span class="mr-auto truncate">
+              {allChoices
+                ? 'Every value of the design'
+                : 'The base and the values that differ from it; one removed returns to the base'}
+            </span>
+            <button
+              type="button"
+              aria-pressed={allChoices}
+              disabled={choicesChanged}
+              class={[
+                optionButton,
+                allChoices ? optionOn : 'hover:text-foreground',
+                'disabled:opacity-50'
+              ]}
+              title={choicesChanged
+                ? 'Save or discard the changed choices to switch'
+                : allChoices
+                  ? 'Show the base and what differs from it'
+                  : 'Show every value of the design, those the base gives included'}
+              onclick={toggleAllChoices}>All values</button
+            >
+          </div>
           {#if choicesError}
             <p class="border-b bg-destructive/10 px-4 py-2 text-sm text-destructive" role="alert">
               {choicesError}
@@ -600,6 +653,17 @@
                   onclick={() => (shownVariant = id)}>{name}</button
                 >
               {/each}
+            {/if}
+            {#if !showingDifferences}
+              <button
+                type="button"
+                aria-pressed={allChoices}
+                class={[optionButton, allChoices ? optionOn : 'hover:text-foreground']}
+                title={allChoices
+                  ? 'Every value of the design; turn off to show the base and what differs from it'
+                  : 'Show every value of the design, those the base gives included'}
+                onclick={toggleAllChoices}>All values</button
+              >
             {/if}
             <button
               type="button"

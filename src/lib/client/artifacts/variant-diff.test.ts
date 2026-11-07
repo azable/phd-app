@@ -7,8 +7,11 @@ import {
   choiceName,
   choiceRows,
   differingKeys,
+  shortChoiceEdits,
+  shortValues,
   variantDocument
 } from './variant-diff';
+import { starterBase } from '$lib/modes/sverlin/library/node/starter-base';
 
 /** The rows of each document the merge view marks as changed, by the key each row sets. */
 function changedKeys(a: string, b: string) {
@@ -188,6 +191,81 @@ describe("a developer's edit of the choices", () => {
     });
     expect(choiceEdits(shown, flat)).toEqual({
       error: expect.stringMatching(/"IntCell\.fill" at the top is written flat/u)
+    });
+  });
+});
+
+describe('the choices in short', () => {
+  // A stored design on the starter base: its accent and one cell's frame chosen, the cell's other
+  // props following its role's style, and a view choice.
+  const stored = {
+    ...starterBase,
+    $accent: 'teal-600',
+    'views.Int': 'IntCell',
+    'IntCell.fill': 'white',
+    'IntCell.padding': 0.375,
+    'IntCell.stroke': 'sky-500'
+  };
+  const roles = { IntCell: 'value' };
+
+  it('names the base and lists only the values that differ from what it gives', () => {
+    expect(shortValues(stored, roles)).toEqual({
+      base: '<starter>',
+      $accent: 'teal-600',
+      'views.Int': 'IntCell',
+      'IntCell.stroke': 'sky-500'
+    });
+    expect(JSON.parse(variantDocument(shortValues(stored, roles)))).toEqual({
+      '...': '<starter>',
+      $accent: 'teal-600',
+      '{Int}': 'IntCell',
+      IntCell: { stroke: 'sky-500' }
+    });
+  });
+
+  it('leaves the base values in where the kinds’ roles are unknown, or the base is no template', () => {
+    expect(Object.keys(shortValues(stored))).toEqual([
+      'base',
+      '$accent',
+      'views.Int',
+      'IntCell.fill',
+      'IntCell.padding',
+      'IntCell.stroke'
+    ]);
+    const mine = shortValues({ ...stored, base: '$mine' }, roles);
+    expect(mine['<Value>.fill']).toBe(starterBase['<Value>.fill']);
+    expect(Object.hasOwn(mine, 'IntCell.fill')).toBe(false);
+  });
+
+  it('changes nothing for the short document as shown', () => {
+    const text = variantDocument(shortValues(stored, roles));
+    expect(shortChoiceEdits(stored, roles, text)).toEqual({ chosen: {}, unset: [] });
+  });
+
+  it('keeps a value changed or added as chosen, never unsetting a value it leaves out', () => {
+    const edited = {
+      '...': '<starter>',
+      $accent: 'violet-600',
+      '{Int}': 'IntCell',
+      IntCell: { stroke: 'sky-500', radius: 2 }
+    };
+    expect(shortChoiceEdits(stored, roles, JSON.stringify(edited))).toEqual({
+      chosen: { $accent: 'violet-600', 'IntCell.radius': 2 },
+      unset: []
+    });
+  });
+
+  it('returns a value removed to what the base gives: the template’s value, else what it follows', () => {
+    const edited = { '...': '<starter>', '{Int}': 'IntCell', IntCell: { stroke: null } };
+    expect(shortChoiceEdits(stored, roles, JSON.stringify(edited))).toEqual({
+      chosen: { $accent: starterBase.$accent },
+      unset: ['IntCell.stroke']
+    });
+  });
+
+  it('says why text is not a document of choices, as an edit of the whole design does', () => {
+    expect(shortChoiceEdits(stored, roles, '[1]')).toEqual({
+      error: 'The choices must be one JSON object, each variable to its value.'
     });
   });
 });

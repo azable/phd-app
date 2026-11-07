@@ -53,6 +53,8 @@ export type DrawnPresentation = {
    */
   variant?: DesignValues;
   origins?: Readonly<Record<string, string>>;
+  /** Each kind of node's role, whose style its props follow (see shortValues in variant-diff.ts). */
+  roles?: Readonly<Record<string, string>>;
   views?: Readonly<Record<string, readonly string[]>>;
   kinds?: Readonly<Record<string, readonly string[]>>;
   /** The variable each render of a type by name reads, views.Int, by its line:column. */
