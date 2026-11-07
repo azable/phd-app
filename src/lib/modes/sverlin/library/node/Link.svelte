@@ -226,7 +226,9 @@
           ]
     );
     if (ends.length) return ends.join(' ');
-    if (from === undefined && !reach && !arrangementParentContext())
+    // A from written, as from={call.parent}, is told where it comes from, even at a step it is none.
+    const written = [__fromPath, __fromOf, __fromAt, __fromIn].some((each) => each !== undefined);
+    if (from === undefined && !written && !__fromInherit && !reach && !arrangementParentContext())
       return `${site} has no from, so it starts at the element its view draws, and only a free layout holding that element and what it reaches lays such a link out: it is in none, so it is drawn nowhere. Put both in a node with layout free.`;
     return undefined;
   });

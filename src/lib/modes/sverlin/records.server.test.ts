@@ -172,6 +172,16 @@ describe('queries', () => {
     expect(linkWarnings(outside.built.warnings)).toEqual([
       'The Link at 36:68 in CallFrame has no from, so it starts at the element its view draws, and only a free layout holding that element and what it reaches lays such a link out: it is in none, so it is drawn nowhere. Put both in a node with layout free.'
     ]);
+    // A from written, as a call's parent, is none only where the value is none, as the first call's.
+    const tree = await drawnSteps(
+      mergeSort(
+        frame,
+        '<Select name="calls" from="@sort" where="start <= now" order="start" max="15" />\n<Layout name="Tree"><Node><Node kind="Calls" layout="column">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
+        '<Scene name="calls" case="eight" pause="@sort.start, @sort.end"><Tree /></Scene>'
+      )
+    );
+    expect(tree.steps.flatMap(({ links }) => links).length).toBeGreaterThan(0);
+    expect(linkWarnings(tree.built.warnings)).toEqual([]);
     // A value of the array is no position.
     const value = await drawnSteps(calls('<Link to={this.a[0]} />', free));
     expect(value.steps.flatMap(({ links }) => links)).toEqual([]);
