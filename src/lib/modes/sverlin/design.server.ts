@@ -731,7 +731,14 @@ export function buildVariant(
   const has = (key: string) => Object.hasOwn(space, key);
   if (baseProblems.length) throw new DesignValueError(writtenText(baseProblems.join(' ')));
   const asGiven = Object.entries(chosenValues);
-  const chosen = asGiven.filter(([key]) => has(key));
+  // The starter base's own values, written in under a design naming `<starter>` (see
+  // withStarterBase), are the starter's, chosen by no one: the design starts from them, and values
+  // drawn go over them as over the starter's.
+  const fromStarterBase = ([key, value]: [string, unknown]) =>
+    chosenValues[baseKey] === starterBaseName && starterBase[key] === value;
+  const offeredGiven = asGiven.filter(([key]) => has(key));
+  const unchosen = offeredGiven.filter(fromStarterBase);
+  const chosen = offeredGiven.filter((entry) => !fromStarterBase(entry));
   // A style's prop outside what its heirs share names them, as a group's names the kinds it reaches.
   const heirsOf = (style: string) =>
     Object.keys(roles).filter((kind) => ({ ...base, ...chosenValues })[inheritKey(kind)] === style);
@@ -745,7 +752,7 @@ export function buildVariant(
         )
       : undefined;
   };
-  const problems = chosen
+  const problems = offeredGiven
     .filter(([key, value]) => !fits(space, key, value))
     .map(([key, value]) => styleUnfit(key, value) ?? unfit(space, key, value));
   if (problems.length) throw new DesignValueError(writtenText(problems.join(' ')));
@@ -783,6 +790,10 @@ export function buildVariant(
           `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`
         )
       );
+  }
+  for (const [key, value] of unchosen) {
+    values[key] = value as DesignValue;
+    origins[key] = 'starter';
   }
   // A kind's prop set apart from its level stays its own; every other follows its level. Before
   // the chosen values, a level the variant built on does not set is the starter base's, which the
@@ -829,12 +840,7 @@ export function buildVariant(
   // one inheriting it follows the value chosen.
   for (const [key, value] of chosen) {
     values[key] = value as DesignValue;
-    // The starter base's own values, written in under a design naming `<starter>` (see
-    // withStarterBase), are the starter's, chosen by no one.
-    origins[key] =
-      chosenValues[baseKey] === starterBaseName && starterBase[key] === value
-        ? 'starter'
-        : 'chosen';
+    origins[key] = 'chosen';
     if (follows(roles, key)) own.add(key);
   }
   // A kind chosen to inherit something follows it where only its starter look set it apart, as a

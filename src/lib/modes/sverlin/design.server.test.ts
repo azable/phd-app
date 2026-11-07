@@ -447,6 +447,27 @@ describe('design tokens and role styles', () => {
     expect(drawn['IntCell.color']).toBe(drawn['$text']);
   });
 
+  it('draws over the starter base a design entering with none has written in', () => {
+    const drawn = [1, 2, 3, 4].map((seed) =>
+      buildOnBase(
+        levelled.space,
+        levelled.starter,
+        withStarterBase({ randomise: true }),
+        seed,
+        levelled.fallbacks,
+        levelled.roles
+      )
+    );
+    expect(new Set(drawn.map(({ values }) => values['$spacing'])).size).toBeGreaterThan(1);
+    for (const { values, origins } of drawn) {
+      expect(values.base).toBe('<starter>');
+      expect(values['IntCell.padding']).toBe(values['$spacing']);
+      expect(origins['$spacing']).toBe(
+        values['$spacing'] === starterBase.$spacing ? 'starter' : 'random'
+      );
+    }
+  });
+
   it('takes the listing settings under <Listing>', () => {
     const { design } = prepareSvelteComponent(pseudocode);
     const chosen = { '<Listing>.syntax': 'colour' };
