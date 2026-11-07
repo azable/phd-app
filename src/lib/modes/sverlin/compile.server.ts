@@ -98,6 +98,7 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
+import { coveredFillWarnings } from './covered-fills.server';
 import { paddingWarnings } from './padding-warnings.server';
 import { placeWarnings } from './place-checks.server';
 import type { BuildWarning } from './warnings';
@@ -2683,7 +2684,8 @@ export async function bundlePresentation(
     ...coded(
       'design.padding',
       paddingWarnings(drawnSteps, values, new Set(scenes.map(({ layout }) => layout)))
-    )
+    ),
+    ...coded('look.fill-covered', coveredFillWarnings(drawnSteps))
   );
   const arrangements =
     options.arrange && size && geometry

@@ -34,7 +34,8 @@ function small({ box, look }: SceneNode): boolean {
   return box.width - left - right < leastTarget || box.height - top - bottom < leastTarget;
 }
 
-function named(kinds: readonly string[]): string {
+/** The first kindsTold of a warning's kinds, and how many more there are. */
+export function named(kinds: readonly string[]): string {
   const told = kinds.slice(0, kindsTold).join(', ');
   const rest = kinds.length - kindsTold;
   return rest > 0 ? `${told} and ${rest} more` : told;

@@ -84,6 +84,11 @@ export type SceneNode = {
    * reaches that element in a free layout: it moves with the element.
    */
   follows?: string;
+  /**
+   * The link end whose fill it shows at this step, where a link from a variable paints it, as
+   * `Arrow.<Link>.<To>`, or a place's, `Arrow.<Link>.<To>:i`, where the place sets its own fill.
+   */
+  paintedBy?: string;
 };
 
 /** One line of one piece of text, as the page laid it out, with its own style. */

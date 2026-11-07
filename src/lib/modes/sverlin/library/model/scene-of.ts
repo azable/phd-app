@@ -800,6 +800,8 @@ export function sceneOf(
     if (fill) {
       node.look.fill = fill.css;
       node.colours = { ...node.colours, fill: fill.name };
+      const painter = attribute('data-target-kind');
+      if (painter) node.paintedBy = painter;
     }
     if (stroke) {
       const width = Number(attribute('data-target-stroke-width'));

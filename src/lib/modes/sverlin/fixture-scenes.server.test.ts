@@ -82,6 +82,9 @@
  *   replay/binary-search-compact, replay/merge-sort-fallback: only boxes that draw nothing (a
  *   caption's, an empty field's) widen round their centred text; no text, painted box or link
  *   moves.
+ * - 33 fixtures whose links from variables paint what they reach: a node so painted names the end
+ *   whose fill it shows (paintedBy), for the covered-fill warning; with that field left out, each
+ *   hashes as before (checked 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';

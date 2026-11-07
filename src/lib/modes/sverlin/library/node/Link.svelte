@@ -126,6 +126,10 @@
   const endKind = untrack(() => `${kind}.${endTag}`);
   const endPlaced = untrack(() => placedKind(placeContext(), endKind));
   const endLook = (prop: string) => lookUp(design, endKind, endPlaced, prop);
+  // The kind whose fill the end gives what it reaches, its place's where that sets its own.
+  const fillKind = untrack(() =>
+    endPlaced !== undefined && design[`${endPlaced}.fill`] !== undefined ? endPlaced : endKind
+  );
   // How it runs is its kind's: as its layout's arrows run, a curve of its own, or a wire; and its
   // heads, drawn at the ends it points to, its end's shape at its kind's size.
   const route = $derived(look('route'));
@@ -213,6 +217,7 @@
     data-sv-reach={reach ? 'true' : undefined}
     data-sv-draws={from !== undefined && !drawn && enclosing ? enclosing : undefined}
     data-target-fill={reach ? target('fill') : undefined}
+    data-target-kind={reach && target('fill') ? fillKind : undefined}
     data-target-stroke={reach ? target('stroke') : undefined}
     data-target-color={reach ? target('color') : undefined}
     data-target-stroke-width={reach ? endLook('strokeWidth') : undefined}
