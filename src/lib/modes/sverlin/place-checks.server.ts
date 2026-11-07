@@ -46,7 +46,7 @@ export function drawnVariables(source: string): Set<string> {
   return drawn;
 }
 
-/** The labels each scene pauses at, by full name, its stops (`:before`) left out. */
+/** The labels each scene pauses at, by full name, their moments (`.end`) left out. */
 function pausedLabels(source: string): string[] {
   return [...source.matchAll(/<Scene\b[^>]*?\bpause="([^"]*)"/gu)].flatMap((match) =>
     match[1]
@@ -55,7 +55,7 @@ function pausedLabels(source: string): string[] {
         each
           .trim()
           .replace(/^@/u, '')
-          .replace(/:(?:before|after)$/u, '')
+          .replace(/\.(?:start|end)$/u, '')
       )
       .filter(Boolean)
   );

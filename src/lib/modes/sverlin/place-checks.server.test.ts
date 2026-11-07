@@ -13,7 +13,7 @@ import {
 import { drawnSteps } from './testing/scenes';
 
 const drawn = '<Layout name="Show"><Node>{i} {target} {values}</Node></Layout>';
-const source = (listing: string, algorithm: string, markup = '', pause = '@scan.check') => `
+const source = (listing: string, algorithm: string, markup = '', pause = '@scan.check.end') => `
 <script input>
   const values = Values;
   const target = Int;
@@ -114,6 +114,8 @@ describe('place and label checks', () => {
         ({ message }) => message
       )
     ).toEqual([expect.stringContaining('@found')]);
+    const atScanEnd = source('SEARCH(A)\n1  @start[begin]', search, markup, '@scan.end');
+    expect(unpausedLabels(atScanEnd.replace('when="@found"', 'when="@scan.check"'))).toEqual([]);
   });
 
   it('warns of two unlabelled statements in a label and of a listing region over unmarked lines', () => {
