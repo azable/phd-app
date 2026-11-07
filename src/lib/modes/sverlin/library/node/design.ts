@@ -488,7 +488,7 @@ export const placeName = (at: string): string =>
   at.startsWith(':@') ? at.slice(at.lastIndexOf('.') + 1).replace(/^:?@/u, '') : at.slice(1);
 
 /**
- * A kind's own variables at a place, as `IntCell:swap.held` or `Mark.Link:left`: for the
+ * A kind's own variables at a place, as `IntCell:swap.held` or `Mark.<Link>:left`: for the
  * kinds of the view the place draws, its nested snippets' included; none for another kind.
  */
 
@@ -516,10 +516,10 @@ export function lookUp(
 
 /**
  * The kind a node is of: the snippet it is in, by its path (`Row.Under` for a snippet inside
- * `Row`), and for a <Link>, that part, as `Mark.Link`.
+ * `Row`), and for a <Link>, that part, as `Mark.<Link>`.
  */
 export function kindKey(view: string, part?: 'Link'): string {
-  return part ? `${view}.${part}` : view;
+  return part ? `${view}.<${part}>` : view;
 }
 
 /** A variant: each variable's value, by key, as IntCell.fill or views.Int. */

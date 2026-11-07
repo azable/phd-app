@@ -3171,7 +3171,7 @@ export const libraryProps: Record<'Node' | 'Link', PropNames> = {
   }
 };
 
-/** A link's looks, the variables of its kind, as Graph.Link.route. */
+/** A link's looks, the variables of its kind, as Graph.<Link>.route. */
 const linkLooks = new Set(['curve', 'route', 'head', 'headSize']);
 
 /**

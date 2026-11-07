@@ -66,8 +66,8 @@ beforeEach(async () => {
 
 const cells = { 'views.Int': 'IntCell' };
 const tallies = { 'views.Int': 'IntTally' };
-const amber = { 'Highlight.Link.targetFill': 'amber-100' };
-const blue = { 'Highlight.Link.targetFill': 'blue-100' };
+const amber = { 'Highlight.<Link>.targetFill': 'amber-100' };
+const blue = { 'Highlight.<Link>.targetFill': 'blue-100' };
 
 describe('changing an earlier answer', () => {
   it('shows the version it went back to, setting aside what it makes moot of the source it left', async () => {

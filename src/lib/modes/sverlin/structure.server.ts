@@ -243,7 +243,7 @@ function linkedFields(
   };
   for (const { name, type, node } of views) {
     const parameter = node.parameters?.[0]?.name;
-    const kind = `${name}.Link`;
+    const kind = `${name}.<Link>`;
     for (const to of fromlessEnds(node.children ?? [])) {
       if (to.type === 'Identifier' && to.name === parameter)
         for (const record of records)

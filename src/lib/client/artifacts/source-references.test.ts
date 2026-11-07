@@ -103,8 +103,8 @@ describe('references in messages', () => {
   });
 
   it('name a design variable by its kind and place', () => {
-    expect(named('Highlight.Link.targetFill')).toEqual(['Highlight', '<Link']);
-    expect(named('Highlight.Link:@compare.left.targetFill')).toEqual([
+    expect(named('Highlight.<Link>.targetFill')).toEqual(['Highlight', '<Link']);
+    expect(named('Highlight.<Link>:@compare.left.targetFill')).toEqual([
       'Highlight',
       '<Link',
       '{@compare.left}'
@@ -175,12 +175,12 @@ describe('view choices, by what a build records each render reads', () => {
     expect(covered('{Index}', design)).toEqual(covered('views.Index', design));
     expect(covered('{Index}:found', design)).toEqual(covered('views.Index:found', design));
     expect(
-      codeIn(both, 'set {Index}:found and Highlight.Link:@compare.left.targetFill', design)
+      codeIn(both, 'set {Index}:found and Highlight.<Link>:@compare.left.targetFill', design)
     ).toEqual([
       { text: 'set ', code: false },
       { text: '{Index}:found', code: true },
       { text: ' and ', code: false },
-      { text: 'Highlight.Link:@compare.left.targetFill', code: true }
+      { text: 'Highlight.<Link>:@compare.left.targetFill', code: true }
     ]);
   });
 
@@ -284,8 +284,8 @@ describe('design variables with a row of their own', () => {
     variant: {
       'views.Index': 'IndexText',
       'views.Index:found': 'Arrow',
-      'Highlight.Link.targetFill': 'amber-100',
-      'Highlight.Link:@left.targetFill': 'sky-100',
+      'Highlight.<Link>.targetFill': 'amber-100',
+      'Highlight.<Link>:@left.targetFill': 'sky-100',
       'IntCell.fill': 'white',
       'Main.gap': 0.5,
       '<Listing>.language': 'code'
@@ -294,8 +294,8 @@ describe('design variables with a row of their own', () => {
 
   it("are a kind's or a place's prop, a place's view choice, or a frame or listing setting", () => {
     for (const key of [
-      'Highlight.Link:@left.targetFill',
-      'Highlight.Link.targetFill',
+      'Highlight.<Link>:@left.targetFill',
+      'Highlight.<Link>.targetFill',
       'IntCell.fill',
       'views.Index:found',
       'Main.gap',
@@ -306,7 +306,7 @@ describe('design variables with a row of their own', () => {
 
   it("are not a type's own view choice, a key the variant has not, or anything without a build", () => {
     expect(ghostKey('views.Index', design)).toBeUndefined();
-    expect(ghostKey('Highlight.Link:right.targetFill', design)).toBeUndefined();
+    expect(ghostKey('Highlight.<Link>:right.targetFill', design)).toBeUndefined();
     expect(ghostKey('@left', design)).toBeUndefined();
     expect(ghostKey('IntCell.fill')).toBeUndefined();
   });
@@ -330,8 +330,8 @@ describe('long label names in pills', () => {
   });
 
   it("keep a kind's place's prop, and show names of two parts or fewer whole", () => {
-    expect(shown('Highlight.Link:@insert.compare.left.targetFill')).toBe(
-      'Highlight.Link:@…compare.left.targetFill'
+    expect(shown('Highlight.<Link>:@insert.compare.left.targetFill')).toBe(
+      'Highlight.<Link>:@…compare.left.targetFill'
     );
     expect(shown('views.Index:@search.check.at')).toBe('views.Index:@…check.at');
     for (const text of [

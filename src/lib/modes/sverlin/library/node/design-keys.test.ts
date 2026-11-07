@@ -28,8 +28,8 @@ const pairs: [kept: string, written: string][] = [
 const alike = [
   'IntCell.stroke',
   'IntCell:target.stroke',
-  'LoMark.Link:lo.targetFill',
-  'Mark.Link:@visit.look.check.next.targetFill',
+  'LoMark.<Link>:lo.targetFill',
+  'Mark.<Link>:@visit.look.check.next.targetFill',
   'VertexCard=true.padding',
   'StateMark=done.icon',
   'Card:this.seen=false.stroke',
@@ -67,8 +67,8 @@ describe('design keys as written', () => {
   });
 
   it('reads a kind key in its parts, a label place keeping its @', () => {
-    expect(kindKeyParts('Mark.Link:@visit.look.check.next.targetFill')).toEqual({
-      kind: 'Mark.Link',
+    expect(kindKeyParts('Mark.<Link>:@visit.look.check.next.targetFill')).toEqual({
+      kind: 'Mark.<Link>',
       place: '@visit.look.check.next',
       prop: 'targetFill'
     });
@@ -122,10 +122,13 @@ describe('the nested form', () => {
       { '<Listing>': { lit: { '@insert.compare.left': { fill: 1 } } } }
     ],
     ['IntCell.stroke', { IntCell: { stroke: 1 } }],
-    ['Here.Link.targetFill', { Here: { Link: { targetFill: 1 } } }],
+    ['Here.<Link>.targetFill', { Here: { '<Link>': { targetFill: 1 } } }],
     ['IntCell:target.stroke', { IntCell: { ':target': { stroke: 1 } } }],
     ['IntCell:pair.left.fill', { IntCell: { ':pair.left': { fill: 1 } } }],
-    ['Mark.Link:@scan.next.targetFill', { Mark: { Link: { ':@scan.next': { targetFill: 1 } } } }],
+    [
+      'Mark.<Link>:@scan.next.targetFill',
+      { Mark: { '<Link>': { ':@scan.next': { targetFill: 1 } } } }
+    ],
     [':lo.label', { ':lo': { label: 1 } }],
     [':@scan.next.label', { ':@scan.next': { label: 1 } }],
     ['Card=true.stroke', { Card: { '=true': { stroke: 1 } } }],
@@ -158,7 +161,7 @@ describe('the nested form', () => {
 
   it('orders a kind: what it inherits, its props, its places, its values, its kinds', () => {
     const nested = nestedDesign({
-      'Here.Link.targetFill': 1,
+      'Here.<Link>.targetFill': 1,
       'Here:lo.fill': 2,
       'Here=true.fill': 3,
       'Here.fill': 4,
@@ -167,7 +170,7 @@ describe('the nested form', () => {
       $cell: 6
     });
     expect(Object.keys(nested)).toEqual(['$cell', '<Value>', 'Here']);
-    expect(Object.keys(nested.Here as object)).toEqual(['...', 'fill', ':lo', '=true', 'Link']);
+    expect(Object.keys(nested.Here as object)).toEqual(['...', 'fill', ':lo', '=true', '<Link>']);
   });
 
   it('refuses a key written flat at any level, inherit and base, naming the nested form', () => {

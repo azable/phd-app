@@ -1,5 +1,5 @@
 {
-  "Graph.Link.route": "straight",
+  "Graph.<Link>.route": "straight",
   "VertexCard:vertex.fill": "white",
   "VertexCard:vertex.stroke": "neutral-300",
   "FrontierItems.FrontierEntry:entry.fill": "white",

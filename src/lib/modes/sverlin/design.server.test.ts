@@ -69,7 +69,7 @@ describe('design space', () => {
         'Checking.Number',
         'Result.Number',
         'Highlight',
-        'Highlight.Link',
+        'Highlight.<Link>',
         'Highlight.Name',
         'Row',
         'Row.Under'
@@ -78,7 +78,7 @@ describe('design space', () => {
     // A layout's props, and a link's target paint.
     expect(space['Row.gap']).toBeDefined();
     expect(space['IntCell.gap']).toBeUndefined();
-    expect(space['Highlight.Link.targetFill']).toContain('amber-100');
+    expect(space['Highlight.<Link>.targetFill']).toContain('amber-100');
     // No overflow: a collection's tracks past its ends are no choice. Dashed borders are paint, for
     // any node.
     expect(space['IntTally.Tally.overflow']).toBeUndefined();
@@ -91,7 +91,7 @@ describe('design space', () => {
     const lines = linearSearchSource.split('\n');
     const line = lines.findIndex((text) => text.includes('<Link to={this}'));
     const position = `${line + 1}:${lines[line].indexOf('<Link') + 1}`;
-    expect(prepared.design.tags[position]).toEqual(['Highlight.Link']);
+    expect(prepared.design.tags[position]).toEqual(['Highlight.<Link>']);
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
@@ -189,37 +189,37 @@ describe('variants', () => {
 
   it('keeps a place as its kinds are until a variant sets it apart', () => {
     const { fallbacks } = prepared.design;
-    const [first, second] = space['Highlight.Link.targetFill'].filter(
-      (option) => option !== 'none' && option !== starter['Highlight.Link.targetFill']
+    const [first, second] = space['Highlight.<Link>.targetFill'].filter(
+      (option) => option !== 'none' && option !== starter['Highlight.<Link>.targetFill']
     );
     // A place follows the kind it falls back to.
     const followed = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.Link.targetFill': first } },
+      { chosen: { 'Highlight.<Link>.targetFill': first } },
       1,
       fallbacks
     ).values;
-    expect(followed['Highlight.Link:found.targetFill']).toBe(first);
+    expect(followed['Highlight.<Link>:found.targetFill']).toBe(first);
     // Chosen, it is set apart, and stays so as the kind changes.
     const apart = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.Link:found.targetFill': second } },
+      { chosen: { 'Highlight.<Link>:found.targetFill': second } },
       1,
       fallbacks
     ).values;
-    expect(apart['Highlight.Link:found.targetFill']).toBe(second);
-    expect(apart['Highlight.Link:i.targetFill']).toBe(starter['Highlight.Link.targetFill']);
+    expect(apart['Highlight.<Link>:found.targetFill']).toBe(second);
+    expect(apart['Highlight.<Link>:i.targetFill']).toBe(starter['Highlight.<Link>.targetFill']);
     const kept = buildVariant(
       space,
       starter,
-      { base: apart, chosen: { 'Highlight.Link.targetFill': first } },
+      { base: apart, chosen: { 'Highlight.<Link>.targetFill': first } },
       1,
       fallbacks
     ).values;
-    expect(kept['Highlight.Link:found.targetFill']).toBe(second);
-    expect(kept['Highlight.Link:i.targetFill']).toBe(first);
+    expect(kept['Highlight.<Link>:found.targetFill']).toBe(second);
+    expect(kept['Highlight.<Link>:i.targetFill']).toBe(first);
   });
 
   it('randomises keeping equalities, shades, and what is shown or none', () => {
@@ -239,7 +239,7 @@ describe('variants', () => {
       expect(values['views.Int']).not.toBe('none');
     }
     expect(
-      new Set(variants.map((values) => values['Highlight.Link.targetFill'])).size
+      new Set(variants.map((values) => values['Highlight.<Link>.targetFill'])).size
     ).toBeGreaterThan(1);
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
@@ -324,8 +324,8 @@ describe('free layouts', () => {
   });
 
   it('give a link’s kind its route, head, and head size, which a vary keeps', () => {
-    expect(graph.space['Graph.Link.route']).toEqual(['layout', 'straight', 'curved', 'wire']);
-    expect(graph.space['Graph.Link.head']).toEqual([
+    expect(graph.space['Graph.<Link>.route']).toEqual(['layout', 'straight', 'curved', 'wire']);
+    expect(graph.space['Graph.<Link>.head']).toEqual([
       'none',
       'arrow',
       'open',
@@ -334,34 +334,34 @@ describe('free layouts', () => {
       'diamond',
       'bar'
     ]);
-    expect(graph.space['Graph.Link.headSize']).toEqual([6, 9, 12, 16]);
-    expect(graph.space['Graph.Link.curve']).toBeUndefined();
-    expect(graph.space['Graph.Link.color']).toBeUndefined();
+    expect(graph.space['Graph.<Link>.headSize']).toEqual([6, 9, 12, 16]);
+    expect(graph.space['Graph.<Link>.curve']).toBeUndefined();
+    expect(graph.space['Graph.<Link>.color']).toBeUndefined();
     expect(graph.starter).toMatchObject({
-      'Graph.Link.route': 'layout',
-      'Graph.Link.head': 'arrow',
-      'Graph.Link.headSize': 9
+      'Graph.<Link>.route': 'layout',
+      'Graph.<Link>.head': 'arrow',
+      'Graph.<Link>.headSize': 9
     });
-    const base = { ...graph.starter, 'Graph.Link.route': 'wire', 'Graph.Link.head': 'vee' };
+    const base = { ...graph.starter, 'Graph.<Link>.route': 'wire', 'Graph.<Link>.head': 'vee' };
     expect(buildVariant(graph.space, graph.starter, { base }, 5).values).toMatchObject({
-      'Graph.Link.route': 'wire',
-      'Graph.Link.head': 'vee'
+      'Graph.<Link>.route': 'wire',
+      'Graph.<Link>.head': 'vee'
     });
   });
 
   it('start a link’s head at none where every link of its kind is a two-way line', () => {
     expect(prepareSvelteComponent(undirected).design.starter).toMatchObject({
-      'Graph.Link.head': 'none'
+      'Graph.<Link>.head': 'none'
     });
     expect(prepareSvelteComponent(bfs).design.starter).toMatchObject({
-      'Graph.Link.head': 'arrow'
+      'Graph.<Link>.head': 'arrow'
     });
   });
 });
 
 describe('design tokens and role styles', () => {
   // IntCell and IntDot are values, Cells a container and Note a text, all made by <Node>;
-  // Arrow.Link is a link, made by <Link>; `{v}` is a place, IntCell:v.
+  // Arrow.<Link> is a link, made by <Link>; `{v}` is a place, IntCell:v.
   const levelled = prepareSvelteComponent(
     `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main"><Node><Cells />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`
   ).design;
@@ -375,7 +375,7 @@ describe('design tokens and role styles', () => {
     expect(levelled.space['<Value>.shown']).toBeUndefined();
     expect(levelled.space['<Pointer>.targetFill']).toBeDefined();
     expect(levelled.space['<Value>.targetFill']).toBeUndefined();
-    expect(levelled.roles['Arrow.Link']).toBe('pointer');
+    expect(levelled.roles['Arrow.<Link>']).toBe('pointer');
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
   });
@@ -404,6 +404,9 @@ describe('design tokens and role styles', () => {
     );
     expect(() => build({ chosen: { base: '$starter' } })).toThrow(
       /\$starter is written <starter>/u
+    );
+    expect(() => build({ chosen: { 'Arrow.Link.stroke': 'red-500' } })).toThrow(
+      /Arrow\.Link\.stroke is written Arrow\.<Link>\.stroke/u
     );
   });
 

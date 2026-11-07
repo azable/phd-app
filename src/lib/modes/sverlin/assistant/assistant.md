@@ -232,7 +232,7 @@ Every key is written with its mark, as the design gives it: `{Int}` a type's
 view, `:found` a place, as `IntCell:found.fill`, and `=true` a value, as
 `VertexCard=true.fill`. `@` only ever means a label, a moment of the run, so a
 place drawn from a label's value keeps it:
-`Arrow.Link:@visit.look.neighbour.targetFill`. values, and each comparison
+`Arrow.<Link>:@visit.look.neighbour.targetFill`. values, and each comparison
 side's values, are one JSON object written as a string, nested as the design
 reads, as `"{\"$cell\": {\"radius\": 8}, \"IntCell\": {\"...\": \"$cell\"}}"`,
 or `"{}"` for none; `null` removes a value, so it returns to what it inherits or

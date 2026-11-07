@@ -1,7 +1,7 @@
 /**
  * What text in a message refers to in a source: the regions an inline code span names, as a view,
  * layout or kind (`Highlight`, `Title`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
- * (`Mark.Link:@left.targetFill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
+ * (`Mark.<Link>:@left.targetFill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
  * is there; and the regions build problems are about.
  *
  * @packageDocumentation
@@ -24,7 +24,7 @@ export type ReferenceDesign = {
   variant?: Readonly<Record<string, unknown>>;
 };
 
-/** The props a kind's variable can set, the last part of a key such as `Mark.Link.targetFill`. */
+/** The props a kind's variable can set, the last part of a key such as `Mark.<Link>.targetFill`. */
 const props = new Set([
   'shown',
   'fill',
@@ -57,6 +57,8 @@ const props = new Set([
 ]);
 
 const name = String.raw`[A-Za-z_$][\w$]*`;
+/** A kind's path segment: a name, or a link's part, `<Link>`, `<To>` or `<From>`. */
+const segment = String.raw`(?:${name}|<Link>|<To>|<From>)`;
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 
 /**
@@ -78,10 +80,9 @@ export function referenceRanges(
       ? linePosition(source, Number(at), Number(column))
       : lineRange(source, Number(first), Number(last ?? first));
   }
-  const variable = new RegExp(
-    String.raw`^(views)\.(${name}(?:\.${name})*)(?::(.+))?$`,
-    'u'
-  ).exec(written);
+  const variable = new RegExp(String.raw`^(views)\.(${name}(?:\.${name})*)(?::(.+))?$`, 'u').exec(
+    written
+  );
   if (variable) {
     const [, , path, place] = variable;
     if (design?.renders && Object.keys(design.renders).length)
@@ -105,7 +106,7 @@ export function referenceRanges(
 
 /**
  * The design variable a reference names whose value the editor shows in a row of its own, which a
- * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Mark.Link:left.targetFill`), a
+ * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Mark.<Link>:left.targetFill`), a
  * place's view choice (`views.Index:found`), or a page-frame or listing setting, as the variant
  * of a build of the source (`design`) has it. A type's own view choice (`views.Index`) has no row:
  * the view markers after its renders show it.
@@ -118,8 +119,8 @@ export function ghostKey(text: string, design?: ReferenceDesign): string | undef
 
 /**
  * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
- * `@insert.compare.left` as `@…compare.left`, `Mark.Link:@insert.compare.left.targetFill` as
- * `Mark.Link:@…compare.left.targetFill`, a kind's place keeping its prop; `head` before the
+ * `@insert.compare.left` as `@…compare.left`, `Mark.<Link>:@insert.compare.left.targetFill` as
+ * `Mark.<Link>:@…compare.left.targetFill`, a kind's place keeping its prop; `head` before the
  * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
  * fewer, or text that names no label.
  */
@@ -127,7 +128,7 @@ export function elidedName(
   text: string
 ): { head: string; hidden: string; tail: string } | undefined {
   const written = new RegExp(
-    String.raw`^((?:${name}(?:\.${name})*:?)?@)(${name}(?:\.${name})*)$`,
+    String.raw`^((?:${name}(?:\.${segment})*:?)?@)(${name}(?:\.${name})*)$`,
     'u'
   );
   const match = written.exec(text);
@@ -199,7 +200,7 @@ function codeAt(text: string, at: number): string[] {
       : [label];
   }
   const path = new RegExp(
-    String.raw`^${name}(?:\.${name})*(?::@?${name}(?:\.${name})*)?(?:=[\w$-]+(?:\.${name})+)?`,
+    String.raw`^${name}(?:\.${segment})*(?::@?${name}(?:\.${name})*)?(?:=[\w$-]+(?:\.${name})+)?`,
     'u'
   ).exec(rest)?.[0];
   if (!path) return [];
@@ -297,14 +298,14 @@ function matches(source: string, pattern: RegExp, group = 0): SourceRange[] {
 }
 
 /**
- * A kind or its variable, as `Row.Under`, `Mark.Link.targetFill`, `IntCell:swap.held.fill` or
- * `Mark.Link:@scan.next.targetFill`: the path of views, layouts and kinds, and the place after `:`
+ * A kind or its variable, as `Row.Under`, `Mark.<Link>.targetFill`, `IntCell:swap.held.fill` or
+ * `Mark.<Link>:@scan.next.targetFill`: the path of views, layouts and kinds, and the place after `:`
  * (a label's keeping its `@`), less a prop at the end.
  */
 function kindKey(text: string): { segments: string[]; place?: string } | undefined {
   const colon = text.indexOf(':');
   const path = colon < 0 ? text : text.slice(0, colon);
-  const pathPattern = new RegExp(String.raw`^${name}(?:\.${name})*$`, 'u');
+  const pathPattern = new RegExp(String.raw`^${segment}(?:\.${segment})*$`, 'u');
   if (!pathPattern.test(path)) return undefined;
   if (colon < 0) {
     const segments = path.split('.');
@@ -315,7 +316,7 @@ function kindKey(text: string): { segments: string[]; place?: string } | undefin
   const label = written.startsWith('@') ? '@' : '';
   const place = written.slice(label.length).split('.');
   if (props.has(place.at(-1) ?? '') && place.length > 1) place.pop();
-  if (!pathPattern.test(place.join('.'))) return undefined;
+  if (!new RegExp(String.raw`^${name}(?:\.${name})*$`, 'u').test(place.join('.'))) return undefined;
   return { segments: path.split('.'), place: `${label}${place.join('.')}` };
 }
 
@@ -350,9 +351,11 @@ function labelRanges(source: string, label: string): SourceRange[] {
   ]);
 }
 
-/** A view's or layout's declaration, or a declaration in a script; for `.Link`, its links. */
-function kindRanges(source: string, segments: string[]): SourceRange[] {
-  const part = segments.at(-1) === 'Link' ? 'Link' : '';
+/** A view's or layout's declaration, or a declaration in a script; for `.<Link>`, its links. */
+function kindRanges(source: string, written: string[]): SourceRange[] {
+  // A link's end, as `Arrow.<Link>.<To>`, is in its link.
+  const segments = written.filter((each) => each !== '<To>' && each !== '<From>');
+  const part = segments.at(-1) === '<Link>' ? 'Link' : '';
   const snippet = part ? segments.at(-2) : segments.at(-1);
   if (!snippet) return [];
   const declared = matches(
@@ -397,10 +400,9 @@ function kindRanges(source: string, segments: string[]): SourceRange[] {
 
 /** A view choice's parts: `views`, the type it draws, and its place, if any. */
 function choice(key: string): { kind: string; type: string; place?: string } | undefined {
-  const parsed = new RegExp(
-    String.raw`^(views)\.(?:${name}\.)*(${name})(?::(.+))?$`,
-    'u'
-  ).exec(key);
+  const parsed = new RegExp(String.raw`^(views)\.(?:${name}\.)*(${name})(?::(.+))?$`, 'u').exec(
+    key
+  );
   return parsed ? { kind: parsed[1], type: parsed[2], place: parsed[3] } : undefined;
 }
 

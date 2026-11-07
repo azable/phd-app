@@ -134,7 +134,7 @@ describe('laying out on the server', () => {
     expect(await drawnWith(2, {})).toEqual(starter);
     // The link's target fill shows from the second step, where mid first points into the cells.
     expect(
-      differingSteps(starter, await drawnWith(2, { 'Arrow.Link.targetFill': 'red-200' }))
+      differingSteps(starter, await drawnWith(2, { 'Arrow.<Link>.targetFill': 'red-200' }))
     ).toEqual(Array.from({ length: 4 }, (_, index) => index + 1));
   }, 60_000);
 

@@ -121,7 +121,7 @@ describe('place() in a pointer view', () => {
     expect(captions(atCheck!)).not.toContain('probe.low.probed');
     const { space } = prepareSvelteComponent(source).design;
     expect(space[':@probe.low.probed.label']).toEqual(['probed']);
-    expect(space['Arrow.Link:@probe.low.probed.targetFill']).toBeDefined();
+    expect(space['Arrow.<Link>:@probe.low.probed.targetFill']).toBeDefined();
     const labelled = await drawnSteps(source, {
       chosen: { ':@probe.low.probed.label': 'checked' }
     });

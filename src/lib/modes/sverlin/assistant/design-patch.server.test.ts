@@ -13,7 +13,7 @@ describe('design values written as one JSON string', () => {
         '{Int}': 'IntTally',
         IntCell: { '...': '$cell', fill: 'sky-100', ':target': { stroke: 'violet-500' } },
         Card: { '=true': { fill: 'amber-100' } },
-        Here: { Link: { targetStrokeWidth: 2 } },
+        Here: { '<Link>': { targetStrokeWidth: 2 } },
         '<Listing>': { language: 'textbook' }
       })
     );
@@ -28,7 +28,7 @@ describe('design values written as one JSON string', () => {
         { variable: 'IntCell.fill', value: 'sky-100' },
         { variable: 'IntCell:target.stroke', value: 'violet-500' },
         { variable: 'Card=true.fill', value: 'amber-100' },
-        { variable: 'Here.Link.targetStrokeWidth', value: 2 },
+        { variable: 'Here.<Link>.targetStrokeWidth', value: 2 },
         { variable: '<Listing>.language', value: 'textbook' }
       ],
       remove: []

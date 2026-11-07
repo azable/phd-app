@@ -306,32 +306,32 @@ describe('single-component Svelte compilation', () => {
     expect(kindsOf(design.space)).toEqual(
       [
         'Arrow',
-        'Arrow.Link',
+        'Arrow.<Link>',
         'Arrow.Name',
         'Cells',
         'IntCell',
         'Mark',
         'Mark.Caption',
-        'Mark.Link',
+        'Mark.<Link>',
         'Note',
         'Pair',
-        'Pair.Link'
+        'Pair.<Link>'
       ].sort()
     );
     expect(design.space['Cells.gap']).toBeDefined();
     expect(design.space['IntCell.gap']).toBeUndefined();
-    expect(design.space['Pair.Link.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
+    expect(design.space['Pair.<Link>.strokeStyle']).toEqual(['solid', 'dashed', 'dotted']);
     expect(design.space['views.Int']).toEqual(['IntCell', 'none']);
     // Each render with an argument is a place: its own choice where its type has several views of
     // the kind it draws, and its own paint for the kinds of each.
     expect(design.space['views.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
     expect(design.starter['views.Position:i']).toBe('Arrow');
-    expect(design.space['Arrow.Link:i.targetFill']).toBeDefined();
+    expect(design.space['Arrow.<Link>:i.targetFill']).toBeDefined();
     expect(design.space['Arrow.Name:i.color']).toBeDefined();
-    expect(design.space['Arrow.Link:i.padding']).toBeUndefined();
+    expect(design.space['Arrow.<Link>:i.padding']).toBeUndefined();
     expect(design.space['IntCell:v.fill']).toBeDefined();
     expect(design.space['views.Int:v']).toBeUndefined();
-    expect(design.fallbacks['Mark.Link:i.targetStroke']).toBe('Mark.Link.targetStroke');
+    expect(design.fallbacks['Mark.<Link>:i.targetStroke']).toBe('Mark.<Link>.targetStroke');
   });
 
   it.each([
@@ -404,7 +404,7 @@ describe('single-component Svelte compilation', () => {
         view(`<Node layout="free"><Node>a</Node><Link from={0} to={1} ${prop} /></Node>`)
       ).rejects.toMatchObject({
         code: 'unknown_prop',
-        message: expect.stringContaining(`here the variable V.Link.${variable}`)
+        message: expect.stringContaining(`here the variable V.<Link>.${variable}`)
       });
     // A label is the link's children, drawn as nodes are.
     await expect(
@@ -1747,9 +1747,9 @@ describe('pauses inside a run', () => {
 
   it('keys a label’s place by its full name only', () => {
     const { space, starter } = insertion.design;
-    expect(space['Highlight.Link:@insert.compare.left.targetFill']).toBeDefined();
-    expect(space['Highlight.Link:left.targetFill']).toBeUndefined();
-    const chosen = { 'Highlight.Link:left.targetFill': 'sky-100' };
+    expect(space['Highlight.<Link>:@insert.compare.left.targetFill']).toBeDefined();
+    expect(space['Highlight.<Link>:left.targetFill']).toBeUndefined();
+    const chosen = { 'Highlight.<Link>:left.targetFill': 'sky-100' };
     expect(buildVariant(space, starter, { chosen }, 1).dropped).toHaveLength(1);
   });
 });

@@ -66,7 +66,7 @@ import { designOnlyWarning } from './padding-warnings.server';
 export type DesignValue = string | number | boolean;
 
 /**
- * A kind of node: its key, the snippet it is in (as Mark.Link), what it is, giving its props,
+ * A kind of node: its key, the snippet it is in (as Mark.<Link>), what it is, giving its props,
  * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
  * (see structure.server.ts); and, for a link's kind, whether every link
  * of it is a two-way line, whose head starts as none.
@@ -672,6 +672,14 @@ export function buildVariant(
     )
   ];
   if (renamed.length) throw new DesignValueError(renamed.join(' '));
+  // A link's kind is written with its tag, as Arrow.<Link>, never as an author's kind Link.
+  const oldLinks = Object.keys(chosenValues).flatMap((key) => {
+    const now = key.replace(/\.Link(?=[.:])/gu, '.<Link>');
+    return now !== key && !Object.hasOwn(offered, key) && Object.hasOwn(offered, now)
+      ? [`${key} is written ${now}, a link's kind named by its tag.`]
+      : [];
+  });
+  if (oldLinks.length) throw new DesignValueError(oldLinks.join(' '));
   const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
   if (missing.length)
     throw new DesignValueError(

@@ -78,7 +78,7 @@ export type BriefAttribute = {
 };
 
 /** Variables for how a step's comparison is marked: links' target paint, and kinds or labels naming one. */
-const comparisonMarks = /\.Link\.target|compar/i;
+const comparisonMarks = /\.<Link>\.target|compar/i;
 /** Variables for how a position is labelled: its place's caption, as `i`, `A[i]` or a word. */
 const positionLabels = /^:[^.]*\.label$/;
 

@@ -92,8 +92,8 @@ it(
       const step = await open(cards, {
         'Graph.form': 'scatter',
         'Graph.layoutSeed': 10,
-        'Graph.Link.head': head,
-        'Graph.Link.headSize': headSize
+        'Graph.<Link>.head': head,
+        'Graph.<Link>.headSize': headSize
       });
       // A card for each vertex but the start, whose name is its box.
       const links = reaches(step, 'VertexCard', 'NameText');
@@ -111,7 +111,7 @@ it(
   'draws a two-way line’s head at both its ends, each tip on its box, once it has one',
   { timeout: 60_000 },
   async () => {
-    const links = reaches(await open(undirected, { 'Graph.Link.head': 'arrow' }), 'VertexCard');
+    const links = reaches(await open(undirected, { 'Graph.<Link>.head': 'arrow' }), 'VertexCard');
     expect(links).toHaveLength(5);
     for (const link of links) {
       expect(link.edge).toContain(' - ');
@@ -171,7 +171,7 @@ it(
   'draws wires in straight runs turning at right angles, round the boxes between',
   { timeout: 60_000 },
   async () => {
-    const step = await open(cards, { 'Graph.form': 'natural', 'Graph.Link.route': 'wire' });
+    const step = await open(cards, { 'Graph.form': 'natural', 'Graph.<Link>.route': 'wire' });
     const boxes = ofKind(step, 'VertexCard').map(({ box }) => box);
     const wires = elementLinks(step).map((link) => {
       const corners = link.wire ?? [];

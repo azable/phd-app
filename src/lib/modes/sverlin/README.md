@@ -999,12 +999,12 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
-`Arrow.Link:@insert.swap.from.targetFill` and `…to.targetFill` `red-300`, turns
-only the pairs found out of order red, and with `@insert.swap.to` in the scene's
-pause, as a step of their own before anything is written. Showing or hiding
-something at some steps needs no flag, sentinel, or cast in the algorithm: a
-label, a link from a label, a view chosen per place, or `when="@label"` below
-does it.
+`Arrow.<Link>:@insert.swap.from.targetFill` and `…to.targetFill` `red-300`,
+turns only the pairs found out of order red, and with `@insert.swap.to` in the
+scene's pause, as a step of their own before anything is written. Showing or
+hiding something at some steps needs no flag, sentinel, or cast in the
+algorithm: a label, a link from a label, a view chosen per place, or
+`when="@label"` below does it.
 
 `<Node when="@insert.swap">…</Node>`, or a link with `when`, shows it at each
 step inside a span of a label, any label: the step that ends a span and those
@@ -1168,8 +1168,9 @@ The design space is every variable of a component's look, found in its markup:
   name, as `Items` or `Title`; every node of a view or layout is of its kind. A
   node naming its kind, as `<Node kind="Header">` in `Table`, is of the kind
   `Table.Header`, with the nodes inside it; in a view, as `IntTally.Tally`. A
-  layout's or view's `<Link>` is a kind of its own, as `Graph.Link`. A variable
-  is its kind and prop, as `Arrow.Link.targetFill` or `Items.Under.shown`.
+  layout's or view's `<Link>` is a kind of its own, as `Graph.<Link>`. A
+  variable is its kind and prop, as `Arrow.<Link>.targetFill` or
+  `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard=true.fill` or
   `LevelCell.textSize.from`, or a length's unit, as `Bar.height.unit` (see Props
@@ -1284,7 +1285,7 @@ pixels; and, for a link from a variable (see Link), how it paints the element it
 reaches while it is drawn: `targetFill`, `targetStroke` and `targetColor`, each
 `none` (leaving that paint as it is) or a colour, and `targetStrokeWidth`, a
 line's width; they start as the base's `<Link>` sets them, and a place sets its
-own, as `Mark.Link:j.targetFill`. It is paint only, so no box changes size. A
+own, as `Mark.<Link>:j.targetFill`. It is paint only, so no box changes size. A
 label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
@@ -1424,7 +1425,7 @@ value is drawn apart with nothing declared:
   draws, as `{Index}:found` or `{Int}:@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
   can draw, the kinds its nodes name included, as
-  `Arrow.Link:@pair.compare.left.targetFill` or
+  `Arrow.<Link>:@pair.compare.left.targetFill` or
   `IntTally.Tally:@swap.held.shown`, though not for another view that view
   renders.
 
@@ -1439,13 +1440,13 @@ listing's lit regions set their own fill, stroke, and colour only.
 {
   "{Index}": "Arrow",
   "{Index}:found": "Flag",
-  "Arrow": { "Link": { ":@pair.compare.left": { "targetFill": "sky-100" } } },
+  "Arrow": { "<Link>": { ":@pair.compare.left": { "targetFill": "sky-100" } } },
   "IntCell": { ":@swap.held": { "fill": "neutral-100" } }
 }
 ```
 
 A design is written nested (see Shared values); a variable is named by its path,
-as `Arrow.Link:@pair.compare.left.targetFill`, where the last part is the prop
+as `Arrow.<Link>:@pair.compare.left.targetFill`, where the last part is the prop
 and the dots after `:` the place's. A label and a variable of one name are two
 places, `:@held` and `:held`.
 
@@ -1717,16 +1718,16 @@ the scenes' pauses decide whether to pause there.
   code kept lit from earlier, overlaps a token, the step touches its place:
   every token naming it and its references in the picture light together, in the
   colour of the place's view: the target paint of the link it points with
-  (`Arrow.Link:i.targetFill`), or its value's view's fill (`IntCell:key.fill`),
-  or its stroke where the fill is none or white. In the picture, a place is the
-  outermost node of a value rendered there, as an arrow and its caption, a
-  caption's number included. Hovering any reference outlines the others, dashed
-  in the place's stroke (its fill where it has none), drawn in a darker shade of
-  its hue where it would show at less than 3:1 on the page, so a pale fill still
-  outlines. `<Listing>.places`, there only where a listing has tokens, says how
-  places light: `fill` (the start: the token filled, a 3px band round the node),
-  `underline`, `outline` (a ring), or `none`, which lights nothing and links
-  nothing on hover; none takes room.
+  (`Arrow.<Link>:i.targetFill`), or its value's view's fill
+  (`IntCell:key.fill`), or its stroke where the fill is none or white. In the
+  picture, a place is the outermost node of a value rendered there, as an arrow
+  and its caption, a caption's number included. Hovering any reference outlines
+  the others, dashed in the place's stroke (its fill where it has none), drawn
+  in a darker shade of its hue where it would show at less than 3:1 on the page,
+  so a pale fill still outlines. `<Listing>.places`, there only where a listing
+  has tokens, says how places light: `fill` (the start: the token filled, a 3px
+  band round the node), `underline`, `outline` (a ring), or `none`, which lights
+  nothing and links nothing on hover; none takes room.
 - A token can also go in the text of a layout or a view, for example
   `<Node kind="Note">Lift :i[A[i]] into :key[key].</Node>`. It means the same as
   in the listing. It is drawn as inline code, a kind of its own named `Code`
@@ -2270,7 +2271,7 @@ boxes, and in a grid each runs straight from cell to cell, as a heap's edges
 (see Grid). The row, column or grid keeps room round its children for the
 largest arc its links draw at any step, so its children stay put as links come
 and go. Each link is selectable, as a node is, and its look, how it runs and its
-heads, is its kind's (see Design), never a prop, as `Arrow.Link` for a link in
+heads, is its kind's (see Design), never a prop, as `Arrow.<Link>` for a link in
 `Arrow`.
 
 - `from` and `to`: positions from the state, as `edge.from`, naming the node

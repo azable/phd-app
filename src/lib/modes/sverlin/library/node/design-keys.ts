@@ -13,7 +13,7 @@
  * | `views.Int:target`            | `{Int}:target`                |
  * | `views.@insert.key`           | `{@insert.key}`               |
  *
- * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.Link:@scan.next.targetFill`,
+ * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.<Link>:@scan.next.targetFill`,
  * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
  * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
  * `<Value>.fill`, `<Listing>.lit@insert.key.fill` and `<Listing>.syntax`. People read the keys
@@ -31,7 +31,7 @@ const writtenView = new RegExp(
 );
 /** A kind's key: kind, place, value, prop and an ordered prop's part (see bound.ts). */
 const kindKey = new RegExp(
-  String.raw`^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(?::(${placePattern}))?(?:=("(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*)(?:\.(from|hue|order|unit))?$`,
+  String.raw`^([A-Z][\w$]*(?:\.(?:[A-Z][\w$]*|<Link>|<To>|<From>))*)(?::(${placePattern}))?(?:=("(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*)(?:\.(from|hue|order|unit))?$`,
   'u'
 );
 const plainValue = /^[\w$-]+$/u;
@@ -135,7 +135,7 @@ export function keptValues<T>(values: Readonly<Record<string, T>>): Record<strin
  * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
  * | `<Listing>.lit.fill`           | `"<Listing>": { "lit": { "fill": … } }`       |
  * | `<Listing>.lit@insert.key.fill`| `… "lit": { "@insert.key": { "fill": … } }`   |
- * | `Here.Link.targetFill`         | `"Here": { "Link": { "targetFill": … } }`     |
+ * | `Here.<Link>.targetFill`         | `"Here": { "<Link>": { "targetFill": … } }`     |
  * | `IntCell:target.stroke`        | `"IntCell": { ":target": { "stroke": … } }`   |
  * | `Card=true.stroke`             | `"Card": { "=true": { "stroke": … } }`        |
  * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |
@@ -189,7 +189,7 @@ function pathOf(key: string): string[] {
   const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
   if (prefixed) return [prefixed[1], prefixed[2]];
   const kind =
-    /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(:@?[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
+    /^([A-Z][\w$]*(?:\.(?:[A-Z][\w$]*|<Link>|<To>|<From>))*)(:@?[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
       key
     );
   if (!kind) return [key];
@@ -206,7 +206,7 @@ function pathOf(key: string): string[] {
 function rank(key: string): number {
   if (key === '...') return 0;
   if (key.startsWith('$')) return 1;
-  if (key.startsWith('<') && key !== '<Listing>') return 2;
+  if (key.startsWith('<') && !['<Listing>', '<Link>', '<To>', '<From>'].includes(key)) return 2;
   if (key.startsWith('{')) return 3;
   if (key === '<Listing>') return 4;
   if (/^[a-z]/u.test(key)) return 5;
