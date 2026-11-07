@@ -1286,11 +1286,13 @@ of the kind is a two-way line, whose `<To>` is both its ends, and the base's
 otherwise; and, for a link from a variable (see Link), the paint it gives the
 element it reaches while it is drawn: `fill`, `stroke` and `color`, each `none`
 (leaving that paint as it is) or a colour, and `strokeWidth`, its stroke's
-width, drawn inside the element's box. An end sets paint only, never a size and
-never whether anything is shown, so no box changes size; it starts as its role's
-end in the base, `<Link>.<To>` painting nothing and `<Pointer>.<To>` the
-starter's amber, and a place sets its own, as `Mark.<Link>.<To>:j.fill`. A
-label's look is its own nodes' kind.
+width, drawn inside the element's box; and `layer`, 1 (the start), 2 or 3: where
+several links paint one element, each setting is the one from the link on the
+highest layer, and on one layer the link written later. An end sets paint only,
+never a size and never whether anything is shown, so no box changes size; it
+starts as its role's end in the base, `<Link>.<To>` painting nothing and
+`<Pointer>.<To>` the starter's amber, and a place sets its own, as
+`Mark.<Link>.<To>:j.fill`. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
 look. `form` is the shape it gives the structure its links make, read from the
@@ -1427,8 +1429,8 @@ value is drawn apart with nothing declared:
 
 - its own choice of view, where its type has more than one view of the kind it
   draws, as `{Index}:found` or `{Int}:@swap.held`;
-- its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
-  can draw, the kinds its nodes name included, as
+- its own `shown`, `fill`, `stroke`, and `color` (and a link end's `layer`) for
+  the kinds of each view it can draw, the kinds its nodes name included, as
   `Arrow.<Link>.<To>:@pair.compare.left.fill` or
   `IntTally.Tally:@swap.held.shown`, though not for another view that view
   renders.

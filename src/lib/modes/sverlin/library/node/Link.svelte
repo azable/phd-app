@@ -213,6 +213,7 @@
     data-target-stroke={reach ? target('stroke') : undefined}
     data-target-color={reach ? target('color') : undefined}
     data-target-stroke-width={reach ? endLook('strokeWidth') : undefined}
+    data-target-layer={reach ? endLook('layer') : undefined}
   ></span>
   {#if children}<LinkLabel link={id ?? ''} hidden={unseen}>{@render children()}</LinkLabel>{/if}
 {/if}

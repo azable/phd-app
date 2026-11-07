@@ -624,8 +624,9 @@ export function sceneOf(
   }
 
   /**
-   * The links from variables, each painting the element it reaches in its target paint while it is
-   * drawn, links written later painting over earlier ones; those no free layout laid out as its own
+   * The links from variables, each painting the element it reaches in its end's paint while it is
+   * drawn, setting by setting: a link on a higher layer (its end's `layer`, 1 to 3) over a lower one,
+   * and on one layer a link written later over an earlier one; those no free layout laid out as its own
    * are drawn by the page over everything, whatever layouts their ends are in: a straight line from
    * the node drawing the variable to the element, met at the edges of both boxes. A position past
    * its collection's last element (or before its first) reaches a ghost: an empty dashed box one
@@ -648,7 +649,8 @@ export function sceneOf(
       );
       return { x: c.x + dx * scale, y: c.y + dy * scale };
     };
-    for (const { marker, from, hidden } of reaching) {
+    const layerOf = ({ marker }: Reaching) => Number(marker.attributes['data-target-layer']) || 1;
+    for (const { marker, from, hidden } of [...reaching].sort((a, b) => layerOf(a) - layerOf(b))) {
       const attribute = (name: string) => marker.attributes[name];
       const id = attribute('data-sv-link');
       const { head, style } = markerLook(attribute);

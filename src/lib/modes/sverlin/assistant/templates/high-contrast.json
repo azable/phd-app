@@ -153,7 +153,8 @@
       "fill": "none",
       "stroke": "none",
       "strokeWidth": 4,
-      "color": "none"
+      "color": "none",
+      "layer": 1
     }
   },
   "<Pointer>": {
@@ -168,7 +169,8 @@
       "fill": "$highlight",
       "stroke": "$accent",
       "strokeWidth": 4,
-      "color": "none"
+      "color": "none",
+      "layer": 1
     }
   },
   "$second": {

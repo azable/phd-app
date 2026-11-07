@@ -52,6 +52,25 @@ describe('a link from a variable', () => {
     }
   });
 
+  it('paints setting by setting, a higher layer over a lower, and else the later link', async () => {
+    const source = `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 4 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(0);]</script><View of="Int" name="IntCell"><Node value={this} /></View>
+<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">{place()}</Node></Node></View>
+<Layout name="Main"><Node layout="column"><Node layout="row">{#each values as v}{v}{/each}</Node><Node layout="row">{i}{j}</Node></Node></Layout><Storyboard><Scene name="main" case="main" pause="@run.end"><Main /></Scene></Storyboard>`;
+    const fills = async (chosen: Record<string, unknown>) => {
+      const { steps } = await drawnSteps(source, { chosen });
+      return steps.at(-1)!.nodes.flatMap(({ colours }) => colours?.fill ?? []);
+    };
+    const apart = {
+      'Arrow.<Link>.<To>:i.fill': 'sky-100',
+      'Arrow.<Link>.<To>:j.fill': 'rose-100'
+    };
+    expect(await fills(apart)).toContain('rose-100');
+    expect(await fills(apart)).not.toContain('sky-100');
+    const raised = await fills({ ...apart, 'Arrow.<Link>.<To>:i.layer': 2 });
+    expect(raised).toContain('sky-100');
+    expect(raised).not.toContain('rose-100');
+  });
+
   it('reaches a dashed ghost one step past the last element', async () => {
     const { steps } = await drawnSteps(linearSearch);
     const last = steps.at(-1) as SceneStep;

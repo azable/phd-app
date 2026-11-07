@@ -874,7 +874,7 @@ function propOf(key: string): string {
 /**
  * Props a random variant leaves as they were: what a kind inherits, what is shown, how things line
  * up, the frame, a listing's language, and a text's decoration, as a line through it can mean it
- * is gone.
+ * is gone, and a link end's layer, which says whose paint wins.
  */
 const kept = new Set<string>([
   'inherit',
@@ -886,7 +886,8 @@ const kept = new Set<string>([
   'strokeStyle',
   'minSize',
   'overflow',
-  'decoration'
+  'decoration',
+  'layer'
 ]);
 const colourProps = new Set<string>(colourPropList);
 const lengthProps = new Set<string>(['strokeWidth', 'textSize', 'padding', 'radius', 'gap']);

@@ -43,11 +43,11 @@ describe('style props', () => {
     expect(paintProps.has('case')).toBe(false);
   });
 
-  it('leave every prop that takes room to the kind, a place setting only paint and being shown', () => {
+  it('leave every prop that takes room to the kind, a place setting only paint, being shown and a link end’s layer', () => {
     const room = ['padding', 'textSize', 'font', 'weight', 'strokeWidth', 'minSize', 'radius'];
     for (const prop of [...room, 'gap', 'width', 'height', 'xAnchor', 'yAnchor', 'spacing'])
       expect(paintProps.has(prop)).toBe(false);
-    expect([...placeProps].filter((prop) => !paintProps.has(prop))).toEqual(['shown']);
+    expect([...placeProps].filter((prop) => !paintProps.has(prop))).toEqual(['shown', 'layer']);
     expect(listingRegionProps.every((prop) => paintProps.has(prop))).toBe(true);
   });
 

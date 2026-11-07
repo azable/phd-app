@@ -251,6 +251,7 @@ export const propOptions = {
   head: headShapes,
   headSize: headSizes,
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
+  layer: [1, 2, 3],
   icon: iconNames,
   colX: basisSteps,
   colY: basisSteps,
@@ -302,9 +303,18 @@ export const colourProps: readonly string[] = placePaint;
  * A link's end, `<To>`, a kind of its own inside the link's kind, as `Arrow.<Link>.<To>`: the head
  * drawn there, and how a link from a variable (see Link.svelte) paints the element it reaches
  * while it is drawn, `none` leaving that paint as it is. Paint only, its line drawn inside the
- * element's box, so no box changes size, and never whether anything is shown.
+ * element's box, so no box changes size, and never whether anything is shown. Where several links
+ * paint one element, each setting is the one from the link on the highest `layer`, 1 to 3, and on
+ * one layer the link written later (see linksFromVariables in ../model/scene-of.ts).
  */
-export const endProps: readonly DesignProp[] = ['head', 'fill', 'stroke', 'strokeWidth', 'color'];
+export const endProps: readonly DesignProp[] = [
+  'head',
+  'fill',
+  'stroke',
+  'strokeWidth',
+  'color',
+  'layer'
+];
 
 /** A link's end kinds, as the design names them. */
 export const linkEnd = '<To>';
@@ -445,7 +455,7 @@ export const paintProps: ReadonlySet<string> = new Set([
  * paint, a link end's paint among it, and whether it is shown at all, which holds at every step, a
  * render left out keeping no room throughout.
  */
-export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint]);
+export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint, 'layer']);
 
 /**
  * A render at a place: `:` and what is written there (`:left`, `:g.a`, or a label, `:@scan.next`),
