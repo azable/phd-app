@@ -170,9 +170,9 @@ describe('the nested form', () => {
   });
 
   it('reads a key written flat at any level, as older documents were', () => {
-    expect(flatDesign({ 'IntCell.fill': 'white', IntCell: { 'Link.targetFill': 'red-100' } })).toEqual(
-      { 'IntCell.fill': 'white', 'IntCell.Link.targetFill': 'red-100' }
-    );
+    expect(
+      flatDesign({ 'IntCell.fill': 'white', IntCell: { 'Link.targetFill': 'red-100' } })
+    ).toEqual({ 'IntCell.fill': 'white', 'IntCell.Link.targetFill': 'red-100' });
   });
 
   it('keeps a null under the key or the start of keys it removes', () => {

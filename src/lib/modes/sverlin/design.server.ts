@@ -72,13 +72,13 @@ export type DesignValue = string | number | boolean;
 /**
  * A kind of node: its key, the snippet it is in (as Mark.Link), what it is, giving its props,
  * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
- * (see structure.server.ts) and the flow its node sets; and, for a link's kind, whether every link
+ * (see structure.server.ts); and, for a link's kind, whether every link
  * of it is a two-way line, whose head starts as none.
  */
 export type DesignKind = {
   key: string;
   role: KindRole;
-  free?: { structure: LayoutStructure; flow?: 'x' | 'y' };
+  free?: { structure: LayoutStructure };
   /** For a kind arranging a grid: its basis is its own too (see gridProps). */
   grid?: true;
   lines?: true;
@@ -87,8 +87,7 @@ export type DesignKind = {
 };
 
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
-// the natural form of a structure it finds that the trace could not show. One whose flow sets the
-// way it runs has no direction.
+// the natural form of a structure it finds that the trace could not show.
 const propsOf = ({ role, free, grid }: DesignKind) =>
   grid
     ? [...roleProps[role], ...gridProps]
@@ -99,7 +98,7 @@ const propsOf = ({ role, free, grid }: DesignKind) =>
             prop === 'form'
               ? free.structure !== 'none'
               : prop === 'direction'
-                ? free.structure !== 'none' && !free.flow
+                ? free.structure !== 'none'
                 : true
           )
         ]
@@ -330,9 +329,7 @@ function withBase(
   const governed = Object.fromEntries(
     Object.entries(space).map(([key, options]) => [
       key,
-      key.startsWith('views.') || framing(key)
-        ? options
-        : baseOptions(propOf(key), options, values)
+      key.startsWith('views.') || framing(key) ? options : baseOptions(propOf(key), options, values)
     ])
   );
   return { space: { ...governed, ...own }, problems };
@@ -660,8 +657,7 @@ export function buildVariant(
 } {
   // Keys come written or as kept (see design-keys.ts): `{Int}` and <Listing>.syntax are views.Int
   // and listing.syntax here; every other key is the same in both.
-  const aliased = (entries: Record<string, unknown> | undefined) =>
-    keptValues(entries ?? {});
+  const aliased = (entries: Record<string, unknown> | undefined) => keptValues(entries ?? {});
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
   // Every design names its base and holds every role's look (see withStarterBase).

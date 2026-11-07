@@ -49,7 +49,7 @@
 </View>
 <Layout name="Title"><Node>Binary search tree insertion</Node></Layout>
 <Layout name="Tree">
-  <Node layout="free" flow="y">
+  <Node layout="free">
     {#each nodes as node}{node}{/each}
   </Node>
 </Layout>

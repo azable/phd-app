@@ -27,10 +27,9 @@ import { seenParts, unionOf } from './visible';
 
 /** A free layout's props, which its element also carries for a step laid out on the model. */
 export type ArrangementProps = {
-  flow?: 'x' | 'y';
   /** The form the linked structure takes; unset, its natural one. */
   form?: Form;
-  /** The way it runs where no flow sets it (see formCentres). */
+  /** The way it runs (see formCentres). */
   direction?: Direction;
   curve?: 'straight' | 'curved';
   /** The seed of its kind's layout, the variant's; unset, 1. */
@@ -80,7 +79,7 @@ export function arrangementInput<E>(
   host: E,
   props: ArrangementProps
 ): ArrangementInput<E> {
-  const { flow, form, direction, curve, layoutSeed, gap, scope } = props;
+  const { form, direction, curve, layoutSeed, gap, scope } = props;
   // The seed this arrangement draws every choice from: its kind's, mixed with its place, so two
   // arrangements of one kind differ, and each stays the same while the variant keeps that seed.
   const drawSeed = layoutSeedFor(layoutSeed ?? 1, scope);
@@ -300,7 +299,7 @@ export function arrangementInput<E>(
     box.width = Math.max(box.width, row.width + 1);
   }
   const rest = waiting.length ? rowOf(waiting, space) : undefined;
-  const options = { links: specs, flow, form, direction, curve, gap: space };
+  const options = { links: specs, form, direction, curve, gap: space };
   const keyed = (anchor: Anchor) => ({ ...anchor, box: boxes[anchor.box].key });
   return {
     input: {

@@ -1,12 +1,7 @@
 import { parse } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 
-import {
-  readsOf,
-  scopedReadsOf,
-  slotInsertions,
-  withInsertions
-} from './components.server';
+import { readsOf, scopedReadsOf, slotInsertions, withInsertions } from './components.server';
 import { viewThisValues } from './label-values';
 
 /** Slots without the site each is stamped with, which one test checks on its own. */

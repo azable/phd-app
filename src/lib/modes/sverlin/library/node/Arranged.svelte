@@ -24,7 +24,6 @@
   import { layoutReader } from './reader';
 
   let {
-    flow,
     form,
     direction,
     curve,
@@ -34,10 +33,9 @@
     scope,
     children
   }: {
-    flow?: 'x' | 'y';
     /** The form the linked structure takes; unset, its natural one. */
     form?: Form;
-    /** The way it runs where no flow sets it (see forms.ts). */
+    /** The way it runs (see forms.ts). */
     direction?: Direction;
     curve?: 'straight' | 'curved';
     /** The seed of its kind's layout, the variant's; unset, 1. */
@@ -102,7 +100,7 @@
     void revision;
     if (!host) return;
     const placed = host;
-    const props = { flow, form, direction, curve, layoutSeed, gap, scope };
+    const props = { form, direction, curve, layoutSeed, gap, scope };
     const laid = untrack(() => arrangeChildren(layoutReader(placed), placed, props, memory));
     for (const problem of laid.problems) console.warn(`Node layout: ${problem}`);
     laid.elements.forEach((element, index) => {
@@ -132,7 +130,7 @@
 <!-- data-sv-arrange carries its props, for a step laid out on the layout model (model/drawn.ts). -->
 <div
   class="sv-arranged"
-  data-sv-arrange={JSON.stringify({ flow, form, direction, curve, layoutSeed, gap, scope })}
+  data-sv-arrange={JSON.stringify({ form, direction, curve, layoutSeed, gap, scope })}
   data-sv-layout-seed={layoutSeed}
   data-sv-layout-kind={layoutSeed === undefined ? undefined : kind}
   data-sv-form={result?.choices.form}

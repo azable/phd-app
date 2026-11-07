@@ -70,7 +70,6 @@
     rowSpan = 1,
     colSpan = 1,
     children,
-    flow,
     icon: kindIcon = false,
     __view: chosenView = 'root',
     __kindOf,
@@ -108,8 +107,6 @@
     rowSpan?: number;
     colSpan?: number;
     children?: Snippet;
-    /** In a free layout, the axis arrows point along: 'x' (rightwards) or 'y' (downwards). */
-    flow?: 'x' | 'y';
     /** Internal: the snippet this node is in, by its path, which is its kind; added by the compiler. */
     __view?: string;
     /** Internal: set by the compiler on a node whose kind is an expression: the names it reads with the variables each stands for (a {@const} name the ones its value reads), their values, and the expression over them. */
@@ -231,9 +228,7 @@
   // The element of the state this node draws: a collection's item, or a component's root, which
   // draws the element its call was given (see Slot.svelte). A hidden copy draws none.
   const copy = copyContext();
-  const slot = untrack(() =>
-    copy || !__component ? undefined : slotContext()
-  );
+  const slot = untrack(() => (copy || !__component ? undefined : slotContext()));
   const element = untrack(() => elementSlot(slot));
   untrack(() => {
     if (element && slot) provideDrawn(slot);
@@ -266,9 +261,7 @@
   if (hiddenHere) provideHidden(true);
   const hidden = hiddenHere ? true : hiddenContext();
   // A node only keeping its room refers to nothing.
-  const places = untrack(() =>
-    hidden ? [] : namedPlaces(listing, [...ownPlaces, __code])
-  );
+  const places = untrack(() => (hidden ? [] : namedPlaces(listing, [...ownPlaces, __code])));
   const lightColour = untrack(() => lightOf(listing, places));
   const light = lightColour ? nodeLight(listing?.places?.look, lightColour) : {};
   // Left out of the presentation, as its kind's shown false leaves it out (see left-out.ts).
@@ -282,9 +275,7 @@
   // Inside a value of a union, a member's view takes the box the union's members share.
   const union = unionContext();
   const box = untrack(() =>
-    __component &&
-    memory &&
-    (!memory.measuring || memory.probing)
+    __component && memory && (!memory.measuring || memory.probing)
       ? ((union ? memory.components.get(unionBoxKey(__component, union)) : undefined) ??
         memory.components.get(__component))
       : undefined
@@ -634,11 +625,7 @@
   // around, and evenly spread the tracks over it instead.
   const packed = $derived(justify === 'start' || justify === 'center' || justify === 'end');
   const roomAt = $derived(
-    justify === 'start'
-        ? 'flex-start'
-        : justify === 'end'
-          ? 'flex-end'
-          : 'center'
+    justify === 'start' ? 'flex-start' : justify === 'end' ? 'flex-end' : 'center'
   );
   // A collection keeps room for its type's max elements: drawn to be measured, it holds an empty
   // track for each element it lacks, which the items' equal tracks size as one of them, so the
@@ -738,7 +725,6 @@
       {@render contents()}
     {:else if free}
       <Arranged
-        {flow}
         form={look('form') as Form | undefined}
         direction={look('direction') as Direction | undefined}
         curve={look('curve') as 'straight' | 'curved' | undefined}
@@ -796,9 +782,7 @@
             ? 'center'
             : undefined}
         style:justify-content={justification}
-        style:width={collection && arrangement === 'row' && packed
-          ? 'max-content'
-          : undefined}
+        style:width={collection && arrangement === 'row' && packed ? 'max-content' : undefined}
         style:margin-inline-start={collection && arrangement === 'row' && roomAt !== 'flex-start'
           ? 'auto'
           : undefined}

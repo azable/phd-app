@@ -29,10 +29,9 @@ export function layeredCentres({
   sizeOf,
   links,
   apart,
-  flow,
   direction
 }: EngineInput): Map<number, Point> {
-  const runs = flow ?? (direction === 'right' ? 'x' : 'y');
+  const runs = direction === 'right' ? 'x' : 'y';
   const graph = new graphlib.Graph({ multigraph: true });
   graph.setGraph({
     rankdir: runs === 'x' ? 'LR' : 'TB',

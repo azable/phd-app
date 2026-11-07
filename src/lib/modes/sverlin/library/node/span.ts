@@ -28,7 +28,7 @@ export type SpanInput = {
   boxes: ArrangeBox[];
   anchors: Record<string, KeyedAnchor>;
   parts: KeyedAnchor[];
-  options: Pick<ArrangeOptions, 'links' | 'flow' | 'form' | 'direction' | 'curve' | 'gap'>;
+  options: Pick<ArrangeOptions, 'links' | 'form' | 'direction' | 'curve' | 'gap'>;
   /** The room this step's waiting labels take side by side (see withRest). */
   rest?: { width: number; height: number };
 };

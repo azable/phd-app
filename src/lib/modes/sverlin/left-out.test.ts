@@ -170,10 +170,7 @@ describe('left out', () => {
           // Accepted: a sentence with a node in it is parts too, so only its loose render goes.
           '<Layout name="Mixed"><Node>picked {v} <Node>first {values[0]}</Node></Node></Layout>'
       )
-      .replace(
-        '<Picked />',
-        '<Column /><Mixed />'
-      );
+      .replace('<Picked />', '<Column /><Mixed />');
     const built = prepareSvelteComponent(shaped);
     const first = nodeIn(shaped);
     const hidden = hiddenIn(built, ['v']);

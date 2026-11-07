@@ -16,8 +16,8 @@ export const forms = ['natural', 'layered', 'line', 'snake', 'wave', 'arc', 'sca
 export type Form = (typeof forms)[number];
 
 /**
- * The way a layout with no flow runs, as a flow would: a tree's or layered graph's links down it or
- * across, and a line, a path's own shape, along it.
+ * The way a free layout runs: a tree's or layered graph's links down it or across, and each
+ * sequence form, a path's line among them, along it.
  */
 export const directions = ['down', 'right'] as const;
 export type Direction = (typeof directions)[number];
@@ -222,8 +222,8 @@ function acyclic(nodes: readonly number[], children: ReadonlyMap<number, number[
 /**
  * Centres for a structure's nodes in a form, in the form's own proportions. `random` varies each
  * form's free parameters, such as a wave's height or a node order. A tree or layered graph's own
- * shape, and a line, run along the flow, else the direction: unset, a tree branches down and a line
- * lies along x. The other sequence forms lie along x unless the flow is y.
+ * shape, and every sequence form, run the way of its direction: right along x, down along y; unset,
+ * a tree branches down and a line lies along x.
  */
 export function formCentres(
   form: Form,
@@ -235,7 +235,6 @@ export function formCentres(
     /** Between nodes no link joins, side by side in a layer: an arrow's room; the room if unset. */
     apart?: number;
     random: (key: string) => number;
-    flow?: 'x' | 'y';
     direction?: Direction;
   }
 ): Map<number, Point> {
@@ -244,7 +243,7 @@ export function formCentres(
   const across = Math.max(...sizes.map(({ width }) => width)) + options.room;
   const down = Math.max(...sizes.map(({ height }) => height)) + options.room;
   const step = { across, down };
-  const runs = options.flow ?? (options.direction && axisOf[options.direction]);
+  const runs = options.direction && axisOf[options.direction];
   if (form === 'natural' && (structure.kind === 'tree' || structure.kind === 'layers')) {
     // Layers lie a node's depth and room for an arrow and its label apart, the way links run; nodes
     // in a layer a node's breadth and an arrow's room apart, so arrows fanning out from one node
@@ -288,7 +287,7 @@ export function formCentres(
   // so a column of tall nodes keeps room for its arrows.
   const ring = form === 'natural' && structure.kind === 'cycle';
   const shape = form === 'natural' ? (ring ? 'ring' : 'line') : form;
-  const turned = !ring && (shape === 'line' ? runs : options.flow) === 'y';
+  const turned = !ring && runs === 'y';
   const placed = sequenceCentres(
     shape,
     sizes.length,
@@ -352,7 +351,10 @@ function sequenceCentres(
       const ring = form === 'ring' || cycle;
       const sweep = ring ? 2 * Math.PI : pick('arc.sweep', 0.6, 1.2) * Math.PI;
       const steps = ring ? count : count - 1;
-      const radius = Math.max(across, (steps * across) / sweep);
+      // Neighbours sit a step apart along the curve, the larger step either way, as the curve runs
+      // both ways round it.
+      const chord = Math.max(across, down);
+      const radius = Math.max(chord, (steps * chord) / sweep);
       const start = ring ? options.random('ring.start') * 2 * Math.PI : -sweep / 2;
       const flip = !ring && options.random('arc.flip') < 0.5 ? -1 : 1;
       return indices.map((i) => {

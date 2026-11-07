@@ -132,7 +132,7 @@ describe('structures', () => {
     ).toBeUndefined();
   });
 
-  it('draws each structure naturally as its own shape, running along its flow or direction', () => {
+  it('draws each structure naturally as its own shape, running along its direction', () => {
     const tree = linked(4, [
       [0, 1],
       [0, 2],
@@ -147,24 +147,15 @@ describe('structures', () => {
       [1, 2],
       [2, 0]
     ]) as Structure;
-    type Ways = { flow?: 'x' | 'y'; direction?: Direction };
+    type Ways = { direction?: Direction };
     const centres = (form: Form, structure: Structure, ways: Ways = {}) =>
       formCentres(form, structure, () => ({ width: 40, height: 20 }), {
         room: 20,
         random: keyedRandom(1, form),
         ...ways
       });
-    const down: Ways[] = [
-      {},
-      { flow: 'y' },
-      { direction: 'down' },
-      { flow: 'y', direction: 'right' }
-    ];
-    const across: Ways[] = [
-      { flow: 'x' },
-      { direction: 'right' },
-      { flow: 'x', direction: 'down' }
-    ];
+    const down: Ways[] = [{}, { direction: 'down' }];
+    const across: Ways[] = [{ direction: 'right' }];
     // A tree branches down unless it runs along x; a path is a line, running the same way.
     for (const ways of down) {
       const branched = centres('natural', tree, ways);
@@ -178,8 +169,14 @@ describe('structures', () => {
       expect(centres('natural', path, ways)).toEqual(centres('line', path, ways));
     const column = centres('line', path, { direction: 'down' });
     expect(new Set([...column.values()].map(({ x }) => x)).size).toBe(1);
-    // The other sequence forms keep their own way, and a cycle's ring is the same either way.
-    expect(centres('snake', path, { direction: 'down' })).toEqual(centres('snake', path));
+    // Every sequence form turns with the direction, and a cycle's ring is the same either way.
+    const snake = centres('snake', path, { direction: 'down' });
+    const across2 = centres('snake', path, { direction: 'right' });
+    expect(snake).not.toEqual(across2);
+    const spread = (placed: Map<number, { x: number; y: number }>, axis: 'x' | 'y') =>
+      Math.max(...[...placed.values()].map((p) => p[axis])) -
+      Math.min(...[...placed.values()].map((p) => p[axis]));
+    expect(spread(snake, 'y')).toBeGreaterThan(spread(snake, 'x'));
     const ring = centres('natural', cycle);
     for (const ways of [...down, ...across]) expect(centres('natural', cycle, ways)).toEqual(ring);
     const radii = [...ring.values()].map(({ x, y }) => Math.round(Math.hypot(x, y)));

@@ -27,7 +27,7 @@ const list = (algorithm: string) => `<script domain>
 <View of="ListNode" name="NodeBox">
   <Node layout="row">{this.name}<Node kind="NextField"><Link to={this.next} /></Node></Node>
 </View>
-<Layout name="List"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout>
+<Layout name="List"><Node layout="free">{#each nodes as n}{n}{/each}</Node></Layout>
 
 <Layout name="Main">
   <Node>

@@ -36,7 +36,7 @@ Most refused first sources break one of these rules, each explained below:
   block.
 - A design variable is named as the design names it: a kind inside another takes
   every kind around it, as `Cells.Item.Eliminated`, and only a free layout whose
-  data makes a structure, with no `flow`, has `form` and `direction`.
+  data makes a structure has `form` and `direction`.
 
 ## Blocks
 
@@ -752,7 +752,7 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
   <Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node>
 </View>
 <Layout name="List">
-  <Node layout="free" flow="x">
+  <Node layout="free">
     {#each nodes as n}{n}{/each}
     <Node kind="Var">{prev}</Node>
     <Node kind="Var">{cur}</Node>
@@ -1304,23 +1304,22 @@ or, along its reading order (a path in link order, a tree depth first, a layered
 graph each node after its parents, or breadth first where it has cycles),
 `line`, `snake` (rows read back and forth), `wave`, `arc`, or `scatter` (free
 positions that keep each node near the next). `direction`, `down` or `right`, is
-the way a `natural` or `line` layout runs where no `flow` sets it, as a `flow`
-would: it starts `right`, across the wide stage, a tree too, so a page starts
-near 16:9; set `down` where the participant asks for it. A layout with a `flow`
-has none. A layered graph also takes `layered`: its layers as in `natural`, but
-each packed by its own nodes' sizes, so the graph is tighter (dagre, the layout
-of Graphviz's dot, on the server); a tree, whose children keep their order, does
-not take it, and its seed changes nothing. A layout whose data makes no
-structure has no `form` or `direction` and is laid out freely, unless the page
-finds a structure in the links it draws, which it draws `natural`. `curve`,
-`straight` (the start) or `curved`, is how its arrows prefer to run.
-`layoutSeed`, 1 to 32, is what its spacing and nudges are drawn from: the order
-each layer of a layered graph starts in, a `wave`'s, `arc`'s or `scatter`'s
-shape, and where a layout with no structure starts; a tree or a path drawn
-`natural` is the same at every seed. A free layout keeps its form's own
-proportions and takes the size of everything it draws, its links' curves, heads
-and labels included, so the same values draw the same layout wherever it is,
-whatever the frame or what is beside it.
+the way every form runs, and the way its arrows point: it starts `right`, across
+the wide stage, a tree too, so a page starts near 16:9; set `down` where the
+participant asks for it, as for a tree read top to bottom. A layered graph also
+takes `layered`: its layers as in `natural`, but each packed by its own nodes'
+sizes, so the graph is tighter (dagre, the layout of Graphviz's dot, on the
+server); a tree, whose children keep their order, does not take it, and its seed
+changes nothing. A layout whose data makes no structure has no `form` or
+`direction` and is laid out freely, unless the page finds a structure in the
+links it draws, which it draws `natural`. `curve`, `straight` (the start) or
+`curved`, is how its arrows prefer to run. `layoutSeed`, 1 to 32, is what its
+spacing and nudges are drawn from: the order each layer of a layered graph
+starts in, a `wave`'s, `arc`'s or `scatter`'s shape, and where a layout with no
+structure starts; a tree or a path drawn `natural` is the same at every seed. A
+free layout keeps its form's own proportions and takes the size of everything it
+draws, its links' curves, heads and labels included, so the same values draw the
+same layout wherever it is, whatever the frame or what is beside it.
 
 The colours are white, black, and 18 hues (neutral, red, orange, amber, yellow,
 lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia,
@@ -2232,10 +2231,6 @@ or without links. The children are kept clear of each other and gathered
 compactly, as their kind's look says (see Design). A node hugs its children
 whatever its layout. Every direct child is placed; put content that belongs
 together, such as a value and its index, in one child node.
-
-- `flow`: in a free layout, `'x'` or `'y'` makes arrows point rightwards or
-  downwards, as for a list or a tree, and every form runs that way. Set it only
-  when asked; an undirected graph has no flow.
 
 A free layout's look, `form`, `direction`, `curve`, and `layoutSeed`, is its
 kind's (see Design), never a prop, and arrows bend round other nodes and labels.

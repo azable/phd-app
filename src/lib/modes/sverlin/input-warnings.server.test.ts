@@ -17,18 +17,9 @@ const typedIn = search
     '<View of="Part" name="PartCell"><Node value={this} /></View>\n<View of="Index" name="IndexNumber">'
   )
   .replace('target={42} />', "target={42} parts={['3 8 15', '23 42']} />")
-  .replace(
-    '<Layout name="Main">',
-    '<Layout name="Main">'
-  )
-  .replace(
-    '<Bounds />',
-    '<Bounds />\n    {#each parts as part}{part}{/each}'
-  )
-  .replace(
-    '<Main />',
-    '<Main />'
-  );
+  .replace('<Layout name="Main">', '<Layout name="Main">')
+  .replace('<Bounds />', '<Bounds />\n    {#each parts as part}{part}{/each}')
+  .replace('<Main />', '<Main />');
 
 describe('inputs the view draws but nothing reads', () => {
   it('warn of one typed into the case, as its picture does not come from the run', async () => {

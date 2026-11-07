@@ -26,7 +26,6 @@ export type EngineInput = {
   /** Between nodes no link joins, side by side in a layer. */
   apart: number;
   random: (key: string) => number;
-  flow?: 'x' | 'y';
   direction?: Direction;
 };
 

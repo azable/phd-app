@@ -423,9 +423,11 @@ describe('single-component Svelte compilation', () => {
       code: 'unknown_prop',
       message: expect.stringContaining('its direction follows from the data')
     });
-    await expect(view('<Node flow="z" />')).rejects.toMatchObject({
-      code: 'invalid_prop',
-      line: 2
+    await expect(view('<Node layout="free" flow="y" />')).rejects.toMatchObject({
+      code: 'unknown_prop',
+      message: expect.stringContaining(
+        "takes no flow: the way a free layout runs is its kind's direction"
+      )
     });
     await expect(view('<Node layout="table" />')).rejects.toThrow(
       "use 'row', 'column', 'grid', 'free'"
@@ -1850,7 +1852,7 @@ describe('pools and references', () => {
 <View of="Name" name="NameCell"><Node value={this} /></View>
 <View of="End" name="EndMark"><Node>∅</Node></View>
 <View of="NodeRef" name="Here"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>`;
-  const list = `<Layout name="List"><Node layout="free" flow="x">{#each nodes as n}{n}{/each}</Node></Layout><Layout name="Main"><Node><List />{cur}</Node></Layout>`;
+  const list = `<Layout name="List"><Node layout="free">{#each nodes as n}{n}{/each}</Node></Layout><Layout name="Main"><Node><List />{cur}</Node></Layout>`;
   const box = `<View of="ListNode" name="NodeBox"><Node layout="row">{this.name}<Link to={this.next} /></Node></View>`;
 
   it('draws every node of a pool, a reference as a pointer, and the end through its view', () => {

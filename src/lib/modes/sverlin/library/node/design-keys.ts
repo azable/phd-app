@@ -23,10 +23,7 @@ import { baseKey, listingAlias, placeCaption } from './design';
 
 /** A place as kept and written: a variable or field (`lo`, `pair.left`), or a label (`@scan.next`). */
 const placePattern = String.raw`@?[\w$.]+?`;
-const viewKey = new RegExp(
-  String.raw`^views\.(@[\w$.]+?|[\w$.]+?)(?::(${placePattern}))?$`,
-  'u'
-);
+const viewKey = new RegExp(String.raw`^views\.(@[\w$.]+?|[\w$.]+?)(?::(${placePattern}))?$`, 'u');
 const writtenView = new RegExp(
   String.raw`^\{(@[\w$.]+|[A-Z][\w$.]*)\}(?::(${placePattern}))?$`,
   'u'

@@ -64,7 +64,7 @@
 </View>
 
 <View of="States" name="StateDiagram">
-  <Node layout="free" flow="x">
+  <Node layout="free">
     {#each this as state, k}
       <Node kind="StateSlot">{state}</Node>
       {#if k === 0}

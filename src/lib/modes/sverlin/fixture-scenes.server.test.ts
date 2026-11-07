@@ -53,6 +53,9 @@
  *   merge-sort-overview, ucs-ten: written with a node's when and a stack instead of <When> and
  *   <OneOf>, which are now refused, so their ids move with their lines and each status stack keeps
  *   the room of its largest branch, as a stack does.
+ * - bst: written without flow="y", which is refused; its tree starts running right, as every
+ *   structure does, its kind's direction (down in a variant) turning every form. dfa-loops, without
+ *   flow="x", draws as it did.
  */
 
 import { createHash } from 'node:crypto';

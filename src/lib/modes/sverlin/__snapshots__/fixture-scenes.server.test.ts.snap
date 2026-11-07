@@ -11,7 +11,7 @@ exports[`every fixture draws the scenes it drew 1`] = `
   "bfs-references.sverlin": "91605db04d3152bf",
   "bfs-undirected.sverlin": "6302a80d164f7a42",
   "bfs-visit-order.sverlin": "f315bb3d62876afe",
-  "bst.sverlin": "358598aa5f5728f4",
+  "bst.sverlin": "ae6aba22f0e27506",
   "bubble-arrow.sverlin": "4ff118df61306421",
   "bubble-layouts.sverlin": "c9cb48e1c0ce3ada",
   "call-frames.sverlin": "c7582b167a1c5853",

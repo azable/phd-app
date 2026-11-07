@@ -367,15 +367,7 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole =
-  | 'container'
-  | 'value'
-  | 'bar'
-  | 'vertex'
-  | 'text'
-  | 'code'
-  | 'icon'
-  | 'link';
+export type KindRole = 'container' | 'value' | 'bar' | 'vertex' | 'text' | 'code' | 'icon' | 'link';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -754,8 +746,7 @@ export const starterTokens: Record<DesignToken, string | number> = {
 export type DesignTag = '<Node>' | '<Link>';
 
 /** The tag making each role's kinds. */
-export const tagOf = (role: KindRole): DesignTag =>
-  role === 'link' ? '<Link>' : '<Node>';
+export const tagOf = (role: KindRole): DesignTag => (role === 'link' ? '<Link>' : '<Node>');
 
 /** The variable setting a prop for every kind of a tag, as `<Node>.padding`. */
 export const groupKey = (tag: DesignTag, prop: string): string => `${tag}.${prop}`;

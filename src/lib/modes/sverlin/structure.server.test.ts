@@ -173,16 +173,11 @@ describe('free layout structures', () => {
       expect(forms).toEqual(
         propOptions.form.filter((form) => form !== 'layered' || structure === 'layers')
       );
-    // A path, a ring and a graph run right; the tree's flow="y" sets its way, so it has none.
-    expect(starts.map(({ direction }) => direction)).toEqual([
-      'right',
-      undefined,
-      'right',
-      'right'
-    ]);
+    // Every structure starts running right, across the wide stage, a tree too.
+    expect(starts.map(({ direction }) => direction)).toEqual(['right', 'right', 'right', 'right']);
     expect(starts.map(({ directions }) => directions?.join())).toEqual([
       'down,right',
-      undefined,
+      'down,right',
       'down,right',
       'down,right'
     ]);

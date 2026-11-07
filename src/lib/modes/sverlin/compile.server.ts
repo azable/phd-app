@@ -1167,7 +1167,6 @@ function prepareViews(
       freeNodes,
       gridKinds,
       linkedNodes,
-      flows,
       tagKinds,
       nodeKinds,
       collections,
@@ -1750,12 +1749,11 @@ function prepareViews(
     const variables = variableTypes(master);
     const kinds = unlaid.map((kind): DesignKind => {
       const structure = structures[kind.key];
-      const flow = flows.get(kind.key);
       const items = collections.get(kind.key);
       const itemsType =
         items && (items.type ?? (items.over ? variables.get(items.over) : undefined));
       return structure
-        ? { ...kind, free: { structure, ...(flow ? { flow } : {}) } }
+        ? { ...kind, free: { structure } }
         : gridKinds.has(kind.key)
           ? { ...kind, grid: true }
           : kind.role === 'link' && lines.has(kind.key)
@@ -3212,7 +3210,6 @@ export const libraryProps: Record<'Node' | 'Link', PropNames> = {
     value: null,
     layout: named(Object.fromEntries(layouts.map((name) => [name, name])), false),
     children: null,
-    flow: named({ x: 0, y: 0 }, false),
     kind: null,
     row: null,
     col: null,
@@ -3322,19 +3319,21 @@ function checkProps(
                 ? `<Link> takes no directed: a link is an arrow from its from to its to, and its direction follows from the data. Where the same <Link> joins two elements both ways at the same steps, as neighbour lists naming each edge from both its ends, the pair is one two-way line, with its kind's head at both ends.`
                 : component === 'Link' && attribute.name === 'label'
                   ? `<Link> takes no label: write its label as its children, drawn at its middle, as <Link from={u} to={v}>{cost}</Link>, or text, as <Link from={u} to={v}>next</Link>.`
-                  : attribute.name === 'size'
-                    ? `<${component}> takes no size: its text's size is textSize, in pixels, a look the design gives every kind of node, not the markup, as the variable ${kind}.textSize.`
-                    : component === 'Node' && attribute.name === 'anchor'
-                      ? `<Node> takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables ${kind}.xAnchor and ${kind}.yAnchor (start, center or end).`
-                      : component === 'Link' && linkLooks.has(attribute.name)
-                        ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
-                        : component === 'Node' && valueOnlyProps.has(attribute.name)
-                          ? `<Node> ${attribute.name} stands for a view's value, each value's ${attribute.name} the design's: bind it in a view, as <View of="State" name="StateMark"><Node ${attribute.name}={this} /></View>, and the design picks one of ${iconNames.join(', ')} for each value.`
-                          : designProps.has(attribute.name)
-                            ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the view or layout it is in, or the one it names, and its look is a variable of that kind.`
-                            : named.length
-                              ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
-                              : `<${component}> takes no props.`,
+                  : component === 'Node' && attribute.name === 'flow'
+                    ? `<Node> takes no flow: the way a free layout runs is its kind's direction, down or right, a look the design gives it, not the markup: here the variable ${kind}.direction.`
+                    : attribute.name === 'size'
+                      ? `<${component}> takes no size: its text's size is textSize, in pixels, a look the design gives every kind of node, not the markup, as the variable ${kind}.textSize.`
+                      : component === 'Node' && attribute.name === 'anchor'
+                        ? `<Node> takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables ${kind}.xAnchor and ${kind}.yAnchor (start, center or end).`
+                        : component === 'Link' && linkLooks.has(attribute.name)
+                          ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
+                          : component === 'Node' && valueOnlyProps.has(attribute.name)
+                            ? `<Node> ${attribute.name} stands for a view's value, each value's ${attribute.name} the design's: bind it in a view, as <View of="State" name="StateMark"><Node ${attribute.name}={this} /></View>, and the design picks one of ${iconNames.join(', ')} for each value.`
+                            : designProps.has(attribute.name)
+                              ? `<${component}> ${attribute.name} is a look, which the design gives every kind of node, not the markup: a node's kind is the view or layout it is in, or the one it names, and its look is a variable of that kind.`
+                              : named.length
+                                ? `<${component}> has no prop ${attribute.name}. Its props are ${named.join(', ')}.`
+                                : `<${component}> takes no props.`,
           { code: 'unknown_prop', ...at }
         )
       );
@@ -3529,13 +3528,12 @@ function withNodeRefs(
   insertions: Insertion[];
   problems: InvalidSvelteSourceError[];
   kinds: DesignKind[];
-  /** The <Node layout="free"> tags of each kind that has one, and the flow the first sets. */
+  /** The <Node layout="free"> tags of each kind that has one. */
   freeNodes: Map<string, unknown[]>;
   /** The kinds of the <Node layout="grid"> tags. */
   gridKinds: Set<string>;
   /** Each <Node> holding links, with the kind of the links written in it. */
   linkedNodes: { kind: string; node: unknown }[];
-  flows: Map<string, 'x' | 'y'>;
   /** The kind of each <Node> and <Link> tag, by its line:column, for the editor to show. */
   tagKinds: Record<string, string[]>;
   /** Each <Node> tag's kind, by where it starts, for what a presentation leaves out. */
@@ -4057,11 +4055,10 @@ function withNodeRefs(
   ];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
-  // its data makes (see structure.server.ts), read from those nodes and the flow they set.
+  // its data makes (see structure.server.ts), read from those nodes.
   const freeNodes = new Map<string, Tag[]>();
   // A kind with a node arranging a grid has its basis among its props (see gridProps).
   const gridKinds = new Set<string>();
-  const flows = new Map<string, 'x' | 'y'>();
   const laidOutFreely = ({ name, tag }: Entry) =>
     name === 'Node' &&
     (tag.attributes ?? []).some(({ name: prop, value }) => {
@@ -4107,10 +4104,6 @@ function withNodeRefs(
     kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
     if (laidOutFreely(entry)) {
       freeNodes.set(key, [...(freeNodes.get(key) ?? []), entry.tag]);
-      const flow = (entry.tag.attributes ?? []).find(({ name }) => name === 'flow')?.value;
-      const [part] = Array.isArray(flow) ? flow : [];
-      if (!flows.has(key) && part?.type === 'Text' && (part.data === 'x' || part.data === 'y'))
-        flows.set(key, part.data);
     }
     if (entry.name === 'Node') nodeKinds.set(entry.start, key);
     const [arranged] = ((entry.tag.attributes ?? []).find(({ name }) => name === 'layout')?.value ??
@@ -4222,7 +4215,6 @@ function withNodeRefs(
     linkedNodes: tags.flatMap(({ name, links, view, tag }) =>
       name === 'Node' && links ? [{ kind: kindKey(view, 'Link'), node: tag }] : []
     ),
-    flows,
     tagKinds,
     nodeKinds,
     collections

@@ -20,7 +20,7 @@ const boxes: ArrangeBox[] = [
 ];
 const options: ArrangeOptions = {
   links: ['a -> b', 'b -> c', 'head -> a'],
-  flow: 'x',
+  direction: 'right',
   gap: 12
 };
 
@@ -107,7 +107,7 @@ describe('unlinked children', () => {
   });
 });
 
-describe('links along a flow', () => {
+describe('links along a direction', () => {
   // Columns of a value cell with a label below one of them, as a list with a "current" label.
   const columns: ArrangeBox[] = [
     { key: 'n0', width: 40, height: 40 },
@@ -122,7 +122,7 @@ describe('links along a flow', () => {
   // A line, with arrows preferring to run straight (the seed's curve style below one half).
   const chain = arrange(columns, {
     links: ['n0 -> n1', 'n1 -> n2'],
-    flow: 'x',
+    direction: 'right',
     form: 'line',
     gap: 6,
     anchors,
@@ -203,8 +203,6 @@ describe('links along a flow', () => {
     for (const seed of [1, 2, 3])
       for (const [ways, down] of [
         [{}, true],
-        [{ flow: 'y' }, true],
-        [{ flow: 'x' }, false],
         [{ direction: 'down' }, true],
         [{ direction: 'right' }, false]
       ] as const) {
@@ -329,20 +327,13 @@ describe('forms running a direction', () => {
   const tree = ['r', 'a', 'b', 'c', 'd'].map((key) => ({ key, width: 40, height: 30 }));
   const links = ['r -> a', 'r -> b', 'a -> c', 'a -> d'];
 
-  it('lays a structure out naturally or in a line along its direction as along that flow', () => {
-    for (const form of forms)
-      for (const [direction, flow] of [
-        ['down', 'y'],
-        ['right', 'x']
-      ] as const) {
-        const random = keyedRandom(1, 'layout');
-        const directed = arrange(tree, { links, gap: 8, form, direction, random });
-        const flowing = arrange(tree, { links, gap: 8, form, flow, random });
-        const unset = arrange(tree, { links, gap: 8, form, random });
-        // The other sequence forms keep their own way.
-        const like = form === 'natural' || form === 'layered' || form === 'line' ? flowing : unset;
-        expect(directed.placements, `${form} ${direction}`).toEqual(like.placements);
-      }
+  it('turns every form with its direction', () => {
+    for (const form of forms) {
+      const random = keyedRandom(1, 'layout');
+      const placed = (direction: 'down' | 'right') =>
+        arrange(tree, { links, gap: 8, form, direction, random }).placements;
+      expect(placed('down'), form).not.toEqual(placed('right'));
+    }
   });
 });
 
@@ -367,7 +358,7 @@ describe('a tree drawn from its fields', () => {
         ],
         anchors: { 'r.left': field(0, 'left'), 'r.right': field(0, 'right') },
         form: 'natural',
-        flow: 'y',
+        direction: 'down',
         gap: 8,
         random: keyedRandom(seed, 'layout')
       });
@@ -389,7 +380,7 @@ describe('a link from a child to itself', () => {
       { from: 'q0', to: 'q1', directed: true, id: 'l2', label },
       { from: 'q1', to: 'q1', directed: true, id: 'l3', label }
     ],
-    flow: 'x',
+    direction: 'right',
     gap: 12,
     random: keyedRandom(1, 'test')
   });

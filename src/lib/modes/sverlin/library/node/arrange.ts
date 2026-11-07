@@ -74,15 +74,13 @@ export type Point = { x: number; y: number };
 export type ArrangeOptions = {
   /** Links such as 'a -> b' (directed) or 'a - b', or link components' specs. */
   links?: readonly (string | LinkSpec)[];
-  /** The axis directed links point along in a free arrangement: 'x' or 'y'. */
-  flow?: 'x' | 'y';
   /** The space between children, in pixels. */
   gap: number;
   /** A random number in [0, 1) for a key, or undefined to start every child at the centre. */
   random?: (key: string) => number;
   /** The form the linked structure takes; unset, its natural one. */
   form?: Form;
-  /** The way the linked structure runs where no flow sets it (see formCentres). */
+  /** The way the linked structure runs (see formCentres). */
   direction?: Direction;
   /** Keys (see linkKey) of the links present at every step; only these decide the structure. Unset, all do. */
   permanent?: ReadonlySet<string>;
@@ -164,13 +162,6 @@ const arrowRoom = 28;
 // The area starting positions are spread over; only its proportions matter.
 const startArea = { width: 800, height: 500 };
 
-type Separation = { axis: 'x' | 'y'; left: number; right: number; gap: number; equality?: true };
-type Alignment = {
-  type: 'alignment';
-  axis: 'x' | 'y';
-  offsets: { node: number; offset: number }[];
-};
-
 export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): ArrangeResult {
   const problems: string[] = [];
   const index = new Map(boxes.map((box, position) => [box.key, position]));
@@ -226,9 +217,7 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
   });
 
   // Each link's length comes from its own two boxes: half of each plus room for the arrow and its
-  // label. With a flow, a directed link's target sits that far along the flow axis, so arrows run
-  // along it. A form spaces every link alike, with room for the largest label.
-  const flowExtent = options.flow === 'y' ? 'height' : 'width';
+  // label. A form spaces every link alike, with room for the largest label.
   const labelRoom = ({ label }: { label?: { width: number; height: number } }) =>
     label ? Math.max(label.width, label.height) : 0;
   // A label sits on its link's line, which breaks round it, so a labelled link keeps an arrow's room
@@ -242,11 +231,8 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
     .map((link) => {
       const { source, target, from, to, directed, id, key } = link;
       const own = roomFor(link);
-      const along = (from[flowExtent] + to[flowExtent]) / 2 + own;
-      const ideal = options.flow
-        ? along
-        : (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + own;
-      return { source, target, from, to, ideal, along, directed, id, key };
+      const ideal = (Math.max(from.width, from.height) + Math.max(to.width, to.height)) / 2 + own;
+      return { source, target, from, to, ideal, directed, id, key };
     });
   const solvedLinks: { source: number; target: number; ideal: number }[] = [...laidLinks];
 
@@ -286,47 +272,9 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
           room,
           apart: spare,
           random: options.random ?? (() => 0.5),
-          flow: options.flow,
           direction: options.direction
         })
       : undefined;
-  const inStructure = new Set(formed ? formed.keys() : []);
-
-  // Along a flow, each directed link's target anchor sits at least a link's length further along
-  // than its source anchor, so arrows run with the flow. A link that closes a cycle cannot point
-  // forward too, so it is left free; and links forming a simple chain (one out, one in) are lined
-  // up on their anchors, so a list runs straight.
-  const flowing: (Separation | Alignment)[] = [];
-  if (options.flow) {
-    const axis = options.flow;
-    const cross = axis === 'x' ? 'y' : 'x';
-    const forward = laidLinks.filter(({ directed }, i) => directed && !closesCycle(laidLinks, i));
-    const outs = new Map<number, number>();
-    const ins = new Map<number, number>();
-    for (const { source, target } of forward) {
-      outs.set(source, (outs.get(source) ?? 0) + 1);
-      ins.set(target, (ins.get(target) ?? 0) + 1);
-    }
-    for (const { source, target, from, to, along } of forward) {
-      // A formed structure places its own links.
-      if (inStructure.has(source) && inStructure.has(target)) continue;
-      flowing.push({
-        axis,
-        left: source,
-        right: target,
-        gap: along + offsetOf(from, axis) - offsetOf(to, axis)
-      });
-      if (outs.get(source) === 1 && ins.get(target) === 1)
-        flowing.push({
-          type: 'alignment',
-          axis: cross,
-          offsets: [
-            { node: source, offset: 0 },
-            { node: target, offset: offsetOf(from, cross) - offsetOf(to, cross) }
-          ]
-        });
-    }
-  }
 
   // A child's loops rise above it, with their labels: it keeps that room above, so the children
   // round it stay clear of them.
@@ -409,11 +357,10 @@ export function arrange(boxes: readonly ArrangeBox[], options: ArrangeOptions): 
       .size([startArea.width, startArea.height])
       .nodes(nodes)
       .links(solvedLinks)
-      .constraints(flowing)
       .avoidOverlaps(true)
       .handleDisconnected(false)
       .linkDistance((link) => (link as unknown as { ideal: number }).ideal);
-    // Iterations without constraints, then with the flow's, then with overlap removal too; then on to
+    // Iterations without constraints, then with overlap removal too; then on to
     // convergence, synchronously, so the same input always gives the same result.
     layout.start(20, 20, 20, 0, false, false);
     layout.settle(1000);
@@ -653,26 +600,6 @@ function groupLeaders(count: number, links: readonly { source: number; target: n
   for (const { source, target } of links)
     if (source < count && target < count) parent[root(source)] = root(target);
   return [...new Set(parent.map((_, i) => root(i)))];
-}
-
-/** Whether directed link i returns to its source along earlier directed links, closing a cycle. */
-function closesCycle(
-  links: readonly { source: number; target: number; directed: boolean }[],
-  i: number
-): boolean {
-  const next = new Map<number, number[]>();
-  for (const { source, target, directed } of links.slice(0, i))
-    if (directed) next.set(source, [...(next.get(source) ?? []), target]);
-  const seen = new Set<number>();
-  const stack = [links[i].target];
-  while (stack.length) {
-    const at = stack.pop() as number;
-    if (at === links[i].source) return true;
-    if (seen.has(at)) continue;
-    seen.add(at);
-    stack.push(...(next.get(at) ?? []));
-  }
-  return false;
 }
 
 // Arrangements solved alone, by everything they were solved from: laying out draws many steps
