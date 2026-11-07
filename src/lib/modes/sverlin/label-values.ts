@@ -1,20 +1,19 @@
 /**
  * Labels read in the view's markup (labels as values): `@swap.a` is the value the expression
  * labelled `swap.a` gave in a step's own code; `spans(@check.at)` every value it has given so far;
- * `applied(Equal, @inner)` every application of `Equal` made inside `@inner` so far; and
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
  * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
  * steps, taking turns in one place; `of="@case.start"` and `of="@case.end"` name the moments of the
  * case shown, the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is
- * found, to be refused.
+ * found, to be refused, as are `runs(@check.at)`, which spans replaced, and `applied(Equal, @inner)`,
+ * which a label's view replaced.
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
  * <When> as `{#if when(@swap)}` and `{/if}`, a <OneOf>'s later branches as `{:else` and `if
  * when(@b)}` in place of the tags between them (see whenTags); then `@swap.a` as `ℓswapˑa`,
- * `spans(@check.at)` as `ϟcheckˑat` and spaces, `applied(Equal, @inner)` as `ǂEqualˑˑinner` and
- * spaces, and `when(@swap)` as `ʬswap` and spaces. The page is
- * given each as a prop of that name.
+ * `spans(@check.at)` as `ϟcheckˑat` and spaces, and `when(@swap)` as `ʬswap` and spaces. The page
+ * is given each as a prop of that name.
  */
 
 import { spanOf } from './algorithm/parse.server';
@@ -22,18 +21,16 @@ import type { Label } from './algorithm/labels.server';
 
 const label = 'ℓ';
 const runs = 'ϟ';
-const history = 'ǂ';
 const during = 'ʬ';
 const dot = 'ˑ';
 
 /**
- * A label read in the markup, a label's values so far, an operator's applications so far, or a
- * label whose runs an {#if when(…)} draws its contents in (none where `when()` names no label).
+ * A label read in the markup, a label's values so far, or a label whose runs an {#if when(…)}
+ * draws its contents in (none where `when()` names no label).
  */
 export type LabelReference =
   | { kind: 'value'; key: string; path: string; start: number }
   | { kind: 'runs'; key: string; path: string; start: number }
-  | { kind: 'applied'; key: string; operator: string; path?: string; start: number }
   | { kind: 'during'; key: string; path?: string; moment?: Moment; start: number };
 
 /** The steps an {#if when(…)} can name besides a label's runs: the first, the input as given, and the last. */
@@ -44,20 +41,15 @@ export const momentTarget = (moment: Moment): string => `#${moment}`;
 export const labelKey = (path: string): string => `${label}${path.replaceAll('.', dot)}`;
 export const isLabelKey = (name: string): boolean => name.startsWith(label);
 export const isRunsKey = (name: string): boolean => name.startsWith(runs);
-export const isHistoryKey = (name: string): boolean => name.startsWith(history);
 export const isDuringKey = (name: string): boolean => name.startsWith(during);
-/** A key as its author wrote it, for messages: a <When>'s as its `of`. */
 /** What a label operator's operand or result is that no domain type holds: a comparison's true or false, drawn as text. */
 export const untypedBoolean = 'boolean';
 
+/** A key as its author wrote it, for messages: a <When>'s as its `of`. */
 export function written(name: string): string {
   if (isDuringKey(name) && name[1] === dot) return name.slice(2);
   if (isLabelKey(name) || isDuringKey(name)) return `@${name.slice(1).replaceAll(dot, '.')}`;
   if (isRunsKey(name)) return `spans(@${name.slice(1).replaceAll(dot, '.')})`;
-  if (isHistoryKey(name)) {
-    const [operator, path] = name.slice(1).split(dot + dot);
-    return `applied(${operator}${path ? `, @${path.replaceAll(dot, '.')}` : ''})`;
-  }
   return name.replaceAll(viewThis, 'this');
 }
 
@@ -212,10 +204,13 @@ export function markLabels(source: string): {
   allReads: { record: string; start: number }[];
   /** Each `runs(@label)` written, the old name of `spans(@label)`. */
   runsReads: { label: string; start: number }[];
+  /** Each `applied(…)` written, as written, which a label's view replaced. */
+  appliedReads: { written: string; start: number }[];
 } {
   const references: LabelReference[] = [];
   const allReads: { record: string; start: number }[] = [];
   const runsReads: { label: string; start: number }[] = [];
+  const appliedReads: { written: string; start: number }[] = [];
   let out = '';
   let depth = 0;
   let quote: string | undefined;
@@ -277,19 +272,11 @@ export function markLabels(source: string): {
         allReads.push({ record: every[1], start: index });
       }
       const made = !word ? appliedCall.exec(rest) : null;
-      if (made) {
-        const key = `${history}${made[1]}${made[2] ? dot + dot + made[2].replaceAll('.', dot) : ''}`;
-        references.push({
-          kind: 'applied',
-          key,
-          operator: made[1],
-          ...(made[2] ? { path: made[2] } : {}),
+      if (made)
+        appliedReads.push({
+          written: `applied(${made[1]}${made[2] ? `, @${made[2]}` : ''})`,
           start: index
         });
-        out += pad(key, made[0].length);
-        index += made[0].length - 1;
-        continue;
-      }
       // A Svelte tag opens with {@, as {@render …}; anything else after {@ is a label: an
       // attribute's value, as from={@a}, or a value drawn in text, as {@swap.from} (see
       // implicit-renders.server.ts).
@@ -305,7 +292,7 @@ export function markLabels(source: string): {
     }
     out += char;
   }
-  return { source: out, references, allReads, runsReads };
+  return { source: out, references, allReads, runsReads, appliedReads };
 }
 
 /** Where a label's code is in the algorithm block's body, for applications made inside it. */

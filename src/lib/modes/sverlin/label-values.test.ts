@@ -42,7 +42,7 @@ describe('labels read in the view', () => {
   it('are rewritten as identifiers of the same length, outside tags and strings', () => {
     const markup =
       '<Node>a@b {@swap.a} {"@x"} {#each spans(@check.at) as p}{/each} {#each applied(Equal, @in) as e}{/each}</Node>';
-    const { source, references } = markLabels(markup);
+    const { source, references, appliedReads } = markLabels(markup);
     expect(source).toHaveLength(markup.length);
     expect(source).toContain('{ℓswapˑa}');
     expect(source).toContain('{"@x"}');
@@ -50,13 +50,22 @@ describe('labels read in the view', () => {
     expect(references.map(({ kind, key }) => [kind, key])).toEqual([
       ['value', 'ℓswapˑa'],
       ['runs', 'ϟcheckˑat'],
-      ['applied', 'ǂEqualˑˑin']
+      ['value', 'ℓin']
+    ]);
+    expect(appliedReads).toEqual([
+      { written: 'applied(Equal, @in)', start: markup.indexOf('applied') }
     ]);
   });
 
   it('are an attribute’s value only inside a tag, so text before a label may end in =', async () => {
     const text = '<Node>current key = {v}</Node>';
-    expect(markLabels(text)).toEqual({ source: text, references: [], allReads: [], runsReads: [] });
+    expect(markLabels(text)).toEqual({
+      source: text,
+      references: [],
+      allReads: [],
+      runsReads: [],
+      appliedReads: []
+    });
     const link = '<Link title="a > b" from={@swap.a} to = { @swap.b } />';
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(

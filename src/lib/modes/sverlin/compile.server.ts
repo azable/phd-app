@@ -34,7 +34,6 @@ import { parseBlock, spanOf } from './algorithm/parse.server';
 import { lightSteps, type Lit } from './listing/light.server';
 import {
   isDuringKey,
-  isHistoryKey,
   isLabelKey,
   isRunsKey,
   labelSpan,
@@ -415,8 +414,6 @@ export type PreparedComponent = {
    * values so far; each with its full name and a value from some step to stand in.
    */
   labelled?: Record<string, { label: string; sample?: LabelRun }>;
-  /** The operators whose applications so far inside a label the root draws, by key. */
-  histories?: Record<string, { operator: string; start: number; end: number }>;
   /** The labels <When>s draw their contents in the runs of, by full name, by key. */
   during?: Record<string, string>;
   /** The variables the view reads, which a step draws from (see sceneSteps). */
@@ -982,7 +979,13 @@ function prepareViews(
             })
         )
       );
-    const { source: marked, references, allReads, runsReads } = markLabels(viewed.source);
+    const {
+      source: marked,
+      references,
+      allReads,
+      runsReads,
+      appliedReads
+    } = markLabels(viewed.source);
     if (runsReads.length)
       throw InvalidSvelteSourceError.combine(
         runsReads.map(
@@ -990,6 +993,16 @@ function prepareViews(
             new InvalidSvelteSourceError(
               `runs(@${label}) is written spans(@${label}): every value the label has given so far, one for each span of its code.`,
               { code: 'view_component', start: sourcePosition(source, start) }
+            )
+        )
+      );
+    if (appliedReads.length)
+      throw InvalidSvelteSourceError.combine(
+        appliedReads.map(
+          ({ written, start }) =>
+            new InvalidSvelteSourceError(
+              `${written} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; spans(@check.equal) lists its values so far.`,
+              { code: 'view_label', start: sourcePosition(source, start) }
             )
         )
       );
@@ -1404,7 +1417,7 @@ function prepareViews(
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
     // Each render of an applied operator by its key: the operator's name and the label it is
-    // narrowed to (see appliedKey); one in {#each applied(…)} draws a value, as a type is rendered.
+    // narrowed to (see appliedKey); one of a query's row draws a value, as a type is rendered.
     // A render with no label is refused once the labels are known.
     const appliedNames = [
       ...new Set(
@@ -1586,7 +1599,6 @@ function prepareViews(
     const filters = new Set(appliedRenders.flatMap(({ filter }) => (filter ? [filter] : [])));
     const snippets = snippetRangesOf(ast.html);
     const labelled: Record<string, { label: string; sample?: LabelRun }> = {};
-    const histories: Record<string, { operator: string; start: number; end: number }> = {};
     const narrowed = new Map<string, { start: number; end: number }>();
     // The labels <When>s draw their contents in the runs of, by key.
     const during: Record<string, string> = {};
@@ -1636,12 +1648,6 @@ function prepareViews(
           );
           continue;
         }
-        if (reference.kind === 'applied') {
-          problem(
-            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; spans(@check.equal) lists its values so far.`
-          );
-          continue;
-        }
         const filter = reference.kind === 'value' && filters.has(reference.key);
         const found = resolveLabel(reference.path, algorithmLabels.labels, !filter);
         if ('problem' in found) {
@@ -1679,8 +1685,8 @@ function prepareViews(
         );
       }
     if (!algorithmLabels.problems.length)
-      for (const { name, filter, fromHistory, start } of appliedRenders)
-        if (!filter && !fromHistory)
+      for (const { name, filter, fromRow, start } of appliedRenders)
+        if (!filter && !fromRow)
           labelProblems.push(
             new InvalidSvelteSourceError(
               `{@render ${name}()} draws no label's application: ${labelledForm(name, algorithmLabels, (path) => `{@render ${name}(${path})}`)}.`,
@@ -1694,13 +1700,10 @@ function prepareViews(
       if (span) appliedIn[`${name}_${filter}`] = { operator: name, ...span };
     }
     // The page pauses where labels finish (see Pacing), at the labels a scene pauses at, else at
-    // every label; the applications made inside the labels the root renders an operator at, one at
-    // a time or so far, are kept.
+    // every label; the applications made inside the labels the root renders an operator at are
+    // kept.
     const shown = new Map<string, { start: number; end: number }[]>();
-    for (const { operator, start, end } of [
-      ...Object.values(appliedIn),
-      ...Object.values(histories)
-    ])
+    for (const { operator, start, end } of Object.values(appliedIn))
       shown.set(operator, [...(shown.get(operator) ?? []), { start, end }]);
     const pacing: Pacing = { shown };
     const keep = {
@@ -1784,7 +1787,6 @@ function prepareViews(
         name === layoutProp ||
         isLabelKey(name) ||
         isRunsKey(name) ||
-        isHistoryKey(name) ||
         isDuringKey(name)
     );
     if (unread)
@@ -2015,14 +2017,9 @@ function prepareViews(
       ...variableNames.filter((name) => everyStep.some(({ state }) => !(name in state))),
       ...Object.keys(labelled).filter(isLabelKey)
     ]);
-    // What the root reads besides the state: labels' values, their values so far, and operators'
-    // applications so far, each a prop of its key.
-    const viewState = new Set([
-      ...stateNames,
-      ...Object.keys(labelled),
-      ...Object.keys(histories),
-      ...Object.keys(during)
-    ]);
+    // What the root reads besides the state: labels' values and their values so far, and the
+    // steps a node with when shows at, each a prop of its key.
+    const viewState = new Set([...stateNames, ...Object.keys(labelled), ...Object.keys(during)]);
     if (viewProblems.length) throw InvalidSvelteSourceError.combine(viewProblems);
     const viewNames = new Set([...Object.keys(components), ...Object.keys(chosen)]);
     // A node with no layout whose blocks flow as text, told to the assistant.
@@ -2185,7 +2182,6 @@ function prepareViews(
         ...stateNames,
         ...appliedNames.map(appliedKey),
         ...Object.keys(labelled),
-        ...Object.keys(histories),
         ...Object.keys(during),
         ...Object.keys(chosen),
         ...Object.keys(viewAliases),
@@ -2372,7 +2368,6 @@ function prepareViews(
       ...(appliedNames.length ? { applied } : {}),
       ...(Object.keys(appliedIn).length ? { appliedIn } : {}),
       ...(Object.keys(labelled).length ? { labelled } : {}),
-      ...(Object.keys(histories).length ? { histories } : {}),
       ...(Object.keys(during).length ? { during } : {}),
       viewReads,
       leftOut: {
@@ -2576,7 +2571,7 @@ export async function bundlePresentation(
     }
     // Each label the root reads: the value its expression gave in the step's own code, at its
     // after, where it gave one; else one from another step stands in hidden. Each label's values
-    // so far, and each operator's applications so far, are lists, there at every step.
+    // so far are a list, there at every step.
     const step = Math.floor(index / 2);
     const entry = entries[step];
     const position = entry.scene.frame ? 0 : entry.index;
@@ -2616,21 +2611,6 @@ export async function bundlePresentation(
       (!entry.scene.frame && atWhen(label, entry.run.steps, position) ? ownApplied : standIn.state)[
         key
       ] = true;
-    for (const [key, history] of Object.entries(prepared.histories ?? {})) {
-      const list = sofar.flatMap((past, which) =>
-        (which < position || index % 2 === 1 || position === 0
-          ? (past.applied?.[history.operator] ?? [])
-          : []
-        ).filter((application) => within(application, history))
-      );
-      ownApplied[key] = list.map((application) => application.state);
-      list.forEach((application, k) => {
-        for (const [path, type] of Object.entries(application.types))
-          ownTypes[`${key}[${k}].${path}`] = type;
-        for (const [path, target] of Object.entries(application.targets ?? {}))
-          ownTargets[`${key}[${k}].${path}`] = target;
-      });
-    }
     return {
       ...standIn.state,
       ...phase.state,
@@ -2938,7 +2918,6 @@ export function leftOutOf(
   const drawn = (name: string): boolean | undefined => {
     const label = prepared.labelled?.[name];
     if (label) return isRunsKey(name) || once((phase) => phase.labelled?.[label.label]);
-    if (prepared.histories?.[name]) return true;
     const narrowed = prepared.appliedIn?.[name.slice('__applied_'.length)];
     if (narrowed)
       return once((phase) =>
@@ -4906,7 +4885,7 @@ function operatorCalls(
 }
 
 /**
- * How to write an operator's render or history at a label: at the labels around its applications,
+ * How to write an operator's render at a label: at the labels around its applications,
  * innermost first, or where none is, with a label to add around one.
  */
 function labelledForm(
@@ -4936,7 +4915,7 @@ function labelledForm(
 
 /**
  * Each render of an operator by name: the label it is narrowed to (as {@render Greater(@inner)}),
- * whether it draws an item of {#each applied(…)}, whether it is otherwise given a value, and
+ * whether it draws a query's row, whether it is otherwise given a value, and
  * whether it is in a view (a part of the page is not one).
  */
 function operatorRendersOf(
@@ -4957,7 +4936,7 @@ function operatorRendersOf(
   name: string;
   start: number;
   filter?: string;
-  fromHistory?: boolean;
+  fromRow?: boolean;
   argued: boolean;
   inView: boolean;
 }[] {
@@ -4965,11 +4944,11 @@ function operatorRendersOf(
   const walk = (
     node: unknown,
     inView: boolean,
-    items: ReadonlySet<string>,
+    rows: ReadonlySet<string>,
     groups: ReadonlySet<string> = new Set()
   ): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView, items, groups));
+    if (Array.isArray(node)) return node.forEach((child) => walk(child, inView, rows, groups));
     const part = node as {
       type?: string;
       start?: number;
@@ -4988,24 +4967,16 @@ function operatorRendersOf(
       const given = (part.expression?.arguments ?? []) as { type?: string; name?: string }[];
       const [only] = given.length === 1 && given[0].type === 'Identifier' ? given : [];
       const filter = only && isLabelKey(only.name ?? '') ? only.name : undefined;
-      const fromHistory = Boolean(only && items.has(only.name ?? ''));
+      const fromRow = Boolean(only && rows.has(only.name ?? ''));
       found.push({
         name,
         start: part.start ?? 0,
         ...(filter ? { filter } : {}),
-        ...(fromHistory ? { fromHistory } : {}),
-        argued: given.length > 0 && !filter && !fromHistory,
+        ...(fromRow ? { fromRow } : {}),
+        argued: given.length > 0 && !filter && !fromRow,
         inView
       });
     }
-    // An {#each applied(…) as a} makes a an application, which an operator's render draws.
-    const item =
-      part.type === 'EachBlock' &&
-      part.expression?.type === 'Identifier' &&
-      (part.expression.name ?? '').startsWith('ǂ') &&
-      part.context?.type === 'Identifier'
-        ? part.context.name
-        : undefined;
     // A query's rows are records, each drawn by its label's view, as are a group's rows.
     const each = part.type === 'EachBlock' ? part.expression : undefined;
     const listed =
@@ -5025,10 +4996,7 @@ function operatorRendersOf(
       queries.grouped.has(each.name ?? '')
         ? part.context.name
         : undefined;
-    const inner =
-      item || listed
-        ? new Set([...items, ...[item, listed].filter((x) => x !== undefined)])
-        : items;
+    const inner = listed ? new Set([...rows, listed]) : rows;
     const innerGroups = group ? new Set([...groups, group]) : groups;
     const within = inView || (part.type === 'SnippetBlock' && !isPart(part));
     for (const [key, child] of Object.entries(part))
