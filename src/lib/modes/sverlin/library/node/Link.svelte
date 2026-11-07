@@ -12,6 +12,7 @@
   import { untrack, type Snippet } from 'svelte';
 
   import {
+    arrangementParentContext,
     drawnContext,
     provideSlot,
     elementOf,
@@ -107,13 +108,37 @@
   // model/scene-of.ts), unless a free layout holding both its ends lays it out as one of its own.
   const drawn = drawnContext();
   const reach = untrack(() => from === undefined && __toInherit && !drawn && !!enclosing);
+  // An end given a number read from the state that points into no collection, as a value no
+  // position type gave, names no element; nor is it a key, which the node drawing a value of that
+  // identity has in a free layout (see arrangement.ts). By the field it was read from, or its type.
+  const nowhere = (
+    end: unknown,
+    path: string | undefined,
+    of: unknown,
+    at: string | number | undefined,
+    walks: unknown
+  ) => {
+    const read = path ?? (at === undefined ? undefined : elementOf(types, of, at));
+    if (typeof end !== 'number' || walks !== undefined || read === undefined) return undefined;
+    if (types?.targetOf(read) !== undefined) return undefined;
+    return typeof at === 'string' ? at : (types?.typeAt(read) ?? 'its value');
+  };
+  const unresolved = untrack(() => ({
+    from: nowhere(from, fromPath, __fromOf, __fromAt, __fromIn),
+    to: nowhere(to, toPath, __toOf, __toAt, __toIn)
+  }));
   // An end given a position names the node drawing the element it points at.
   const ends = untrack(() => ({
     from:
-      from === undefined
-        ? (drawn ?? (reach ? enclosing : undefined) ?? '')
-        : linkEnd(types, from, { path: fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
-    to: linkEnd(types, to, { path: toPath, of: __toOf, at: __toAt, in: __toIn })
+      unresolved.from !== undefined
+        ? ''
+        : from === undefined
+          ? (drawn ?? (reach ? enclosing : undefined) ?? '')
+          : linkEnd(types, from, { path: fromPath, of: __fromOf, at: __fromAt, in: __fromIn }),
+    to:
+      unresolved.to !== undefined
+        ? ''
+        : linkEnd(types, to, { path: toPath, of: __toOf, at: __toAt, in: __toIn })
   }));
   // The link's look is the variant's values for its kind, a render at a place giving its own.
   const design = designContext();
@@ -185,6 +210,26 @@
       return length !== undefined && (end < 0 || end >= length);
     })
   );
+  // A link drawn nowhere, told rather than left out without a word: an end pointing nowhere (see
+  // unresolved); or one with no from, which only a free layout round it lays out (see
+  // arrangement.ts; rows, columns and grids draw only links with a from, see overlay.ts), outside
+  // every free layout.
+  const warning = untrack(() => {
+    // A component probed alone, for its sizes, is drawn at no place (see probeComponent).
+    if (unseen || layoutMemoryContext()?.probing) return undefined;
+    const site = `The Link at ${__ref ?? '?'} in ${__view}`;
+    const ends = (['from', 'to'] as const).flatMap((which) =>
+      unresolved[which] === undefined
+        ? []
+        : [
+            `${site} has ${which} = ${unresolved[which]}, a number pointing into no collection, so it names no element and is drawn nowhere: a link's end is a position, as Index(values, i), or a reference.`
+          ]
+    );
+    if (ends.length) return ends.join(' ');
+    if (from === undefined && !reach && !arrangementParentContext())
+      return `${site} has no from, so it starts at the element its view draws, and only a free layout holding that element and what it reaches lays such a link out: it is in none, so it is drawn nowhere. Put both in a node with layout free.`;
+    return undefined;
+  });
   // A link with a from in a view of an element, as an edge's, draws that element (data-sv-draws), so
   // a link from a variable holding its position reaches the link. The end it draws is no element of
   // the state, so it draws none.
@@ -215,6 +260,7 @@
     data-head={head}
     data-head-size={headSize}
     data-sv-reach={reach ? 'true' : undefined}
+    data-sv-warning={warning}
     data-sv-draws={from !== undefined && !drawn && enclosing ? enclosing : undefined}
     data-target-fill={reach ? target('fill') : undefined}
     data-target-kind={reach && target('fill') ? fillKind : undefined}

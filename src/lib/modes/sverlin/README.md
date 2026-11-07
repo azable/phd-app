@@ -2292,10 +2292,13 @@ heads, is its kind's (see Design), never a prop, as `Arrow.<Link>` for a link in
   such index and numbers, as `to={2 * k + 1}` for a heap's child, which draws no
   link at a step where it runs past the array's ends; labels giving positions,
   as `@insert.swap.from`. An end naming no element, as a number or text written
-  in the view or arithmetic of two indices, fails the build. In a view of an
-  element, a link with no `from` starts at the node drawing that element, as a
-  node's `next`. An arrow meets what is seen of its end: a node with no stroke
-  or fill of its own is met at the bordered or filled boxes inside it, as a
+  in the view or arithmetic of two indices, fails the build; a number from the
+  state pointing into no collection, as a value of the array, names none, and
+  the build warns. In a view of an element, a link with no `from` starts at the
+  node drawing that element, as a node's `next`, and only a free layout holding
+  both ends lays it out: outside every free layout it is drawn nowhere, and the
+  build warns. An arrow meets what is seen of its end: a node with no stroke or
+  fill of its own is met at the bordered or filled boxes inside it, as a
   vertex's name cell rather than the column holding it and its caption, unless
   reaching them would cross that other content: an arrow down from a vertex with
   captions under it leaves just below what is drawn under it at that step, its

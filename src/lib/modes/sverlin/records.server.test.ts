@@ -52,6 +52,9 @@ ${layout}
 ${storyboard}
 </Storyboard>`;
 
+const linkWarnings = (warnings: readonly { message: string }[] = []) =>
+  warnings.map(({ message }) => message).filter((message) => message.startsWith('The Link at'));
+
 const problemOf = (source: string) => {
   try {
     prepareSvelteComponent(source);
@@ -150,6 +153,31 @@ describe('queries', () => {
     ]);
     expect(reached).toEqual(expected);
     expect(expected.flat()).toContain('values[4]');
+    expect(linkWarnings(built.warnings)).toEqual([]);
+  });
+
+  it('warns of a link drawn nowhere: from no free layout, or to a number pointing nowhere', async () => {
+    const calls = (link: string, layout: string) =>
+      mergeSort(
+        `<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}${link}</Node></View>`,
+        `<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />\n<Layout name="Stack">${layout}</Layout>`,
+        '<Scene name="calls" case="eight" pause="@sort.split.end"><Stack /></Scene>'
+      );
+    const column = '<Node layout="column">{values}{#each stack as call}{call}{/each}</Node>';
+    const free =
+      '<Node><Node kind="Calls" layout="free">{#each values as v}{v}{/each}{#each stack as call}{call}{/each}</Node></Node>';
+    // The rows in a column, values beside them: no layout lays out a link from a row.
+    const outside = await drawnSteps(calls('<Link to={this.lo} />', column));
+    expect(outside.steps.flatMap(({ links }) => links)).toEqual([]);
+    expect(linkWarnings(outside.built.warnings)).toEqual([
+      'The Link at 36:68 in CallFrame has no from, so it starts at the element its view draws, and only a free layout holding that element and what it reaches lays such a link out: it is in none, so it is drawn nowhere. Put both in a node with layout free.'
+    ]);
+    // A value of the array is no position.
+    const value = await drawnSteps(calls('<Link to={this.a[0]} />', free));
+    expect(value.steps.flatMap(({ links }) => links)).toEqual([]);
+    expect(linkWarnings(value.built.warnings)).toEqual([
+      "The Link at 36:68 in CallFrame has to = Int, a number pointing into no collection, so it names no element and is drawn nowhere: a link's end is a position, as Index(values, i), or a reference."
+    ]);
   });
 
   it("links a row's position to the element it points at, in a loop outside any call", async () => {
