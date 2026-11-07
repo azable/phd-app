@@ -16,7 +16,11 @@ const events = [
     id: 1,
     operationId: 'a',
     type: 'ai.generation-requested',
-    payload: { purpose: 'initial', attempt: 1, parameters: { model: 'gpt-6.1-sol' } }
+    payload: {
+      purpose: 'initial',
+      attempt: 1,
+      parameters: { model: 'gpt-6.1-sol', reasoningEffort: 'medium' }
+    }
   },
   {
     id: 2,
@@ -58,13 +62,21 @@ const events = [
   // The same source shown again, and its warnings told again in a later turn's context: not again.
   presented(8, 'b', 's2', [{ code: 'listing.plain-variable', message: 'plain' }]),
   // A presentation stored before codes.
-  presented(9, 'c', 's3', ['An old warning.'])
+  presented(9, 'c', 's3', ['An old warning.']),
+  // A helper's fill picked into the source: the helpers' model wrote it.
+  {
+    id: 10,
+    operationId: 'd',
+    type: 'build.requested',
+    payload: { purpose: 'picks', source: { sha256: 's4' } }
+  },
+  presented(11, 'd', 's4', [{ code: 'label.clumped', message: 'clumped' }])
 ] as unknown as ProjectEvent[];
 
 describe('warning summary', () => {
   it('counts each version once, attributes it, and counts the fixes after a soft return', () => {
     const summary = warningSummary([{ id: 'p', events }]);
-    expect(summary.versions).toBe(3);
+    expect(summary.versions).toBe(4);
     expect(summary.codes['listing.plain-variable']).toEqual({
       occurrences: 2,
       projects: 1,
@@ -74,9 +86,16 @@ describe('warning summary', () => {
       fixedNext: 0
     });
     expect(summary.codes['label.clumped']).toMatchObject({
-      occurrences: 1,
+      occurrences: 2,
       sentBack: 1,
-      fixedNext: 1
+      fixedNext: 1,
+      byPurpose: { initial: 1, 'helper-pick': 1 },
+      byModel: { 'gpt-6.1-sol': 1, 'gpt-5.6-luna': 1 }
+    });
+    expect(summary.occurrences.find(({ eventId }) => eventId === 3)).toMatchObject({
+      reasoningEffort: 'medium',
+      attempt: 1,
+      generationRequestEventId: 1
     });
     expect(summary.codes.uncoded).toMatchObject({ occurrences: 1, byPurpose: { unknown: 1 } });
     expect(summary.occurrences.find(({ eventId }) => eventId === 6)).toMatchObject({

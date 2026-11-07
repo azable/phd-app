@@ -1470,15 +1470,14 @@ export function returnedWarnings(
   firstSource: boolean
 ): string[] {
   const toldOnly = new Set(['listing.unmarked-read', 'view.caption-name']);
-  const firstSourceKept = new Set(['design.unknown-value', 'scene.repeated-step']);
   return warnings.flatMap((warning) => {
-    const code = presentationWarningCode(warning);
     const text = presentationWarningText(warning);
     // A look only, as padding nobody sees, never sends a picture back: it is right, only roomier.
-    if (toldOnly.has(code) || text.endsWith(designOnlyWarning)) return [];
-    // A warning stored before codes is known by its words.
+    if (toldOnly.has(presentationWarningCode(warning)) || text.endsWith(designOnlyWarning))
+      return [];
+    // By its words, not its code: a code also covers what a first source still goes back for, as
+    // one step drawing the same picture as the one before (scene.repeated-step).
     const keptForFirst =
-      firstSourceKept.has(code) ||
       text.endsWith('The value is left out.') ||
       text.includes('draw the same picture as the step before them');
     if (firstSource && keptForFirst) return [];

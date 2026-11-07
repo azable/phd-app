@@ -536,10 +536,10 @@ Binary search, stopping where it finds the target:
 </script>
 
 <script algorithm>
-  @range[let lo = Index(0);
-  let hi = values.length - 1;]
+  @range[@from[let lo = Index(0);]
+  @to[let hi = values.length - 1;]]
   while (@open[lo <= hi]) @probe{
-    const mid = Index(Math.floor((lo + hi) / 2));
+    @middle[const mid = Index(Math.floor((lo + hi) / 2));]
     @check[if (@found[values[mid] === target]) break;]
     if (@low[values[mid] < target]) @right{ lo = mid + 1; } else @left{ hi = mid - 1; }
   }
@@ -734,13 +734,13 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 </script>
 
 <script algorithm>
-  @begin[let prev = Next(End('end'));
-  let cur = Next(head);]
+  @begin[@none[let prev = Next(End('end'));]
+  @front[let cur = Next(head);]]
   while (@more[cur !== 'end']) @rewire{
-    const after = cur.next;
-    cur.next = prev;
-    prev = cur;
-    cur = after;
+    @keep[const after = cur.next;]
+    @flip[cur.next = prev;]
+    @back[prev = cur;]
+    @ahead[cur = after;]
   }
 </script>
 
@@ -913,9 +913,9 @@ place:
   for (@last[let end = values.length]; @more[Index(values, 1) < end]; @shrink[end--]) @sweep{
     for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
       if (@test[values[i - 1] > values[i]]) @swap{
-        const moved = values[i - 1];
-        values[i - 1] = values[i];
-        values[i] = moved;
+        @save[const moved = values[i - 1];]
+        @move[values[i - 1] = values[i];]
+        @put[values[i] = moved;]
       }
     }
   }
@@ -1791,13 +1791,13 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 <script listing="textbook">
   INSERTION-SORT(A, n)
-  1  for @start[i = 2] @more[to n] @next[step 1]
+  1  for @start[:i[i] = 2] @more[to n] @next[step 1]
   2      @insert[@key[:key[key] = :i[A[i]]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
-  4      @init[j = i - 1]
-  5      while @test[@bound[j > 0] and @cmp[A[j] > :key[key]]]
-  6          @shift[@copy[:j[A[j + 1]] = A[j]]
-  7          @down[j = j - 1]]
+  4      @init[:j[j] = :i[i] - 1]
+  5      while @test[@bound[:j[j] > 0] and @cmp[A[:j[j]] > :key[key]]]
+  6          @shift[@copy[:j[A[j + 1]] = A[:j[j]]]
+  7          @down[:j[j] = :j[j] - 1]]
   8      @place[:j[A[j + 1]] = :key[key]]]
 </script>
 
@@ -1971,11 +1971,9 @@ lanes below them, `j` reaching −1 before the first cell:
 
 <script algorithm>
   for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
-    @take[const key = values[i];
-    let j = Position(i - 1);]
+    @take[@lift[const key = values[i];] @back[let j = Position(i - 1);]]
     while (@front[j >= 0 && values[j] > key]) @shift{
-      @move[values[j + 1] = values[j];
-      j--;]
+      @move[@copy[values[j + 1] = values[j];] @down[j--;]]
     }
     @drop[values[j + 1] = key;]
   }
@@ -2375,14 +2373,12 @@ at marked and the queue drawn by number:
 <script algorithm>
   @init[let queue = Queue([0]);]
   while (@more[queue.length > 0]) @visit{
-    @take[const current = queue[0];
-    queue.shift();
-    const around = out[current];]
+    @take[@front[const current = queue[0];] @dequeue[queue.shift();] @row[const around = out[current];]]
     for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
-      const w = around[slot];
+      @pick[const w = around[slot];]
       if (@check[!vertices[@next[w]].seen]) @add{
-        vertices[w].seen = true;
-        queue.push(w);
+        @mark[vertices[w].seen = true;]
+        @enqueue[queue.push(w);]
       }
     }
   }

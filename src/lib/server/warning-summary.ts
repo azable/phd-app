@@ -18,9 +18,14 @@ export type WarningOccurrence = {
   /** The event that showed the version, or that sent it back. */
   eventId: number;
   sourceSha256?: string;
-  /** What wrote it: a generation's purpose (initial, repair, …), else the build's (picks, …). */
+  /**
+   * What wrote it: a generation's purpose (initial, repair, …); a helper's fill picked into the
+   * source, `helper-pick`, with the model of the round's helpers; else the build's purpose.
+   */
   purpose: string;
   model?: string;
+  reasoningEffort?: string;
+  attempt?: number;
   /** The generation request, which holds the prompt the version was written from. */
   generationRequestEventId?: number;
   sentBack: boolean;
@@ -42,7 +47,15 @@ export type WarningSummary = {
   occurrences: WarningOccurrence[];
 };
 
-type Generation = { purpose: string; model?: string; eventId: number };
+type Generation = {
+  purpose: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempt: number;
+  eventId: number;
+};
+
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
 /** The warnings of one project's versions, each version once, attributed. */
 export function projectWarnings(
@@ -54,23 +67,31 @@ export function projectWarnings(
   const counted = new Set<string>();
   const occurrences: WarningOccurrence[] = [];
   const fixed = new Map<string, number>();
+  // The model of the latest helper round, which a helper's fill picked into the source came from.
+  let helperModel: string | undefined;
   const writer = (operationId: string | undefined, sha?: string, attempt?: number) => {
     const build = sha ? builds.get(`${operationId}|${sha}`) : undefined;
+    if (build?.purpose === 'picks')
+      return { purpose: 'helper-pick', ...(helperModel ? { model: helperModel } : {}) };
     const generation = generations.get(`${operationId}|${attempt ?? build?.attempt}`);
     return {
       purpose: generation?.purpose ?? build?.purpose ?? 'unknown',
       ...(generation?.model ? { model: generation.model } : {}),
-      ...(generation ? { generationRequestEventId: generation.eventId } : {})
+      ...(generation?.reasoningEffort ? { reasoningEffort: generation.reasoningEffort } : {}),
+      ...(generation
+        ? { attempt: generation.attempt, generationRequestEventId: generation.eventId }
+        : {})
     };
   };
   events.forEach((event, index) => {
-    if (event.type === 'ai.generation-requested' && !unversioned.has(event.payload.purpose))
+    if (event.type === 'ai.generation-requested' && event.payload.purpose === 'helper')
+      helperModel = text(event.payload.parameters.model) ?? helperModel;
+    else if (event.type === 'ai.generation-requested' && !unversioned.has(event.payload.purpose))
       generations.set(`${event.operationId}|${event.payload.attempt}`, {
         purpose: event.payload.purpose,
-        model:
-          typeof event.payload.parameters.model === 'string'
-            ? event.payload.parameters.model
-            : undefined,
+        model: text(event.payload.parameters.model),
+        reasoningEffort: text(event.payload.parameters.reasoningEffort),
+        attempt: event.payload.attempt,
         eventId: event.id
       });
     else if (event.type === 'build.requested')

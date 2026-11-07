@@ -3984,6 +3984,47 @@ describe('several variants from chat', () => {
     );
   });
 
+  it('sends a picture with a clumped label back, recording the warning’s code', async () => {
+    const clumped = [
+      '<script domain>',
+      "  const Int = type('integer', { min: 0, max: 20 });",
+      '  const Values = array(Int, { max: 5 });',
+      '  const Index = index(Values);',
+      '</script>',
+      '<script input>',
+      '  const values = Values;',
+      '  const target = Int;',
+      '</script>',
+      '<script algorithm>',
+      '  @start[let i = Index(values, 0); let k = Index(values, 0);]',
+      '  while (@compare[values[i] !== target]) @next[i++;]',
+      '</script>',
+      '<View of="Int" name="Cell"><Node value={this} /></View>',
+      '<View of="Index" name="IndexCell"><Node value={this} /></View>',
+      '<Layout name="Scan">',
+      '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
+      '</Layout>',
+      '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
+      '<Storyboard>',
+      '  <Scene name="scan" case="main" pause="@start, @next"><Scan /></Scene>',
+      '</Storyboard>'
+    ].join('\n');
+    const result = await attempts(
+      () => ({
+        ...generation(undefined, 'Each check.'),
+        decision: { action: 'revise', source: clumped, summary: 'Each check' }
+      }),
+      'Clumped'
+    );
+    const [rejected] = result.appendedEvents.filter(
+      ({ type }) => type === 'revision.edits-rejected'
+    );
+    expect(rejected?.payload).toMatchObject({
+      rejected: 'warnings',
+      codes: expect.arrayContaining(['label.clumped'])
+    });
+  });
+
   it('sends a picture built with warnings back once, then shows it as built', async () => {
     const repeated = [
       '<script domain>',
