@@ -13,7 +13,7 @@ import { drawingTags } from './drawings.server';
 import { fitted } from './layouts.server';
 import { mathsSvg } from './maths-svg.server';
 import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
-import { placeTokenAt, placeTokenIn } from './listing/mapped.server';
+import { oldPlaceTokenAt, placeTokenAt, placeTokenIn } from './listing/mapped.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -424,9 +424,9 @@ export function layoutTags(source: string): {
     edits.push(around, unwhen);
     edits.push({ start: closing.index, length: closing[0].length, text: `${closing[0]}</When>` });
   }
-  // A token in a caption's text, $name[text], refers to the place @name as a listing's token does
+  // A token in a caption's text, :name[text], refers to the place :name as a listing's token does
   // (see listing/places.ts), and is drawn as inline code: a node of kind Code linked to that place.
-  const captions = captionTokens(scanned);
+  const captions = captionTokens(scanned, problems);
   for (const token of captions) {
     edits.push({
       start: token.start,
@@ -507,11 +507,13 @@ export function keepStateReads(
 }
 
 /**
- * Each token in the markup's text, `$name[text]`, outside tags and braces: where it starts, how long
+ * Each token in the markup's text, `:name[text]`, outside tags and braces: where it starts, how long
  * its opening is, where its closing `]` is, and the place it names; its text keeps any `[…]` in it.
+ * An old token, `$name[`, is a problem naming the new form.
  */
 function captionTokens(
-  scanned: string
+  scanned: string,
+  problems: Problem[]
 ): { start: number; open: number; end: number; place: string }[] {
   const tokens: { start: number; open: number; end: number; place: string }[] = [];
   let tag = false;
@@ -535,6 +537,8 @@ function captionTokens(
       tag = true;
       continue;
     }
+    const old = oldPlaceTokenAt(scanned, at);
+    if (old) problems.push({ message: old, start: at });
     const opening = placeTokenAt(scanned, at);
     if (!opening) continue;
     let depth = 0;

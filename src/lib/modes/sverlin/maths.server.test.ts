@@ -68,8 +68,8 @@ describe('inline maths written as Unicode', () => {
       'This inline maths is never closed: write it between $$ and $$, as $$O(n \\log n)$$.';
     expect(readRegions('if \\(a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
     expect(readRegions('if $$a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
-    expect(readRegions('\\($i[i] + 1\\)').problems[0].message).toContain('inside maths');
-    expect(readRegions('$$$i[i] + 1$$').problems[0].message).toContain('inside maths');
+    expect(readRegions('\\(:i[i] + 1\\)').problems[0].message).toContain('inside maths');
+    expect(readRegions('$$:i[i] + 1$$').problems[0].message).toContain('inside maths');
   });
 
   it('reads $$…$$ as maths, never as a token, and a lone $ as text', () => {

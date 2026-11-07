@@ -1,6 +1,6 @@
 /**
  * Where a selected element came from: the <Node>, <Link>, or <Listing> tag its id names in the
- * presentation's source, or the caption token (`:i[…]`, or `$i[…]` as older sources write it) or
+ * presentation's source, or the caption token (`:i[…]`) or
  * inline maths (`$$…$$`) the compiler draws as a node of its own; a listing's line is keyed by its
  * number, as L3 (see provideNodeIds in library/type-context.ts for how ids are formed).
  */
@@ -29,7 +29,7 @@ const elementId =
   /^(\d{1,5}):(\d{1,5})(?:@([\w.!~*'()%-]{1,24}))?(?:#(\d{1,5}))?((?:\/\d{1,5}){0,8})(?::ghost)?$/u;
 const maxMarkup = 200;
 // What an id's position can start: a library tag, a caption token, or inline maths.
-const drawnFrom = /^(?:<(?:Node|Link|Listing)(?:[\s/>]|$)|[:$][A-Za-z_][\w$.]*\[|\$\$)/u;
+const drawnFrom = /^(?:<(?:Node|Link|Listing)(?:[\s/>]|$)|:[A-Za-z_@][\w$.]*\[|\$\$)/u;
 
 /**
  * Locate an element id in a Sverlin source, or undefined if it names no library tag there; a

@@ -26,8 +26,8 @@
 LINEAR-SEARCH(A, target)
 1  @start[start at i = 0]
 2  @more[while i is inside A]
-3      @scan.check[if A[$i[i]] = target]
-4          @scan.found[return $i[i]]
+3      @scan.check[if A[:i[i]] = target]
+4          @scan.found[return :i[i]]
 5      @next[i = i + 1]
 6  @missing[return not found]
 </script>

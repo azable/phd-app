@@ -26,7 +26,7 @@ describe('element locations', () => {
   });
 
   it('traces an id to a caption token or inline maths, which the compiler draws as nodes', () => {
-    const caption = '  <Node>Inspect :i[values[i]], $j[x] and $$x^2$$ here, $5 more.</Node>';
+    const caption = '  <Node>Inspect :i[values[i]], :j[x] and $$x^2$$ here, $5 more.</Node>';
     expect(locateElement(caption, '1:17')).toMatchObject({ line: 1, column: 17 });
     expect(locateElement(caption, '1:32')).toMatchObject({ column: 32 });
     expect(locateElement(caption, '1:42')).toMatchObject({ column: 42 });

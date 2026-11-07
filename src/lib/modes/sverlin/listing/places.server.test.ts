@@ -45,12 +45,12 @@ ${listing}
 </Storyboard>`;
 
 const tokened = `  @run[start:] lo = 0, hi = n - 1
-  while @open[$lo[lo] <= $hi[hi]]
-    @probe[@mid[$mid[mid] = (lo + hi) / 2]
-    if @low[$mid[A[mid]] < $target[target]]
-      @right[$lo[lo] = mid + 1]
+  while @open[:lo[lo] <= :hi[hi]]
+    @probe[@mid[:mid[mid] = (lo + hi) / 2]
+    if @low[:mid[A[mid]] < :target[target]]
+      @right[:lo[lo] = mid + 1]
     else
-      @left[$hi[hi] = mid - 1]]`;
+      @left[:hi[hi] = mid - 1]]`;
 
 const linearSearch = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
@@ -69,7 +69,7 @@ const linearSearch = `<script domain>
 </script>
 <script listing="pseudocode">
   for @setup[i = 0] @guard[to n - 1] @onward[step 1]
-    @scan[@check[if @cond[$i[A[i]] = $target[target]] then return $i[i]]]
+    @scan[@check[if @cond[:i[A[i]] = :target[target]] then return :i[i]]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
@@ -101,7 +101,7 @@ function touched(source: string, pauses: readonly string[]) {
 describe('tokens naming places in a listing', () => {
   it('are read as regions of their own, nesting with regions either way', () => {
     const { text, regions, tokens, problems } = readRegions(
-      '  @cmp[$x[A[@left[j - 1]]] > $key[key]]'
+      '  @cmp[:x[A[@left[j - 1]]] > :key[key]]'
     );
     expect(problems).toEqual([]);
     expect(text).toBe('A[j - 1] > key');
@@ -111,13 +111,13 @@ describe('tokens naming places in a listing', () => {
     ]);
     // A region inside a token keeps the prefix of the region around the token.
     expect(regions.map(({ label }) => label)).toEqual(['cmp', 'cmp.left']);
-    const around = readRegions('  $j[@left[j - 1]] and $pair.left[l]');
+    const around = readRegions('  :j[@left[j - 1]] and :pair.left[l]');
     expect(around.tokens.map(({ place }) => place)).toEqual([':j', ':pair.left']);
     expect(around.regions.map(({ label }) => label)).toEqual(['left']);
   });
 
-  it('reads :x[…] as a token, as $x[…] was, but never a : after a name or before a space or =', () => {
-    const written = readRegions('  :lo[lo] = 0, $hi[hi] = n; x := y; a : b; {key:values[0]}');
+  it('reads :x[…] as a token, but never a : after a name or before a space or =', () => {
+    const written = readRegions('  :lo[lo] = 0, :hi[hi] = n; x := y; a : b; {key:values[0]}');
     expect(written.tokens.map(({ place }) => place)).toEqual([':lo', ':hi']);
     expect(written.text).toBe('lo = 0, hi = n; x := y; a : b; {key:values[0]}');
   });
@@ -127,7 +127,7 @@ describe('tokens naming places in a listing', () => {
     ['an unclosed token', ':lo[lo', 'The token :lo[ is never closed with ].'],
     [
       'a token naming a place nothing renders',
-      '$k[k]',
+      ':k[k]',
       'names :k, which the view renders nowhere at its root or in a part: a token names a place a render is written with, as :mid[…] for {mid}, and the places it renders are :hi, :lo, :mid, :target, :v.'
     ]
   ])('refuse %s', (_, token, message) => {
@@ -140,7 +140,7 @@ describe('tokens naming places in a listing', () => {
     expect(design.space['listing.places']).toEqual(['none', 'fill', 'underline', 'outline']);
     expect(design.starter['listing.places']).toBe('fill');
     const plain = prepareSvelteComponent(
-      binarySearch(tokened.replace(/\$\w+\[([^\]]*\]?)\]/gu, '$1'))
+      binarySearch(tokened.replace(/:\w+\[([^\]]*\]?)\]/gu, '$1'))
     );
     expect(plain.listings?.pseudocode.tokens).toBeUndefined();
     expect(plain.design.space['listing.places']).toBeUndefined();
@@ -148,7 +148,7 @@ describe('tokens naming places in a listing', () => {
   });
 
   it('leave a source without tokens as it was', () => {
-    const source = binarySearch(tokened.replace(/\$\w+\[([^\]]*\]?)\]/gu, '$1'));
+    const source = binarySearch(tokened.replace(/:\w+\[([^\]]*\]?)\]/gu, '$1'));
     const prepared = prepareSvelteComponent(source);
     expect(prepared.listings?.pseudocode.text).toBe(
       prepareSvelteComponent(binarySearch(tokened)).listings?.pseudocode.text
@@ -188,11 +188,7 @@ describe('tokens naming places in a listing', () => {
     expect(listing?.places?.look).toBe('fill');
     // A place's own fill falls back to its kind's.
     expect(
-      placePaint(
-        ':x',
-        { type: 'Int' },
-        { 'views.Int': 'IntCell', 'IntCell.fill': 'red-200' }
-      )
+      placePaint(':x', { type: 'Int' }, { 'views.Int': 'IntCell', 'IntCell.fill': 'red-200' })
     ).toBe('red-200');
     // Its line takes the stroke first, as a pale fill would not show as a line; the fill where the
     // stroke is none.
@@ -201,9 +197,9 @@ describe('tokens naming places in a listing', () => {
     expect(
       placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'amber-500' }, 'line')
     ).toBe('amber-500');
-    expect(placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'none' }, 'line')).toBe(
-      'amber-100'
-    );
+    expect(
+      placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'none' }, 'line')
+    ).toBe('amber-100');
     expect(listing?.places?.lines).toHaveProperty(':target', 'violet-500');
     // listing.places none lights nothing.
     const none = shownListing(
@@ -254,12 +250,12 @@ describe('tokens naming places in a listing', () => {
 </script>
 <script listing="textbook">
   for @setup[i = 2] @guard[to n] @onward[step 1]
-      @insert[@key[$key[key] = $i[A[i]]]
+      @insert[@key[:key[key] = :i[A[i]]]
       @init[j = i - 1]
-      while @test[@bound[j > 0] and @cmp[A[j] > $key[key]]]
-          @shift[@copy[$j[A[j + 1]] = A[j]]
+      while @test[@bound[j > 0] and @cmp[A[j] > :key[key]]]
+          @shift[@copy[:j[A[j + 1]] = A[j]]
           @down[j = j - 1]]
-      @place[$j[A[j + 1]] = $key[key]]]
+      @place[:j[A[j + 1]] = :key[key]]]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="Mark"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
