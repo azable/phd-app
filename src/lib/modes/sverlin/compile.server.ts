@@ -759,7 +759,12 @@ function paced(
   const run = interpretBlock(source, algorithm, (body) =>
     traceAlgorithm(body, input, domain, pacing, { ...keep, records }, true)
   );
-  const steps = withSelectRows([run.opening, ...run.steps], run.records, selects);
+  const steps = withSelectRows(
+    [run.opening, ...run.steps],
+    run.records,
+    selects,
+    new Set(run.topLevel)
+  );
   return { ...run, steps: withOverItems(steps, overs) };
 }
 

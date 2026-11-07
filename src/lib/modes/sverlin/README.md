@@ -1086,6 +1086,10 @@ beside the layouts:
 - In a query of a function's calls, not in groups, a row whose caller is listed
   too has `parent`, its caller's position in the list, so a link can join each
   call to the calls it makes (see Calls).
+- A position in a row points where the span's variable pointed, so in a free
+  layout holding the calls and `values`, `<Link to={this.lo} />` in a view of
+  `@sort` joins each call to `values[lo]`, also through a recursive call's
+  parameter `a`.
 - `max` is the most rows any input can give, required, so the layout keeps room
   for all of them and nothing moves as rows come and go.
 - The result is state, which a layout reads by name, as `{#each stack as call}`.
