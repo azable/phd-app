@@ -30,6 +30,8 @@ import { cutText } from '$lib/shared/text';
 import { modeCatalog } from '$lib/modes/catalog';
 import { designOnlyWarning } from '$lib/modes/sverlin/padding-warnings.server';
 import { keptKey, writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { templateKey } from '$lib/modes/sverlin/library/node/design';
+import { templateNames, templateOf } from '$lib/modes/sverlin/templates/templates';
 import {
   freeLayoutName,
   pageLayoutName,
@@ -1158,10 +1160,19 @@ export function comparisonProblems(
     const set = [designPatch(left.values), designPatch(right.values)].flatMap(
       ({ set }: DesignPatch) => set
     );
+    // A side may name a template to copy, as “textbook or slide?” asks, which no variable is.
     const problems = set.flatMap(({ variable, value }) =>
-      offeredOptions(design, variable)?.includes(value)
+      (
+        variable === templateKey
+          ? templateOf(value)
+          : offeredOptions(design, variable)?.includes(value)
+      )
         ? []
-        : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
+        : variable === templateKey
+          ? [
+              `${name}: ${JSON.stringify(value)} is no template; the templates are ${templateNames()}.`
+            ]
+          : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
     );
     const asked = comparisonBriefProblem(pair);
     if (asked) problems.push(`${name}: ${asked}`);

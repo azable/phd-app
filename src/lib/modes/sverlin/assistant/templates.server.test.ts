@@ -11,6 +11,8 @@ import { keptKey } from '../library/node/design-keys';
 import { designContext, designVariables } from './context.server';
 import { designPatch, readDesignPatch } from './design-patch.server';
 import { templateName, templates, templateValues, type TemplateName } from '../templates/templates';
+import { pictureTree } from '$lib/server/projects/variant-guard';
+import { briefSteering } from '$lib/server/ai/context/brief-context';
 
 const names = Object.keys(templates) as TemplateName[];
 // As a decision's values become a build's chosen values (designValues in turn.server.ts).
@@ -41,7 +43,9 @@ describe('templates', () => {
   it.each(names)('%s builds every fixture with no value refused or left out', async (name) => {
     for (const source of [bfs, dijkstra, pseudocode, bars]) {
       const { built } = await drawnSteps(source, { chosen: chosenFor(name) });
-      expect(built.warnings ?? []).not.toContainEqual(expect.stringMatching(/left out/u));
+      expect((built.warnings ?? []).map(({ message }) => message)).not.toContainEqual(
+        expect.stringMatching(/left out/u)
+      );
       expect(built.design).not.toHaveProperty('template');
       expect(built.design.$text).toBe(templateValues(name).$text);
     }
@@ -55,6 +59,28 @@ describe('templates', () => {
       templateValues('slide')['scale.spacing']
     );
     expect(told.variables.map(({ variable }) => variable)).not.toContain('$text');
+  });
+
+  it('are asked as a comparison, each side copying its template', async () => {
+    // Through the registry, as the turn is reached (see modes/assistants.server.ts).
+    await import('$lib/modes/assistants.server');
+    const { comparisonProblems } = await import('./turn.server');
+    const { built } = await drawnSteps(bars, { chosen: chosenFor('starter') });
+    const side = (name: TemplateName) => ({
+      label: name,
+      values: JSON.stringify({ template: templateName(name) })
+    });
+    const ask = (right: { label: string; values: string }) =>
+      comparisonProblems(
+        [{ question: 'Textbook or slide?', left: side('textbook'), right }],
+        designVariables(built as never),
+        { tree: pictureTree(bars), base: built.design, settled: {} },
+        briefSteering([])
+      );
+    expect(ask(side('slide'))).toEqual([[]]);
+    expect(ask({ label: 'typo', values: '{"template": "$slid"}' })[0]).toEqual([
+      expect.stringMatching(/"\$slid" is no template; the templates are \$starter/u)
+    ]);
   });
 
   // Principle 4 (assistant.md, Templates): text at least 4.5:1 on its fill, and the lines needed to

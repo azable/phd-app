@@ -10,7 +10,7 @@ import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from './compile.server';
-import { bundlePresentation } from './testing/scenes';
+import { bundlePresentation, fixtureDesign } from './testing/scenes';
 import costsVariant from './fixtures/dijkstra-costs.json';
 import costs from './fixtures/dijkstra-costs.sverlin?raw';
 import replay from './fixtures/replay/replay.json';
@@ -40,18 +40,26 @@ const cases: [name: string, source: string, chosen: DesignValues][] = [
     ([name, { variant }]): [string, string, DesignValues] => [
       name,
       replayed[`./fixtures/replay/${name}.sverlin`],
-      variant
+      { ...fixtureDesign(`replay/${name}`), ...variant } as DesignValues
     ]
   ),
   ...Object.entries(graphs).map(([path, source]): [string, string, DesignValues] => {
     const name = path.replace(/^.*\/(.*)\.sverlin$/u, '$1');
-    return [name, source, name === 'ucs-compare' ? (natural as DesignValues) : {}];
+    return [
+      name,
+      source,
+      { ...fixtureDesign(name), ...(name === 'ucs-compare' ? natural : {}) } as DesignValues
+    ];
   }),
   // A glow and a hard shadow round every vertex card, which only paint.
   [
     'dijkstra-effects',
     graphs['./fixtures/dijkstra.sverlin'],
-    { 'VertexCard.glow': 'on', 'VertexCard.shadow': 'hard' }
+    {
+      ...fixtureDesign('dijkstra'),
+      'VertexCard.glow': 'on',
+      'VertexCard.shadow': 'hard'
+    } as DesignValues
   ]
 ];
 
