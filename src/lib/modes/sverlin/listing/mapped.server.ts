@@ -69,28 +69,21 @@ export function oldPlaceTokenAt(text: string, index: number): string | undefined
 export const isLabelPlace = (place: string): boolean => place.startsWith(':@');
 
 /**
- * The label a name as written means, as regions resolve theirs: the label with that full name, else
- * the one whose full name ends with it, or with its last parts, the fewest dropped from the front;
- * or why none does: several end with it, or none, naming the nearest by its own name.
+ * The label a name as written means, as regions check theirs: the label with that full name; or
+ * why none does: it is the end of full names, which it gives, or of none, naming the nearest.
  */
 export function labelNamed(
   written: string,
   labels: readonly Label[]
 ): { full: string } | { problem: string } {
-  const parts = written.split('.');
-  for (let dropped = 0; dropped < parts.length; dropped++) {
-    const name = parts.slice(dropped).join('.');
-    const exact = labels.find(({ full }) => full === name);
-    const ending = exact ? [exact] : labels.filter(({ full }) => full.endsWith(`.${name}`));
-    if (ending.length === 1) return { full: ending[0].full };
-    if (ending.length > 1) {
-      const names = ending.map(({ full }) => `@${full}`);
-      return {
-        problem: `@${name} could be ${names.slice(0, -1).join(', ')} or ${names.at(-1)}: write the full name of the one it means, as ${names[0]}.`
-      };
-    }
-  }
-  const own = parts.at(-1) ?? written;
+  const exact = labels.find(({ full }) => full === written);
+  if (exact) return { full: exact.full };
+  const ending = labels.filter(({ full }) => full.endsWith(`.${written}`));
+  if (ending.length)
+    return {
+      problem: `@${written} is not a full name: write ${ending.map(({ full }) => `@${full}`).join(' or ')}, the chain of labels around it, as adding a label elsewhere never changes what a full name means.`
+    };
+  const own = written.split('.').at(-1) ?? written;
   const nearest = [...labels].sort(
     (a, b) => editDistance(a.name, own) - editDistance(b.name, own)
   )[0];
@@ -349,10 +342,9 @@ function ownLines(
 }
 
 /**
- * Each region named by the label it stands for: the one its name as written means, with the regions
- * around it, where a label has that full name; else the one label whose full name ends with it, or
- * with its last parts, the fewest dropped from the front. A name that more labels end with is a
- * problem naming them; one no label ends with is left for unlabelledRegion.
+ * Each region checked against the labels: its name as written, after the names of the regions
+ * around it, is a label's full name. A short name, the end of a full name, is a problem giving the
+ * full name, or the region to write it inside; one no label ends with is left for unlabelledRegion.
  */
 function resolveRegions(
   regions: Region[],
@@ -361,26 +353,17 @@ function resolveRegions(
   const problems: MappingProblem[] = [];
   const unclear = new Set<Region>();
   for (const region of regions) {
-    const parts = region.label.split('.');
-    for (let dropped = 0; dropped < parts.length; dropped++) {
-      const name = parts.slice(dropped).join('.');
-      const exact = labels.find(({ full }) => full === name);
-      const ending = exact ? [exact] : labels.filter(({ full }) => full.endsWith(`.${name}`));
-      if (ending.length === 1) {
-        region.label = ending[0].full;
-        break;
-      }
-      if (ending.length > 1) {
-        const names = ending.map(({ full }) => `@${full}`);
-        problems.push({
-          message: `The listing's region @${name} could be ${names.slice(0, -1).join(', ')} or ${names.at(-1)}: write the full name of the one it marks, as ${names[0]}[…].`,
-          block: 'listing',
-          at: region.at
-        });
-        unclear.add(region);
-        break;
-      }
-    }
+    if (labels.some(({ full }) => full === region.label)) continue;
+    const ending = labels.filter(({ full }) => full.endsWith(`.${region.label}`));
+    if (!ending.length) continue;
+    const names = ending.map(({ full }) => `@${full}[…]`);
+    const around = ending[0].full.slice(0, -region.label.length - 1);
+    problems.push({
+      message: `The listing's region @${region.label} is not a full name: write ${names.join(' or ')}, or write it inside the region of @${around}, as a region inside another takes its name as a prefix.`,
+      block: 'listing',
+      at: region.at
+    });
+    unclear.add(region);
   }
   return { problems, unclear };
 }

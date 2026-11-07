@@ -125,7 +125,19 @@ describe('listings of the source’s own', () => {
       'a short name that more than one label has',
       '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }\n  for (@again[let k = Position(0)]; @still[k < values.length]; @step[k++]) @back{\n    @look[const w = values[k];]\n  }',
       'for @first[i] @more[i] @next[i] @look[v] for @again[k] @still[k] @step[k] @back[w]',
-      "The listing's region @look could be @pass.look or @back.look: write the full name of the one it marks, as @pass.look[…]."
+      "The listing's region @look is not a full name: write @pass.look[…] or @back.look[…], or write it inside the region of @pass"
+    ],
+    [
+      'a short name outside the region of the label around it',
+      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }',
+      '@first[i] @more[n] @next[i] @look[v = A[i]]',
+      "The listing's region @look is not a full name: write @pass.look[…], or write it inside the region of @pass"
+    ],
+    [
+      "a for header's parts marked inside its body's label",
+      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }',
+      '@pass[for @first[i] @more[n] @next[i] @look[v = A[i]]]',
+      "The listing's region @pass.first names no label: the code's @first is @first, as a for header's parts sit beside its body's label"
     ],
     [
       'a listing named none',
@@ -142,14 +154,9 @@ describe('listings of the source’s own', () => {
 
   it.each([
     ['by its full name', '@first[i] @more[n] @next[i] @pass.look[v = A[i]]'],
-    ['by its short name, the only label with it', '@first[i] @more[n] @next[i] @look[v = A[i]]'],
     [
       'nested in the regions of the labels around it',
       '@first[i] @more[n] @next[i] @pass[@look[v = A[i]]]'
-    ],
-    [
-      "marked inside its body's label, a for header's parts",
-      '@pass[for @first[i] @more[n] @next[i] @look[v = A[i]]]'
     ]
   ])('name a label %s', (_, listing) => {
     const algorithm =

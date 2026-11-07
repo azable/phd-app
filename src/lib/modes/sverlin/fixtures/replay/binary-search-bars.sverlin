@@ -43,12 +43,12 @@
   @range[lo = 0; hi = length(A) - 1]
   while lo <= hi
       mid = floor((lo + hi) / 2)
-      if @equal[A[mid] = target]
-          @found[return mid]
+      if @probe.equal[A[mid] = target]
+          @probe.found[return mid]
       if A[mid] < target
-          @right[lo = mid + 1]
+          @probe.right[lo = mid + 1]
       else
-          @left[hi = mid - 1]
+          @probe.left[hi = mid - 1]
   @missing[return not found]
 </script>
 

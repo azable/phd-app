@@ -57,8 +57,8 @@ MERGE-SORT(A, lo, hi)
   @left[MERGE-SORT(A, lo, mid)]
   @right[MERGE-SORT(A, mid, hi)]
   @start[i = lo; j = mid]
-  @merge[while @both[i < j and j < hi]
-    if @ordered[A[i] ≤ A[j]]
+  while @both[i < j and j < hi]
+    @merge[if @ordered[A[i] ≤ A[j]]
       @keep[i = i + 1]
     else @insert[@lift[held = A[j]]
       @shift[for k = j down to i + 1

@@ -1648,16 +1648,16 @@ starter, or `none`.
 Mark each part of the text that should light as a region, `@name[text]`. A
 region names one of the algorithm's labels (see Steps). A label's full name is
 the chain of labels around it in the algorithm: `@test` inside `@pair{` inside
-`@pass{` is `@pass.pair.test`. A region names a label in one of three ways:
+`@pass{` is `@pass.pair.test`. A region names a label in one of two ways:
 
 - by its full name, `@pass.pair.test[…]`;
-- by its short name, `@test[…]`, when no other label has that name;
-- by nesting inside regions of the labels around it,
+- inside the regions of the labels around it, by the rest of its name,
   `@pass[… @pair[… @test[…]]]`.
 
-A short name that more than one label has is refused, and the message names
-them. A `for` header's labels sit beside its body's label, not inside it (see
-Steps). Regions nest as finely as needed, for example
+A short name outside those regions is refused, and the message gives the full
+name, as adding a label elsewhere never changes what a full name means. A `for`
+header's labels sit beside its body's label, not inside it (see Steps). Regions
+nest as finely as needed, for example
 `while @test[@bound[j > 0] and @cmp[A[j] > key]]`. A `[` without a name, as in
 `A[i]`, is text, and the marks are not shown. Under a procedure's name, indent
 its body one level, as a textbook does. Write `<`, `>` and `&` as they are: a
@@ -1723,15 +1723,14 @@ the scenes' pauses decide whether to pause there.
 - A token can name a label, a moment of the run, as its place `:@name`:
   `<Node kind="Note">The loop stops when :@front[A[j] > key] is false.</Node>`,
   or in the listing, `while @front[j ≥ 0 and :@front[A[j] > key]]`. The label is
-  named as a region names it: by its full name, by the end of it that no other
-  label shares, or in the listing inside the regions of the labels around it. It
-  needs no render, and is drawn as code. It lights where the label's region
-  lights as the step's own code, not as code kept lit from earlier, in the
-  region's paint (`listing.lit@insert.front.fill`, else the lit fill) unless the
-  layout draws the label, whose place then paints as a variable's does; hovering
-  it outlines the label's region and its other tokens. Like a place's token, it
-  lights only where the presentation shows a listing. A name no label has is
-  refused, naming the nearest label.
+  named as a region names it: by its full name, or in the listing inside the
+  regions of the labels around it. It needs no render, and is drawn as code. It
+  lights where the label's region lights as the step's own code, not as code
+  kept lit from earlier, in the region's paint (`listing.lit@insert.front.fill`,
+  else the lit fill) unless the layout draws the label, whose place then paints
+  as a variable's does; hovering it outlines the label's region and its other
+  tokens. Like a place's token, it lights only where the presentation shows a
+  listing. A name no label has is refused, naming the nearest label.
 - The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
   `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
   the listing's ink; a stroke is drawn inside the lit text and its padding takes

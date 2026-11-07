@@ -33,12 +33,12 @@
 <script listing="textbook">
   INSERTION SORT(A)
   for :i[i] = 1 to length(A) - 1
-      @init[:j[j] = :i[i]]
-      while @front[:j[j] > 0]
-          if @cmp[A[:j[j] - 1] > A[:j[j]]]
-              @swap[@exchange[swap A[:j[j] - 1] and A[:j[j]]]
+      @insert.init[:j[j] = :i[i]]
+      while @insert.front[:j[j] > 0]
+          if @insert.scan.cmp[A[:j[j] - 1] > A[:j[j]]]
+              @insert.scan.swap[@exchange[swap A[:j[j] - 1] and A[:j[j]]]
               @down[:j[j] = :j[j] - 1]]
-          else @stop[stop]
+          else @insert.scan.stop[stop]
 </script>
 
 <View of="Int" name="IntColumn">
