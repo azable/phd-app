@@ -13,7 +13,7 @@
  * | `views.Int:target`            | `{Int}:target`                |
  * | `views.@insert.key`           | `{@insert.key}`               |
  *
- * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.<Link>:@scan.next.targetFill`,
+ * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.<Link>.<To>:@scan.next.fill`,
  * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
  * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
  * `<Value>.fill`, `<Listing>.lit@insert.key.fill` and `<Listing>.syntax`. People read the keys
@@ -135,7 +135,7 @@ export function keptValues<T>(values: Readonly<Record<string, T>>): Record<strin
  * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
  * | `<Listing>.lit.fill`           | `"<Listing>": { "lit": { "fill": … } }`       |
  * | `<Listing>.lit@insert.key.fill`| `… "lit": { "@insert.key": { "fill": … } }`   |
- * | `Here.<Link>.targetFill`         | `"Here": { "<Link>": { "targetFill": … } }`     |
+ * | `Here.<Link>.<To>.fill`        | `"Here": { "<Link>": { "<To>": { "fill": … } } }` |
  * | `IntCell:target.stroke`        | `"IntCell": { ":target": { "stroke": … } }`   |
  * | `Card=true.stroke`             | `"Card": { "=true": { "stroke": … } }`        |
  * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |
@@ -187,7 +187,7 @@ function pathOf(key: string): string[] {
     ];
   }
   const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
-  if (prefixed) return [prefixed[1], prefixed[2]];
+  if (prefixed) return [prefixed[1], ...prefixed[2].split('.')];
   const kind =
     /^([A-Z][\w$]*(?:\.(?:[A-Z][\w$]*|<Link>|<To>|<From>))*)(:@?[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
       key

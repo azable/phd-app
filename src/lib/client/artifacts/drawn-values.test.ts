@@ -127,7 +127,7 @@ describe('variant markers', () => {
   const variant = (fill: string) => ({
     'views.Int': 'IntCell',
     'Main.ratio': '16:9',
-    'Here.<Link>.targetFill': fill,
+    'Here.<Link>.<To>.fill': fill,
     'Here.<Link>.strokeWidth': 2,
     'Title.textSize': 24
   });
@@ -136,14 +136,14 @@ describe('variant markers', () => {
       label: 'top',
       seed: 1,
       variant: variant('amber-100'),
-      origins: { 'Here.<Link>.targetFill': 'starter' },
+      origins: { 'Here.<Link>.<To>.fill': 'starter' },
       kinds: { '2:3': ['Here.<Link>'], '4:22': ['Title'] }
     },
     {
       label: 'bottom',
       seed: 2,
       variant: variant('blue-100'),
-      origins: { 'Here.<Link>.targetFill': 'random' },
+      origins: { 'Here.<Link>.<To>.fill': 'random' },
       kinds: { '2:3': ['Here.<Link>'], '4:22': ['Title'] }
     }
   ];
@@ -153,13 +153,13 @@ describe('variant markers', () => {
     expect(ghosts.map(({ kinds }) => kinds)).toEqual([['Here.<Link>'], ['Title']]);
     const [pointer, title] = ghosts;
     expect(pointer.props.map(({ name, differs }) => [name, differs])).toEqual([
-      ['strokeWidth', false],
-      ['targetFill', true]
+      ['<To>.fill', true],
+      ['strokeWidth', false]
     ]);
-    expect(pointer.props[1].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
+    expect(pointer.props[0].values.map(({ text, title, color }) => [text, title, !!color])).toEqual(
       [
-        ['amber-100', 'Here.<Link>.targetFill = amber-100, from the starter', true],
-        ['blue-100', 'Here.<Link>.targetFill = blue-100, randomised', true]
+        ['amber-100', 'Here.<Link>.<To>.fill = amber-100, from the starter', true],
+        ['blue-100', 'Here.<Link>.<To>.fill = blue-100, randomised', true]
       ]
     );
     expect(title.props.map(({ name }) => name)).toEqual(['textSize']);
@@ -276,10 +276,10 @@ describe('place values', () => {
     'views.Int': 'IntCell',
     'views.Index': 'IndexText',
     'views.Index:@left': 'Highlight',
-    'Highlight.<Link>.targetFill': 'amber-100',
-    'Highlight.<Link>:@left.targetFill': 'sky-100',
+    'Highlight.<Link>.<To>.fill': 'amber-100',
+    'Highlight.<Link>.<To>:@left.fill': 'sky-100',
     'Highlight.Caption:@left.shown': true,
-    'Arrow.<Link>:@left.targetFill': 'amber-100',
+    'Arrow.<Link>.<To>:@left.fill': 'amber-100',
     'IndexText:i.fill': 'sky-100',
     'IntCell:v.fill': 'white',
     'Ask.IntCell:this.a.fill': 'green-100',
@@ -311,7 +311,7 @@ describe('place values', () => {
   it("shows a place's own view choice and the paint of the view it draws, after its render", () => {
     expect(rows('{@render Index(@left)}')).toEqual([
       ['view', 'views.Index:@left', 'Highlight'],
-      ['Highlight.<Link>.targetFill', 'Highlight.<Link>:@left.targetFill', 'sky-100'],
+      ['Highlight.<Link>.<To>.fill', 'Highlight.<Link>.<To>:@left.fill', 'sky-100'],
       ['Highlight.Caption.shown', 'Highlight.Caption:@left.shown', 'true']
     ]);
     // A render whose argument has no variables of its own is no place shown.
@@ -335,7 +335,7 @@ describe('place values', () => {
     const state = EditorState.create({ doc, extensions: [drawnValues] }).update({
       effects: [
         setDrawnValues.of({ presentations: [presentation] }),
-        setRevealedKeys.of(['Highlight.<Link>:@left.targetFill'])
+        setRevealedKeys.of(['Highlight.<Link>.<To>:@left.fill'])
       ]
     }).state;
     const tables: string[][] = [];
@@ -345,8 +345,8 @@ describe('place values', () => {
           const widget = decoration.spec.widget as { revealed?: readonly string[] } | undefined;
           if (widget && Array.isArray(widget.revealed)) tables.push([...widget.revealed]);
         });
-    expect(tables).toEqual([['Highlight.<Link>:@left.targetFill']]);
-    expect(ghostRowAt(state, ['Highlight.<Link>:@left.targetFill'])).toBe(
+    expect(tables).toEqual([['Highlight.<Link>.<To>:@left.fill']]);
+    expect(ghostRowAt(state, ['Highlight.<Link>.<To>:@left.fill'])).toBe(
       state.doc.lineAt(doc.indexOf('{@render Index(@left)}')).to
     );
     expect(ghostRowAt(state, ['Nothing.fill'])).toBeUndefined();

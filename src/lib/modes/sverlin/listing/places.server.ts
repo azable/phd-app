@@ -65,8 +65,8 @@ export function touchedPlaces(
 const unseen = new Set(['none', 'white', undefined]);
 
 /**
- * The colour a place lights in: the target paint of the link a view drawn there points with
- * (Arrow.<Link>:i.targetFill), or the fill of the view a value there is drawn with (IntCell:key.fill),
+ * The colour a place lights in: the paint the end of the link a view drawn there points with gives
+ * (Arrow.<Link>.<To>:i.fill), or the fill of the view a value there is drawn with (IntCell:key.fill),
  * or its stroke where the fill is none or white; for a label's place nothing draws, its region's lit paint
  * (<Listing>.lit@insert.front.fill); else the listing's lit fill. Its line, which outlines its
  * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
@@ -85,9 +85,7 @@ export function placePaint(
     (values[`${key}${place}.${name}`] ?? values[`${key}.${name}`]) as string | undefined;
   // A view pointing with a link lights its place as the link paints what it reaches.
   const target = (name: string) =>
-    kind === undefined
-      ? undefined
-      : valueOf(`${kind}.<Link>`, `target${name[0].toUpperCase()}${name.slice(1)}`);
+    kind === undefined ? undefined : valueOf(`${kind}.<Link>.<To>`, name);
   const prop = (name: string) =>
     kind === undefined ? undefined : unseen.has(target(name)) ? valueOf(kind, name) : target(name);
   const seen = (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])

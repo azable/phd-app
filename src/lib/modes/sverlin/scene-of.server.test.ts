@@ -74,8 +74,8 @@ it(
         chosen: {
           'IntCell:target.stroke': 'violet-500',
           '<Listing>.places': 'fill',
-          'Arrow.<Link>.targetFill': 'amber-100',
-          'Arrow.<Link>.targetStroke': 'amber-500'
+          'Arrow.<Link>.<To>.fill': 'amber-100',
+          'Arrow.<Link>.<To>.stroke': 'amber-500'
         }
       }
     );

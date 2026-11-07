@@ -30,7 +30,7 @@ export type GhostProp = {
   name: string;
   values: { label?: string; text: string; color?: string; title: string }[];
   differs: boolean;
-  /** The design variable its row shows, as `Mark.<Link>:@left.targetFill`, which links reveal. */
+  /** The design variable its row shows, as `Mark.<Link>.<To>:@left.fill`, which links reveal. */
   key?: string;
 };
 
@@ -361,7 +361,7 @@ function typeRenders(
 /**
  * A place's own values, as each shown presentation's variant has them, after the render drawn there,
  * as {@render Index(@left)}: its own view choice, where it has one, and the paint of the kinds of
- * the view it draws with, as `Mark.<Link>:@left.targetFill`. A place is named by the argument as
+ * the view it draws with, as `Mark.<Link>.<To>:@left.fill`. A place is named by the argument as
  * written, inside a typed view after that view's path (`Ask.IntCell@g.a`), as the build names it.
  */
 export function placeGhosts(

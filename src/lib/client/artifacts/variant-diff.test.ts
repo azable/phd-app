@@ -101,8 +101,8 @@ describe('variant diff', () => {
 
 describe('choices in words', () => {
   it('names a variable by its kind, prop and place', () => {
-    expect(choiceName('Highlight.<Link>:pair.left.targetFill')).toBe(
-      'Highlight link target fill for pair.left'
+    expect(choiceName('Highlight.<Link>.<To>:pair.left.fill')).toBe(
+      'Highlight link to fill for pair.left'
     );
     expect(choiceName('IntCell:i.stroke')).toBe('Int cell stroke for i');
     expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');

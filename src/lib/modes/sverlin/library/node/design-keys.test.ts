@@ -28,8 +28,8 @@ const pairs: [kept: string, written: string][] = [
 const alike = [
   'IntCell.stroke',
   'IntCell:target.stroke',
-  'LoMark.<Link>:lo.targetFill',
-  'Mark.<Link>:@visit.look.check.next.targetFill',
+  'LoMark.<Link>.<To>:lo.fill',
+  'Mark.<Link>.<To>:@visit.look.check.next.fill',
   'VertexCard=true.padding',
   'StateMark=done.icon',
   'Card:this.seen=false.stroke',
@@ -67,10 +67,10 @@ describe('design keys as written', () => {
   });
 
   it('reads a kind key in its parts, a label place keeping its @', () => {
-    expect(kindKeyParts('Mark.<Link>:@visit.look.check.next.targetFill')).toEqual({
-      kind: 'Mark.<Link>',
+    expect(kindKeyParts('Mark.<Link>.<To>:@visit.look.check.next.fill')).toEqual({
+      kind: 'Mark.<Link>.<To>',
       place: '@visit.look.check.next',
-      prop: 'targetFill'
+      prop: 'fill'
     });
     expect(kindKeyParts('Card:this.seen=false.stroke')).toEqual({
       kind: 'Card',
@@ -122,12 +122,12 @@ describe('the nested form', () => {
       { '<Listing>': { lit: { '@insert.compare.left': { fill: 1 } } } }
     ],
     ['IntCell.stroke', { IntCell: { stroke: 1 } }],
-    ['Here.<Link>.targetFill', { Here: { '<Link>': { targetFill: 1 } } }],
+    ['Here.<Link>.<To>.fill', { Here: { '<Link>': { '<To>': { fill: 1 } } } }],
     ['IntCell:target.stroke', { IntCell: { ':target': { stroke: 1 } } }],
     ['IntCell:pair.left.fill', { IntCell: { ':pair.left': { fill: 1 } } }],
     [
-      'Mark.<Link>:@scan.next.targetFill',
-      { Mark: { '<Link>': { ':@scan.next': { targetFill: 1 } } } }
+      'Mark.<Link>.<To>:@scan.next.fill',
+      { Mark: { '<Link>': { '<To>': { ':@scan.next': { fill: 1 } } } } }
     ],
     [':lo.label', { ':lo': { label: 1 } }],
     [':@scan.next.label', { ':@scan.next': { label: 1 } }],
@@ -161,7 +161,7 @@ describe('the nested form', () => {
 
   it('orders a kind: what it inherits, its props, its places, its values, its kinds', () => {
     const nested = nestedDesign({
-      'Here.<Link>.targetFill': 1,
+      'Here.<Link>.<To>.fill': 1,
       'Here:lo.fill': 2,
       'Here=true.fill': 3,
       'Here.fill': 4,

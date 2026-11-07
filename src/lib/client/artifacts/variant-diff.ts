@@ -99,7 +99,7 @@ const viewCategories: Record<string, string> = { views: 'view' };
 
 /**
  * A variable's key in words: its kind's and prop's names split into words, its place as “for …”
- * and a value of the data as “when …”: `Mark.<Link>:pair.left.targetFill` is “Mark link target
+ * and a value of the data as “when …”: `Mark.<Link>.<To>:pair.left.fill` is “Mark link target
  * fill for pair.left”, `Card=true.fill` “Card fill when true”, and `views.Int:swap.held` “Int view
  * for swap.held”. Whether something is shown is said by its value (`choiceValue`), not its name.
  */

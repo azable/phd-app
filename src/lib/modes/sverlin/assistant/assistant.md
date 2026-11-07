@@ -180,10 +180,10 @@ value, as `$spacing`, each role's style, as `<Value>`, and each style, as
 `"padding": "$spacing"`, follows that token, a kind's prop following a role
 style or a style is told only there, and `"..."` in a kind's values is what it
 inherits. For a look asked of many kinds at once, as “less padding everywhere”
-or “every pointer teal”, set a token or a role's style, as `<Pointer>` (see
-Shared values in the guide), rather than each kind; for a look several kinds
-share, as “value cells rounder with a darker frame”, set a style's props and
-have those kinds inherit it
+or “every pointer teal”, set a token or a role's style, as `<Pointer>`, whose
+end, `<Pointer>.<To>`, paints what it reaches (see Shared values in the guide),
+rather than each kind; for a look several kinds share, as “value cells rounder
+with a darker frame”, set a style's props and have those kinds inherit it
 (`{"$cell": {"radius": 4}, "IntCell": {"...": "$cell"}}`). Write values nested,
 one level for each part of a key; a key written flat, as `"IntCell.fill"`, goes
 back to be written again.
@@ -232,7 +232,7 @@ Every key is written with its mark, as the design gives it: `{Int}` a type's
 view, `:found` a place, as `IntCell:found.fill`, and `=true` a value, as
 `VertexCard=true.fill`. `@` only ever means a label, a moment of the run, so a
 place drawn from a label's value keeps it:
-`Arrow.<Link>:@visit.look.neighbour.targetFill`. values, and each comparison
+`Arrow.<Link>.<To>:@visit.look.neighbour.fill`. values, and each comparison
 side's values, are one JSON object written as a string, nested as the design
 reads, as `"{\"$cell\": {\"radius\": 8}, \"IntCell\": {\"...\": \"$cell\"}}"`,
 or `"{}"` for none; `null` removes a value, so it returns to what it inherits or

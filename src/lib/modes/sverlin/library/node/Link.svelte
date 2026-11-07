@@ -25,7 +25,14 @@
     slotContext,
     typeContext
   } from '../type-context';
-  import { colourCss, kindKey, lookUp, placedKind, strokeStyleCss } from './design';
+  import {
+    colourCss,
+    kindKey,
+    lookUp,
+    placedKind,
+    strokeStyleCss,
+    linkEnd as endTag
+  } from './design';
   import { byPlace, pairOf } from './lines';
   import LinkLabel from './LinkLabel.svelte';
   import { designContext } from '../type-context';
@@ -114,10 +121,15 @@
   const kind = untrack(() => kindKey(__view, 'Link'));
   const placed = untrack(() => placedKind(placeContext(), kind));
   const look = (prop: string) => lookUp(design, kind, placed, prop);
+  // Its end, as Arrow.<Link>.<To>: the head drawn there and the paint it gives what it reaches, a
+  // render at a place giving its own.
+  const endKind = untrack(() => `${kind}.${endTag}`);
+  const endPlaced = untrack(() => placedKind(placeContext(), endKind));
+  const endLook = (prop: string) => lookUp(design, endKind, endPlaced, prop);
   // How it runs is its kind's: as its layout's arrows run, a curve of its own, or a wire; and its
-  // heads, drawn at the ends it points to, its kind's shape and size.
+  // heads, drawn at the ends it points to, its end's shape at its kind's size.
   const route = $derived(look('route'));
-  const head = $derived(look('head') as string | undefined);
+  const head = $derived(endLook('head') as string | undefined);
   const headSize = $derived(look('headSize') as number | undefined);
   const nodeIds = nodeIdsContext();
   // A link from a node's field is known by the nodes it joins, not their places in the heap, which
@@ -148,10 +160,11 @@
     () => !!joined.pair && (layoutMemoryContext()?.lines.has(joined.pair) ?? false)
   );
   const unseen = untrack(() => hidden || look('shown') === false);
-  // The paint a link from a variable gives the element it reaches, as `name|css`, so the scene keeps
-  // the colour's name as a place's paint does; none where its kind leaves the element as it is.
+  // The paint a link from a variable gives the element it reaches, its end's, as `name|css`, so the
+  // scene keeps the colour's name as a place's paint does; none where its end leaves the element as
+  // it is.
   const target = (prop: string) => {
-    const name = look(prop);
+    const name = endLook(prop);
     const css = typeof name === 'string' && name !== 'none' ? colourCss(name) : undefined;
     return css ? `${name}|${css}` : undefined;
   };
@@ -196,10 +209,10 @@
     data-head={head}
     data-head-size={headSize}
     data-sv-reach={reach ? 'true' : undefined}
-    data-target-fill={reach ? target('targetFill') : undefined}
-    data-target-stroke={reach ? target('targetStroke') : undefined}
-    data-target-color={reach ? target('targetColor') : undefined}
-    data-target-stroke-width={reach ? look('targetStrokeWidth') : undefined}
+    data-target-fill={reach ? target('fill') : undefined}
+    data-target-stroke={reach ? target('stroke') : undefined}
+    data-target-color={reach ? target('color') : undefined}
+    data-target-stroke-width={reach ? endLook('strokeWidth') : undefined}
   ></span>
   {#if children}<LinkLabel link={id ?? ''} hidden={unseen}>{@render children()}</LinkLabel>{/if}
 {/if}

@@ -63,9 +63,9 @@ export function designContext(design: AiDesign): AiDesignContext {
     const roleStyle = roleStyleOf(variable);
     if (isToken(variable)) levels[variable] = value;
     else if (roleStyle)
-      ((levels[variable.slice(0, variable.indexOf('.'))] ??= {}) as Record<string, DesignValue>)[
-        roleStyle.prop
-      ] = value;
+      (
+        (levels[variable.slice(0, variable.lastIndexOf('.'))] ??= {}) as Record<string, DesignValue>
+      )[roleStyle.prop] = value;
     // A style is a level of its own, as a role's style is; what a kind inherits is told as "..."
     // with the kind's own values.
     else if (style)

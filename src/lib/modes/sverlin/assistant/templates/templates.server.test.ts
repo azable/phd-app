@@ -87,10 +87,10 @@ describe('templates', () => {
       }
       expect(contrast(resolve(values['<Link>.stroke'])!, page)).toBeGreaterThanOrEqual(3);
       // What a link from a variable reaches: text on its fill, and its stroke on the page.
-      const target = resolve(values['<Link>.targetFill']) ?? page;
+      const target = resolve(values['<Pointer>.<To>.fill']) ?? page;
       const text = resolve(values['<Text>.color'])!;
       expect(contrast(text, target), `${name} target text`).toBeGreaterThanOrEqual(4.5);
-      const edge = resolve(values['<Link>.targetStroke'])!;
+      const edge = resolve(values['<Pointer>.<To>.stroke'])!;
       expect(contrast(edge, page), `${name} target stroke`).toBeGreaterThanOrEqual(3);
     }
   );

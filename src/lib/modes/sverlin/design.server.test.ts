@@ -70,6 +70,7 @@ describe('design space', () => {
         'Result.Number',
         'Highlight',
         'Highlight.<Link>',
+        'Highlight.<Link>.<To>',
         'Highlight.Name',
         'Row',
         'Row.Under'
@@ -78,7 +79,7 @@ describe('design space', () => {
     // A layout's props, and a link's target paint.
     expect(space['Row.gap']).toBeDefined();
     expect(space['IntCell.gap']).toBeUndefined();
-    expect(space['Highlight.<Link>.targetFill']).toContain('amber-100');
+    expect(space['Highlight.<Link>.<To>.fill']).toContain('amber-100');
     // No overflow: a collection's tracks past its ends are no choice. Dashed borders are paint, for
     // any node.
     expect(space['IntTally.Tally.overflow']).toBeUndefined();
@@ -189,37 +190,37 @@ describe('variants', () => {
 
   it('keeps a place as its kinds are until a variant sets it apart', () => {
     const { fallbacks } = prepared.design;
-    const [first, second] = space['Highlight.<Link>.targetFill'].filter(
-      (option) => option !== 'none' && option !== starter['Highlight.<Link>.targetFill']
+    const [first, second] = space['Highlight.<Link>.<To>.fill'].filter(
+      (option) => option !== 'none' && option !== starter['Highlight.<Link>.<To>.fill']
     );
     // A place follows the kind it falls back to.
     const followed = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.<Link>.targetFill': first } },
+      { chosen: { 'Highlight.<Link>.<To>.fill': first } },
       1,
       fallbacks
     ).values;
-    expect(followed['Highlight.<Link>:found.targetFill']).toBe(first);
+    expect(followed['Highlight.<Link>.<To>:found.fill']).toBe(first);
     // Chosen, it is set apart, and stays so as the kind changes.
     const apart = buildVariant(
       space,
       starter,
-      { chosen: { 'Highlight.<Link>:found.targetFill': second } },
+      { chosen: { 'Highlight.<Link>.<To>:found.fill': second } },
       1,
       fallbacks
     ).values;
-    expect(apart['Highlight.<Link>:found.targetFill']).toBe(second);
-    expect(apart['Highlight.<Link>:i.targetFill']).toBe(starter['Highlight.<Link>.targetFill']);
+    expect(apart['Highlight.<Link>.<To>:found.fill']).toBe(second);
+    expect(apart['Highlight.<Link>.<To>:i.fill']).toBe(starter['Highlight.<Link>.<To>.fill']);
     const kept = buildVariant(
       space,
       starter,
-      { base: apart, chosen: { 'Highlight.<Link>.targetFill': first } },
+      { base: apart, chosen: { 'Highlight.<Link>.<To>.fill': first } },
       1,
       fallbacks
     ).values;
-    expect(kept['Highlight.<Link>:found.targetFill']).toBe(second);
-    expect(kept['Highlight.<Link>:i.targetFill']).toBe(first);
+    expect(kept['Highlight.<Link>.<To>:found.fill']).toBe(second);
+    expect(kept['Highlight.<Link>.<To>:i.fill']).toBe(first);
   });
 
   it('randomises keeping equalities, shades, and what is shown or none', () => {
@@ -239,7 +240,7 @@ describe('variants', () => {
       expect(values['views.Int']).not.toBe('none');
     }
     expect(
-      new Set(variants.map((values) => values['Highlight.<Link>.targetFill'])).size
+      new Set(variants.map((values) => values['Highlight.<Link>.<To>.fill'])).size
     ).toBeGreaterThan(1);
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
@@ -325,7 +326,7 @@ describe('free layouts', () => {
 
   it('give a link’s kind its route, head, and head size, which a vary keeps', () => {
     expect(graph.space['Graph.<Link>.route']).toEqual(['layout', 'straight', 'curved', 'wire']);
-    expect(graph.space['Graph.<Link>.head']).toEqual([
+    expect(graph.space['Graph.<Link>.<To>.head']).toEqual([
       'none',
       'arrow',
       'open',
@@ -339,22 +340,26 @@ describe('free layouts', () => {
     expect(graph.space['Graph.<Link>.color']).toBeUndefined();
     expect(graph.starter).toMatchObject({
       'Graph.<Link>.route': 'layout',
-      'Graph.<Link>.head': 'arrow',
+      'Graph.<Link>.<To>.head': 'arrow',
       'Graph.<Link>.headSize': 9
     });
-    const base = { ...graph.starter, 'Graph.<Link>.route': 'wire', 'Graph.<Link>.head': 'vee' };
+    const base = {
+      ...graph.starter,
+      'Graph.<Link>.route': 'wire',
+      'Graph.<Link>.<To>.head': 'vee'
+    };
     expect(buildVariant(graph.space, graph.starter, { base }, 5).values).toMatchObject({
       'Graph.<Link>.route': 'wire',
-      'Graph.<Link>.head': 'vee'
+      'Graph.<Link>.<To>.head': 'vee'
     });
   });
 
   it('start a link’s head at none where every link of its kind is a two-way line', () => {
     expect(prepareSvelteComponent(undirected).design.starter).toMatchObject({
-      'Graph.<Link>.head': 'none'
+      'Graph.<Link>.<To>.head': 'none'
     });
     expect(prepareSvelteComponent(bfs).design.starter).toMatchObject({
-      'Graph.<Link>.head': 'arrow'
+      'Graph.<Link>.<To>.head': 'arrow'
     });
   });
 });
@@ -373,8 +378,9 @@ describe('design tokens and role styles', () => {
     expect(levelled.starter['$spacing']).toBe(0.375);
     expect(levelled.space['<Value>.padding']).toContain('$spacing');
     expect(levelled.space['<Value>.shown']).toBeUndefined();
-    expect(levelled.space['<Pointer>.targetFill']).toBeDefined();
-    expect(levelled.space['<Value>.targetFill']).toBeUndefined();
+    expect(levelled.space['<Pointer>.<To>.fill']).toBeDefined();
+    expect(levelled.space['<Value>.<To>.fill']).toBeUndefined();
+    expect(levelled.roles['Arrow.<Link>.<To>']).toBe('pointer');
     expect(levelled.roles['Arrow.<Link>']).toBe('pointer');
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
@@ -407,6 +413,9 @@ describe('design tokens and role styles', () => {
     );
     expect(() => build({ chosen: { 'Arrow.Link.stroke': 'red-500' } })).toThrow(
       /Arrow\.Link\.stroke is written Arrow\.<Link>\.stroke/u
+    );
+    expect(() => build({ chosen: { 'Arrow.<Link>:i.targetFill': 'sky-100' } })).toThrow(
+      /Arrow\.<Link>:i\.targetFill is written Arrow\.<Link>\.<To>:i\.fill/u
     );
   });
 

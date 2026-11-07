@@ -250,10 +250,6 @@ export const propOptions = {
   route: ['layout', 'straight', 'curved', 'wire'],
   head: headShapes,
   headSize: headSizes,
-  targetFill: ['none', ...colours],
-  targetStroke: ['none', ...colours],
-  targetStrokeWidth: [0, 0.5, 1, 1.5, 2, 3, 4],
-  targetColor: ['none', ...colours],
   layoutSeed: Array.from({ length: 32 }, (_, index) => index + 1),
   icon: iconNames,
   colX: basisSteps,
@@ -299,24 +295,26 @@ const listingLitOptions = {
  */
 export const placePaint = ['fill', 'stroke', 'color'] as const;
 
-/**
- * How a link from a variable (see Link.svelte) paints the element it reaches while it is drawn,
- * none leaving that paint as it is: paint only, so no box changes size.
- */
-export const targetProps = [
-  'targetFill',
-  'targetStroke',
-  'targetStrokeWidth',
-  'targetColor'
-] as const satisfies readonly DesignProp[];
-
 /** The props whose values are colours, a palette's among them (see baseOptions). */
-export const colourProps: readonly string[] = [
-  ...placePaint,
-  'targetFill',
-  'targetStroke',
-  'targetColor'
-];
+export const colourProps: readonly string[] = placePaint;
+
+/**
+ * A link's end, `<To>`, a kind of its own inside the link's kind, as `Arrow.<Link>.<To>`: the head
+ * drawn there, and how a link from a variable (see Link.svelte) paints the element it reaches
+ * while it is drawn, `none` leaving that paint as it is. Paint only, its line drawn inside the
+ * element's box, so no box changes size, and never whether anything is shown.
+ */
+export const endProps: readonly DesignProp[] = ['head', 'fill', 'stroke', 'strokeWidth', 'color'];
+
+/** A link's end kinds, as the design names them. */
+export const linkEnd = '<To>';
+
+/** Whether a kind is a link's end, as `Arrow.<Link>.<To>`, or a place's, as `Arrow.<Link>.<To>:i`. */
+export const isLinkEnd = (kind: string): boolean => /\.<To>(?::|$)/u.test(kind);
+
+/** The props a kind has: a link end's, or its role's. */
+export const kindProps = (role: KindRole, kind: string): readonly DesignProp[] =>
+  isLinkEnd(kind) ? endProps : roleProps[role];
 
 /** The props a region of a listing sets for itself, as `<Listing>.lit@insert.compare.left.fill`. */
 export const listingRegionProps = placePaint;
@@ -389,9 +387,7 @@ const linkProps: readonly DesignProp[] = [
   'opacity',
   'strokeStyle',
   'route',
-  'head',
-  'headSize',
-  ...targetProps
+  'headSize'
 ];
 
 /**
@@ -429,8 +425,8 @@ export const starterFreeLayout: Record<string, string | number> = {
  * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
  * step to step or render to render, a link from a variable reaching a node, a place, a listing's
  * lit region, sets only paint; every other prop is its kind's in every slot and at every step, so
- * slots keep one size. A link's target paint (targetProps) is paint on the element it reaches, its
- * width drawn inside that box.
+ * slots keep one size. A link end's paint (endProps) is paint on the element it reaches, its width
+ * drawn inside that box.
  */
 export const paintProps: ReadonlySet<string> = new Set([
   'fill',
@@ -441,22 +437,15 @@ export const paintProps: ReadonlySet<string> = new Set([
   'shadow',
   'glow',
   'fillStyle',
-  'decoration',
-  ...targetProps
+  'decoration'
 ]);
 
 /**
  * The props a place sets for the kinds of the view it draws, those that tell one render apart: its
- * paint, a link's target paint, and whether it is shown at all, which holds at every step, a render
- * left out keeping no room throughout.
+ * paint, a link end's paint among it, and whether it is shown at all, which holds at every step, a
+ * render left out keeping no room throughout.
  */
-export const placeProps: ReadonlySet<string> = new Set([
-  'shown',
-  ...placePaint,
-  'targetFill',
-  'targetStroke',
-  'targetColor'
-]);
+export const placeProps: ReadonlySet<string> = new Set(['shown', ...placePaint]);
 
 /**
  * A render at a place: `:` and what is written there (`:left`, `:g.a`, or a label, `:@scan.next`),
@@ -560,10 +549,23 @@ export function tokenFits(prop: DesignProp, token: DesignToken): boolean {
   return propOptions[tokenProps[token]].every((option) => options.includes(option as never));
 }
 
+/**
+ * A prop's options for a kind: the prop's, but a link end's text colour, which also takes none,
+ * leaving the reached element's colour as it is.
+ */
+export const kindPropOptions = (
+  prop: DesignProp,
+  end = false
+): readonly (string | number | boolean)[] =>
+  end && prop === 'color' ? ['none', ...colours] : propOptions[prop];
+
 /** A role style's options for a prop: the prop's, and each token that fits it. */
-export function roleStyleOptions(prop: DesignProp): readonly (string | number | boolean)[] {
+export function roleStyleOptions(
+  prop: DesignProp,
+  end = false
+): readonly (string | number | boolean)[] {
   return [
-    ...propOptions[prop],
+    ...kindPropOptions(prop, end),
     ...(Object.keys(tokenProps) as DesignToken[]).filter((token) => tokenFits(prop, token))
   ];
 }
@@ -623,12 +625,26 @@ export function roleOfStyle(style: string): KindRole | undefined {
   return (Object.keys(roleProps) as KindRole[]).find((role) => roleStyle(role) === style);
 }
 
-/** A role style's prop, as `<Value>` and fill for `<Value>.fill`. */
-export function roleStyleOf(key: string): { role: KindRole; prop: string } | undefined {
-  const match = /^(<[A-Z][a-z]+>)\.([a-z]\w*)$/u.exec(key);
+/**
+ * A role style's prop, as `<Value>` and fill for `<Value>.fill`, or of its link end's, as
+ * `<Pointer>.<To>.fill`.
+ */
+export function roleStyleOf(
+  key: string
+): { role: KindRole; prop: string; end?: typeof linkEnd } | undefined {
+  const match = /^(<[A-Z][a-z]+>)(\.<To>)?\.([a-z]\w*)$/u.exec(key);
   const role = match ? roleOfStyle(match[1]) : undefined;
-  return role ? { role, prop: match![2] } : undefined;
+  if (!role || (match![2] && role !== 'link' && role !== 'pointer')) return undefined;
+  return { role, prop: match![3], ...(match![2] ? { end: linkEnd } : {}) };
 }
+
+/** The style a kind follows: its role's, as `<Pointer>`, or for a link's end its end's, `<Pointer>.<To>`. */
+export const kindStyle = (role: KindRole, kind: string): string =>
+  isLinkEnd(kind) ? `${roleStyle(role)}.${linkEnd}` : roleStyle(role);
+
+/** The props a kind takes from its style: a link end's, or its role's but `shown`. */
+export const kindLookProps = (role: KindRole, kind: string): readonly DesignProp[] =>
+  isLinkEnd(kind) ? endProps : lookProps(role);
 
 /**
  * The base a design starts from, written `"...": "$textbook"` at its top: the name of the template
@@ -651,7 +667,7 @@ export const scaleProps = {
   spacing: ['padding', 'gap'],
   radius: ['radius'],
   type: ['textSize'],
-  line: ['strokeWidth', 'targetStrokeWidth'],
+  line: ['strokeWidth'],
   opacity: ['opacity']
 } as const satisfies Record<string, readonly DesignProp[]>;
 
@@ -751,7 +767,7 @@ export function levelFor(
   const kind = key.slice(0, Math.max(0, dot));
   const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
   const prop = key.slice(dot + 1) as DesignProp;
-  if (!role || !lookProps(role).includes(prop)) return undefined;
+  if (!role || !kindLookProps(role, kind).includes(prop)) return undefined;
   const source = values[inheritKey(kind)];
   if (typeof source === 'string') {
     const from = `${source}.${prop}`;
@@ -760,7 +776,7 @@ export function levelFor(
       return isToken(value) ? { value: values[value], from: value } : { value, from };
     }
   }
-  const from = `${roleStyle(role)}.${prop}`;
+  const from = `${kindStyle(role, kind)}.${prop}`;
   if (!Object.hasOwn(values, from)) return { value: undefined };
   const level = values[from];
   return isToken(level) ? { value: values[level], from: level } : { value: level, from };
@@ -774,12 +790,10 @@ export function missingRoleLooks(
   values: Readonly<Record<string, unknown>>,
   roles: Readonly<Record<string, KindRole>>
 ): string[] {
-  const used = new Set(Object.values(roles));
-  return [...used].flatMap((role) =>
-    lookProps(role)
-      .map((prop) => `${roleStyle(role)}.${prop}`)
-      .filter((key) => !Object.hasOwn(values, key))
+  const keys = Object.entries(roles).flatMap(([kind, role]) =>
+    kindLookProps(role, kind).map((prop) => `${kindStyle(role, kind)}.${prop}`)
   );
+  return [...new Set(keys)].filter((key) => !Object.hasOwn(values, key));
 }
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {

@@ -139,6 +139,9 @@ import {
   placeLabelKey,
   placeName,
   placeProps,
+  isLinkEnd,
+  kindProps,
+  linkEnd,
   listingPlacesOptions,
   roleProps,
   starterListingPlaces,
@@ -1750,7 +1753,9 @@ function prepareViews(
         ? { ...kind, free: { structure } }
         : gridKinds.has(kind.key)
           ? { ...kind, grid: true }
-          : kind.role === 'link' && lines.has(kind.key)
+          : kind.role === 'link' &&
+              isLinkEnd(kind.key) &&
+              lines.has(kind.key.slice(0, -linkEnd.length - 1))
             ? { ...kind, lines: true }
             : items
               ? {
@@ -2257,7 +2262,7 @@ function prepareViews(
         fallbacks: Object.fromEntries([
           ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
           ...[...placeKinds].flatMap(([key, { base, role, unboxed }]) =>
-            roleProps[role]
+            kindProps(role, base)
               .filter((prop) => placeProps.has(prop) && !(unboxed && prop in unboxed))
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
           ),
@@ -3275,7 +3280,7 @@ function checkProps(
                       : component === 'Node' && attribute.name === 'anchor'
                         ? `<Node> takes no anchor: where a box sits in its slot is a look the design gives its kind, not the markup, as the variables ${kind}.xAnchor and ${kind}.yAnchor (start, center or end).`
                         : component === 'Link' && linkLooks.has(attribute.name)
-                          ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
+                          ? `<Link> ${attribute.name} is a look, which the variant gives the link's kind, not the markup: here the variable ${kindKey(kind, 'Link')}${attribute.name === 'head' ? `.${linkEnd}` : ''}.${attribute.name === 'curve' ? 'route' : attribute.name}.`
                           : component === 'Node' && valueOnlyProps.has(attribute.name)
                             ? `<Node> ${attribute.name} stands for a view's value, each value's ${attribute.name} the design's: bind it in a view, as <View of="State" name="StateMark"><Node ${attribute.name}={this} /></View>, and the design picks one of ${iconNames.join(', ')} for each value.`
                             : designProps.has(attribute.name)
@@ -4142,7 +4147,11 @@ function withNodeRefs(
     bindings,
     localKinds,
     problems,
-    kinds: [...kinds].map(([key, role]) => ({ key, role })),
+    // A link's kind holds its end's, as Arrow.<Link>.<To>, its head and the paint it gives.
+    kinds: [...kinds].flatMap(([key, role]) => [
+      { key, role },
+      ...(role === 'link' || role === 'pointer' ? [{ key: `${key}.${linkEnd}`, role }] : [])
+    ]),
     freeNodes,
     gridKinds,
     linkedNodes: tags.flatMap(({ name, links, view, tag }) =>

@@ -366,12 +366,12 @@ rendered inside a node where the variable's label should stand:
   too, each in a node of its own, `<Node>{@pass.compare.left}</Node>`, as a
   label has a value only at some steps.
 
-The link paints the element while it points there, in its kind's target paint
-(see Link), and reaches a dashed ghost one past either end of an array, so
-nothing keeps room round the elements. It reaches the node drawing the element
-by a view of its type, as `{vertex}`, or else the node an `{#each}` draws the
-item in, as a bar drawn by its height; it reaches no element drawn as a link, as
-an edge.
+The link paints the element while it points there, in its end's paint, as
+`Arrow.<Link>.<To>.fill` (see Link), and reaches a dashed ghost one past either
+end of an array, so nothing keeps room round the elements. It reaches the node
+drawing the element by a view of its type, as `{vertex}`, or else the node an
+`{#each}` draws the item in, as a bar drawn by its height; it reaches no element
+drawn as a link, as an edge.
 
 - One choice of view serves every render of a type, so a position drawn as an
   arrow in a lane is an arrow in a sentence too: write a number in words as a
@@ -999,12 +999,12 @@ A place's look holds at every step, and a view cannot choose by a label's value
 (`{#if @compare}`), so to mark only what a test let through, label the positions
 the code it guards uses and give those places their own look: labelling a swap's
 reads, `values[@from[j - 1]]` and `values[@to[j]]`, with
-`Arrow.<Link>:@insert.swap.from.targetFill` and `…to.targetFill` `red-300`,
-turns only the pairs found out of order red, and with `@insert.swap.to` in the
-scene's pause, as a step of their own before anything is written. Showing or
-hiding something at some steps needs no flag, sentinel, or cast in the
-algorithm: a label, a link from a label, a view chosen per place, or
-`when="@label"` below does it.
+`Arrow.<Link>.<To>:@insert.swap.from.fill` and `…to.fill` `red-300`, turns only
+the pairs found out of order red, and with `@insert.swap.to` in the scene's
+pause, as a step of their own before anything is written. Showing or hiding
+something at some steps needs no flag, sentinel, or cast in the algorithm: a
+label, a link from a label, a view chosen per place, or `when="@label"` below
+does it.
 
 `<Node when="@insert.swap">…</Node>`, or a link with `when`, shows it at each
 step inside a span of a label, any label: the step that ends a span and those
@@ -1169,7 +1169,7 @@ The design space is every variable of a component's look, found in its markup:
   node naming its kind, as `<Node kind="Header">` in `Table`, is of the kind
   `Table.Header`, with the nodes inside it; in a view, as `IntTally.Tally`. A
   layout's or view's `<Link>` is a kind of its own, as `Graph.<Link>`. A
-  variable is its kind and prop, as `Arrow.<Link>.targetFill` or
+  variable is its kind and prop, as `Arrow.<Link>.<To>.fill` or
   `Items.Under.shown`.
 - Each place's own, for a value in braces (see Places).
 - Each prop a view binds to its value, as `VertexCard=true.fill` or
@@ -1273,19 +1273,23 @@ between, around, or evenly spreads the tracks over it; an array's kind starts at
 center where every value of its type keeps one length throughout, as an array
 being sorted, and at start where one grows or shrinks, as a queue, so no element
 moves as another comes or goes. A row or column is a grid of one row or column
-(see Grid). A link's kind has `shown`, `stroke`, `strokeWidth`, `opacity`, and
+(see Grid). A link's kind, named by its tag, as `Arrow.<Link>` for every link in
+the `Arrow` view, has `shown`, `stroke`, `strokeWidth`, `opacity`, and
 `strokeStyle`; `route`, `layout` (as its layout's arrows run, the start),
 `straight`, `curved` (each arrow choosing its own side and how far to bow round
 what is in its way), or `wire` (straight runs turning only at right angles,
-round the boxes, side by side apart); `head`, the mark at each end a link points
-to, `none`, `arrow` (a filled triangle), `open` (an outlined one), `vee`, `dot`,
-`diamond`, or `bar`, which starts at `none` where every link of the kind is a
-two-way line and `arrow` otherwise; `headSize`, 6, 9 (the start), 12, or 16
-pixels; and, for a link from a variable (see Link), how it paints the element it
-reaches while it is drawn: `targetFill`, `targetStroke` and `targetColor`, each
-`none` (leaving that paint as it is) or a colour, and `targetStrokeWidth`, a
-line's width; they start as the base's `<Link>` sets them, and a place sets its
-own, as `Mark.<Link>:j.targetFill`. It is paint only, so no box changes size. A
+round the boxes, side by side apart); and `headSize`, 6, 9 (the start), 12, or
+16 pixels. Its end, `<To>`, a kind inside it, as `Arrow.<Link>.<To>`, has the
+`head` drawn there, `none`, `arrow` (a filled triangle), `open` (an outlined
+one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none` where every link
+of the kind is a two-way line, whose `<To>` is both its ends, and the base's
+otherwise; and, for a link from a variable (see Link), the paint it gives the
+element it reaches while it is drawn: `fill`, `stroke` and `color`, each `none`
+(leaving that paint as it is) or a colour, and `strokeWidth`, its stroke's
+width, drawn inside the element's box. An end sets paint only, never a size and
+never whether anything is shown, so no box changes size; it starts as its role's
+end in the base, `<Link>.<To>` painting nothing and `<Pointer>.<To>` the
+starter's amber, and a place sets its own, as `Mark.<Link>.<To>:j.fill`. A
 label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
@@ -1425,7 +1429,7 @@ value is drawn apart with nothing declared:
   draws, as `{Index}:found` or `{Int}:@swap.held`;
 - its own `shown`, `fill`, `stroke`, and `color` for the kinds of each view it
   can draw, the kinds its nodes name included, as
-  `Arrow.<Link>:@pair.compare.left.targetFill` or
+  `Arrow.<Link>.<To>:@pair.compare.left.fill` or
   `IntTally.Tally:@swap.held.shown`, though not for another view that view
   renders.
 
@@ -1446,7 +1450,7 @@ listing's lit regions set their own fill, stroke, and colour only.
 ```
 
 A design is written nested (see Shared values); a variable is named by its path,
-as `Arrow.<Link>:@pair.compare.left.targetFill`, where the last part is the prop
+as `Arrow.<Link>.<To>:@pair.compare.left.fill`, where the last part is the prop
 and the dots after `:` the place's. A label and a variable of one name are two
 places, `:@held` and `:held`.
 
@@ -1455,10 +1459,10 @@ places, `:@held` and `:held`.
 A key's mark says what it sets: `$` a token or a style, the author's names;
 `<…>` a built-in name, a role's style (`<Value>`, `<Container>`, `<Text>`,
 `<Code>`, `<Icon>`, `<Link>`, `<Pointer>`), the listing (`<Listing>`) or the
-starter base (`<starter>`); `{…}` the view a type is drawn with, `:` a place,
-`=` a value of the data, and no mark one kind. `@` names only a part of the run,
-a label, as in the source: it says when, as `:` says where, so a place drawn
-from a label's value is `:@label`.
+starter base (`<starter>`), or a link's end (`<To>`); `{…}` the view a type is
+drawn with, `:` a place, `=` a value of the data, and no mark one kind. `@`
+names only a part of the run, a label, as in the source: it says when, as `:`
+says where, so a place drawn from a label's value is `:@label`.
 
 - A token is one value the starter's kinds share: `$text` (text colour),
   `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight`
@@ -1718,16 +1722,16 @@ the scenes' pauses decide whether to pause there.
   code kept lit from earlier, overlaps a token, the step touches its place:
   every token naming it and its references in the picture light together, in the
   colour of the place's view: the target paint of the link it points with
-  (`Arrow.<Link>:i.targetFill`), or its value's view's fill
-  (`IntCell:key.fill`), or its stroke where the fill is none or white. In the
-  picture, a place is the outermost node of a value rendered there, as an arrow
-  and its caption, a caption's number included. Hovering any reference outlines
-  the others, dashed in the place's stroke (its fill where it has none), drawn
-  in a darker shade of its hue where it would show at less than 3:1 on the page,
-  so a pale fill still outlines. `<Listing>.places`, there only where a listing
-  has tokens, says how places light: `fill` (the start: the token filled, a 3px
-  band round the node), `underline`, `outline` (a ring), or `none`, which lights
-  nothing and links nothing on hover; none takes room.
+  (`Arrow.<Link>.<To>:i.fill`), or its value's view's fill (`IntCell:key.fill`),
+  or its stroke where the fill is none or white. In the picture, a place is the
+  outermost node of a value rendered there, as an arrow and its caption, a
+  caption's number included. Hovering any reference outlines the others, dashed
+  in the place's stroke (its fill where it has none), drawn in a darker shade of
+  its hue where it would show at less than 3:1 on the page, so a pale fill still
+  outlines. `<Listing>.places`, there only where a listing has tokens, says how
+  places light: `fill` (the start: the token filled, a 3px band round the node),
+  `underline`, `outline` (a ring), or `none`, which lights nothing and links
+  nothing on hover; none takes room.
 - A token can also go in the text of a layout or a view, for example
   `<Node kind="Note">Lift :i[A[i]] into :key[key].</Node>`. It means the same as
   in the listing. It is drawn as inline code, a kind of its own named `Code`
@@ -2343,7 +2347,7 @@ as every node does; a vertex drawn as a circle is a design's choice, as
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
-edge from both its ends, the pair is one two-way line, its kind's head at both
+edge from both its ends, the pair is one two-way line, its `<To>` head at both
 ends, and a free layout reads it as undirected: an undirected graph lists each
 edge from both ends, a directed one from its source alone. Two `<Link>`s are
 never one line, so a doubly linked list's next and prev stay two arrows.

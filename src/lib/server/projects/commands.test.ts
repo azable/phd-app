@@ -969,7 +969,7 @@ describe('submitProjectFeedback', () => {
           count: null,
           comparisons: [
             pair('Cells or tallies?', 'views.Int', 'IntCell', 'IntTally'),
-            pair('Amber or blue marks?', 'Highlight.<Link>.targetFill', 'amber-100', 'blue-100')
+            pair('Amber or blue marks?', 'Highlight.<Link>.<To>.fill', 'amber-100', 'blue-100')
           ],
           summary: 'Asks two questions'
         }
@@ -3549,7 +3549,7 @@ describe('assistant edits', () => {
       decision: {
         action: 'vary' as const,
         values: designValues({ ['views.Int']: 'IntTally' }),
-        randomise: ['Highlight.<Link>.targetFill'],
+        randomise: ['Highlight.<Link>.<To>.fill'],
         summary: 'Draws every value with a tally'
       }
     });
@@ -3572,12 +3572,12 @@ describe('assistant edits', () => {
         ])
       );
     expect(origins(first)['views.Int']).toEqual({ value: 'IntTally', origin: 'chosen' });
-    expect(origins(first)['Highlight.<Link>.targetFill'].origin).not.toBe('chosen');
+    expect(origins(first)['Highlight.<Link>.<To>.fill'].origin).not.toBe('chosen');
     // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
     const follows = (key: string) =>
-      /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.<Link>:@?\w+\.targetFill$/u.test(key);
+      /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.<Link>\.<To>:@?\w+\.fill$/u.test(key);
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'views.Int' && key !== 'Highlight.<Link>.targetFill' && !follows(key))
+      if (key !== 'views.Int' && key !== 'Highlight.<Link>.<To>.fill' && !follows(key))
         expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
   });
 });
@@ -3648,8 +3648,8 @@ describe('several variants from chat', () => {
   });
   const marks = {
     question: 'Amber or blue marks?',
-    left: { label: 'amber', values: '{"Highlight": {"<Link>": {"targetFill": "amber-100"}}}' },
-    right: { label: 'blue', values: '{"Highlight": {"<Link>": {"targetFill": "blue-100"}}}' }
+    left: { label: 'amber', values: '{"Highlight": {"<Link>": {"<To>": {"fill": "amber-100"}}}}' },
+    right: { label: 'blue', values: '{"Highlight": {"<Link>": {"<To>": {"fill": "blue-100"}}}}' }
   };
 
   it('builds each comparison as a pair differing only as given, with its question and side labels, the first shown and the rest queued', async () => {
@@ -3671,7 +3671,7 @@ describe('several variants from chat', () => {
     // With no presentation named, the turn builds on the newest (viewedPresentation).
     const viewed = presented(before.events).at(-1)!.payload.presentation;
     // Each pair differs only in what its comparison sets, and the variables that follow them.
-    const following = [/^views\.(\w+\.)?Int(:.*)?$/u, /^Highlight\.<Link>(:@?\w+)?\.targetFill$/u];
+    const following = [/^views\.(\w+\.)?Int(:.*)?$/u, /^Highlight\.<Link>\.<To>(:@?\w+)?\.fill$/u];
     for (const index of [0, 1]) {
       const [left, right] = shown.slice(index * 2, index * 2 + 2).map(({ payload }) => payload);
       expect(left.displaySetId).toBe(right.displaySetId);
@@ -4690,8 +4690,8 @@ describe('several variants from chat', () => {
       const variant = presentationVariant(shown[0].payload.presentation);
       // The first pair's pick; the second, unsure, keeps what the first pair's sides share.
       expect(variant['views.Int']).toBe('IntTally');
-      expect(variant['Highlight.<Link>.targetFill']).toBe(
-        presentationVariant(sides[0])['Highlight.<Link>.targetFill']
+      expect(variant['Highlight.<Link>.<To>.fill']).toBe(
+        presentationVariant(sides[0])['Highlight.<Link>.<To>.fill']
       );
       expect(mocks.generatePrepared).not.toHaveBeenCalled();
     });

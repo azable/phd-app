@@ -32,6 +32,13 @@ import {
   placeLabelLength,
   placePaint,
   placeProps,
+  endProps,
+  isLinkEnd,
+  kindLookProps,
+  kindPropOptions,
+  kindProps,
+  kindStyle,
+  linkEnd,
   lookProps,
   oldBuiltIn,
   roleStyleOf,
@@ -84,32 +91,33 @@ export type DesignKind = {
 
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
 // the natural form of a structure it finds that the trace could not show.
-const propsOf = ({ role, free, grid }: DesignKind) =>
-  grid
-    ? [...roleProps[role], ...gridProps]
-    : free
-      ? [
-          ...roleProps[role],
-          ...freeLayoutProps.filter((prop) =>
-            prop === 'form'
-              ? free.structure !== 'none'
-              : prop === 'direction'
+const propsOf = ({ key, role, free, grid }: DesignKind) =>
+  isLinkEnd(key)
+    ? endProps
+    : grid
+      ? [...roleProps[role], ...gridProps]
+      : free
+        ? [
+            ...roleProps[role],
+            ...freeLayoutProps.filter((prop) =>
+              prop === 'form'
                 ? free.structure !== 'none'
-                : true
-          )
-        ]
-      : roleProps[role];
+                : prop === 'direction'
+                  ? free.structure !== 'none'
+                  : true
+            )
+          ]
+        : roleProps[role];
 
 /**
  * A kind's starting value for a prop: a free layout runs right, across the wide stage, a tree too,
- * so pages start near 16:9 unless the participant asks for them to run down; and a link's head is
- * none where
- * every link of its kind is a two-way line, as an undirected graph's edges. A collection's box,
+ * so pages start near 16:9 unless the participant asks for them to run down; and a link end's head
+ * is none where every link of its kind is a two-way line, as an undirected graph's edges. A collection's box,
  * where it varies, starts where its first item is, so the items already there stay as it grows; and
  * its items sit in the middle of its room where its length never changes, at its start where it
  * does, so none moves as one comes or goes.
  */
-const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string) =>
+const starterLook = ({ key, role, free, lines, collection }: DesignKind, prop: string) =>
   prop === 'direction' && free
     ? 'right'
     : prop === 'head' && lines
@@ -120,15 +128,16 @@ const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string
           ? collection.steady
             ? 'center'
             : 'start'
-          : (starterRoleLook(role, prop) ?? starterFreeLayout[prop] ?? starterGrid[prop]);
+          : (starterRoleLook(role, key, prop) ?? starterFreeLayout[prop] ?? starterGrid[prop]);
 
 /**
  * A role's look in the starter base, through its tokens: every kind is shown, and takes each other
- * prop from its role's style there, as `<Value>.fill`, so the engine holds no look of its own.
+ * prop from its style there, as `<Value>.fill` or a link's end `<Pointer>.<To>.fill`, so the
+ * engine holds no look of its own.
  */
-function starterRoleLook(role: KindRole, prop: string): DesignValue | undefined {
+function starterRoleLook(role: KindRole, kind: string, prop: string): DesignValue | undefined {
   if (prop === 'shown') return true;
-  const value = starterBase[`${roleStyle(role)}.${prop}`];
+  const value = starterBase[`${kindStyle(role, kind)}.${prop}`];
   return isToken(value) ? starterBase[value] : value;
 }
 
@@ -158,8 +167,8 @@ export type DesignPlaces = {
   choices: readonly { key: string; options: readonly string[] }[];
 };
 
-const placePropsOf = ({ role }: DesignKind) =>
-  roleProps[role].filter((prop) => placeProps.has(prop));
+const placePropsOf = ({ key, role }: DesignKind) =>
+  kindProps(role, key).filter((prop) => placeProps.has(prop));
 
 /** Each page layout's frame, as Stacked.ratio, by the layout's name; the scenes say which shows. */
 function layoutSpace(names: readonly string[]): DesignSpace {
@@ -191,7 +200,8 @@ const tokens = Object.keys(tokenProps) as DesignToken[];
 
 /**
  * The design's levels above its kinds (see Shared values in the language guide): every token, and
- * every role's style, as `<Value>.fill`, which each kind of the role follows.
+ * every role's style, as `<Value>.fill`, which each kind of the role follows, and a link role's
+ * end's, as `<Pointer>.<To>.fill`.
  */
 function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   if (!kinds.length) return {};
@@ -202,6 +212,14 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
       (Object.keys(roleProps) as KindRole[]).flatMap((role) =>
         lookProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, roleStyleOptions(prop)])
       )
+    ),
+    ...Object.fromEntries(
+      (['link', 'pointer'] as const).flatMap((role) =>
+        endProps.map((prop) => [
+          `${roleStyle(role)}.${linkEnd}.${prop}`,
+          roleStyleOptions(prop, true)
+        ])
+      )
     )
   };
 }
@@ -210,7 +228,7 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
 function follows(roles: Readonly<Record<string, KindRole>>, key: string): boolean {
   const kind = kindOf(key);
   const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-  return !!role && lookProps(role).includes(key.slice(kind.length + 1) as DesignProp);
+  return !!role && kindLookProps(role, kind).includes(key.slice(kind.length + 1) as DesignProp);
 }
 
 /**
@@ -473,17 +491,24 @@ export function designSpace(
     // What a kind inherits over its role's look: a kind of its role; the styles a variant names
     // join these (see withStyles). The starter sets none, so a kind follows its role's look.
     ...Object.fromEntries(
-      kinds.map((kind) => [
-        inheritKey(kind.key),
-        kinds
-          .filter((other) => other.role === kind.role && other.key !== kind.key)
-          .map(({ key }) => key)
-      ])
+      kinds
+        .filter(({ key }) => !isLinkEnd(key))
+        .map((kind) => [
+          inheritKey(kind.key),
+          kinds
+            .filter(
+              (other) => other.role === kind.role && other.key !== kind.key && !isLinkEnd(other.key)
+            )
+            .map(({ key }) => key)
+        ])
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
     ...Object.fromEntries(
       places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, propOptions[prop]])
+        placePropsOf(kind).map((prop) => [
+          `${kind.key}.${prop}`,
+          kindPropOptions(prop, isLinkEnd(kind.key))
+        ])
       )
     ),
     ...layoutSpace(layouts)
@@ -495,7 +520,7 @@ export function designSpace(
  * one structure dagre's layered engine lays out (library/node/layered-engine.ts).
  */
 function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[] {
-  const options = propOptions[prop];
+  const options = kindPropOptions(prop, isLinkEnd(kind.key));
   return prop === 'form' && kind.free?.structure !== 'layers'
     ? options.filter((option) => option !== 'layered')
     : options;
@@ -531,7 +556,10 @@ export function starterVariant(
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, options[0]])),
     ...Object.fromEntries(
       places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterRoleLook(kind.role, prop)])
+        placePropsOf(kind).map((prop) => [
+          `${kind.key}.${prop}`,
+          starterRoleLook(kind.role, kind.key, prop)
+        ])
       )
     ),
     ...layoutStarter(layouts)
@@ -680,6 +708,15 @@ export function buildVariant(
       : [];
   });
   if (oldLinks.length) throw new DesignValueError(oldLinks.join(' '));
+  // A link from a variable paints what it reaches with its end, <To>.
+  const targets = Object.keys(chosenValues).flatMap((key) => {
+    const old = /^(.*?)(:[^.]*(?:\.[^.]+)*?)?\.target(Fill|Stroke|StrokeWidth|Color)$/u.exec(key);
+    if (!old) return [];
+    const [, kind, place = '', prop] = old;
+    const end = `${kind}.${linkEnd}${place}.${prop[0].toLowerCase()}${prop.slice(1)}`;
+    return [`${key} is written ${end}, the paint the link's end gives what it reaches.`];
+  });
+  if (targets.length) throw new DesignValueError(targets.join(' '));
   const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
   if (missing.length)
     throw new DesignValueError(

@@ -307,15 +307,18 @@ describe('single-component Svelte compilation', () => {
       [
         'Arrow',
         'Arrow.<Link>',
+        'Arrow.<Link>.<To>',
         'Arrow.Name',
         'Cells',
         'IntCell',
         'Mark',
         'Mark.Caption',
         'Mark.<Link>',
+        'Mark.<Link>.<To>',
         'Note',
         'Pair',
-        'Pair.<Link>'
+        'Pair.<Link>',
+        'Pair.<Link>.<To>'
       ].sort()
     );
     expect(design.space['Cells.gap']).toBeDefined();
@@ -326,12 +329,12 @@ describe('single-component Svelte compilation', () => {
     // the kind it draws, and its own paint for the kinds of each.
     expect(design.space['views.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
     expect(design.starter['views.Position:i']).toBe('Arrow');
-    expect(design.space['Arrow.<Link>:i.targetFill']).toBeDefined();
+    expect(design.space['Arrow.<Link>.<To>:i.fill']).toBeDefined();
     expect(design.space['Arrow.Name:i.color']).toBeDefined();
     expect(design.space['Arrow.<Link>:i.padding']).toBeUndefined();
     expect(design.space['IntCell:v.fill']).toBeDefined();
     expect(design.space['views.Int:v']).toBeUndefined();
-    expect(design.fallbacks['Mark.<Link>:i.targetStroke']).toBe('Mark.<Link>.targetStroke');
+    expect(design.fallbacks['Mark.<Link>.<To>:i.stroke']).toBe('Mark.<Link>.<To>.stroke');
   });
 
   it.each([
@@ -397,7 +400,7 @@ describe('single-component Svelte compilation', () => {
     for (const [prop, variable] of [
       ['curve="curved"', 'route'],
       ['route="wire"', 'route'],
-      ['head="vee"', 'head'],
+      ['head="vee"', '<To>.head'],
       ['headSize={12}', 'headSize']
     ])
       await expect(
@@ -1747,9 +1750,9 @@ describe('pauses inside a run', () => {
 
   it('keys a label’s place by its full name only', () => {
     const { space, starter } = insertion.design;
-    expect(space['Highlight.<Link>:@insert.compare.left.targetFill']).toBeDefined();
-    expect(space['Highlight.<Link>:left.targetFill']).toBeUndefined();
-    const chosen = { 'Highlight.<Link>:left.targetFill': 'sky-100' };
+    expect(space['Highlight.<Link>.<To>:@insert.compare.left.fill']).toBeDefined();
+    expect(space['Highlight.<Link>.<To>:left.fill']).toBeUndefined();
+    const chosen = { 'Highlight.<Link>.<To>:left.fill': 'sky-100' };
     expect(buildVariant(space, starter, { chosen }, 1).dropped).toHaveLength(1);
   });
 });

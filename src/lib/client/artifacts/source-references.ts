@@ -1,7 +1,7 @@
 /**
  * What text in a message refers to in a source: the regions an inline code span names, as a view,
  * layout or kind (`Highlight`, `Title`, `Row.Under`), a label (`@left`, `@swap.held`), a design variable
- * (`Mark.<Link>:@left.targetFill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
+ * (`Mark.<Link>.<To>:@left.fill`, `views.Int`), a line (`line 33`, `33:12`), or code written as it
  * is there; and the regions build problems are about.
  *
  * @packageDocumentation
@@ -24,7 +24,7 @@ export type ReferenceDesign = {
   variant?: Readonly<Record<string, unknown>>;
 };
 
-/** The props a kind's variable can set, the last part of a key such as `Mark.<Link>.targetFill`. */
+/** The props a kind's variable can set, the last part of a key such as `Mark.<Link>.<To>.fill`. */
 const props = new Set([
   'shown',
   'fill',
@@ -45,10 +45,6 @@ const props = new Set([
   'route',
   'head',
   'headSize',
-  'targetFill',
-  'targetStroke',
-  'targetStrokeWidth',
-  'targetColor',
   'shadow',
   'glow',
   'fillStyle',
@@ -106,7 +102,7 @@ export function referenceRanges(
 
 /**
  * The design variable a reference names whose value the editor shows in a row of its own, which a
- * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Mark.<Link>:left.targetFill`), a
+ * link then reveals: a kind's or a place's prop (`IntCell.fill`, `Mark.<Link>.<To>:left.fill`), a
  * place's view choice (`views.Index:found`), or a page-frame or listing setting, as the variant
  * of a build of the source (`design`) has it. A type's own view choice (`views.Index`) has no row:
  * the view markers after its renders show it.
@@ -119,8 +115,8 @@ export function ghostKey(text: string, design?: ReferenceDesign): string | undef
 
 /**
  * A label's full name as a pill shows it, kept to its last two parts, the parts before elided:
- * `@insert.compare.left` as `@…compare.left`, `Mark.<Link>:@insert.compare.left.targetFill` as
- * `Mark.<Link>:@…compare.left.targetFill`, a kind's place keeping its prop; `head` before the
+ * `@insert.compare.left` as `@…compare.left`, `Mark.<Link>.<To>:@insert.compare.left.fill` as
+ * `Mark.<Link>.<To>:@…compare.left.fill`, a kind's place keeping its prop; `head` before the
  * ellipsis, `hidden` the parts it stands for, `tail` after it. None for a name of two parts or
  * fewer, or text that names no label.
  */
@@ -298,8 +294,8 @@ function matches(source: string, pattern: RegExp, group = 0): SourceRange[] {
 }
 
 /**
- * A kind or its variable, as `Row.Under`, `Mark.<Link>.targetFill`, `IntCell:swap.held.fill` or
- * `Mark.<Link>:@scan.next.targetFill`: the path of views, layouts and kinds, and the place after `:`
+ * A kind or its variable, as `Row.Under`, `Mark.<Link>.<To>.fill`, `IntCell:swap.held.fill` or
+ * `Mark.<Link>.<To>:@scan.next.fill`: the path of views, layouts and kinds, and the place after `:`
  * (a label's keeping its `@`), less a prop at the end.
  */
 function kindKey(text: string): { segments: string[]; place?: string } | undefined {

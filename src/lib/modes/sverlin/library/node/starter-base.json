@@ -140,12 +140,14 @@
     "opacity": 1,
     "strokeStyle": "solid",
     "route": "layout",
-    "head": "arrow",
     "headSize": 9,
-    "targetFill": "$highlight",
-    "targetStroke": "$accent",
-    "targetStrokeWidth": "$lineWidth",
-    "targetColor": "none"
+    "<To>": {
+      "head": "arrow",
+      "fill": "none",
+      "stroke": "none",
+      "strokeWidth": "$lineWidth",
+      "color": "none"
+    }
   },
   "<Pointer>": {
     "stroke": "neutral-500",
@@ -153,12 +155,14 @@
     "opacity": 1,
     "strokeStyle": "solid",
     "route": "layout",
-    "head": "arrow",
     "headSize": 9,
-    "targetFill": "$highlight",
-    "targetStroke": "$accent",
-    "targetStrokeWidth": "$lineWidth",
-    "targetColor": "none"
+    "<To>": {
+      "head": "arrow",
+      "fill": "$highlight",
+      "stroke": "$accent",
+      "strokeWidth": "$lineWidth",
+      "color": "none"
+    }
   },
   "$second": {
     "fill": "sky-100",

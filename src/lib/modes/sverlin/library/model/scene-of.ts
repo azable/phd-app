@@ -695,7 +695,7 @@ export function sceneOf(
     }
   }
 
-  /** A link's target paint on the node it reaches: fill, stroke and text colour (see targetProps). */
+  /** A link end's paint on the node it reaches: fill, stroke and text colour (see endProps). */
   function paintTarget(
     node: SceneNode | undefined,
     attribute: (name: string) => string | undefined

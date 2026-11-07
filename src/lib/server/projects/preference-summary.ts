@@ -59,9 +59,6 @@ export function choiceFamily(variable: string): { family: ChoiceFamily; impact: 
     case 'stroke':
     case 'color':
     case 'opacity':
-    case 'targetFill':
-    case 'targetStroke':
-    case 'targetColor':
       return { family: 'colour', impact: 0.15 };
     default:
       return { family: 'spacing', impact: 0.1 };

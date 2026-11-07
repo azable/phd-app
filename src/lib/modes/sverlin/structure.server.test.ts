@@ -141,8 +141,8 @@ describe('free layout structures', () => {
       .replace('<Link from={k} to={w} />', '<Link from={k} to={w} /><Link from={w} to={k} />');
     const design = designOf(twoTags);
     expect(design.structures).not.toEqual(designOf(undirected).structures);
-    expect(design.starter).toMatchObject({ 'Graph.<Link>.head': 'arrow' });
-    expect(designOf(undirected).starter).toMatchObject({ 'Graph.<Link>.head': 'none' });
+    expect(design.starter).toMatchObject({ 'Graph.<Link>.<To>.head': 'arrow' });
+    expect(designOf(undirected).starter).toMatchObject({ 'Graph.<Link>.<To>.head': 'none' });
   });
 
   it('are none where nothing links the elements, or the links change from step to step', () => {

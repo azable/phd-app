@@ -15,7 +15,7 @@ import type { SourceRange } from './source-references';
 /** Replace the revealed regions; none clears them, and the revealed keys with them. */
 export const setRevealed = StateEffect.define<readonly SourceRange[]>();
 
-/** Reveal the ghost rows of these design variables, as `Mark.<Link>:@left.targetFill`. */
+/** Reveal the ghost rows of these design variables, as `Mark.<Link>.<To>:@left.fill`. */
 export const setRevealedKeys = StateEffect.define<readonly string[]>();
 
 const revealedMark = Decoration.mark({ class: 'cm-revealed' });

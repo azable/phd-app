@@ -92,7 +92,7 @@ it(
       const step = await open(cards, {
         'Graph.form': 'scatter',
         'Graph.layoutSeed': 10,
-        'Graph.<Link>.head': head,
+        'Graph.<Link>.<To>.head': head,
         'Graph.<Link>.headSize': headSize
       });
       // A card for each vertex but the start, whose name is its box.
@@ -111,7 +111,10 @@ it(
   'draws a two-way line’s head at both its ends, each tip on its box, once it has one',
   { timeout: 60_000 },
   async () => {
-    const links = reaches(await open(undirected, { 'Graph.<Link>.head': 'arrow' }), 'VertexCard');
+    const links = reaches(
+      await open(undirected, { 'Graph.<Link>.<To>.head': 'arrow' }),
+      'VertexCard'
+    );
     expect(links).toHaveLength(5);
     for (const link of links) {
       expect(link.edge).toContain(' - ');

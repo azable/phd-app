@@ -175,7 +175,7 @@ describe('tokens naming places in a listing', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
     const values = {
       ...prepared.design.starter,
-      'Arrow.<Link>:mid.targetFill': 'sky-200',
+      'Arrow.<Link>.<To>:mid.fill': 'sky-200',
       'IntCell:target.fill': 'white',
       'IntCell:target.stroke': 'violet-500'
     };
@@ -183,7 +183,7 @@ describe('tokens naming places in a listing', () => {
     expect(listing?.places?.paints).toMatchObject({
       ':mid': 'sky-200',
       ':target': 'violet-500',
-      ':lo': prepared.design.starter['Arrow.<Link>.targetFill']
+      ':lo': prepared.design.starter['Arrow.<Link>.<To>.fill']
     });
     expect(listing?.places?.look).toBe('fill');
     // A place's own fill falls back to its kind's.
@@ -193,12 +193,12 @@ describe('tokens naming places in a listing', () => {
     // Its line takes the stroke first, as a pale fill would not show as a line; the fill where the
     // stroke is none.
     const pointer = { type: 'Index', pointer: true };
-    const arrow = { 'views.Index': 'Arrow', 'Arrow.<Link>.targetFill': 'amber-100' };
+    const arrow = { 'views.Index': 'Arrow', 'Arrow.<Link>.<To>.fill': 'amber-100' };
     expect(
-      placePaint(':lo', pointer, { ...arrow, 'Arrow.<Link>.targetStroke': 'amber-500' }, 'line')
+      placePaint(':lo', pointer, { ...arrow, 'Arrow.<Link>.<To>.stroke': 'amber-500' }, 'line')
     ).toBe('amber-500');
     expect(
-      placePaint(':lo', pointer, { ...arrow, 'Arrow.<Link>.targetStroke': 'none' }, 'line')
+      placePaint(':lo', pointer, { ...arrow, 'Arrow.<Link>.<To>.stroke': 'none' }, 'line')
     ).toBe('amber-100');
     expect(listing?.places?.lines).toHaveProperty(':target', 'violet-500');
     // <Listing>.places none lights nothing.
@@ -212,7 +212,7 @@ describe('tokens naming places in a listing', () => {
 
   it('are told to the assistant with the variable that removes them, as no node prop does', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
-    const values = { ...prepared.design.starter, 'Arrow.<Link>:mid.targetFill': 'sky-200' };
+    const values = { ...prepared.design.starter, 'Arrow.<Link>.<To>:mid.fill': 'sky-200' };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     const text = placeLightsText(listing?.places);
     expect(text).toContain('<Listing>.places fill');
