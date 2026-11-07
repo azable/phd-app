@@ -190,6 +190,39 @@ describe('queries', () => {
     ]);
   });
 
+  it("points a call's result where the call's variables point, as the caller's values for a", () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  function half(a, lo, hi) @half{
+    if (@base[hi - lo < 2]) @single[return Index(a, lo);]
+    @rest[return half(a, lo, Index(a, Math.floor((lo + hi) / 2)));]
+  }
+  @run[const found = half(values, Index(values, 0), values.length);]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="@half" name="Call"><Node>half<Link to={this.lo} /></Node></View>
+<Select name="calls" from="@half" where="end <= now" order="start" max="4" />
+<Layout name="Main"><Node><Node kind="Calls" layout="free">{#each values as v}{v}{/each}{#each calls as call}{call}{/each}</Node></Node></Layout>
+<Case name="main" values={[4, 8, 2, 6]} />
+<Storyboard>
+  <Scene name="calls" case="main" pause="@half.end"><Main /></Scene>
+</Storyboard>`;
+    const last = prepareSvelteComponent(source).master.at(-1)!;
+    const results = Object.entries(last.targets ?? {}).filter(([path]) => path.endsWith('.result'));
+    expect(results).toEqual([
+      ['calls[0].result', 'values'],
+      ['calls[1].result', 'values'],
+      ['calls[2].result', 'values']
+    ]);
+  });
+
   it("links a row's position to the element it points at, in a loop outside any call", async () => {
     const source = `<script domain>
   const Int = type('integer', { min: 0, max: 9 });

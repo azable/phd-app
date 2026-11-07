@@ -1791,6 +1791,9 @@ class Interpreter {
         targets,
         placed: []
       });
+      // Pointing where the call's own variables point, as #state names them.
+      for (const [path, name] of Object.entries(targets))
+        if (/^result(?:$|[.[])/u.test(path)) targets[path] = this.#shown(name, scope);
     }
     this.records.push({
       label,
