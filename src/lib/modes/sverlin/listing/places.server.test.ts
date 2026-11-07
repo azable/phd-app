@@ -135,16 +135,16 @@ describe('tokens naming places in a listing', () => {
     expect(() => prepareSvelteComponent(binarySearch(listing))).toThrow(message);
   });
 
-  it('give the design listing.places only where a listing has tokens', () => {
+  it('give the design <Listing>.places only where a listing has tokens', () => {
     const { design } = prepareSvelteComponent(binarySearch(tokened));
-    expect(design.space['listing.places']).toEqual(['none', 'fill', 'underline', 'outline']);
-    expect(design.starter['listing.places']).toBe('fill');
+    expect(design.space['<Listing>.places']).toEqual(['none', 'fill', 'underline', 'outline']);
+    expect(design.starter['<Listing>.places']).toBe('fill');
     const plain = prepareSvelteComponent(
       binarySearch(tokened.replace(/:\w+\[([^\]]*\]?)\]/gu, '$1'))
     );
     expect(plain.listings?.pseudocode.tokens).toBeUndefined();
-    expect(plain.design.space['listing.places']).toBeUndefined();
-    expect(plain.design.starter['listing.places']).toBeUndefined();
+    expect(plain.design.space['<Listing>.places']).toBeUndefined();
+    expect(plain.design.starter['<Listing>.places']).toBeUndefined();
   });
 
   it('leave a source without tokens as it was', () => {
@@ -201,10 +201,10 @@ describe('tokens naming places in a listing', () => {
       placePaint(':lo', pointer, { ...arrow, 'Arrow.Link.targetStroke': 'none' }, 'line')
     ).toBe('amber-100');
     expect(listing?.places?.lines).toHaveProperty(':target', 'violet-500');
-    // listing.places none lights nothing.
+    // <Listing>.places none lights nothing.
     const none = shownListing(
       prepared,
-      { ...values, 'listing.places': 'none' },
+      { ...values, '<Listing>.places': 'none' },
       prepared.paced(new Set()).lit
     );
     expect(none?.places).toBeUndefined();
@@ -215,13 +215,13 @@ describe('tokens naming places in a listing', () => {
     const values = { ...prepared.design.starter, 'Arrow.Link:mid.targetFill': 'sky-200' };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     const text = placeLightsText(listing?.places);
-    expect(text).toContain('listing.places fill');
+    expect(text).toContain('<Listing>.places fill');
     expect(text).toContain('a 3px band round it');
     expect(text).toContain(':mid in sky-200');
-    expect(text).toContain('listing.places none removes them');
+    expect(text).toContain('<Listing>.places none removes them');
     const none = shownListing(
       prepared,
-      { ...values, 'listing.places': 'none' },
+      { ...values, '<Listing>.places': 'none' },
       prepared.paced(new Set()).lit
     );
     expect(placeLightsText(none?.places)).toBeUndefined();

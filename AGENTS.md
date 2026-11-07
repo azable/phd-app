@@ -122,7 +122,7 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   earlier example, `<!-- parent: name -->`, and to build it with chosen values,
   `<!-- variant: {"Here": {"shown": false}} -->` (nested, or flat as
   `{"Here.shown": false}`; a root example's variant naming no `"..."` base is
-  built on `$starter`, written into the version, while a template's name alone
+  built on `<starter>`, written into the version, while a template's name alone
   is refused, as the demo writes out no template), and to post a note to the
   chat after it, `<!-- note: … -->` (markdown on one line; code in backticks
   links to the source): while the page is open, each is saved, in name order, as

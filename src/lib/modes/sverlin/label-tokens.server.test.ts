@@ -57,7 +57,7 @@ for i = 1 to n − 1
 </Storyboard>`;
 
 const note = 'The loop stops when :@insert.front[A[j] > key] is false, and :key[key] waits.';
-const lit = { chosen: { 'listing.places': 'fill' } };
+const lit = { chosen: { '<Listing>.places': 'fill' } };
 
 /** The steps at which a node with that text and kind shows its place's light. */
 const litAt = (steps: SceneStep[], text: string) =>

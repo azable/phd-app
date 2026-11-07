@@ -13,7 +13,7 @@ const cases = [
     kept: {
       'IntCell:target.stroke': 'violet-500',
       'Arrow.Link:lo.targetFill': 'sky-100',
-      'listing.places': 'fill'
+      '<Listing>.places': 'fill'
     },
     written: {
       'IntCell:target.stroke': 'violet-500',

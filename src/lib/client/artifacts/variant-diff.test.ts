@@ -108,7 +108,7 @@ describe('choices in words', () => {
     expect(choiceName('Stacked.ratio')).toBe('Stacked ratio');
     expect(choiceName('views.Int:swap.held')).toBe('Int view for swap.held');
     expect(choiceName('views.Index')).toBe('Index view');
-    expect(choiceName('listing.language')).toBe('Listing language');
+    expect(choiceName('<Listing>.language')).toBe('Listing language');
   });
 
   it('gives each variant’s value as written, shown or hidden for whether something shows', () => {
@@ -127,11 +127,11 @@ describe("a developer's edit of the choices", () => {
     const edited = variantDocument({
       'IntCell.padding': 0.375,
       $spacing: 0.125,
-      '<Node>.textSize': 14,
+      '<Text>.textSize': 14,
       'Goal.shown': false
     });
     expect(choiceEdits(shown, edited)).toEqual({
-      chosen: { $spacing: 0.125, '<Node>.textSize': 14, 'Goal.shown': false },
+      chosen: { $spacing: 0.125, '<Text>.textSize': 14, 'Goal.shown': false },
       unset: ['IntCell.fill']
     });
   });

@@ -149,7 +149,7 @@ it.skipIf(!enabled)(
   async () => {
     const { page, frame } = await hostedAt(pausingAt(search, '@probe.low.end'), 1, {
       'IntCell@target.stroke': 'violet-500',
-      'listing.places': 'fill',
+      '<Listing>.places': 'fill',
       'Arrow.Pointed.fill': 'amber-100',
       'Arrow.Pointed.stroke': 'amber-500'
     });
@@ -191,7 +191,7 @@ it.skipIf(!enabled)(
     );
     expect(labelled).not.toBe(search);
     const { page, frame } = await hostedAt(pausingAt(labelled, '@probe.low.end'), 1, {
-      'listing.places': 'fill'
+      '<Listing>.places': 'fill'
     });
     const label = await frame.evaluate(() => {
       const box = document

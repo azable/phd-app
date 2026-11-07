@@ -17,7 +17,7 @@ const design: AiDesign = {
     { variable: 'Compared.fill', options: 'fill', value: 'white' },
     { variable: 'Cell.fill', options: 'fill', value: 'white' },
     { variable: 'Cell.font', options: 'font', value: 'sans' },
-    { variable: 'listing.language', options: ['python', 'pseudo'], value: 'pseudo' }
+    { variable: '<Listing>.language', options: ['python', 'pseudo'], value: 'pseudo' }
   ]
 };
 
@@ -100,7 +100,7 @@ describe('the brief steering the preference summary', () => {
     expect(
       briefSteering(
         brief({ constraints: { status: 'inferred', value: 'no code', tags: ['no-listing'] } })
-      ).excluded('listing.language')
+      ).excluded('<Listing>.language')
     ).toBe('it has no code listing');
   });
 });

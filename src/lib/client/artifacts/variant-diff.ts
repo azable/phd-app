@@ -104,9 +104,9 @@ export function choiceName(key: string): string {
     const name = `${words(type)} ${viewCategories[category]}`;
     return sentence(place ? `${name} for ${place}` : name);
   }
-  // A group, as `<Node>.padding`, sets every kind of its tag: “Every node padding”.
-  const tag = /^<(\w+)>\.(\w+)$/u.exec(key);
-  if (tag) return sentence(`every ${words(tag[1])} ${words(tag[2])}`);
+  // A built-in name, as `<Value>.padding`, reads as its words: “Value padding”.
+  const builtIn = /^<(\w+)>\.([\w.]+)$/u.exec(key);
+  if (builtIn) return sentence([builtIn[1], ...builtIn[2].split('.')].map(words).join(' '));
   const parts = kindKeyParts(key);
   if (!parts) return sentence(key.split('.').map(words).join(' ') || key);
   const named = [...parts.kind.split('.'), ...(parts.prop === 'shown' ? [] : [parts.prop])];

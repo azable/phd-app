@@ -42,10 +42,10 @@ const alike = [
   ':@visit.look.check.next.label',
   'Main.Problem.gap',
   '$accent',
-  '<Node>.padding',
+  '<Value>.padding',
   '<Link>.stroke',
-  'listing.syntax',
-  'listing.lit@insert.compare.left.fill',
+  '<Listing>.syntax',
+  '<Listing>.lit@insert.compare.left.fill',
   'pause@main',
   'Stacked.ratio'
 ];
@@ -62,7 +62,7 @@ describe('design keys as written', () => {
   });
 
   it("names the listing's group by its settings", () => {
-    expect(keptKey('<Listing>.syntax')).toBe('listing.syntax');
+    expect(keptKey('<Listing>.syntax')).toBe('<Listing>.syntax');
   });
 
   it('reads a kind key in its parts, a label place keeping its @', () => {
@@ -110,15 +110,15 @@ describe('the nested form', () => {
   const shapes: [written: string, nested: Record<string, unknown>][] = [
     ['$text', { $text: 1 }],
     ['$cell.stroke', { $cell: { stroke: 1 } }],
-    ['<Node>.padding', { '<Node>': { padding: 1 } }],
+    ['<Pointer>.stroke', { '<Pointer>': { stroke: 1 } }],
     ['{Int}', { '{Int}': 1 }],
     ['{Int}:target', { '{Int}:target': 1 }],
     ['{@insert.key}', { '{@insert.key}': 1 }],
-    ['listing.syntax', { listing: { syntax: 1 } }],
-    ['listing.lit.fill', { listing: { lit: { fill: 1 } } }],
+    ['<Listing>.syntax', { '<Listing>': { syntax: 1 } }],
+    ['<Listing>.lit.fill', { '<Listing>': { lit: { fill: 1 } } }],
     [
-      'listing.lit@insert.compare.left.fill',
-      { listing: { lit: { '@insert.compare.left': { fill: 1 } } } }
+      '<Listing>.lit@insert.compare.left.fill',
+      { '<Listing>': { lit: { '@insert.compare.left': { fill: 1 } } } }
     ],
     ['IntCell.stroke', { IntCell: { stroke: 1 } }],
     ['Here.Link.targetFill', { Here: { Link: { targetFill: 1 } } }],
@@ -138,7 +138,7 @@ describe('the nested form', () => {
     ['base', { '...': 1 }],
     ['scale.spacing', { scale: { spacing: 1 } }],
     ['palette.accent', { palette: { accent: 1 } }],
-    ['$Value.fill', { $Value: { fill: 1 } }]
+    ['<Value>.fill', { '<Value>': { fill: 1 } }]
   ];
 
   it.each(shapes)('nests %s and reads it back', (written, nested) => {
@@ -162,10 +162,10 @@ describe('the nested form', () => {
       'Here=true.fill': 3,
       'Here.fill': 4,
       'Here.inherit': '$cell',
-      '<Node>.padding': 5,
+      '<Value>.padding': 5,
       $cell: 6
     });
-    expect(Object.keys(nested)).toEqual(['$cell', '<Node>', 'Here']);
+    expect(Object.keys(nested)).toEqual(['$cell', '<Value>', 'Here']);
     expect(Object.keys(nested.Here as object)).toEqual(['...', 'fill', ':lo', '=true', 'Link']);
   });
 

@@ -171,7 +171,7 @@
         (entry) => entry.presentation.presentationId === selection.presentationId
       )?.presentation;
       if (presentation?.format !== 'browser-bundle-v1') return [];
-      const listingName = presentation.variant?.['listing.language'];
+      const listingName = presentation.variant?.['<Listing>.language'];
       return [
         {
           source: presentation.source.text,

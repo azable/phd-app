@@ -9,7 +9,13 @@
 
 import { baseKey, isBaseKey } from '$lib/modes/sverlin/library/node/design';
 import { flatDesign } from '$lib/modes/sverlin/library/node/design-keys';
-import { templateOf, templates, templateValues } from './templates/templates';
+import {
+  templateName,
+  templateOf,
+  templates,
+  templateValues,
+  type TemplateName
+} from './templates/templates';
 import type { DesignValues } from '$lib/shared/presentations';
 
 type DesignValue = string | number | boolean;
@@ -63,7 +69,7 @@ export function readDesignPatch(values: unknown): DesignPatch | { problem: strin
  * A patch naming a template as its base, as `"...": "$textbook"`, with the template written out in
  * full under the values it sets itself, so the design holds every base value (see templates.ts).
  * A base of the model's own, named otherwise, must write some base values, and starts from
- * `$starter`'s, written out under them as a template's are, so it too holds every role's look; a
+ * `<starter>`'s, written out under them as a template's are, so it too holds every role's look; a
  * name that is neither, as a mistyped template's, is a problem naming the templates.
  */
 function withTemplate(patch: DesignPatch): DesignPatch | { problem: string } {
@@ -73,13 +79,13 @@ function withTemplate(patch: DesignPatch): DesignPatch | { problem: string } {
   const own = patch.set.some(({ variable }) => variable !== baseKey && isBaseKey(variable));
   if (!template && !own)
     return {
-      problem: `"..." names ${JSON.stringify(base.value)}, which is no template (${Object.keys(
-        templates
+      problem: `"..." names ${JSON.stringify(base.value)}, which is no template (${(
+        Object.keys(templates) as TemplateName[]
       )
-        .map((name) => `$${name}`)
+        .map(templateName)
         .join(
           ', '
-        )}), and the values write no base of their own: name a template, or write the base's tokens, role styles ($Value, …) and scales with a name of your own.`
+        )}), and the values write no base of their own: name a template, or write the base's tokens, role styles (<Value>, …) and scales with a name of your own.`
     };
   const written = new Set(patch.set.map(({ variable }) => variable));
   const fromTemplate = Object.entries(templateValues(template ?? 'starter'))

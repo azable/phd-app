@@ -33,7 +33,7 @@ const drawnFrom = /^(?:<(?:Node|Link|Listing)(?:[\s/>]|$)|:[A-Za-z_@][\w$.]*\[|\
 
 /**
  * Locate an element id in a Sverlin source, or undefined if it names no library tag there; a
- * listing's line is found in the listing the presentation shows (its listing.language), else the
+ * listing's line is found in the listing the presentation shows (its <Listing>.language), else the
  * first.
  */
 export function locateElement(

@@ -1,6 +1,7 @@
 /**
  * Design keys as written, which is also how the app keeps them. Each mark has one meaning: `$` a
- * token, `<…>` a tag group, `{Type}` the view a type is drawn with, `:` a place on the page, `=`
+ * token or a style, `<…>` a built-in name (a role's style, as `<Value>`, the listing, `<Listing>`,
+ * and the starter base, `<starter>`), `{Type}` the view a type is drawn with, `:` a place on the page, `=`
  * a value of the data, no mark a kind; `@` only a part of the run, a label, as a label marks a
  * moment or span of it. A place drawn from a label's value keeps the label's `@` after its `:`.
  * Only a view choice is kept apart from how it is written, as a choice holds a view's name rather
@@ -15,11 +16,11 @@
  * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.Link:@scan.next.targetFill`,
  * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
  * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
- * `<…>` groups, `listing.lit@insert.key.fill` and `listing.syntax` (or `<Listing>.syntax`). People
- * read the keys nested (see nestedDesign).
+ * `<Value>.fill`, `<Listing>.lit@insert.key.fill` and `<Listing>.syntax`. People read the keys
+ * nested (see nestedDesign).
  */
 
-import { baseKey, listingAlias, placeCaption } from './design';
+import { baseKey, placeCaption } from './design';
 
 /** A place as kept and written: a variable or field (`lo`, `pair.left`), or a label (`@scan.next`). */
 const placePattern = String.raw`@?[\w$.]+?`;
@@ -91,13 +92,10 @@ export function writtenKey(key: string): string {
   return place ? `{${type}}:${place}` : `{${type}}`;
 }
 
-/**
- * A key as the app keeps it: a view choice from braces, the listing's group, `<Listing>.syntax`, as
- * `listing.syntax`, every other key as it is.
- */
+/** A key as the app keeps it: a view choice from braces, every other key as it is. */
 export function keptKey(key: string): string {
   const view = writtenView.exec(key);
-  if (!view) return listingAlias(key);
+  if (!view) return key;
   const [, type, place] = view;
   return `views.${type}${place ? `:${place}` : ''}`;
 }
@@ -126,17 +124,17 @@ export function keptValues<T>(values: Readonly<Record<string, T>>): Record<strin
 }
 
 /**
- * A design as people and the assistant read it: nested, one object for each token style, group,
- * kind and listing, as the language guide's Shared values shows. Each written key's path:
+ * A design as people and the assistant read it: nested, one object for each style, role style,
+ * kind and the listing, as the language guide's Shared values shows. Each written key's path:
  *
  * | Written                        | Nested                                        |
  * | ------------------------------ | --------------------------------------------- |
  * | `$text`                        | `"$text": …`                                  |
  * | `$cell.stroke`                 | `"$cell": { "stroke": … }`                    |
- * | `<Node>.padding`               | `"<Node>": { "padding": … }`                  |
+ * | `<Value>.padding`              | `"<Value>": { "padding": … }`                 |
  * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
- * | `listing.lit.fill`             | `"listing": { "lit": { "fill": … } }`         |
- * | `listing.lit@insert.key.fill`  | `… "lit": { "@insert.key": { "fill": … } }`   |
+ * | `<Listing>.lit.fill`           | `"<Listing>": { "lit": { "fill": … } }`       |
+ * | `<Listing>.lit@insert.key.fill`| `… "lit": { "@insert.key": { "fill": … } }`   |
  * | `Here.Link.targetFill`         | `"Here": { "Link": { "targetFill": … } }`     |
  * | `IntCell:target.stroke`        | `"IntCell": { ":target": { "stroke": … } }`   |
  * | `Card=true.stroke`             | `"Card": { "=true": { "stroke": … } }`        |
@@ -176,20 +174,20 @@ function pathOf(key: string): string[] {
   if (caption) return [`:${caption[1]}`, 'label'];
   const ofBase = /^(scale|palette)\.([a-z]\w*)$/u.exec(key);
   if (ofBase) return [ofBase[1], ofBase[2]];
-  const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
-  if (prefixed) return [prefixed[1], prefixed[2]];
-  if (key.startsWith('listing.')) {
-    const rest = key.slice('listing.'.length);
+  if (key.startsWith('<Listing>.')) {
+    const rest = key.slice('<Listing>.'.length);
     const at = rest.indexOf('@');
-    if (at < 0) return ['listing', ...rest.split('.')];
+    if (at < 0) return ['<Listing>', ...rest.split('.')];
     const label = rest.slice(at + 1, rest.lastIndexOf('.'));
     return [
-      'listing',
+      '<Listing>',
       ...rest.slice(0, at).split('.'),
       `@${label}`,
       rest.slice(rest.lastIndexOf('.') + 1)
     ];
   }
+  const prefixed = /^(\$[\w$]+|<[A-Za-z]+>)\.(.+)$/u.exec(key);
+  if (prefixed) return [prefixed[1], prefixed[2]];
   const kind =
     /^([A-Z][\w$]*(?:\.[A-Z][\w$]*)*)(:@?[\w$.]+?)?(=(?:"(?:[^"\\]|\\.)*"|[\w$-]+))?\.([a-z]\w*(?:\.(?:from|hue|order|unit))?)$/u.exec(
       key
@@ -208,9 +206,9 @@ function pathOf(key: string): string[] {
 function rank(key: string): number {
   if (key === '...') return 0;
   if (key.startsWith('$')) return 1;
-  if (key.startsWith('<')) return 2;
+  if (key.startsWith('<') && key !== '<Listing>') return 2;
   if (key.startsWith('{')) return 3;
-  if (key === 'listing') return 4;
+  if (key === '<Listing>') return 4;
   if (/^[a-z]/u.test(key)) return 5;
   if (key.startsWith(':')) return 6;
   if (key.startsWith('=')) return 7;

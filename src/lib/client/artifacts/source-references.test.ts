@@ -115,8 +115,12 @@ describe('references in messages', () => {
   });
 
   it('name lines, a line and column, or a run of lines', () => {
-    expect(named('line 12')).toEqual(['<View of="Index" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>']);
-    expect(named('12:24')).toEqual(['Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>']);
+    expect(named('line 12')).toEqual([
+      '<View of="Index" name="Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>'
+    ]);
+    expect(named('12:24')).toEqual([
+      'Highlight"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>'
+    ]);
     expect(named('lines 18-19')).toEqual(['    {@compare.left}\n    {@compare.right}']);
     expect(named('line 99')).toEqual([]);
   });
@@ -284,7 +288,7 @@ describe('design variables with a row of their own', () => {
       'Highlight.Link:@left.targetFill': 'sky-100',
       'IntCell.fill': 'white',
       'Main.gap': 0.5,
-      'listing.language': 'code'
+      '<Listing>.language': 'code'
     }
   };
 
@@ -295,7 +299,7 @@ describe('design variables with a row of their own', () => {
       'IntCell.fill',
       'views.Index:found',
       'Main.gap',
-      'listing.language'
+      '<Listing>.language'
     ])
       expect(ghostKey(` ${key} `, design)).toBe(key);
   });

@@ -37,7 +37,7 @@ export type ModeBuildResult =
         variant?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
         views?: Record<string, string[]>;
-        // The source's own listings, the first options of its listing.language variable.
+        // The source's own listings, the first options of its <Listing>.language variable.
         listings?: string[];
         // The kind of each tag, by its line:column.
         kinds?: Record<string, string[]>;

@@ -1093,7 +1093,7 @@ export function comparisonBriefProblem({ brief }: Comparisons[number]): string |
 /** The values a decision's patch sets, as kept (see design-patch.server.ts), as a build chooses them. */
 export function designValues(values: unknown): DesignValues {
   // Keys as written or kept, kept (see design-keys.ts): {Int} is views.Int, <Listing>.syntax
-  // listing.syntax.
+  // <Listing>.syntax.
   return Object.fromEntries(
     designPatch(values).set.map(({ variable, value }) => [keptKey(variable), value])
   ) as DesignValues;

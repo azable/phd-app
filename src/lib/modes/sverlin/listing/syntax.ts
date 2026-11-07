@@ -1,6 +1,6 @@
 /**
  * The syntax of a listing's text, as spans of keywords, strings, comments and numbers, for the page
- * to draw keywords in bold and, where the variant colours it (listing.syntax), each kind in its
+ * to draw keywords in bold and, where the variant colours it (<Listing>.syntax), each kind in its
  * colour. A small tokenizer, not a highlighting library: a listing is a few lines of teaching code,
  * only ranges are needed, to nest with its regions and tokens, and pseudocode has no grammar.
  */

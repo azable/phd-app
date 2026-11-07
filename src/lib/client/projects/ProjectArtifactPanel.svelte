@@ -47,7 +47,7 @@
     selectedSources?: readonly {
       source: string;
       elements: readonly { id: string; place?: string }[];
-      /** The listing the presentation shows, its listing.language. */
+      /** The listing the presentation shows, its <Listing>.language. */
       listingName?: string;
     }[];
     /** What the visible presentations drew, with the source each was built from. */

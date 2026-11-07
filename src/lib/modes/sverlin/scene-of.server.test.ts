@@ -73,7 +73,7 @@ it(
       {
         chosen: {
           'IntCell:target.stroke': 'violet-500',
-          'listing.places': 'fill',
+          '<Listing>.places': 'fill',
           'Arrow.Link.targetFill': 'amber-100',
           'Arrow.Link.targetStroke': 'amber-500'
         }

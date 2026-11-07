@@ -83,8 +83,8 @@ describe('listings of the source’s own', () => {
 
   it('light each region where the algorithm runs the code with its label, parts of a line apart', () => {
     const prepared = prepareSvelteComponent(insertion);
-    expect(prepared.design.starter['listing.language']).toBe('textbook');
-    expect(prepared.design.space['listing.language']).toEqual(['textbook', 'none']);
+    expect(prepared.design.starter['<Listing>.language']).toBe('textbook');
+    expect(prepared.design.space['<Listing>.language']).toEqual(['textbook', 'none']);
     const { text } = prepared.listings!.textbook;
     const lit = prepared.paced(new Set(['shift', 'place'])).lit.textbook;
     expect(text.split('\n')[5]).toBe('5      while j > 0 and A[j] > key');

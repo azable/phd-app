@@ -95,13 +95,11 @@ describe('design space', () => {
   });
 
   it('starts every variable at the starter, each type in its first view', () => {
-    // A group, as <Node>.padding, what a kind inherits, and a role's style in a base, as
-    // $Value.fill, are set only where a variant sets them.
+    // What a kind inherits and a role's style in a base, as <Value>.fill, are set only where a
+    // variant sets them.
     expect(Object.keys(starter).sort()).toEqual(
       Object.keys(space)
-        .filter(
-          (key) => !key.startsWith('<') && !key.endsWith('.inherit') && !/^\$[A-Z]/u.test(key)
-        )
+        .filter((key) => !key.startsWith('<') && !key.endsWith('.inherit'))
         .sort()
     );
     expect(starter['views.Int']).toBe('IntCell');
@@ -361,7 +359,7 @@ describe('free layouts', () => {
   });
 });
 
-describe('design tokens and tag groups', () => {
+describe('design tokens and role styles', () => {
   // IntCell and IntDot are values, Cells a container and Note a text, all made by <Node>;
   // Arrow.Link is a link, made by <Link>; `{v}` is a place, IntCell:v.
   const levelled = prepareSvelteComponent(
@@ -371,50 +369,63 @@ describe('design tokens and tag groups', () => {
     buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles)
       .values;
 
-  it('starts every kind at its role look, which names the tokens it shares, and no group set', () => {
+  it('starts every kind at its role look, which names the tokens it shares', () => {
     expect(levelled.starter['$spacing']).toBe(0.375);
-    expect(levelled.space['<Node>.padding']).toContain('$spacing');
-    expect(levelled.starter['<Node>.padding']).toBeUndefined();
-    expect(levelled.space['<Node>.shown']).toBeUndefined();
-    expect(levelled.space['<Link>.targetFill']).toBeDefined();
-    expect(levelled.space['<Node>.targetFill']).toBeUndefined();
+    expect(levelled.space['<Value>.padding']).toContain('$spacing');
+    expect(levelled.space['<Value>.shown']).toBeUndefined();
+    expect(levelled.space['<Pointer>.targetFill']).toBeDefined();
+    expect(levelled.space['<Value>.targetFill']).toBeUndefined();
+    expect(levelled.roles['Arrow.Link']).toBe('pointer');
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
   });
 
-  it('changes every kind following a token, and a group overrides the token for its tag', () => {
+  it('changes every kind following a token, and a role style overrides the token for its role', () => {
     const spacing = build({ chosen: { $spacing: 0.25 } });
     expect([spacing['IntCell.padding'], spacing['IntDot.padding']]).toEqual([0.25, 0.25]);
     expect(spacing['Cells.padding']).toBe(0);
-    const group = build({ chosen: { $spacing: 0.25, '<Node>.padding': 0.5 } });
-    expect([group['IntCell.padding'], group['Cells.padding'], group['Note.padding']]).toEqual([
-      0.5, 0.5, 0.5
+    const styled = build({ chosen: { $spacing: 0.25, '<Value>.padding': 0.5 } });
+    expect([styled['IntCell.padding'], styled['IntDot.padding'], styled['Note.padding']]).toEqual([
+      0.5, 0.5, 0
     ]);
-    // <Node> never reaches a link.
-    expect(group['Arrow.Link.padding']).toBeUndefined();
-    const named = build({ chosen: { '<Node>.fill': '$highlight' } });
-    expect([named['IntCell.fill'], named['Note.fill']]).toEqual(['amber-100', 'amber-100']);
+    const named = build({ chosen: { '<Text>.fill': '$highlight' } });
+    expect([named['IntCell.fill'], named['Note.fill']]).toEqual(['white', 'amber-100']);
   });
 
-  it("keeps a kind's own value and a place's over its group", () => {
-    const own = build({ chosen: { '<Node>.padding': 0.5, 'IntCell.padding': 0.125 } });
+  it('refuses the old spellings of built-in names, giving the new', () => {
+    expect(() => build({ chosen: { '$Value.fill': 'white' } })).toThrow(
+      /\$Value is written <Value>/u
+    );
+    expect(() => build({ chosen: { '<Node>.padding': 0.5 } })).toThrow(
+      /<Node>\.padding: the <Node> group is gone; set the role styles <Container>, <Value>/u
+    );
+    expect(() => build({ chosen: { 'listing.syntax': 'colour' } })).toThrow(
+      /listing is written <Listing>/u
+    );
+    expect(() => build({ chosen: { base: '$starter' } })).toThrow(
+      /\$starter is written <starter>/u
+    );
+  });
+
+  it("keeps a kind's own value and a place's over its role style", () => {
+    const own = build({ chosen: { '<Value>.padding': 0.5, 'IntCell.padding': 0.125 } });
     expect([own['IntCell.padding'], own['IntDot.padding']]).toEqual([0.125, 0.5]);
-    const placed = build({ chosen: { '<Node>.fill': 'sky-100', 'IntCell:v.fill': 'rose-100' } });
+    const placed = build({ chosen: { '<Value>.fill': 'sky-100', 'IntCell:v.fill': 'rose-100' } });
     expect([placed['IntCell.fill'], placed['IntCell:v.fill']]).toEqual(['sky-100', 'rose-100']);
-    // A place not set apart follows its kind, and so the group.
-    expect(build({ chosen: { '<Node>.fill': 'sky-100' } })['IntCell:v.fill']).toBe('sky-100');
+    // A place not set apart follows its kind, and so the role style.
+    expect(build({ chosen: { '<Value>.fill': 'sky-100' } })['IntCell:v.fill']).toBe('sky-100');
     // A value set apart in the base stays when a token changes later.
     const base = build({ chosen: { 'IntCell.padding': 0.125 } });
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntCell.padding']).toBe(0.125);
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntDot.padding']).toBe(0.5);
   });
 
-  it('refuses a token or a group outside its options, naming them', () => {
+  it('refuses a token or a role style outside its options, naming them', () => {
     expect(() => build({ chosen: { $radius: 5 } })).toThrow(
       /\$radius cannot be 5; its options are 0, 2, 4, 6, 8, 12, 999/u
     );
-    expect(() => build({ chosen: { '<Node>.padding': '$radius' } })).toThrow(
-      /<Node>\.padding cannot be "\$radius"/u
+    expect(() => build({ chosen: { '<Value>.padding': '$radius' } })).toThrow(
+      /<Value>\.padding cannot be "\$radius"/u
     );
   });
 
@@ -424,18 +435,18 @@ describe('design tokens and tag groups', () => {
     expect(drawn['IntCell.color']).toBe(drawn['$text']);
   });
 
-  it('takes the listing group as the listing settings', () => {
+  it('takes the listing settings under <Listing>', () => {
     const { design } = prepareSvelteComponent(pseudocode);
     const chosen = { '<Listing>.syntax': 'colour' };
     const values = buildVariant(design.space, design.starter, { chosen }, 1).values;
-    expect(values['listing.syntax']).toBe('colour');
+    expect(values['<Listing>.syntax']).toBe('colour');
   });
 
-  it('gives a kind what it inherits from a style, over its group and token, under its own', () => {
+  it('gives a kind what it inherits from a style, over its role style and token, under its own', () => {
     const styled = build({
       chosen: {
         $spacing: 0.25,
-        '<Node>.padding': 0.5,
+        '<Text>.padding': 0.5,
         '$cell.padding': 0.125,
         '$cell.radius': 2,
         'IntCell.inherit': '$cell',
@@ -444,7 +455,7 @@ describe('design tokens and tag groups', () => {
       }
     });
     expect([styled['IntCell.padding'], styled['IntDot.padding']]).toEqual([0.125, 0.125]);
-    // Its own value wins; a prop the style does not set comes from the group.
+    // Its own value wins; a prop the style does not set comes from the role's style.
     expect([styled['IntCell.radius'], styled['IntDot.radius']]).toEqual([2, 999]);
     expect(styled['Note.padding']).toBe(0.5);
     // A style's value can name a token, which it then follows.
@@ -503,23 +514,23 @@ describe('design tokens and tag groups', () => {
     expect(drawn['IntCell.radius']).toBe(drawn['$cell.radius']);
   });
 
-  it('takes a role’s look from its style in the base, below a group and a kind’s own value', () => {
-    const based = build({ chosen: { '$Value.radius': 0, '$Value.fill': '$surface' } });
+  it('takes a role’s look from its style in the base, below a kind’s own value', () => {
+    const based = build({ chosen: { '<Value>.radius': 0, '<Value>.fill': '$surface' } });
     expect([based['IntCell.radius'], based['IntDot.radius']]).toEqual([0, 0]);
     expect(based['IntCell.fill']).toBe('white');
-    const grouped = build({ chosen: { '$Value.radius': 0, '<Node>.radius': 4 } });
-    expect(grouped['IntCell.radius']).toBe(4);
-    const own = build({ chosen: { '$Value.radius': 0, 'IntCell.radius': 12 } });
+    const own = build({ chosen: { '<Value>.radius': 0, 'IntCell.radius': 12 } });
     expect([own['IntCell.radius'], own['IntDot.radius']]).toEqual([12, 0]);
   });
 
   it('gives each prop on a scale only its steps, refusing a value off the scale', () => {
     // The base's own values must sit on its scale too: the starter's radii 8 and 4 do not.
-    const onScale = { $radius: 6, '$Code.radius': 0 };
+    const onScale = { $radius: 6, '<Code>.radius': 0 };
     expect(() => build({ chosen: { 'scale.radius': '0 6 999' } })).toThrow(
       /\$radius cannot be 8; its options are 0, 6, 999/u
     );
-    const scaled = build({ chosen: { 'scale.radius': '0 6 999', ...onScale, '$Value.radius': 6 } });
+    const scaled = build({
+      chosen: { 'scale.radius': '0 6 999', ...onScale, '<Value>.radius': 6 }
+    });
     expect(scaled['IntCell.radius']).toBe(6);
     expect(() =>
       build({ chosen: { 'scale.radius': '0 6 999', ...onScale, 'IntCell.radius': 8 } })
@@ -563,16 +574,16 @@ describe('design tokens and tag groups', () => {
     const { values, dropped } = buildVariant(
       levelled.space,
       levelled.starter,
-      { chosen: { ...starterBase, base: '$mine', 'listing.lit.fill': 'neutral-200' } },
+      { chosen: { ...starterBase, base: '$mine', '<Listing>.lit.fill': 'neutral-200' } },
       1,
       levelled.fallbacks,
       levelled.roles
     );
     expect(values.base).toBe('$mine');
-    expect(values['listing.lit.fill']).toBeUndefined();
+    expect(values['<Listing>.lit.fill']).toBeUndefined();
     expect(dropped).toEqual([]);
     expect(() => build({ chosen: { ...starterBase, base: 'textbook' } })).toThrow(
-      /names its base with \$/u
+      /names its base as "<starter>", or with \$/u
     );
   });
 
@@ -581,8 +592,8 @@ describe('design tokens and tag groups', () => {
       buildOnBase(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles);
     expect(() => plain({ chosen: { 'IntCell.radius': 0 } })).toThrow(/names no base/u);
     expect(() => plain({ chosen: { base: '$textbook' } })).toThrow(
-      /base sets no \$Value\.fill, .*start from a template/u
+      /base sets no <Value>\.fill, .*start from a template/u
     );
-    expect(plain(withStarterBase({})).values.base).toBe('$starter');
+    expect(plain(withStarterBase({})).values.base).toBe('<starter>');
   });
 });

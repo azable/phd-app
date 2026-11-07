@@ -7,7 +7,13 @@
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import type { AiDesign, AiDesignContext, AiVariable } from '$lib/server/ai/context/project-context';
 import { writtenKey } from '../library/node/design-keys';
-import { templateOf, templates, templateValues } from './templates/templates';
+import {
+  templateName,
+  templateOf,
+  templates,
+  templateValues,
+  type TemplateName
+} from './templates/templates';
 import {
   baseKey,
   baseOptions,
@@ -16,13 +22,12 @@ import {
   listingOptions,
   listingPlacesOptions,
   listingPropOptions,
-  groupOf,
-  groupOptions,
+  roleStyleOf,
+  roleStyleOptions,
   isToken,
   levelFor,
   propOptions,
   styleOf,
-  tagOf,
   tokenProps,
   type DesignProp,
   type KindRole
@@ -54,12 +59,15 @@ export function designContext(design: AiDesign): AiDesignContext {
   const levels: Record<string, DesignValue | Record<string, DesignValue>> = {};
   const followers = new Map<string, Set<string>>();
   const own = variables.filter(({ variable, value, follows }) => {
-    const group = groupOf(variable);
     const style = styleOf(variable);
+    const roleStyle = roleStyleOf(variable);
     if (isToken(variable)) levels[variable] = value;
-    else if (group) ((levels[group.tag] ??= {}) as Record<string, DesignValue>)[group.prop] = value;
-    // A style is a level of its own, as a group is; what a kind inherits is told as "..." with
-    // the kind's own values.
+    else if (roleStyle)
+      ((levels[variable.slice(0, variable.indexOf('.'))] ??= {}) as Record<string, DesignValue>)[
+        roleStyle.prop
+      ] = value;
+    // A style is a level of its own, as a role's style is; what a kind inherits is told as "..."
+    // with the kind's own values.
     else if (style)
       ((levels[style.style] ??= {}) as Record<string, DesignValue>)[style.prop] = value;
     else if (variable.endsWith('.inherit'))
@@ -160,18 +168,16 @@ export function designVariables(
   const variant = presentation?.variant ?? {};
   const roles = (presentation?.roles ?? {}) as Readonly<Record<string, KindRole>>;
   // What a kind's prop follows where it holds that value (see buildVariant): what it inherits,
-  // as $cell.padding or VertexCard.padding, its group where set, as <Node>.padding, or the token
+  // as $cell.padding or VertexCard.padding, its role's style, as <Value>.padding, or the token
   // its role's look names, as $spacing.
   const followed = (key: string): string | undefined => {
     const level = levelFor(variant, roles, key);
     return level?.value !== undefined && level.value === variant[key] ? level.from : undefined;
   };
-  const rolesOfTag = (tag: string) =>
-    [...new Set(Object.values(roles))].filter((role) => tagOf(role) === tag);
   const styles = [...new Set(Object.keys(variant).flatMap((key) => styleOf(key)?.style ?? []))];
   const variables = Object.entries(variant).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
-    // What a kind inherits takes none, the kinds of its role, or a style the variant sets; a
+    // What a kind inherits takes the kinds of its role, or a style the variant sets; a
     // style's prop, its prop's options.
     if (key.endsWith('.inherit')) {
       const kind = key.slice(0, -'.inherit'.length);
@@ -180,7 +186,7 @@ export function designVariables(
       );
       return {
         variable: key,
-        options: ['none', ...peers, ...styles],
+        options: [...peers, ...styles],
         value,
         ...(origin ? { origin } : {})
       };
@@ -196,9 +202,9 @@ export function designVariables(
       options[set] = baseOptions(set, propOptions[set], variant);
       return { variable: key, options: set, value, ...(origin ? { origin } : {}) };
     }
-    const group = groupOf(key);
-    if (group) {
-      options[key] = groupOptions(rolesOfTag(group.tag), group.prop);
+    const roleStyle = roleStyleOf(key);
+    if (roleStyle) {
+      options[key] = roleStyleOptions(roleStyle.prop as DesignProp);
       return { variable: key, options: key, value, ...(origin ? { origin } : {}) };
     }
     const follows = followed(key);
@@ -210,12 +216,12 @@ export function designVariables(
     };
     const view = key.startsWith('views.') ? typeIn(key.slice('views.'.length)) : undefined;
     const prop =
-      key === 'listing.language' || key === 'listing.places'
+      key === '<Listing>.language' || key === '<Listing>.places'
         ? key
         : key.slice(key.lastIndexOf('.') + 1);
     // A listing's text colour has options of its own, which can keep the listing's ink.
     const set =
-      prop === 'color' && key.startsWith('listing.')
+      prop === 'color' && key.startsWith('<Listing>.')
         ? 'listing.color'
         : prop === 'form' && structures?.[key.slice(0, -'.form'.length)] !== 'layers'
           ? 'form.unlayered'
@@ -223,8 +229,8 @@ export function designVariables(
     const known: Record<string, readonly DesignValue[]> = {
       ...propOptions,
       ...frameOptions,
-      'listing.language': listingOptions['listing.language'],
-      'listing.places': listingPlacesOptions,
+      '<Listing>.language': listingOptions['<Listing>.language'],
+      '<Listing>.places': listingPlacesOptions,
       'listing.color': listingPropOptions('color') ?? [],
       // The forms of a layout whose links make no layers, which do not take layered.
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
@@ -233,7 +239,10 @@ export function designVariables(
     // A base's name, scales and palette are free within their form (see withBase).
     const ofBase =
       key === baseKey
-        ? [...Object.keys(templates).map((name) => `$${name}`), '$ and a name of your own']
+        ? [
+            ...(Object.keys(templates) as TemplateName[]).map(templateName),
+            '$ and a name of your own'
+          ]
         : key.startsWith('scale.')
           ? ['rising numbers, 0 or more, separated by spaces']
           : paletteKey.test(key)
@@ -244,8 +253,8 @@ export function designVariables(
       variable: key,
       options: view
         ? [...(presentation?.views?.[view] ?? []), 'none']
-        : key === 'listing.language' && presentation?.listings?.length
-          ? [...presentation.listings, ...listingOptions['listing.language']]
+        : key === '<Listing>.language' && presentation?.listings?.length
+          ? [...presentation.listings, ...listingOptions['<Listing>.language']]
           : set,
       value,
       ...(origin ? { origin } : {}),

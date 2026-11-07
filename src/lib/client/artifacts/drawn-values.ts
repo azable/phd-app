@@ -402,9 +402,7 @@ export function placeGhosts(
               `${around[typed].name}.`
             ])
           ];
-    const views = new Set(
-      presentations.flatMap(({ views = {} }) => views[type] ?? [])
-    );
+    const views = new Set(presentations.flatMap(({ views = {} }) => views[type] ?? []));
     const choices = keys.filter((key) => {
       const at = key.indexOf(':');
       const head = key.slice(0, at);
@@ -468,13 +466,13 @@ export function placeGhosts(
 function listingSettings(presentations: readonly DrawnPresentation[]): GhostProp[] {
   const keys = new Set(
     presentations.flatMap(({ variant = {} }) =>
-      Object.keys(variant).filter((key) => key.startsWith('listing.'))
+      Object.keys(variant).filter((key) => key.startsWith('<Listing>.'))
     )
   );
   const own = [...keys].filter((key) => !key.includes('@'));
   const regions = [...keys].filter((key) => key.includes('@')).sort();
   return [...own.sort(byOrder(listingOrder, (key) => key)), ...regions].map((key) =>
-    variable(presentations, key, key.slice('listing.'.length))
+    variable(presentations, key, key.slice('<Listing>.'.length))
   );
 }
 
@@ -527,8 +525,7 @@ export function viewMarkers(
 function closingAt(state: EditorState, line: number, column: number): number | undefined {
   if (line < 1 || line > state.doc.lines) return undefined;
   const from = state.doc.line(line).from + column - 1;
-  if (!/^<(?:Node|Link|Listing)\b/u.test(state.doc.sliceString(from, from + 9)))
-    return undefined;
+  if (!/^<(?:Node|Link|Listing)\b/u.test(state.doc.sliceString(from, from + 9))) return undefined;
   const end = from + tagEnd(state.doc.sliceString(from, from + 4000));
   if (state.doc.sliceString(end - 1, end) !== '>') return undefined;
   let at = state.doc.sliceString(end - 2, end - 1) === '/' ? end - 2 : end - 1;

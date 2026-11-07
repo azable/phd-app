@@ -141,7 +141,7 @@ export const browserBundlePresentationSchema = v.strictObject({
   origins: v.optional(v.record(v.string(), designOriginSchema)),
   /** The views each type rendered by name could draw, the options of its views variable. */
   views: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
-  /** The source's own listings, the first options of its listing.language variable. */
+  /** The source's own listings, the first options of its <Listing>.language variable. */
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),

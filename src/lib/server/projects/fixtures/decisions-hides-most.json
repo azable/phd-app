@@ -20,7 +20,7 @@
     "views.Int:value": "IntCell",
     "ResultCard.shown": true,
     "SearchView.shown": true,
-    "listing.language": "textbook",
+    "<Listing>.language": "textbook",
     "views.Int:target": "IntCell",
     "CheckMark:i.shown": true,
     "FoundCaption.shown": true,
@@ -67,7 +67,7 @@
     "views.Int:value": ["IntCell", "IntTally", "none"],
     "ResultCard.shown": [true, false],
     "SearchView.shown": [true, false],
-    "listing.language": ["textbook", "none"],
+    "<Listing>.language": ["textbook", "none"],
     "views.Int:target": ["IntCell", "IntTally", "none"],
     "CheckMark:i.shown": [true, false],
     "FoundCaption.shown": [true, false],
@@ -256,7 +256,7 @@
     },
     {
       "type": "choice",
-      "name": "listing.language",
+      "name": "<Listing>.language",
       "choice": "none",
       "probabilities": [
         {

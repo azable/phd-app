@@ -1,6 +1,6 @@
 /**
  * The assistant's templates: whole bases, each a nested design (see nestedDesign in
- * ../../library/node/design-keys.ts) of every token, every role's look (`$Value`, …), the scales,
+ * ../../library/node/design-keys.ts) of every token, every role's look (`<Value>`, …), the scales,
  * a palette where it uses exact colours, a second state's style (`$second`), and the listing's
  * look. A design names one as `"...": "$textbook"` and patches it; the app writes the template
  * out in full into the design (see readDesignPatch), so the Timeline records every base value and
@@ -9,6 +9,7 @@
  * assistant.md's Templates.
  */
 
+import { starterName } from '../../library/node/design';
 import { flatDesign } from '../../library/node/design-keys';
 import starter from '../../library/node/starter-base.json';
 import highContrast from './high-contrast.json';
@@ -26,13 +27,19 @@ export const templates = {
 
 export type TemplateName = keyof typeof templates;
 
-/** The template a base's name, as `$textbook`, names, if it names one. */
+/**
+ * A template's base name as a design writes it: the starter's built in, so in angle brackets,
+ * `<starter>`, the others with `$`, as `$textbook`.
+ */
+export const templateName = (name: TemplateName): string =>
+  name === 'starter' ? starterName : `$${name}`;
+
+/** The template a base's name, as `$textbook` or `<starter>`, names, if it names one. */
 export function templateOf(base: unknown): TemplateName | undefined {
-  const name = typeof base === 'string' && base.startsWith('$') ? base.slice(1) : undefined;
-  return name !== undefined && Object.hasOwn(templates, name) ? (name as TemplateName) : undefined;
+  return (Object.keys(templates) as TemplateName[]).find((name) => templateName(name) === base);
 }
 
-/** A template's values, flat, with their keys as written, as `$Value.fill` and `scale.spacing`. */
+/** A template's values, flat, with their keys as written, as `<Value>.fill` and `scale.spacing`. */
 export function templateValues(name: TemplateName): Record<string, DesignValue> {
   return flatDesign(templates[name]) as Record<string, DesignValue>;
 }

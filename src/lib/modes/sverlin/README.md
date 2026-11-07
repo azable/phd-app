@@ -1160,10 +1160,10 @@ The design space is every variable of a component's look, found in its markup:
   `gap`, as `Stacked.ratio` (see Page frame), so each layout keeps its own; a
   node a layout writes beside what it draws, as a row in its root, is of its
   kind too.
-- A listing's, where the view places a `<Listing />`: `listing.language`, its
-  lit look, as `listing.lit.radius`, and each region's paint, as
-  `listing.lit@insert.compare.left.fill`, which follows the listing's lit look
-  until set, and where it has tokens, `listing.places` (see Listing).
+- A listing's, where the view places a `<Listing />`: `<Listing>.language`, its
+  lit look, as `<Listing>.lit.radius`, and each region's paint, as
+  `<Listing>.lit@insert.compare.left.fill`, which follows the listing's lit look
+  until set, and where it has tokens, `<Listing>.places` (see Listing).
 - Each kind of node's props. A kind is the view or layout a node is in, its
   name, as `Items` or `Title`; every node of a view or layout is of its kind. A
   node naming its kind, as `<Node kind="Header">` in `Table`, is of the kind
@@ -1174,7 +1174,7 @@ The design space is every variable of a component's look, found in its markup:
 - Each prop a view binds to its value, as `VertexCard=true.fill` or
   `LevelCell.textSize.from`, or a length's unit, as `Bar.height.unit` (see Props
   bound to a view's value).
-- The design's tokens and groups, which set many kinds at once (see Shared
+- The design's tokens and role styles, which set many kinds at once (see Shared
   values).
 
 A view's or layout's name is its kind, and so is a node's `kind`, so each names
@@ -1283,7 +1283,7 @@ two-way line and `arrow` otherwise; `headSize`, 6, 9 (the start), 12, or 16
 pixels; and, for a link from a variable (see Link), how it paints the element it
 reaches while it is drawn: `targetFill`, `targetStroke` and `targetColor`, each
 `none` (leaving that paint as it is) or a colour, and `targetStrokeWidth`, a
-line's width; they start as the base's `$Link` sets them, and a place sets its
+line's width; they start as the base's `<Link>` sets them, and a place sets its
 own, as `Mark.Link:j.targetFill`. It is paint only, so no box changes size. A
 label's look is its own nodes' kind.
 
@@ -1449,11 +1449,13 @@ and a variable of one name are two places, `:@held` and `:held`.
 
 ### Shared values
 
-A key's mark says what it sets: `$` a token, `<…>` every kind its tag makes,
-`{…}` the view a type is drawn with, `:` a place, `=` a value of the data, and
-no mark one kind. `@` names only a part of the run, a label, as in the source:
-it says when, as `:` says where, so a place drawn from a label's value is
-`:@label`.
+A key's mark says what it sets: `$` a token or a style, the author's names;
+`<…>` a built-in name, a role's style (`<Value>`, `<Container>`, `<Text>`,
+`<Code>`, `<Icon>`, `<Link>`, `<Pointer>`), the listing (`<Listing>`) or the
+starter base (`<starter>`); `{…}` the view a type is drawn with, `:` a place,
+`=` a value of the data, and no mark one kind. `@` names only a part of the run,
+a label, as in the source: it says when, as `:` says where, so a place drawn
+from a label's value is `:@label`.
 
 - A token is one value the starter's kinds share: `$text` (text colour),
   `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight`
@@ -1461,12 +1463,6 @@ it says when, as `:` says where, so a place drawn from a label's value is
   `$spacing` (framed values' padding), `$radius` and `$lineWidth`. Every kind
   that starts with a token's value follows it, so `{"$spacing": 0.25}` tightens
   every framed value.
-- A group sets one prop for every kind its tag makes that has it:
-  `<Node>.padding` for every node's kind (never a `<Link>`'s),
-  `<Link>.strokeWidth` for every link, and `<Listing>.syntax` for the listing,
-  as `listing.syntax`. Its value is one of the prop's options or a token, as
-  `{"<Node>.fill": "$highlight"}`. A group is set only where a variant sets it,
-  and never sets `shown`.
 - A style is a `$` name holding a group of props, as a CSS class does:
   `$cell.stroke`, `$cell.padding`. A kind inherits one style, or one kind of its
   role, and takes each prop it sets: `IntCell.inherit: "$cell"`, or
@@ -1476,29 +1472,32 @@ it says when, as `:` says where, so a place drawn from a label's value is
   role's look by default, so a kind leaves `"..."` out unless it inherits a
   style or a kind; `"...": "none"` is refused.
 - A kind's role comes only from the props written on its node: a `<Link>` is a
-  link; a node with a `layout`, links, or one `{#each}` arranges others
-  (`$Container`); a bare `icon` draws an icon (`$Icon`); a node with `value`, or
-  holding nothing, or only links from it, is a value (`$Value`); a caption's
-  token is code (`$Code`); and any other node, holding text or renders, is text
-  (`$Text`). Where it stands, as among a free layout's vertices, and what binds
+  link (`<Link>`), or, written with no `from`, a link from a variable
+  (`<Pointer>`); a node with a `layout`, links, or one `{#each}` arranges others
+  (`<Container>`); a bare `icon` draws an icon (`<Icon>`); a node with `value`,
+  or holding nothing, or only links from it, is a value (`<Value>`); a caption's
+  token is code (`<Code>`); and any other node, holding text or renders, is text
+  (`<Text>`). Where it stands, as among a free layout's vertices, and what binds
   its size never change its role. A node sized by its value, as
   `<Node height={this} />`, is exactly its length, so its kind has no `padding`.
 - A base is what every kind starts from, written out in the design as values:
-  its tokens; a style for each role's look, as `$Value` for every framed value,
-  `$Container`, `$Text`, `$Code`, `$Icon` and `$Link`, which every kind of that
-  role follows; its scales; its palette; and the listing's look. The engine
-  holds no look: what tells roles apart in the starter base is only what each
-  does (text and containers unboxed, code in the code font), and its colours,
-  corners and lines are the starter's taste, as a template's are its own.
-  `"..."` at the top names it, as `"...": "$textbook"`. Every design names its
-  base and holds every role's look: the app has no look of its own. A design
-  that comes in naming none, as a first version's or a demo example's, gets the
-  starter base, `"...": "$starter"`, written in; one naming a base but missing a
-  role's look is refused, naming what is missing.
+  its tokens; a style for each role's look, as `<Value>` for every framed value,
+  `<Container>`, `<Text>`, `<Code>`, `<Icon>`, `<Link>` and `<Pointer>`, which
+  every kind of that role follows (never its `shown`), its prop one of the
+  prop's options or a token, as `"<Value>": {"fill": "$surface"}`; its scales;
+  its palette; and the listing's look. The engine holds no look: what tells
+  roles apart in the starter base is only what each does (text and containers
+  unboxed, code in the code font), and its colours, corners and lines are the
+  starter's taste, as a template's are its own. `"..."` at the top names it, as
+  `"...": "$textbook"`. Every design names its base and holds every role's look:
+  the app has no look of its own. A design that comes in naming none, as a first
+  version's or a demo example's, gets the starter base, `"...": "<starter>"`,
+  written in; one naming a base but missing a role's look is refused, naming
+  what is missing.
   - A scale is the steps a prop takes, numbers separated by spaces:
     `scale.spacing` for `padding` and `gap` (em), `scale.radius`, `scale.type`
     for `textSize` and `scale.line` for `strokeWidth` (pixels), and
-    `scale.opacity`. Where a design sets one, every kind, group and token takes
+    `scale.opacity`. Where a design sets one, every kind, style and token takes
     only its steps (a line 0 too), so `"scale": {"radius": "0 4 999"}` refuses
     `radius` 8.
   - A palette names exact colours, as `"palette": {"accent": "#E69F00"}`, and
@@ -1506,13 +1505,14 @@ it says when, as `:` says where, so a place drawn from a label's value is
     named colours.
   - A base holds values the source may not use, as the listing's look where no
     `<Listing />` is placed; those are left out without a word.
-- A kind's own value overrides what it inherits, that its group, its group its
-  role's style in the base, and that the token: with
-  `{"$spacing": 0.25, "<Node>.padding": 0.5, "IntCell.padding": 0}`, pointers
-  take 0.25, every node's kind 0.5, and IntCell none. A kind set apart once
-  stays apart when what it follows changes later, and a place, as
-  `IntCell:v.fill`, overrides its kind as before.
-- The design reads nested, one object for each style, group and kind, as
+- A kind's own value overrides what it inherits, that its role's style in the
+  base, and that the token: with
+  `{"$spacing": 0.25, "<Value>": {"padding": 0.5}, "IntCell": {"padding": 0}}`,
+  every value's kind takes 0.5, IntCell none, and every other kind whose role's
+  style names `$spacing` 0.25. A kind set apart once stays apart when what it
+  follows changes later, and a place, as `IntCell:v.fill`, overrides its kind as
+  before.
+- The design reads nested, one object for each style, role style and kind, as
   project.design's levels and values and the Choices file show it: `"..."` is
   what a kind inherits, a nested kind sits inside its view's object, and a place
   or a value is a key inside its kind's:
@@ -1520,7 +1520,7 @@ it says when, as `:` says where, so a place drawn from a label's value is
   ```json
   {
     "$cell": { "stroke": "neutral-500", "padding": 0.25, "radius": 4 },
-    "<Node>": { "padding": 0 },
+    "<Value>": { "padding": 0 },
     "IntCell": { "...": "$cell", ":target": { "stroke": "violet-500" } },
     "VertexCard": { "...": "$cell", "radius": 999 }
   }
@@ -1581,7 +1581,7 @@ variables:
 - Give a source a listing of the algorithm as taught (see Listing), and more
   than one view of a type where the request leaves open what it shows (see Views
   of types), as a position's number and its element's name; the design decides
-  whether a variant shows each, set by the assistant (as `listing.language`
+  whether a variant shows each, set by the assistant (as `<Listing>.language`
   none).
 - Never write a look into the markup: a look the participant asks for is the
   values of a kind.
@@ -1659,7 +1659,7 @@ Place it outside views, in a layout, as
 `<Node layout="row"><Listing /><Node layout="column">…</Node></Node>`; it takes
 no props or children, and each of its lines is a node participants can select.
 The text is a `<script listing="textbook">` block; with several,
-`listing.language` chooses which one a presentation shows, the first in the
+`<Listing>.language` chooses which one a presentation shows, the first in the
 starter, or `none`.
 
 Mark each part of the text that should light as a region, `@name[text]`. A
@@ -1718,7 +1718,7 @@ the scenes' pauses decide whether to pause there.
   caption's number included. Hovering any reference outlines the others, dashed
   in the place's stroke (its fill where it has none), drawn in a darker shade of
   its hue where it would show at less than 3:1 on the page, so a pale fill still
-  outlines. `listing.places`, there only where a listing has tokens, says how
+  outlines. `<Listing>.places`, there only where a listing has tokens, says how
   places light: `fill` (the start: the token filled, a 3px band round the node),
   `underline`, `outline` (a ring), or `none`, which lights nothing and links
   nothing on hover; none takes room.
@@ -1743,21 +1743,23 @@ the scenes' pauses decide whether to pause there.
   named as a region names it: by its full name, or in the listing inside the
   regions of the labels around it. It needs no render, and is drawn as code. It
   lights where the label's region lights as the step's own code, not as code
-  kept lit from earlier, in the region's paint (`listing.lit@insert.front.fill`,
-  else the lit fill) unless the layout draws the label, whose place then paints
-  as a variable's does; hovering it outlines the label's region and its other
-  tokens. Like a place's token, it lights only where the presentation shows a
-  listing. A name no label has is refused, naming the nearest label.
-- The lit look is `listing.lit`, with a kind's `fill`, `stroke`, `strokeWidth`,
-  `strokeStyle`, `radius`, `weight`, and `padding`, and `color`, `none` keeping
-  the listing's ink; a stroke is drawn inside the lit text and its padding takes
-  no room, so lighting never moves the text, and a `radius` of 999 makes a pill.
-  Each region is a place, by its label's full name, with its own `fill`,
-  `stroke`, and `color`, as `listing.lit@insert.compare.left.fill`, falling back
-  to its label's mark where the root draws the label as a pointer, so the code a
-  mark stands for looks as its cell does, otherwise to `listing.lit`. A region
-  in another paint than the region around it is drawn inside it.
-- `listing.syntax` sets how the listing's words look: `keywords` (the starter)
+  kept lit from earlier, in the region's paint
+  (`<Listing>.lit@insert.front.fill`, else the lit fill) unless the layout draws
+  the label, whose place then paints as a variable's does; hovering it outlines
+  the label's region and its other tokens. Like a place's token, it lights only
+  where the presentation shows a listing. A name no label has is refused, naming
+  the nearest label.
+- The lit look is `<Listing>.lit`, with a kind's `fill`, `stroke`,
+  `strokeWidth`, `strokeStyle`, `radius`, `weight`, and `padding`, and `color`,
+  `none` keeping the listing's ink; a stroke is drawn inside the lit text and
+  its padding takes no room, so lighting never moves the text, and a `radius` of
+  999 makes a pill. Each region is a place, by its label's full name, with its
+  own `fill`, `stroke`, and `color`, as
+  `<Listing>.lit@insert.compare.left.fill`, falling back to its label's mark
+  where the root draws the label as a pointer, so the code a mark stands for
+  looks as its cell does, otherwise to `<Listing>.lit`. A region in another
+  paint than the region around it is drawn inside it.
+- `<Listing>.syntax` sets how the listing's words look: `keywords` (the starter)
   draws its keywords in bold, as textbooks print them; `colour` also colours
   keywords, strings, comments and numbers; `none` draws plain text. The
   listing's name chooses its keywords: `python`, `javascript`, `java` or `c`

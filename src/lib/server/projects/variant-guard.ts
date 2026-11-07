@@ -16,7 +16,7 @@ import { settledFromEvidence } from './preference-model';
 export function hides(variable: string, value: unknown): boolean {
   if (variable.endsWith('.shown')) return value === false;
   if (variable.startsWith('views.')) return value === 'none';
-  return variable === 'listing.language' && value === 'none';
+  return variable === '<Listing>.language' && value === 'none';
 }
 
 /** The most of the picture one press may hide, and the least that must stay. */
@@ -103,7 +103,7 @@ function hiddenBy(changes: readonly [string, unknown][]): Hidden {
   const hidden: Hidden = { snippets: new Set(), types: new Set(), listing: false };
   for (const [variable, value] of changes) {
     if (!hides(variable, value)) continue;
-    if (variable === 'listing.language') hidden.listing = true;
+    if (variable === '<Listing>.language') hidden.listing = true;
     else if (variable.endsWith('.shown')) hidden.snippets.add(shownSnippet(variable));
     // A place's own view (views.Int:value) hides one render; the type's, all of them.
     else if (!variable.includes(':'))
@@ -271,7 +271,7 @@ export function mootComparison(
   const names = new Set([...hidden.snippets, ...hidden.types]);
   return variables.some(
     (variable) =>
-      (hidden.listing && variable.startsWith('listing.')) ||
+      (hidden.listing && variable.startsWith('<Listing>.')) ||
       variable
         .split(/[:=]/u)[0]
         .split('.')

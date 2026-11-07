@@ -203,7 +203,11 @@ export const briefAttributes = [
       },
       'low-vision': { families: { lettering: 1.4 } },
       'no-listing': {
-        excludes: { what: 'the listing', pattern: /^listing\./, reason: 'it has no code listing' }
+        excludes: {
+          what: 'the listing',
+          pattern: /^<Listing>\./u,
+          reason: 'it has no code listing'
+        }
       }
     }
   },

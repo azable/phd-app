@@ -346,9 +346,9 @@ describe('design variables in the AI context', () => {
     expect(design.options.gap).toEqual([0.5, 1]);
   });
 
-  it('tells tokens and groups once, a kind following a group not at all, and one following a token as the token', () => {
+  it('tells tokens and role styles once, a kind following a role style not at all, and one following a token as the token', () => {
     const { design: built } = prepareSvelteComponent(bfs);
-    const chosen = { $spacing: 0.25, '<Node>.fill': 'sky-100' };
+    const chosen = { $spacing: 0.25, '<Value>.fill': 'sky-100' };
     const { values, origins } = buildVariant(
       built.space,
       built.starter,
@@ -359,7 +359,7 @@ describe('design variables in the AI context', () => {
     );
     const design = designContext(designVariables({ variant: values, origins, roles: built.roles }));
     expect(design.levels?.['$spacing']).toBe(0.25);
-    const node = design.levels?.['<Node>'] as Record<string, string>;
+    const node = design.levels?.['<Value>'] as Record<string, string>;
     expect(node.fill).toBe('sky-100');
     const valueKind = Object.keys(built.roles).find((kind) => built.roles[kind] === 'value')!;
     expect(node.kinds.split(', ')).toContain(valueKind);
@@ -446,9 +446,9 @@ describe('design variables in the AI context', () => {
   });
 
   it('offers how a listing’s places light its own options', () => {
-    const design = designVariables({ variant: { 'listing.places': 'fill' } });
-    expect(design.variables[0].options).toBe('listing.places');
-    expect(design.options['listing.places']).toEqual(['none', 'fill', 'underline', 'outline']);
+    const design = designVariables({ variant: { '<Listing>.places': 'fill' } });
+    expect(design.variables[0].options).toBe('<Listing>.places');
+    expect(design.options['<Listing>.places']).toEqual(['none', 'fill', 'underline', 'outline']);
   });
 
   it('offers each layout’s frame its options', () => {

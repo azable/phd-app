@@ -122,7 +122,8 @@ import {
   type DesignSpace,
   type DesignValue,
   type Fallback,
-  type VariantRequest
+  type VariantRequest,
+  starterListing
 } from './design.server';
 import {
   hiddenAt,
@@ -140,7 +141,6 @@ import {
   placeProps,
   listingPlacesOptions,
   roleProps,
-  starterListing,
   starterListingPlaces,
   type DesignProp,
   type ListingPlacesLook,
@@ -549,7 +549,7 @@ function listingsFrom(
     if (block.name === 'none' || Object.hasOwn(listings, block.name)) {
       problems.push(
         new InvalidSvelteSourceError(
-          `A listing cannot be named ${block.name}: ${block.name === 'none' ? 'listing.language none shows none' : 'another has that name'}.`,
+          `A listing cannot be named ${block.name}: ${block.name === 'none' ? '<Listing>.language none shows none' : 'another has that name'}.`,
           { code: 'sverlin_block', start: at(block.start) }
         )
       );
@@ -1961,7 +1961,7 @@ function prepareViews(
         .map((place) => [place, rootPlaces.get(place)])
     ]);
     const placesSpace: DesignSpace = Object.keys(tokenPlaces).length
-      ? { 'listing.places': [...listingPlacesOptions] }
+      ? { '<Listing>.places': [...listingPlacesOptions] }
       : {};
     // Each region a listing marks is a place, by its label's full name, its paint at each level
     // starting as the level's own.
@@ -1973,7 +1973,7 @@ function prepareViews(
     const regionStarter = Object.fromEntries(
       Object.keys(listingRegionSpace(regionLabels)).map((key) => {
         const prop = key.slice(key.lastIndexOf('.') + 1);
-        return [key, starterListing[`listing.lit.${prop}`]];
+        return [key, starterListing()[`<Listing>.lit.${prop}`]];
       })
     );
     // Variables out of scope at some step, however paced: what the view draws from one is hidden
@@ -2322,7 +2322,9 @@ function prepareViews(
                 Object.entries(linkLabelLook).map(([prop, value]) => [`${view}.${prop}`, value])
               )
             ),
-            ...(Object.keys(placesSpace).length ? { 'listing.places': starterListingPlaces } : {}),
+            ...(Object.keys(placesSpace).length
+              ? { '<Listing>.places': starterListingPlaces }
+              : {}),
             ...boundDesign(bindings).starter
           },
           bindings
@@ -2785,7 +2787,7 @@ function neverDrawnLabelNodes(
 /**
  * The listing a variant shows, in its language, and what each step lights in it: the code it
  * finished and the code it keeps as run alike; and, where its tokens, or a text's, name places and
- * the variant lights them (listing.places), the places each step touches and the colour each lights
+ * the variant lights them (<Listing>.places), the places each step touches and the colour each lights
  * in, a label's place lighting with its region (see touchedPlaces).
  */
 export function shownListing(
@@ -2793,11 +2795,11 @@ export function shownListing(
   values: Readonly<Record<string, DesignValue>>,
   lit: Readonly<Record<string, readonly Lit[]>>
 ): StepListing {
-  const language = values['listing.language'];
+  const language = values['<Listing>.language'];
   const listed = typeof language === 'string' ? prepared.listings?.[language] : undefined;
   if (!listed) return null;
   const steps = lit[language as string] ?? [];
-  const look = values['listing.places'] as ListingPlacesLook | undefined;
+  const look = values['<Listing>.places'] as ListingPlacesLook | undefined;
   const tokens = listed.tokens ?? [];
   const placed = prepared.tokenPlaces ?? {};
   // Every label's place a token names, in the listing or a text, lights with its region.
@@ -2805,7 +2807,7 @@ export function shownListing(
     ...new Set([...tokens.map(({ place }) => place), ...Object.keys(placed)].filter(isLabelPlace))
   ];
   const lighting = [...new Set([...tokens.map(({ place }) => place), ...labelPlaces])];
-  const syntax = values['listing.syntax'];
+  const syntax = values['<Listing>.syntax'];
   return {
     text: listed.text,
     regions: listed.regions,
@@ -3685,7 +3687,7 @@ function withNodeRefs(
       );
       if (tag.attributes?.length || content)
         reject(
-          "<Listing /> takes no props or children: its language and looks are the design's, as listing.language.",
+          "<Listing /> takes no props or children: its language and looks are the design's, as <Listing>.language.",
           'view_markup',
           tag.start
         );
@@ -3936,9 +3938,10 @@ function withNodeRefs(
   };
   const roleOf = (entry: Entry): KindRole => {
     const { name, links, tag } = entry;
-    if (name === 'Link') return 'link';
     const attributes = tag.attributes ?? [];
     const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
+    // A link from a variable, written with no from, is a pointer.
+    if (name === 'Link') return has('from') ? 'link' : 'pointer';
     if (has('__code')) return 'code';
     if (has('__math')) return 'text';
     const children = (tag.children ?? []).filter(
@@ -3983,7 +3986,7 @@ function withNodeRefs(
         childNodes(child, inEach || part.type === 'EachBlock');
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'link'];
+  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'link', 'pointer'];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes.
@@ -4002,7 +4005,7 @@ function withNodeRefs(
   const tagKinds: Record<string, string[]> = {};
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
-  const apart = (of: KindRole) => (of === 'link' ? of : 'node');
+  const apart = (of: KindRole) => (of === 'link' || of === 'pointer' ? 'link' : 'node');
   for (const entry of tags) if (laidOutFreely(entry)) childNodes(entry.tag.children, false);
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
@@ -4027,7 +4030,7 @@ function withNodeRefs(
     const known = kinds.get(key);
     if (known && apart(known) !== apart(role))
       reject(
-        `${key} is the kind of a <${role === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
+        `${key} is the kind of a <${apart(role) === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
         'view_kinds',
         entry.start
       );

@@ -124,7 +124,7 @@ Some features suit common needs. Offer them as alternatives where they fit:
   participant has chosen at the current one. Each comparison stays a pair.
 - When the participant gives code in a real language, such as C, name its
   listing by that language (`<script listing="c">`), so its keywords and types
-  read right, and offer colour coding (`listing.syntax`, `colour` against
+  read right, and offer colour coding (`<Listing>.syntax`, `colour` against
   `keywords`) as an alternative (see the guide's Listing).
 - A layered graph, as one a search or a shortest path explores, often reads
   tighter in the `layered` form, each layer packed by its own nodes; where its
@@ -175,15 +175,15 @@ variable by its kind and prop, as values.Cell.fill for Cell.fill, with its
 value; a key naming several kinds, as "Note, Status", gives each of them those
 values; its options are project.design.options of the prop, a set written as a
 rule, as colours, naming every hue in every shade. Its levels give each token's
-value, as `$spacing`, each group a variant sets, as `<Node>`, and each style, as
+value, as `$spacing`, each role's style, as `<Value>`, and each style, as
 `$cell`, with the kinds following it; a value written as a token, as
-`"padding": "$spacing"`, follows that token, a kind's prop following a group or
-a style is told only there, and `"..."` in a kind's values is what it inherits.
-For a look asked of many kinds at once, as “less padding everywhere” or “every
-pointer teal”, set a token or a group (see Shared values in the guide) rather
-than each kind; for a look several kinds share, as “value cells rounder with a
-darker frame”, set a style's props and have those kinds inherit it
-(`$cell.radius`, `$cell.stroke`, `IntCell.inherit`).
+`"padding": "$spacing"`, follows that token, a kind's prop following a role
+style or a style is told only there, and `"..."` in a kind's values is what it
+inherits. For a look asked of many kinds at once, as “less padding everywhere”
+or “every pointer teal”, set a token or a role's style, as `<Pointer>` (see
+Shared values in the guide), rather than each kind; for a look several kinds
+share, as “value cells rounder with a darker frame”, set a style's props and
+have those kinds inherit it (`$cell.radius`, `$cell.stroke`, `IntCell.inherit`).
 
 Templates are whole bases (see Shared values in the guide), named in values as
 `"...": "$textbook"` and patched with only what differs, as
@@ -192,7 +192,7 @@ full into the design, and project.design then names the base and lists only what
 differs from it. Every value then takes a step on the base's scales and the
 named colours or the base's palette.
 
-- `$starter`: framed white values, grey frames, amber pointers; a first version
+- `<starter>`: framed white values, grey frames, amber pointers; a first version
   that names no base gets it written in.
 - `$textbook`: black on white in a serif with no hue, so it prints in greyscale;
   the item of the step a grey fill with a thicker black frame, a second state
@@ -212,12 +212,12 @@ thickest line). A second state, as visited, inherits `$second`, as
 `"Visited": {"...": "$second"}`. Offer another template as a comparison
 (“textbook or slide?”) rather than switching unasked. Write a base of your own,
 under a name of your own, as `"...": "$mine"`, only where no template fits what
-the participant asks: set the tokens, role styles (`$Value`, `$Container`,
-`$Text`, `$Code`, `$Icon`, `$Link`), scales and palette it changes, and the app
-writes `$starter`'s values out under them, so the base holds every role's look.
-A kind's role comes only from what its node writes (see Shared values in the
-guide): a vertex or a bar is a value or text like any other node, so a look such
-as round vertices or grey bars is a kind's values, as
+the participant asks: set the tokens, role styles (`<Value>`, `<Container>`,
+`<Text>`, `<Code>`, `<Icon>`, `<Link>`), scales and palette it changes, and the
+app writes `<starter>`'s values out under them, so the base holds every role's
+look. A kind's role comes only from what its node writes (see Shared values in
+the guide): a vertex or a bar is a value or text like any other node, so a look
+such as round vertices or grey bars is a kind's values, as
 `"StateSlot": {"radius": 999}`. Every kind follows its role's look; leave
 `"..."` out unless it inherits a style or a kind.
 

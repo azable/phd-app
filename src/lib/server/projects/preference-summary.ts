@@ -27,9 +27,8 @@ type DesignValue = string | number | boolean;
  * shown and the listing before forms and layouts, before shape, lettering and colour.
  */
 export function choiceFamily(variable: string): { family: ChoiceFamily; impact: number } {
-  if (variable.startsWith('views.'))
-    return { family: 'views', impact: 1 };
-  if (variable === 'listing.language') return { family: 'views', impact: 0.9 };
+  if (variable.startsWith('views.')) return { family: 'views', impact: 1 };
+  if (variable === '<Listing>.language') return { family: 'views', impact: 0.9 };
   if (variable.endsWith('.shown')) return { family: 'shown', impact: 0.9 };
   // A token is of the family of its prop, as $accent of colour.
   const prop = designKeys.tokenProp(variable) ?? variable.slice(variable.lastIndexOf('.') + 1);

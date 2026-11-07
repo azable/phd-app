@@ -151,7 +151,7 @@ describe('single-component Svelte compilation', () => {
     // With no values, the starter on the starter base, which the variant records.
     const plain = (await bundlePresentation(prepared, 1)).variant;
     expect(plain).toMatchObject(prepared.design.starter);
-    expect(plain.base).toBe('$starter');
+    expect(plain.base).toBe('<starter>');
   });
 
   it('rejects a design block, and a source with no algorithm block', async () => {
@@ -650,8 +650,8 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       '<View of="Index" name="IndexCell"><Node value={this} /></View>\n<Layout name="Cells"><Node>{#each values as v}<Node value={v} />{/each}</Node></Layout><Layout name="Main"><Node><Listing /><Cells />{last}</Node></Layout>'
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.design.space['listing.language']).toEqual(['code', 'none']);
-    expect(prepared.design.starter['listing.language']).toBe('code');
+    expect(prepared.design.space['<Listing>.language']).toEqual(['code', 'none']);
+    expect(prepared.design.starter['<Listing>.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n step 1');
     // The input as given, lighting nothing, then i set, each test, each pass's move, the loop's
     // end, and the end of all, :after.
@@ -662,7 +662,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     expect(javascript).toContain('for i = 1 to n step 1');
     // Without a <Listing />, the design has no listing variables.
     expect(prepareSvelteComponent(linearSearchSource).design.space).not.toHaveProperty(
-      'listing.language'
+      '<Listing>.language'
     );
   });
 
@@ -1599,16 +1599,16 @@ describe('pauses at labels', () => {
   describe('listing regions as places', () => {
     it('gives each region its paint, falling back to the lit look', () => {
       const { design } = prepareSvelteComponent(insertion);
-      expect(design.space['listing.lit.radius']).toContain(999);
-      expect(design.space['listing.lit.color']).toContain('none');
-      expect(design.space['listing.lit@insert.compare.left.fill']).toContain('sky-100');
-      expect(design.space['listing.lit@insert.compare.left.radius']).toBeUndefined();
+      expect(design.space['<Listing>.lit.radius']).toContain(999);
+      expect(design.space['<Listing>.lit.color']).toContain('none');
+      expect(design.space['<Listing>.lit@insert.compare.left.fill']).toContain('sky-100');
+      expect(design.space['<Listing>.lit@insert.compare.left.radius']).toBeUndefined();
       expect(Object.keys(design.space).some((key) => key.startsWith('listing.earlier'))).toBe(
         false
       );
-      expect(design.starter['listing.lit.fill']).toBe('amber-200');
-      expect(design.fallbacks['listing.lit@insert.compare.left.fill']).toBe('listing.lit.fill');
-      expect(design.fallbacks['listing.lit@insert.swap.fill']).toBe('listing.lit.fill');
+      expect(design.starter['<Listing>.lit.fill']).toBe('amber-200');
+      expect(design.fallbacks['<Listing>.lit@insert.compare.left.fill']).toBe('<Listing>.lit.fill');
+      expect(design.fallbacks['<Listing>.lit@insert.swap.fill']).toBe('<Listing>.lit.fill');
     });
 
     it('hands the page each region by its label’s full name', async () => {
@@ -2805,7 +2805,7 @@ describe('tokens in captions', () => {
   it('draws a token as inline code, a kind of its own in monospace, linked to its place', () => {
     const { design } = prepareSvelteComponent(captioned('Look at :i[A[i]].'));
     expect(design.starter['Board.Note.Code.font']).toBe('mono');
-    expect(design.space).toHaveProperty('listing.places');
+    expect(design.space).toHaveProperty('<Listing>.places');
   });
 
   it('refuses a token naming a place nothing renders, and a node written with __code', () => {

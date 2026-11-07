@@ -104,8 +104,8 @@ export type AiVariable = {
   value: DesignValue;
   origin?: string;
   /**
-   * For a kind's prop holding the value of what it follows, that: its group, as <Node>.padding, or
-   * the token its role's look names, as $spacing.
+   * For a kind's prop holding the value of what it follows, that: its role's style, as
+   * <Value>.padding, or the token its role's look names, as $spacing.
    */
   follows?: string;
 };
@@ -883,7 +883,7 @@ function selectedElement(
   const presentation = event.payload.presentation;
   if (presentation.format !== 'browser-bundle-v1') return [];
   const locate = modeBuilders[presentation.mode]?.locateElement;
-  const listingName = presentation.variant?.['listing.language'];
+  const listingName = presentation.variant?.['<Listing>.language'];
   const source = locate?.(
     presentation.source.text,
     reference.element.id,

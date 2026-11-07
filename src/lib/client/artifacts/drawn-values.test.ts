@@ -171,10 +171,10 @@ describe('variant markers', () => {
       ...presentation,
       variant: {
         ...presentation.variant,
-        'listing.language': index ? 'textbook' : 'code',
-        'listing.lit@insert.compare.left.fill': 'sky-100',
-        'listing.lit.fill': 'amber-200',
-        'listing.lit.radius': 2
+        '<Listing>.language': index ? 'textbook' : 'code',
+        '<Listing>.lit@insert.compare.left.fill': 'sky-100',
+        '<Listing>.lit.fill': 'amber-200',
+        '<Listing>.lit.radius': 2
       }
     }));
     const ghosts = tagGhosts(EditorState.create({ doc: listed }), withListing);

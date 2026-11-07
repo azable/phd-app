@@ -171,7 +171,7 @@ describe('laying out on the server', () => {
       differingSteps(graph, await drawnWith({ 'Graph.shown': true, 'Table.shown': false }))
     ).toEqual([]);
     const shown = await drawnWith({});
-    expect(differingSteps(shown, await drawnWith({ 'listing.language': 'none' }))).toEqual(every);
+    expect(differingSteps(shown, await drawnWith({ '<Listing>.language': 'none' }))).toEqual(every);
   }, 120_000);
 
   it('counts the steps where labels differ, the room their lanes keep included', async () => {

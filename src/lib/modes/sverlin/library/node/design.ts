@@ -318,7 +318,7 @@ export const colourProps: readonly string[] = [
   'targetColor'
 ];
 
-/** The props a region of a listing sets for itself, as `listing.lit@insert.compare.left.fill`. */
+/** The props a region of a listing sets for itself, as `<Listing>.lit@insert.compare.left.fill`. */
 export const listingRegionProps = placePaint;
 
 /** The lit text's options for a prop, for its own variable or a region's. */
@@ -334,27 +334,14 @@ export function listingPropOptions(prop: string): readonly (string | number)[] |
  * text looks.
  */
 export const listingOptions: Record<string, readonly (string | number)[]> & {
-  'listing.language': readonly string[];
+  '<Listing>.language': readonly string[];
 } = {
-  'listing.language': ['none'],
+  '<Listing>.language': ['none'],
   // Keywords in bold, as textbooks print them, or every kind of word in its colour too.
-  'listing.syntax': ['none', 'keywords', 'colour'],
+  '<Listing>.syntax': ['none', 'keywords', 'colour'],
   ...Object.fromEntries(
-    Object.entries(listingLitOptions).map(([prop, options]) => [`listing.lit.${prop}`, options])
+    Object.entries(listingLitOptions).map(([prop, options]) => [`<Listing>.lit.${prop}`, options])
   )
-};
-
-export const starterListing: Record<string, string | number> & { 'listing.language': string } = {
-  'listing.language': 'none',
-  'listing.syntax': 'keywords',
-  'listing.lit.fill': 'amber-200',
-  'listing.lit.stroke': 'none',
-  'listing.lit.strokeWidth': 0,
-  'listing.lit.strokeStyle': 'solid',
-  'listing.lit.radius': 2,
-  'listing.lit.color': 'none',
-  'listing.lit.weight': 'normal',
-  'listing.lit.padding': 0
 };
 
 /**
@@ -367,7 +354,7 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'link';
+export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'link' | 'pointer';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -394,24 +381,31 @@ const nodeProps: readonly DesignProp[] = [
   'case'
 ];
 
-/** The props a kind of node has: a layout's own, a link's line. */
+/** A link's props: its line, its route, its heads, and the paint it gives what it reaches. */
+const linkProps: readonly DesignProp[] = [
+  'shown',
+  'stroke',
+  'strokeWidth',
+  'opacity',
+  'strokeStyle',
+  'route',
+  'head',
+  'headSize',
+  ...targetProps
+];
+
+/**
+ * The props a kind of node has: a layout's own, a link's line. A link from a variable, a <Link>
+ * with no from, is a pointer, with a link's props and a look of its own.
+ */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
   value: nodeProps,
   text: nodeProps,
   code: nodeProps,
   icon: [...nodeProps, 'icon'],
-  link: [
-    'shown',
-    'stroke',
-    'strokeWidth',
-    'opacity',
-    'strokeStyle',
-    'route',
-    'head',
-    'headSize',
-    ...targetProps
-  ]
+  link: linkProps,
+  pointer: linkProps
 };
 
 /** The props a kind arranging a free layout has besides its role's: how the layout looks. */
@@ -554,33 +548,10 @@ export const isToken = (name: unknown): name is DesignToken =>
   typeof name === 'string' && Object.hasOwn(tokenProps, name);
 
 /**
- * The tags whose kinds a group sets together, as `<Node>.padding` for every kind a <Node> makes
- * that has padding: <Node> for every node role, <Link> for links.
- * The listing's own group, <Listing>, names its settings (see listingAlias).
+ * The props a role's kinds take from their role's style: their role's, but whether a kind is shown,
+ * which stays each kind's own, so no one value hides every kind of a role.
  */
-export type DesignTag = '<Node>' | '<Link>';
-
-/** The tag making each role's kinds. */
-export const tagOf = (role: KindRole): DesignTag => (role === 'link' ? '<Link>' : '<Node>');
-
-/** The variable setting a prop for every kind of a tag, as `<Node>.padding`. */
-export const groupKey = (tag: DesignTag, prop: string): string => `${tag}.${prop}`;
-
-/** A group's tag and prop, as `<Node>` and padding for `<Node>.padding`. */
-export function groupOf(key: string): { tag: DesignTag; prop: DesignProp } | undefined {
-  const match = /^(<Node>|<Link>)\.([A-Za-z]+)$/u.exec(key);
-  return match ? { tag: match[1] as DesignTag, prop: match[2] as DesignProp } : undefined;
-}
-
-/** `<Listing>.syntax` is listing.syntax, as every listing setting: the listing's group is its own. */
-export const listingAlias = (key: string): string =>
-  key.startsWith('<Listing>.') ? `listing.${key.slice('<Listing>.'.length)}` : key;
-
-/**
- * The props a role's kinds take from their group: their role's, but whether a kind is shown, which
- * stays each kind's own, so no one value hides every kind of a tag.
- */
-export const groupProps = (role: KindRole): readonly DesignProp[] =>
+export const lookProps = (role: KindRole): readonly DesignProp[] =>
   roleProps[role].filter((prop) => prop !== 'shown');
 
 /** Whether a prop can name a token: every value the token can hold is one of the prop's. */
@@ -589,15 +560,8 @@ export function tokenFits(prop: DesignProp, token: DesignToken): boolean {
   return propOptions[tokenProps[token]].every((option) => options.includes(option as never));
 }
 
-/**
- * A group's options for a prop, where a role of the kinds it reaches has it: the prop's, and each
- * token that fits it.
- */
-export function groupOptions(
-  roles: readonly KindRole[],
-  prop: DesignProp
-): readonly (string | number | boolean)[] {
-  if (!roles.some((role) => groupProps(role).includes(prop))) return [];
+/** A role style's options for a prop: the prop's, and each token that fits it. */
+export function roleStyleOptions(prop: DesignProp): readonly (string | number | boolean)[] {
   return [
     ...propOptions[prop],
     ...(Object.keys(tokenProps) as DesignToken[]).filter((token) => tokenFits(prop, token))
@@ -610,7 +574,33 @@ export function groupOptions(
  * style's.
  */
 export const isStyle = (name: unknown): name is `$${string}` =>
-  typeof name === 'string' && /^\$[A-Za-z]\w*$/u.test(name) && !isToken(name);
+  typeof name === 'string' &&
+  /^\$[A-Za-z]\w*$/u.test(name) &&
+  !isToken(name) &&
+  oldBuiltIn(name) === undefined;
+
+/**
+ * The built-in name a key's first part once was, written with `$` or as a group, with the name it
+ * now has, as `<Value>` for `$Value`; undefined for any other.
+ */
+export function oldBuiltIn(key: string): { old: string; now: string } | undefined {
+  const first = /^(\$[A-Za-z]\w*|<[A-Za-z]+>|listing)(?=\.|$)/u.exec(key)?.[1];
+  if (first === '$starter') return { old: first, now: starterName };
+  if (first === 'listing') return { old: first, now: '<Listing>' };
+  if (first === '<Node>')
+    return { old: first, now: nodeRoles.map((role) => roleStyle(role)).join(', ') };
+  const role = first && /^\$[A-Z]/u.test(first) ? first.slice(1) : undefined;
+  if (role && ['Bar', 'Vertex'].includes(role)) return { old: first!, now: '<Value>' };
+  return role && (Object.keys(roleProps) as string[]).includes(role.toLowerCase())
+    ? { old: first!, now: `<${role}>` }
+    : undefined;
+}
+
+/** The roles of a node's kinds, those the old `<Node>` group set together. */
+const nodeRoles: readonly KindRole[] = ['container', 'value', 'text', 'code', 'icon'];
+
+/** The starter base's name: built in, so written in angle brackets, as every built-in name is. */
+export const starterName = '<starter>';
 
 /** A style's prop, as `$cell` and padding for `$cell.padding`. */
 export function styleOf(key: string): { style: `$${string}`; prop: string } | undefined {
@@ -621,17 +611,23 @@ export function styleOf(key: string): { style: `$${string}`; prop: string } | un
 }
 
 /**
- * The style holding a role's look in a design's base, as `$Value` for every value kind: each prop a
- * kind of the role follows below its group, so the base sets every role's look as data and the
- * engine has none of its own (see starter-base.ts and missingRoleLooks). Capitalised, as a role's look is no token
- * (`$text` is the text colour, `$Text` the text role's look).
+ * The style holding a role's look in a design's base, written in angle brackets as every built-in
+ * name is, as `<Value>` for every value kind: each prop a kind of the role follows, so the base sets
+ * every role's look as data and the engine has none of its own (see starter-base.ts and
+ * missingRoleLooks).
  */
-export const roleStyle = (role: KindRole): `$${string}` =>
-  `$${role[0].toUpperCase()}${role.slice(1)}`;
+export const roleStyle = (role: KindRole): string => `<${role[0].toUpperCase()}${role.slice(1)}>`;
 
-/** The role a style holds the look of, as value for `$Value`, or undefined for any other style. */
+/** The role a style holds the look of, as value for `<Value>`, or undefined for any other name. */
 export function roleOfStyle(style: string): KindRole | undefined {
   return (Object.keys(roleProps) as KindRole[]).find((role) => roleStyle(role) === style);
+}
+
+/** A role style's prop, as `<Value>` and fill for `<Value>.fill`. */
+export function roleStyleOf(key: string): { role: KindRole; prop: string } | undefined {
+  const match = /^(<[A-Z][a-z]+>)\.([a-z]\w*)$/u.exec(key);
+  const role = match ? roleOfStyle(match[1]) : undefined;
+  return role ? { role, prop: match![2] } : undefined;
 }
 
 /**
@@ -642,7 +638,7 @@ export function roleOfStyle(style: string): KindRole | undefined {
 export const baseKey = 'base';
 
 /** A base's name: `$` and a short name, as `$textbook`, or `$mine` for a base the model wrote. */
-export const baseName = /^\$[a-z][\w-]{0,31}$/u;
+export const baseName = /^(?:<starter>|\$(?!starter$)[a-z][\w-]{0,31})$/u;
 
 /**
  * A base's scales, each the steps its props take (see scaleKey): spacing for padding and gaps, in
@@ -698,14 +694,13 @@ export const paletteKey = /^palette\.[a-z]\w*$/u;
  * leaves it out without a word.
  */
 export function isBaseKey(key: string): boolean {
-  const style = styleOf(key);
   return (
     isToken(key) ||
     key === baseKey ||
     paletteKey.test(key) ||
     /^scale\.[a-z]+$/u.test(key) ||
-    (style !== undefined && roleOfStyle(style.style) !== undefined) ||
-    (key.startsWith('listing.') && key !== 'listing.language')
+    roleStyleOf(key) !== undefined ||
+    (key.startsWith('<Listing>.') && key !== '<Listing>.language')
   );
 }
 
@@ -742,10 +737,9 @@ export const inheritKey = (kind: string): string => `${kind}.inherit`;
 /**
  * What a kind's prop follows, and the variable its value comes from: what the kind inherits where
  * that sets the prop (a style's prop, naming a token or a value, or a kind of its role's own value),
- * else its group's value where the variant sets it, else its role's style in the base (see
- * roleStyle), through tokens; no value where the base sets none, which the build refuses (see
- * missingRoleLooks). Undefined for a variable that is no kind's prop a group could set (a place's,
- * a frame's, a view choice).
+ * else its role's style in the base (see roleStyle), through tokens; no value where the base sets
+ * none, which the build refuses (see missingRoleLooks). Undefined for a variable that is no kind's
+ * prop a role style sets (a place's, a frame's, a view choice).
  * Shared by the build and the assistant's design, so both tell what follows what alike.
  */
 export function levelFor(
@@ -757,7 +751,7 @@ export function levelFor(
   const kind = key.slice(0, Math.max(0, dot));
   const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
   const prop = key.slice(dot + 1) as DesignProp;
-  if (!role || !groupProps(role).includes(prop)) return undefined;
+  if (!role || !lookProps(role).includes(prop)) return undefined;
   const source = values[inheritKey(kind)];
   if (typeof source === 'string') {
     const from = `${source}.${prop}`;
@@ -766,20 +760,14 @@ export function levelFor(
       return isToken(value) ? { value: values[value], from: value } : { value, from };
     }
   }
-  const group = groupKey(tagOf(role), prop);
-  const base = `${roleStyle(role)}.${prop}`;
-  const from = Object.hasOwn(values, group)
-    ? group
-    : Object.hasOwn(values, base)
-      ? base
-      : undefined;
-  if (!from) return { value: undefined };
+  const from = `${roleStyle(role)}.${prop}`;
+  if (!Object.hasOwn(values, from)) return { value: undefined };
   const level = values[from];
   return isToken(level) ? { value: values[level], from: level } : { value: level, from };
 }
 
 /**
- * The role styles a design's base leaves out, as `$Value.fill`, among the roles its kinds have: a
+ * The role styles a design's base leaves out, as `<Value>.fill`, among the roles its kinds have: a
  * base sets every role's look its kinds follow, so no kind falls back to a look nobody chose.
  */
 export function missingRoleLooks(
@@ -788,7 +776,7 @@ export function missingRoleLooks(
 ): string[] {
   const used = new Set(Object.values(roles));
   return [...used].flatMap((role) =>
-    groupProps(role)
+    lookProps(role)
       .map((prop) => `${roleStyle(role)}.${prop}`)
       .filter((key) => !Object.hasOwn(values, key))
   );

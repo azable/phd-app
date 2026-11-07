@@ -23,7 +23,7 @@ const listing: ShownListing = {
 describe('a place’s references in the picture', () => {
   it('count only places a token names, once each', () => {
     expect(namedPlaces(listing, ['@hi', undefined, '@v', '@hi', '@lo'])).toEqual(['@hi', '@lo']);
-    // Without lit places, as with listing.places none, nothing counts.
+    // Without lit places, as with <Listing>.places none, nothing counts.
     expect(namedPlaces({ ...listing, places: undefined }, ['@hi'])).toEqual([]);
   });
 

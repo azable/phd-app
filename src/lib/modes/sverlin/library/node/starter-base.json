@@ -14,7 +14,7 @@
     "line": "0.5 1 1.5 2 3 4",
     "opacity": "0.25 0.5 0.75 1"
   },
-  "$Container": {
+  "<Container>": {
     "fill": "none",
     "stroke": "none",
     "strokeWidth": 0,
@@ -41,7 +41,7 @@
     "justify": "start",
     "spacing": "slots"
   },
-  "$Value": {
+  "<Value>": {
     "fill": "$surface",
     "stroke": "neutral-300",
     "strokeWidth": "$lineWidth",
@@ -64,7 +64,7 @@
     "decoration": "none",
     "case": "normal"
   },
-  "$Text": {
+  "<Text>": {
     "fill": "none",
     "stroke": "none",
     "strokeWidth": 0,
@@ -87,7 +87,7 @@
     "decoration": "none",
     "case": "normal"
   },
-  "$Code": {
+  "<Code>": {
     "fill": "neutral-100",
     "stroke": "none",
     "strokeWidth": 0,
@@ -110,7 +110,7 @@
     "decoration": "none",
     "case": "normal"
   },
-  "$Icon": {
+  "<Icon>": {
     "fill": "none",
     "stroke": "none",
     "strokeWidth": 0,
@@ -134,7 +134,20 @@
     "case": "normal",
     "icon": "circle-dot"
   },
-  "$Link": {
+  "<Link>": {
+    "stroke": "neutral-500",
+    "strokeWidth": 2,
+    "opacity": 1,
+    "strokeStyle": "solid",
+    "route": "layout",
+    "head": "arrow",
+    "headSize": 9,
+    "targetFill": "$highlight",
+    "targetStroke": "$accent",
+    "targetStrokeWidth": "$lineWidth",
+    "targetColor": "none"
+  },
+  "<Pointer>": {
     "stroke": "neutral-500",
     "strokeWidth": 2,
     "opacity": 1,
@@ -154,7 +167,7 @@
     "strokeStyle": "solid",
     "fillStyle": "solid"
   },
-  "listing": {
+  "<Listing>": {
     "syntax": "keywords",
     "places": "fill",
     "lit": {

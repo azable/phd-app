@@ -32,10 +32,10 @@ import {
   placeLabelLength,
   placePaint,
   placeProps,
-  groupKey,
-  groupOf,
-  groupOptions,
-  groupProps,
+  lookProps,
+  oldBuiltIn,
+  roleStyleOf,
+  roleStyleOptions,
   inheritKey,
   levelFor,
   missingRoleLooks,
@@ -44,9 +44,7 @@ import {
   starterFrame,
   starterFreeLayout,
   starterGrid,
-  starterListing,
   styleOf,
-  tagOf,
   tokenProps,
   type DesignProp,
   type DesignToken,
@@ -126,13 +124,26 @@ const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string
 
 /**
  * A role's look in the starter base, through its tokens: every kind is shown, and takes each other
- * prop from its role's style there, as `$Value.fill`, so the engine holds no look of its own.
+ * prop from its role's style there, as `<Value>.fill`, so the engine holds no look of its own.
  */
 function starterRoleLook(role: KindRole, prop: string): DesignValue | undefined {
   if (prop === 'shown') return true;
   const value = starterBase[`${roleStyle(role)}.${prop}`];
   return isToken(value) ? starterBase[value] : value;
 }
+
+/**
+ * The starter base's listing look, as `<Listing>.lit.fill`, with its first language none: what a
+ * view placing a <Listing /> starts with, its places' look aside (see starterListingPlaces).
+ */
+export const starterListing = (): Record<string, DesignValue> => ({
+  '<Listing>.language': 'none',
+  ...Object.fromEntries(
+    Object.entries(starterBase).filter(
+      ([key]) => key.startsWith('<Listing>.') && key !== '<Listing>.places'
+    )
+  )
+});
 
 /** The starter base's tokens, as `$accent`, each with its value. */
 const starterTokens = (): Record<string, DesignValue> =>
@@ -178,44 +189,28 @@ const kindOf = keyKind;
 
 const tokens = Object.keys(tokenProps) as DesignToken[];
 
-/** The roles of a source's kinds, each once, in the order roleProps lists them. */
-const rolesOf = (kinds: readonly DesignKind[]) =>
-  (Object.keys(roleProps) as KindRole[]).filter((role) => kinds.some((kind) => kind.role === role));
-
 /**
- * The design's levels above its kinds (see Shared design values in the language guide): every
- * token, and a group for each prop of each tag the source's kinds are made by, as `<Node>.padding`,
- * taking the options of every kind it reaches, or a token that fits them all. A group is set only
- * where a variant sets it, so the starter has none: each kind starts at its role's look.
+ * The design's levels above its kinds (see Shared values in the language guide): every token, and
+ * every role's style, as `<Value>.fill`, which each kind of the role follows.
  */
 function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   if (!kinds.length) return {};
-  const roles = rolesOf(kinds);
   return {
     ...Object.fromEntries(tokens.map((token) => [token, propOptions[tokenProps[token]]])),
     // Every role's style in the base, the source's roles or not, as a base holds every value.
     ...Object.fromEntries(
       (Object.keys(roleProps) as KindRole[]).flatMap((role) =>
-        groupProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, groupOptions([role], prop)])
+        lookProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, roleStyleOptions(prop)])
       )
-    ),
-    ...Object.fromEntries(
-      (['<Node>', '<Link>'] as const).flatMap((tag) => {
-        const reached = roles.filter((role) => tagOf(role) === tag);
-        return [...new Set(reached.flatMap(groupProps))].map((prop) => [
-          groupKey(tag, prop),
-          groupOptions(reached, prop)
-        ]);
-      })
     )
   };
 }
 
-/** Whether a kind's variable follows a level: a prop of a kind with a role its group can set. */
+/** Whether a kind's variable follows a level: a prop of a kind its role's style sets. */
 function follows(roles: Readonly<Record<string, KindRole>>, key: string): boolean {
   const kind = kindOf(key);
   const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-  return !!role && groupProps(role).includes(key.slice(kind.length + 1) as DesignProp);
+  return !!role && lookProps(role).includes(key.slice(kind.length + 1) as DesignProp);
 }
 
 /**
@@ -312,7 +307,7 @@ function withBase(
       if (typeof value === 'string' && baseName.test(value)) own[key] = [value];
       else
         problems.push(
-          `${key} names its base with $ and a short name, as "$textbook", not ${JSON.stringify(value)}.`
+          `${key} names its base as "<starter>", or with $ and a short name, as "$textbook", not ${JSON.stringify(value)}.`
         );
     } else if (scale !== undefined) {
       if (!Object.hasOwn(scaleProps, scale))
@@ -347,30 +342,6 @@ function withBase(
   return { space: { ...governed, ...own }, problems };
 }
 
-/**
- * Why a group cannot take a value that some kinds it reaches can: the kinds that cannot, by name.
- * Undefined where none of them can, for the group's options to say.
- */
-function groupUnfit(
-  space: DesignSpace,
-  roles: Readonly<Record<string, KindRole>>,
-  key: string,
-  value: unknown
-): string | undefined {
-  const group = groupOf(key);
-  if (!group) return undefined;
-  const reached = Object.entries(roles)
-    .filter(([, role]) => tagOf(role) === group.tag && groupProps(role).includes(group.prop))
-    .map(([kind]) => kind)
-    .filter((kind) => Object.hasOwn(space, `${kind}.${group.prop}`));
-  const cannot = reached.filter(
-    (kind) => !space[`${kind}.${group.prop}`]?.includes(value as never)
-  );
-  return cannot.length && cannot.length < reached.length
-    ? `${key} cannot be ${JSON.stringify(value)}: it sets every kind of ${group.tag} with ${group.prop}, and ${cannot.join(', ')} cannot take it; set the others one by one, as ${reached.find((kind) => !cannot.includes(kind))}.${group.prop}.`
-    : undefined;
-}
-
 /** The layouts of a space: the kinds with a frame. */
 const framedKinds = (space: DesignSpace) =>
   new Set(
@@ -403,7 +374,7 @@ const namesBase = (values: Readonly<Record<string, unknown>> | undefined) =>
 /**
  * A request as a design enters the app: one naming its base as it is; one naming none and building
  * on no variant, as a demo example's, a new project's or a test's, with the starter base written in
- * under its chosen values, so the variant built records `"...": "$starter"` and every base value. A
+ * under its chosen values, so the variant built records `"...": "<starter>"` and every base value. A
  * request building on a variant that names no base is left to be refused (see buildVariant).
  */
 export function withStarterBase(request: VariantRequest): VariantRequest {
@@ -445,13 +416,13 @@ function fallbackOf(fallback: Fallback, values: Readonly<Record<string, unknown>
 
 /**
  * A listing's regions as places, by their labels' full names: each region's own paint, as
- * listing.lit@insert.compare.left.fill, with the listing's options.
+ * <Listing>.lit@insert.compare.left.fill, with the listing's options.
  */
 export function listingRegionSpace(labels: readonly string[]): DesignSpace {
   return Object.fromEntries(
     labels.flatMap((label) =>
       listingRegionProps.map((prop) => [
-        `listing.lit@${label}.${prop}`,
+        `<Listing>.lit@${label}.${prop}`,
         listingPropOptions(prop) ?? []
       ])
     )
@@ -463,8 +434,8 @@ export function listingRegionFallbacks(labels: readonly string[]): Record<string
   return Object.fromEntries(
     labels.flatMap((label) =>
       listingRegionProps.map((prop): [string, Fallback] => [
-        `listing.lit@${label}.${prop}`,
-        `listing.lit.${prop}`
+        `<Listing>.lit@${label}.${prop}`,
+        `<Listing>.lit.${prop}`
       ])
     )
   );
@@ -490,7 +461,7 @@ export function designSpace(
     ...(listing
       ? {
           ...listingOptions,
-          'listing.language': [...ownListings, ...listingOptions['listing.language']]
+          '<Listing>.language': [...ownListings, ...listingOptions['<Listing>.language']]
         }
       : {}),
     ...levelSpace(kinds),
@@ -546,8 +517,8 @@ export function starterVariant(
     // The source's first listing is the one it starts with.
     ...(listing
       ? {
-          ...starterListing,
-          'listing.language': ownListings[0] ?? starterListing['listing.language']
+          ...starterListing(),
+          '<Listing>.language': ownListings[0] ?? 'none'
         }
       : {}),
     ...(kinds.length ? starterTokens() : {}),
@@ -619,7 +590,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
               /^[A-Z]/u.test(other) &&
               other.includes('.') &&
               !other.startsWith('views.') &&
-              !other.startsWith('listing.')
+              !other.startsWith('<Listing>.')
           )
           .map((other) => other.slice(0, other.lastIndexOf('.')))
       )
@@ -671,14 +642,14 @@ export function buildVariant(
   dropped: string[];
 } {
   // Keys come written or as kept (see design-keys.ts): `{Int}` and <Listing>.syntax are views.Int
-  // and listing.syntax here; every other key is the same in both.
+  // and <Listing>.syntax here; every other key is the same in both.
   const aliased = (entries: Record<string, unknown> | undefined) => keptValues(entries ?? {});
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
   // Every design names its base and holds every role's look (see withStarterBase).
   if (!namesBase({ ...base, ...chosenValues }))
     throw new DesignValueError(
-      'The design names no base: write "...": "$starter", or another template, at its top.'
+      'The design names no base: write "...": "<starter>", or another template, at its top.'
     );
   const optedOut = Object.entries(chosenValues)
     .filter(([key, value]) => key.endsWith('.inherit') && value === 'none')
@@ -687,10 +658,24 @@ export function buildVariant(
     throw new DesignValueError(
       `${optedOut.join(', ')}: "...": "none" is gone, as every kind follows its role's look; leave "..." out, and set the props that differ on the kind itself.`
     );
+  // A built-in name is written in angle brackets, `$` being only for tokens and styles.
+  const renamed = [
+    ...new Set(
+      Object.entries(chosenValues).flatMap(([key, value]) => {
+        const named =
+          oldBuiltIn(key) ?? (typeof value === 'string' ? oldBuiltIn(value) : undefined);
+        if (!named) return [];
+        return named.old === '<Node>'
+          ? [`${key}: the <Node> group is gone; set the role styles ${named.now}, or the kinds.`]
+          : [`${named.old} is written ${named.now}, as every built-in name is.`];
+      })
+    )
+  ];
+  if (renamed.length) throw new DesignValueError(renamed.join(' '));
   const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
   if (missing.length)
     throw new DesignValueError(
-      `The design's base sets no ${missing.join(', ')}: a base sets every role's look its kinds follow; start from a template, as "...": "$starter", and change what differs.`
+      `The design's base sets no ${missing.join(', ')}: a base sets every role's look its kinds follow; start from a template, as "...": "<starter>", and change what differs.`
     );
   // The styles the base and the chosen values name join the space (see withStyles), and the base's
   // scales and palette set its options (see withBase).
@@ -717,14 +702,11 @@ export function buildVariant(
   };
   const problems = chosen
     .filter(([key, value]) => !fits(space, key, value))
-    .map(
-      ([key, value]) =>
-        groupUnfit(space, roles, key, value) ?? styleUnfit(key, value) ?? unfit(space, key, value)
-    );
+    .map(([key, value]) => styleUnfit(key, value) ?? unfit(space, key, value));
   if (problems.length) throw new DesignValueError(writtenText(problems.join(' ')));
   const isLevel = (key: string) =>
     isToken(key) ||
-    groupOf(key) !== undefined ||
+    roleStyleOf(key) !== undefined ||
     styleOf(key) !== undefined ||
     key.endsWith('.inherit');
   const following = Object.keys(starter).filter((key) => follows(roles, key));
@@ -802,7 +784,7 @@ export function buildVariant(
   // one inheriting it follows the value chosen.
   for (const [key, value] of chosen) {
     values[key] = value as DesignValue;
-    // The starter base's own values, written in under a design naming `$starter` (see
+    // The starter base's own values, written in under a design naming `<starter>` (see
     // withStarterBase), are the starter's, chosen by no one.
     origins[key] =
       chosenValues[baseKey] === starterBaseName && starterBase[key] === value

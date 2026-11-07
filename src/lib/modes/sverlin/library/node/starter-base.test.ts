@@ -14,6 +14,6 @@ describe('the starter base', () => {
   it('holds every token and names itself', () => {
     for (const token of Object.keys(tokenProps))
       expect(isToken(token) && starterBase[token]).toBeDefined();
-    expect(starterBase.base).toBe('$starter');
+    expect(starterBase.base).toBe('<starter>');
   });
 });

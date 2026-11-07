@@ -9,12 +9,12 @@ describe('design values written as one JSON string', () => {
       JSON.stringify({
         $accent: 'teal-600',
         $cell: { radius: 4, stroke: '$line' },
-        '<Node>': { padding: 0.25 },
+        '<Value>': { padding: 0.25 },
         '{Int}': 'IntTally',
         IntCell: { '...': '$cell', fill: 'sky-100', ':target': { stroke: 'violet-500' } },
         Card: { '=true': { fill: 'amber-100' } },
         Here: { Link: { targetStrokeWidth: 2 } },
-        listing: { language: 'textbook' }
+        '<Listing>': { language: 'textbook' }
       })
     );
     expect(patch).toEqual({
@@ -22,14 +22,14 @@ describe('design values written as one JSON string', () => {
         { variable: '$accent', value: 'teal-600' },
         { variable: '$cell.radius', value: 4 },
         { variable: '$cell.stroke', value: '$line' },
-        { variable: '<Node>.padding', value: 0.25 },
+        { variable: '<Value>.padding', value: 0.25 },
         { variable: '{Int}', value: 'IntTally' },
         { variable: 'IntCell.inherit', value: '$cell' },
         { variable: 'IntCell.fill', value: 'sky-100' },
         { variable: 'IntCell:target.stroke', value: 'violet-500' },
         { variable: 'Card=true.fill', value: 'amber-100' },
         { variable: 'Here.Link.targetStrokeWidth', value: 2 },
-        { variable: 'listing.language', value: 'textbook' }
+        { variable: '<Listing>.language', value: 'textbook' }
       ],
       remove: []
     });

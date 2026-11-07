@@ -1,11 +1,11 @@
 <!--
-  The algorithm as a listing in the language the variant chose (listing.language), lighting what the
-  shown step ran: the code it finished and the code it keeps as run alike, as listing.lit.* says,
-  each region painting itself as its place says (listing.lit@insert.compare.left.fill), a region
+  The algorithm as a listing in the language the variant chose (<Listing>.language), lighting what the
+  shown step ran: the code it finished and the code it keeps as run alike, as <Listing>.lit.* says,
+  each region painting itself as its place says (<Listing>.lit@insert.compare.left.fill), a region
   inside another drawn inside it where its paint differs. A line lights from its first character to
   its last, never its indentation. The text is the same at every step, so the box keeps one size;
   only the lighting moves, its padding and stroke taking no room. Each line is a node of its own,
-  which participants can select. A token naming a place (listing.places) is a region of its own,
+  which participants can select. A token naming a place (<Listing>.places) is a region of its own,
   lit in its place's colour at a step touching the place (see places.ts). A region whose label a
   token names (:@insert.front) is a reference to that label's place too, so hovering the token
   outlines it; it lights as a region does.
@@ -101,7 +101,8 @@
 
   const paintOf = (label: string | undefined): Paint => {
     const prop = (name: string) =>
-      (label ? design[`listing.lit@${label}.${name}`] : undefined) ?? design[`listing.lit.${name}`];
+      (label ? design[`<Listing>.lit@${label}.${name}`] : undefined) ??
+      design[`<Listing>.lit.${name}`];
     return { fill: prop('fill'), stroke: prop('stroke'), color: prop('color') };
   };
   const samePaint = (a: Paint, b: Paint) =>
@@ -159,7 +160,7 @@
   // The lit look: its paint, its corners, and a stroke drawn inside it; the outermost piece's
   // padding is taken back by its margin, so lit text never moves.
   const styleOf = (paint: Paint, outer: boolean): string => {
-    const value = (name: string) => design[`listing.lit.${name}`];
+    const value = (name: string) => design[`<Listing>.lit.${name}`];
     const width = Number(value('strokeWidth') ?? 0);
     const stroke = colourCss(paint.stroke);
     const padding = outer ? Number(value('padding') ?? 0) : 0;

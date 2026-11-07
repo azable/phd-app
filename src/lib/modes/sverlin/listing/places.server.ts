@@ -68,7 +68,7 @@ const unseen = new Set(['none', 'white', undefined]);
  * The colour a place lights in: the target paint of the link a view drawn there points with
  * (Arrow.Link:i.targetFill), or the fill of the view a value there is drawn with (IntCell:key.fill),
  * or its stroke where the fill is none or white; for a label's place nothing draws, its region's lit paint
- * (listing.lit@insert.front.fill); else the listing's lit fill. Its line, which outlines its
+ * (<Listing>.lit@insert.front.fill); else the listing's lit fill. Its line, which outlines its
  * references on hover, takes the stroke first, as a pale fill would not show as a line (the page
  * then darkens it as far as it needs, see lineColour in ../library/listing/places.ts).
  */
@@ -89,24 +89,20 @@ export function placePaint(
       ? undefined
       : valueOf(`${kind}.Link`, `target${name[0].toUpperCase()}${name.slice(1)}`);
   const prop = (name: string) =>
-    kind === undefined
-      ? undefined
-      : unseen.has(target(name))
-        ? valueOf(kind, name)
-        : target(name);
+    kind === undefined ? undefined : unseen.has(target(name)) ? valueOf(kind, name) : target(name);
   const seen = (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])
     .map(prop)
     .find((paint) => !unseen.has(paint));
   if (seen) return seen;
-  // A label's place nothing draws lights as its region does (listing.lit@insert.front.fill).
-  const region = !kind && isLabelPlace(place) ? `listing.lit@${place.slice(2)}` : undefined;
+  // A label's place nothing draws lights as its region does (<Listing>.lit@insert.front.fill).
+  const region = !kind && isLabelPlace(place) ? `<Listing>.lit@${place.slice(2)}` : undefined;
   const regionPaint = region
     ? (part === 'line' ? ['stroke', 'fill'] : ['fill', 'stroke'])
         .map((name) => values[`${region}.${name}`] as string | undefined)
         .find((paint) => !unseen.has(paint))
     : undefined;
   if (regionPaint) return regionPaint;
-  const lit = values['listing.lit.fill'] as string | undefined;
+  const lit = values['<Listing>.lit.fill'] as string | undefined;
   return unseen.has(lit) ? 'amber-300' : (lit as string);
 }
 
@@ -126,5 +122,5 @@ export function placeLightsText(
 ): string | undefined {
   const lit = Object.entries(places?.paints ?? {}).map(([place, paint]) => `${place} in ${paint}`);
   if (!places || !lit.length) return undefined;
-  return `Place lights (listing.places ${places.look}): at a step whose code touches a place, the node drawing it shows ${lightLooks[places.look]}, as its tokens light: ${lit.join(', ')}; listing.places none removes them.`;
+  return `Place lights (<Listing>.places ${places.look}): at a step whose code touches a place, the node drawing it shows ${lightLooks[places.look]}, as its tokens light: ${lit.join(', ')}; <Listing>.places none removes them.`;
 }

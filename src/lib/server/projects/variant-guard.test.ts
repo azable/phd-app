@@ -59,12 +59,12 @@ describe('allowedChange', () => {
 
   it('lets a small part or the listing go', () => {
     expect(allowedChange(context, 'FoundCaption.shown', false)).toBe(true);
-    expect(allowedChange(context, 'listing.language', 'none')).toBe(true);
+    expect(allowedChange(context, '<Listing>.language', 'none')).toBe(true);
   });
 
   it('never changes a settled value', () => {
-    const settled = { ...context, settled: { 'listing.language': 'textbook' } };
-    expect(allowedChange(settled, 'listing.language', 'none')).toBe(false);
+    const settled = { ...context, settled: { '<Listing>.language': 'textbook' } };
+    expect(allowedChange(settled, '<Listing>.language', 'none')).toBe(false);
   });
 
   it('measures how much of the picture a change hides', () => {
@@ -94,7 +94,7 @@ describe('allowedComparisonSide', () => {
     expect(
       allowedComparisonSide(context, {
         'FoundCaption.shown': false,
-        'listing.language': 'textbook'
+        '<Listing>.language': 'textbook'
       })
     ).toBe(true);
   });
@@ -105,12 +105,12 @@ describe('guardedChoice', () => {
     const { chosen } = guardedChoice(context, {
       chosen: {
         'Board.shown': false,
-        'listing.language': 'none',
+        '<Listing>.language': 'none',
         'Answer.shown': false,
         'views.Int': 'IntTally'
       }
     });
-    expect(chosen).toEqual({ 'listing.language': 'none', 'views.Int': 'IntTally' });
+    expect(chosen).toEqual({ '<Listing>.language': 'none', 'views.Int': 'IntTally' });
   });
 });
 
@@ -144,8 +144,8 @@ describe('settledValues', () => {
     }) as unknown as ProjectEvent;
 
   it('settles a choice once one option is very likely best over two answers, and what a vary decision set', () => {
-    const textbook = { 'listing.language': 'textbook', 'Cell.fill': 'white' };
-    const none = { 'listing.language': 'none', 'Cell.fill': 'white' };
+    const textbook = { '<Listing>.language': 'textbook', 'Cell.fill': 'white' };
+    const none = { '<Listing>.language': 'none', 'Cell.fill': 'white' };
     const once = [presented('a', textbook), presented('b', none), preferred(['a', 'b'], 'a')];
     // One answer is not enough.
     expect(settledValues(once)).toEqual({});
@@ -156,7 +156,7 @@ describe('settledValues', () => {
       preferred(['c', 'd'], 'c')
     ];
     expect(settledValues([...twice, vary('Graph.form', 'snake')])).toEqual({
-      'listing.language': 'textbook',
+      '<Listing>.language': 'textbook',
       'Graph.form': 'snake'
     });
   });
@@ -182,9 +182,9 @@ describe('moot comparisons', () => {
     // The answer hid the Answer part, so how it looks is no longer open.
     expect(mootComparison(settled, about('Board.Answer.fill'))).toBe(true);
     expect(mootComparison(settled, about('Highlight.Link.targetFill'))).toBe(false);
-    expect(mootComparison(answer({ 'listing.language': 'none' }), about('listing.color'))).toBe(
-      true
-    );
+    expect(
+      mootComparison(answer({ '<Listing>.language': 'none' }), about('<Listing>.lit.color'))
+    ).toBe(true);
   });
 
   it('sets aside the pair just answered, whichever way round, though it settled nothing', () => {
