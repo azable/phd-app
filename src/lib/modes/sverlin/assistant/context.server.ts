@@ -1,35 +1,26 @@
 /**
  * The design part of the assistant's context (see $lib/server/ai/context/project-context.ts): a
- * version's design space and variant as the model reads it, with its keys as people and the model
- * write them (see design-keys.ts).
+ * version's design file as it is stored, and its design space as the model reads it, with its keys
+ * as people and the model write them (see design-keys.ts).
  */
 
 import type { BrowserBundlePresentation } from '$lib/shared/presentations';
 import type { AiDesign, AiDesignContext, AiVariable } from '$lib/server/ai/context/project-context';
-import { writtenKey } from '../library/node/design-keys';
+import { nestedDesign, writtenKey, writtenValues } from '../library/node/design-keys';
 import {
-  templateName,
-  templates,
-  withoutTemplateValues,
-  type TemplateName
-} from '../templates/templates';
-import {
-  baseKey,
   baseOptions,
   paletteKey,
   frameOptions,
   listingOptions,
   listingPlacesOptions,
   listingPropOptions,
-  roleStyleOf,
-  roleStyleOptions,
+  baseOf,
+  tokenedOptions,
   isToken,
-  levelFor,
   propOptions,
   styleOf,
   tokenProps,
-  type DesignProp,
-  type KindRole
+  type DesignProp
 } from '../library/node/design';
 
 type DesignValue = string | number | boolean;
@@ -52,158 +43,93 @@ function patternOf(set: readonly DesignValue[]): string | undefined {
   return `${others.length ? `${others.join(', ')}, or ` : ''}a hue-shade, as ${hues[1] ?? hues[0]}-${shades[Math.floor(shades.length / 2)]}: hues ${hues.join(', ')}; shades ${shades.join(', ')}`;
 }
 
+/**
+ * The design as the assistant reads it: the stored file as it is, nested; every kind of node with
+ * the props it has, kinds with the same props told once under their names joined by commas; the
+ * option sets those props take; and in full, with their values, only the variables with options of
+ * their own (views, a listing's language, a place's label). A kind's prop the file does not write
+ * takes what the kind inherits, else its base's, else the prop's neutral value (see the guide).
+ */
 export function designContext(design: AiDesign): AiDesignContext {
-  const { options, variables } = withoutBase(writtenDesign(design));
-  const values: Record<string, Record<string, DesignValue>> = {};
-  const levels: Record<string, DesignValue | Record<string, DesignValue>> = {};
-  const followers = new Map<string, Set<string>>();
-  const own = variables.filter(({ variable, value, follows }) => {
-    const style = styleOf(variable);
-    const roleStyle = roleStyleOf(variable);
-    if (isToken(variable)) levels[variable] = value;
-    else if (roleStyle)
-      (
-        (levels[variable.slice(0, variable.lastIndexOf('.'))] ??= {}) as Record<string, DesignValue>
-      )[roleStyle.prop] = value;
-    // A style is a level of its own, as a role's style is; what a kind inherits is told as "..."
-    // with the kind's own values.
-    else if (style)
-      ((levels[style.style] ??= {}) as Record<string, DesignValue>)[style.prop] = value;
-    else if (variable.endsWith('.inherit'))
-      (values[variable.slice(0, -'.inherit'.length)] ??= {})['...'] = value;
-    else if (follows && !isToken(follows)) {
-      const group = follows.slice(0, follows.lastIndexOf('.'));
-      followers.set(
-        group,
-        (followers.get(group) ?? new Set()).add(variable.slice(0, variable.lastIndexOf('.')))
-      );
-    } else return true;
-    return false;
+  const kinds = new Map<string, string[]>();
+  const variables = design.variables.filter((variable) => {
+    const key = variable.variable;
+    if (isToken(key) || baseOf(key) || styleOf(key) || paletteKey.test(key)) return false;
+    if (key.startsWith('scale.')) return false;
+    const dot = key.lastIndexOf('.');
+    const prop = key.slice(dot + 1);
+    const named = typeof variable.options === 'string';
+    if (dot > 0 && named && (variable.options === prop || prop === 'inherit')) {
+      const kind = writtenKey(key).slice(0, writtenKey(key).lastIndexOf('.'));
+      kinds.set(kind, [...(kinds.get(kind) ?? []), prop === 'inherit' ? '...' : prop]);
+      return false;
+    }
+    return true;
   });
-  for (const [group, kinds] of followers)
-    if (typeof levels[group] === 'object')
-      (levels[group] as Record<string, DesignValue>).kinds = [...kinds].join(', ');
-  const full = own.filter(({ variable, options: set, value, origin, follows }) => {
-    const dot = variable.lastIndexOf('.');
-    const prop = variable.slice(dot + 1);
-    const brief =
-      dot > 0 &&
-      typeof set === 'string' &&
-      set === prop &&
-      ((origin !== 'chosen' && origin !== 'random') || follows !== undefined);
-    // A prop following a token is told as the token, whose value levels gives.
-    if (brief) (values[variable.slice(0, dot)] ??= {})[prop] = follows ?? value;
-    return !brief;
-  });
-  // Kinds whose values are all alike are told once, under their names joined by commas: most text
-  // and container kinds keep the same starter values (about half of design.values in a graph).
   const grouped = new Map<string, string[]>();
-  for (const [kind, props] of Object.entries(values)) {
-    const key = JSON.stringify(props);
+  for (const [kind, props] of kinds) {
+    const key = props.join(' ');
     grouped.set(key, [...(grouped.get(key) ?? []), kind]);
   }
-  const told = Object.fromEntries(
-    [...grouped].map(([key, kinds]) => [
-      kinds.join(', '),
-      JSON.parse(key) as Record<string, DesignValue>
-    ])
-  );
-  const toldOptions = Object.fromEntries(
-    Object.entries(options).map(([name, set]) => [name, patternOf(set) ?? set])
-  );
   return {
-    options: toldOptions,
-    variables: full,
-    values: told,
-    ...(Object.keys(levels).length ? { levels } : {})
-  };
-}
-
-/**
- * The design told against the template it names as its base (see templates.ts): every value still
- * the template's is left out, as the base's name says it, so the context lists only the
- * differences, not the base's 200-odd values.
- */
-function withoutBase(design: AiDesign): AiDesign {
-  const told = withoutTemplateValues(
-    Object.fromEntries(design.variables.map(({ variable, value }) => [variable, value]))
-  );
-  return {
-    options: design.options,
-    variables: design.variables.filter(({ variable }) => Object.hasOwn(told, variable))
-  };
-}
-
-/**
- * The design with its keys as the assistant reads and writes them (see design-keys.ts): `{Int}`,
- * `IntCell:target.stroke`, `Card=true.stroke`; the app keeps the other form, and converts back what
- * the assistant sends.
- */
-function writtenDesign({ options, variables }: AiDesign): AiDesign {
-  const written = (key: string) => writtenKey(key);
-  return {
-    options: Object.fromEntries(Object.entries(options).map(([name, set]) => [written(name), set])),
+    file: nestedDesign(writtenValues(design.file ?? {})),
+    kinds: Object.fromEntries([...grouped].map(([props, names]) => [names.join(', '), props])),
+    options: Object.fromEntries(
+      Object.entries(design.options).map(([name, set]) => [writtenKey(name), patternOf(set) ?? set])
+    ),
     variables: variables.map((variable) => ({
       ...variable,
-      variable: written(variable.variable),
-      ...(typeof variable.options === 'string' ? { options: written(variable.options) } : {}),
-      ...(variable.follows ? { follows: written(variable.follows) } : {})
+      variable: writtenKey(variable.variable),
+      ...(typeof variable.options === 'string' ? { options: writtenKey(variable.options) } : {})
     }))
   };
 }
 
-/** A presentation's design space and variant, each prop's options named once. */
+/**
+ * A presentation's design space and variant, each prop's options named once, and its design file.
+ * What a kind inherits takes every kind and every style the file writes, one set, `inherit`.
+ */
 export function designVariables(
   presentation:
-    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'listings' | 'roles'>
+    | Pick<BrowserBundlePresentation, 'variant' | 'design' | 'origins' | 'views' | 'listings'>
     | undefined,
   /** Each free layout's structure, by its kind (see SourceBuildFacts): only layers take layered. */
   structures?: Readonly<Record<string, string>>
 ): AiDesign {
   const options: Record<string, readonly DesignValue[]> = {};
   const variant = presentation?.variant ?? {};
-  const roles = (presentation?.roles ?? {}) as Readonly<Record<string, KindRole>>;
-  // What a kind's prop follows where it holds that value (see buildVariant): what it inherits,
-  // as $cell.padding or VertexCard.padding, its role's style, as <Value>.padding, or the token
-  // its role's look names, as $spacing.
-  const followed = (key: string): string | undefined => {
-    const level = levelFor(variant, roles, key);
-    return level?.value !== undefined && level.value === variant[key] ? level.from : undefined;
-  };
   const styles = [...new Set(Object.keys(variant).flatMap((key) => styleOf(key)?.style ?? []))];
+  const kinds = Object.keys(variant).flatMap((key) =>
+    key.endsWith('.inherit') ? [key.slice(0, -'.inherit'.length)] : []
+  );
   const variables = Object.entries(variant).map(([key, value]): AiVariable => {
     const origin = presentation?.origins?.[key];
-    // What a kind inherits takes the kinds of its role, or a style the variant sets; a
-    // style's prop, its prop's options.
+    const told = (set: string | readonly DesignValue[]): AiVariable => ({
+      variable: key,
+      options: set,
+      value,
+      ...(origin ? { origin } : {})
+    });
     if (key.endsWith('.inherit')) {
-      const kind = key.slice(0, -'.inherit'.length);
-      const peers = Object.keys(roles).filter(
-        (other) => other !== kind && roles[other] === roles[kind]
-      );
-      return {
-        variable: key,
-        options: [...peers, ...styles],
-        value,
-        ...(origin ? { origin } : {})
-      };
+      options.inherit = [...kinds, ...styles];
+      return told('inherit');
     }
     const style = styleOf(key);
     if (style && Object.hasOwn(propOptions, style.prop)) {
       options[style.prop] = baseOptions(style.prop, propOptions[style.prop as DesignProp], variant);
-      return { variable: key, options: style.prop, value, ...(origin ? { origin } : {}) };
+      return told(style.prop);
     }
-    // A token's options are its prop's; a role level's, its prop's and the tokens that fit it.
+    // A token's options are its prop's; a base's, its prop's and the tokens that fit it.
     if (isToken(key)) {
       const set = tokenProps[key];
       options[set] = baseOptions(set, propOptions[set], variant);
-      return { variable: key, options: set, value, ...(origin ? { origin } : {}) };
+      return told(set);
     }
-    const roleStyle = roleStyleOf(key);
-    if (roleStyle) {
-      options[key] = roleStyleOptions(roleStyle.prop as DesignProp);
-      return { variable: key, options: key, value, ...(origin ? { origin } : {}) };
+    const base = baseOf(key);
+    if (base) {
+      options[key] = tokenedOptions(base.prop, base.base === '<Link>.<To>');
+      return told(key);
     }
-    const follows = followed(key);
     // A place's own choice, as views.Int:swap.held or views.Ask.Int:g.a, has its type's options; a
     // label's view, as views.@scan.check, is the label's.
     const typeIn = (rest: string) => {
@@ -232,30 +158,16 @@ export function designVariables(
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };
     if (!view && Object.hasOwn(known, set)) options[set] = baseOptions(set, known[set], variant);
-    // A base's name, scales and palette are free within their form (see withBase).
-    const ofBase =
-      key === baseKey
-        ? [
-            ...(Object.keys(templates) as TemplateName[]).map(templateName),
-            '$ and a name of your own'
-          ]
-        : key.startsWith('scale.')
-          ? ['rising numbers, 0 or more, separated by spaces']
-          : paletteKey.test(key)
-            ? ['an exact colour, # and six hex digits']
-            : undefined;
-    if (ofBase) return { variable: key, options: ofBase, value, ...(origin ? { origin } : {}) };
-    return {
-      variable: key,
-      options: view
+    // Scales and palette colours are free within their form (see withBase).
+    if (key.startsWith('scale.')) return told(['rising numbers, 0 or more, separated by spaces']);
+    if (paletteKey.test(key)) return told(['an exact colour, # and six hex digits']);
+    return told(
+      view
         ? [...(presentation?.views?.[view] ?? []), 'none']
         : key === '<Listing>.language' && presentation?.listings?.length
           ? [...presentation.listings, ...listingOptions['<Listing>.language']]
-          : set,
-      value,
-      ...(origin ? { origin } : {}),
-      ...(follows ? { follows } : {})
-    };
+          : set
+    );
   });
-  return { options, variables };
+  return { options, variables, ...(presentation?.design ? { file: presentation.design } : {}) };
 }

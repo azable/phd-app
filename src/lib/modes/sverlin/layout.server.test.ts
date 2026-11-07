@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
+import { starterValues } from './testing/scenes';
 
 import { buildBatch } from './build.server';
 import { prepareSvelteComponent } from './compile.server';
@@ -92,7 +93,7 @@ describe('laying out on the server', () => {
   it('fails the build of a presentation the server cannot lay out, saying what to change', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const [result] = await buildBatch(source.replace('<Node>lo</Node>', '<Node>漢字</Node>'), [
-      { seed: 1 }
+      { seed: 1, variant: { chosen: { template: '$starter' } } }
     ]);
     expect(result).toMatchObject({ ok: false, failureKind: 'source' });
     expect(result.ok || result.diagnostics[0]).toMatchObject({
@@ -146,7 +147,9 @@ describe('laying out on the server', () => {
         '{#each states as state, k}{@const row = DeltaIndex(delta, k)}'
       )
       .replaceAll('delta[k]', 'delta[row]');
-    const [result] = await buildBatch(source, [{ seed: 1 }]);
+    const [result] = await buildBatch(source, [
+      { seed: 1, variant: { chosen: { template: '$starter' } } }
+    ]);
     expect(result.ok || result.diagnostics[0]).toMatchObject({
       code: 'draw_failed',
       message: expect.stringMatching(
@@ -260,7 +263,10 @@ while (@more[i < 2]) @next[i++;]</script><View of="Int" name="Cell"><Node value=
 <Storyboard>
   <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
-      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1);
+      // Each cell framed, as the template's $cell draws a value.
+      const { geometry, layout } = await bundlePresentation(prepareSvelteComponent(source), 1, {
+        chosen: { 'Cell.inherit': '$cell' }
+      });
       expect(layout.errors).toEqual([]);
       const given = geometry;
       return given.tracks[0][1];
@@ -426,9 +432,10 @@ describe('text measured on the server', () => {
 describe('link labels', () => {
   const source = readFileSync('src/lib/modes/sverlin/fixtures/dijkstra.sverlin', 'utf8');
 
-  it('start as plain text where their type is drawn only on links, keeping room for the words', async () => {
+  it('take the template’s $label where their kind links it, keeping room for the words', async () => {
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.design.starter).toMatchObject({
+    const label = { 'WeightText.inherit': '$label' };
+    expect(starterValues(prepared.design, label)).toMatchObject({
       'WeightText.padding': 0,
       'WeightText.minSize': 0,
       'WeightText.stroke': 'none',
@@ -438,19 +445,15 @@ describe('link labels', () => {
     const width = async (chosen: Record<string, string | number> = {}) =>
       (await bundlePresentation(prepared, 1, { chosen })).layout.readability?.content.width ?? 0;
     // Boxed as a value, the labels need more room between the vertices.
-    const boxed = {
-      'WeightText.padding': 0.375,
-      'WeightText.minSize': 2.5,
-      'WeightText.textSize': 20
-    };
-    expect(await width()).toBeLessThan(await width(boxed));
+    expect(await width(label)).toBeLessThan(await width({ 'WeightText.inherit': '$cell' }));
   });
 
-  it('keep the box of a type also drawn elsewhere, only unboxed on the line', () => {
-    const shared = source.replace(
-      '<View of="Weight" name="WeightText"><Node value={this} /></View>',
-      '<View of="Weight" name="WeightText"><Node value={this} /></View>\n<Layout name="Extra"><Node>{edges[0].weight}</Node></Layout>'
-    );
-    expect(prepareSvelteComponent(shared).design.starter['WeightText.minSize']).not.toBe(0);
+  it('keep the box their kind links, only unboxed on the line', () => {
+    const { design } = prepareSvelteComponent(source);
+    const values = starterValues(design, { 'WeightText.inherit': '$cell' });
+    expect(values['WeightText.minSize']).not.toBe(0);
+    const placed = Object.keys(values).filter((key) => /WeightText:.*\.stroke$/u.test(key));
+    expect(placed.length).toBeGreaterThan(0);
+    for (const key of placed) expect(values[key]).toBe('none');
   });
 });

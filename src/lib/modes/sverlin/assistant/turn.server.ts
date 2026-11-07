@@ -18,7 +18,7 @@ import {
   type RenderablePresentation
 } from '$lib/shared/presentations';
 import {
-  presentationVariant,
+  presentationDesign,
   presentationWarningCode,
   presentationWarningText,
   type PresentationWarning
@@ -30,6 +30,8 @@ import { cutText } from '$lib/shared/text';
 import { modeCatalog } from '$lib/modes/catalog';
 import { designOnlyWarning } from '$lib/modes/sverlin/padding-warnings.server';
 import { keptKey, writtenKey } from '$lib/modes/sverlin/library/node/design-keys';
+import { templateKey } from '$lib/modes/sverlin/library/node/design';
+import { templateNames, templateOf } from '$lib/modes/sverlin/templates/templates';
 import {
   freeLayoutName,
   pageLayoutName,
@@ -86,6 +88,8 @@ import {
   activateBuiltPresentations,
   appendProjectEvents,
   basedRequests,
+  presentedValues,
+  startingDesign,
   buildProjectSourceBatch,
   draftEvent,
   freshPresentationSeeds,
@@ -161,11 +165,12 @@ export async function runSverlinAssistantTurn(
   inReplyTo: readonly EventId[] = []
 ): Promise<ProjectDocument> {
   const chatbot = dependencies.getChatbot(projectSnapshotAt(document).assistantId);
-  // The first presentation keeps the viewed variant's values; every attempt builds the same seeds.
-  const viewedVariant = presentationVariant(
+  // The first presentation changes the viewed version's design file; every attempt builds the same
+  // seeds.
+  const viewedDesign = presentationDesign(
     viewedPresentation(document, contextSelection.interactionEventIds ?? [])
   );
-  const viewed = Object.keys(viewedVariant).length ? viewedVariant : undefined;
+  const viewed = Object.keys(viewedDesign).length ? viewedDesign : undefined;
   const turn: ChatTurn =
     entrySource(document) === modeCatalog[projectSnapshotAt(document).mode].starter.source ||
     (contextSelection.interactionEventIds ?? []).some(
@@ -436,7 +441,11 @@ export async function runSverlinAssistantTurn(
         case 'resample':
           if (queued) {
             candidate = entrySource(current);
-            variant = { base: viewed, randomise: true };
+            // A resample writes no values: with no version to build on, it draws from the
+            // project's starting design.
+            variant = viewed
+              ? { base: viewed, randomise: true }
+              : { chosen: startingDesign(current), randomise: true };
           }
           break;
         case 'revise':
@@ -1151,10 +1160,19 @@ export function comparisonProblems(
     const set = [designPatch(left.values), designPatch(right.values)].flatMap(
       ({ set }: DesignPatch) => set
     );
+    // A side may name a template to copy, as “textbook or slide?” asks, which no variable is.
     const problems = set.flatMap(({ variable, value }) =>
-      offeredOptions(design, variable)?.includes(value)
+      (
+        variable === templateKey
+          ? templateOf(value)
+          : offeredOptions(design, variable)?.includes(value)
+      )
         ? []
-        : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
+        : variable === templateKey
+          ? [
+              `${name}: ${JSON.stringify(value)} is no template; the templates are ${templateNames()}.`
+            ]
+          : [`${name}: ${variable} has no option ${JSON.stringify(value)} in project.design.`]
     );
     const asked = comparisonBriefProblem(pair);
     if (asked) problems.push(`${name}: ${asked}`);
@@ -1322,6 +1340,9 @@ export async function advanceCandidatesForAgent(
     if (!artifact || snapshot.mode !== 'sverlin') {
       throw new Error('Only source-authored projects can generate buffered candidates.');
     }
+    // On the design of the version shown, or with none shown, the project's starting design.
+    const shownDesign = current[0] && presentedValues(document, current[0].presentationId);
+    const variant = shownDesign ? { base: shownDesign } : { chosen: startingDesign(document) };
     const recorded = await buildProjectSourceBatch(
       {
         document,
@@ -1329,7 +1350,7 @@ export async function advanceCandidatesForAgent(
         source: artifact.content,
         sourceLabel: artifact.path,
         requests: freshPresentationSeeds((presentationCount - remaining.length) as 1 | 2).map(
-          (seed) => ({ seed })
+          (seed) => ({ seed, variant })
         ),
         purpose: 'seed-change',
         input: 'committed-artifact',

@@ -7,7 +7,7 @@ import { preferredPresentation } from '$lib/shared/projects/events/visualization
 import type { ProjectDocument } from '$lib/shared/projects/model';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { type DesignValues } from '$lib/shared/presentations';
-import { presentationVariant } from '$lib/shared/presentations';
+import { presentationDesign } from '$lib/shared/presentations';
 import { projectSnapshotAt } from '$lib/shared/projects/projection';
 import { type BuildRequest } from '$lib/modes/server';
 import type { Comparisons } from '$lib/server/ai/decisions/source-decisions';
@@ -191,7 +191,7 @@ export async function presentAfterRebase(
   const requests = shown.flatMap((event): BuildRequest[] => {
     const presentation = event?.payload.presentation;
     if (presentation?.format !== 'browser-bundle-v1') return [];
-    const values = presentationVariant(presentation);
+    const values = presentationDesign(presentation);
     return [
       {
         seed: presentation.seed,
@@ -300,10 +300,10 @@ export async function presentPicks(
     const preferred = picked && preferredPresentation(picked.payload);
     return [
       {
-        left: presentationVariant(left.payload.presentation),
-        right: presentationVariant(right.payload.presentation),
+        left: presentationDesign(left.payload.presentation),
+        right: presentationDesign(right.payload.presentation),
         picked: preferred
-          ? presentationVariant(presented.get(preferred)?.payload.presentation)
+          ? presentationDesign(presented.get(preferred)?.payload.presentation)
           : undefined,
         seed:
           left.payload.presentation.format === 'browser-bundle-v1'

@@ -31,7 +31,7 @@ describe('Sverlin language guide and assistant instructions', () => {
       .filter((source) => source.includes('<script algorithm>'));
     expect(examples.length).toBeGreaterThan(0);
     for (const example of examples) {
-      const result = await compileSvelteComponent(example);
+      const result = await compileSvelteComponent(example, { chosen: { template: '$starter' } });
       expect(result.labels.length).toBeGreaterThan(0);
     }
   });

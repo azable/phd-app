@@ -85,9 +85,10 @@ export type DesignValues = v.InferOutput<typeof designValuesSchema>;
 export const designOriginSchema = v.picklist(['chosen', 'kept', 'random', 'starter']);
 
 /**
- * The values a build starts from. Chosen values must each name a variable and be one of its
- * options. A base variant's values are kept where they still fit, and the starter gives the rest.
- * Randomise draws afresh: everything (true), keeping the base's equalities, or the variables named.
+ * The values a build starts from: the design file of the version built on (base), the values this
+ * build changes (chosen), each naming a variable and one of its options, or naming a template whose
+ * file replaces the base, and the values drawn afresh (randomise): every value the file writes
+ * (true), keeping its equalities, or the variables named.
  */
 export const variantRequestSchema = v.strictObject({
   chosen: v.optional(v.record(v.string(), v.unknown())),
@@ -95,6 +96,14 @@ export const variantRequestSchema = v.strictObject({
   randomise: v.optional(v.union([v.literal(true), v.array(v.string())]))
 });
 export type VariantRequest = v.InferOutput<typeof variantRequestSchema>;
+
+/**
+ * A presentation's design file, the template's copy and the changes made to it, which the next
+ * version built on it changes; empty for one with no design space.
+ */
+export function presentationDesign(presentation: RenderablePresentation | undefined): DesignValues {
+  return presentation?.format === 'browser-bundle-v1' ? (presentation.design ?? {}) : {};
+}
 
 /** A presentation's variant, by key; empty for one with no design space. */
 export function presentationVariant(
@@ -135,8 +144,10 @@ export const browserBundlePresentationSchema = v.strictObject({
       v.minLength(1)
     )
   ),
-  /** Its variant: every variable of the source's design space, by key. */
+  /** Its variant: every variable of the source's design space, by key, built from its design. */
   variant: v.optional(designValuesSchema),
+  /** Its design file: the template's copy and the changes made to it, each value by key. */
+  design: v.optional(designValuesSchema),
   /** Where each of the variant's values came from. */
   origins: v.optional(v.record(v.string(), designOriginSchema)),
   /** The views each type rendered by name could draw, the options of its views variable. */
@@ -145,10 +156,6 @@ export const browserBundlePresentationSchema = v.strictObject({
   listings: v.optional(v.array(v.pipe(v.string(), v.maxLength(200)))),
   /** The kind of each tag, by its line:column, as the editor shows it. */
   kinds: v.optional(v.record(v.string(), v.array(v.pipe(v.string(), v.maxLength(200))))),
-  /** Each kind of node's role, by its key, whose role levels (role.value.padding) its props follow. */
-  roles: v.optional(
-    v.record(v.pipe(v.string(), v.maxLength(200)), v.pipe(v.string(), v.maxLength(40)))
-  ),
   /** The variable each render of a type by name reads, as views.Int, by its line:column. */
   renders: v.optional(v.record(v.string(), v.pipe(v.string(), v.maxLength(200)))),
   /** The <Node> tags it leaves out, by their line:column, as the editor greys them. */

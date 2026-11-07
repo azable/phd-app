@@ -59,7 +59,7 @@ const count = v.optional(
 const designPatch = v.pipe(
   v.string(),
   v.description(
-    'Design values as one JSON object written as a string, nested as project.design shows: a kind\u2019s props in its object, as {"IntCell": {"fill": "sky-100"}}; a token, as {"$accent": "teal-600"}; a style, as {"$cell": {"radius": 4}}; a role\u2019s style, as {"<Value>": {"padding": 0.25}}; a place or a data value inside its kind, as {"IntCell": {":target": {"stroke": "violet-500"}}}; what a kind inherits, as {"IntCell": {"...": "$cell"}}; a type\u2019s view, as {"{Int}": "IntTally"}. Each value one of its variable\u2019s options; null removes a value, so it returns to what it inherits or follows. "{}" for none.'
+    'Design values as one JSON object written as a string, nested as project.design shows: a kind\u2019s props in its object, as {"IntCell": {"fill": "sky-100"}}; a token, as {"$accent": "teal-600"}; a style, as {"$cell": {"radius": 4}}; a base, as {"<Node>": {"font": "serif"}}; a place or a data value inside its kind, as {"IntCell": {":target": {"stroke": "violet-500"}}}; what a kind inherits, as {"IntCell": {"...": "$cell"}}; a type\u2019s view, as {"{Int}": "IntTally"}; a first version names the template its design copies, as {"template": "$starter"}. Each value one of its variable\u2019s options; null removes a value, so it returns to what it inherits or follows. "{}" for none.'
   )
 );
 

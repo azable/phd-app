@@ -1,6 +1,7 @@
 /**
- * Every fixture's scenes, built with no variant, as a hash each, so a change to the engine that
- * moves anything in a picture shows here; a change meant to move pictures updates the snapshot.
+ * Every fixture's scenes, built with its design (fixtures/designs.json, by the fixture's path), as a
+ * hash each, so a change to the engine that moves anything in a picture shows here; a change meant
+ * to move pictures updates the snapshot.
  *
  * Deliberate changes, by the step that made them:
  * - grid-marks: a grid placed by positions keeps a track before the first cell, as a position's
@@ -89,6 +90,14 @@
  *   so the values a call shows (its lo and hi, its part of the array) carry the identities of the
  *   values they are; only nodes' identity fields are added, no box, text or link changes (checked
  *   against the scenes without them, 7 November 2026).
+ * - design files: every fixture is built with its own design, {"template": "$starter"}, a copy of
+ *   the starter base the build once wrote in; no scene changed.
+ * - four bases, no roles: each fixture's design links the kinds its roles once framed, 129 links
+ *   over 595 kinds (a value's to $cell, a type drawn only on links to $label, a record's card to
+ *   $card, a union's members as the one the build once made them); $starter's <Node> holds the old
+ *   text and container look with <Icon>'s size as iconSize, and $label keeps the value frame's
+ *   strokeWidth, unpainted but taking room, so no scene changed (checked byte for byte on PNGs of
+ *   bars, dijkstra, insertion-decisions and replay/binary-search-bars, 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';
@@ -96,7 +105,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
 import type { SceneNode, SceneStep } from './library';
-import { drawnSteps, ofKind } from './testing/scenes';
+import { drawnSteps, fixtureDesign, ofKind } from './testing/scenes';
 
 const root = join(import.meta.dirname, 'fixtures');
 const fixtures = (directory: string): string[] =>
@@ -111,7 +120,13 @@ const fixtures = (directory: string): string[] =>
 // Each fixture is built once for every test.
 const built = new Map<string, ReturnType<typeof drawnSteps>>();
 const drawn = (file: string) => {
-  if (!built.has(file)) built.set(file, drawnSteps(readFileSync(file, 'utf8')));
+  if (!built.has(file))
+    built.set(
+      file,
+      drawnSteps(readFileSync(file, 'utf8'), {
+        chosen: fixtureDesign(relative(root, file).replace(/\.sverlin$/u, ''))
+      })
+    );
   return built.get(file)!;
 };
 

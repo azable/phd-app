@@ -10,7 +10,9 @@ export const POST: RequestHandler = async () => {
   if (!readiness.ready) return json(readiness, { status: 503 });
   const start = performance.now();
   try {
-    const bundle = await compileSvelteComponent(sverlinStarter.source);
+    const bundle = await compileSvelteComponent(sverlinStarter.source, {
+      chosen: { template: '$starter' }
+    });
     return json(
       { ok: true, durationMs: Math.round(performance.now() - start), steps: bundle.labels.length },
       { headers: { 'cache-control': 'no-store' } }

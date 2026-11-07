@@ -1,0 +1,82 @@
+{
+  "$text": "black",
+  "$font": "sans",
+  "$surface": "white",
+  "$accent": "amber-500",
+  "$highlight": "amber-100",
+  "$spacing": 0.375,
+  "$radius": 8,
+  "$lineWidth": 1.5,
+  "scale": {
+    "spacing": "0 0.0625 0.125 0.25 0.375 0.5 0.75 1 1.5 2",
+    "radius": "0 2 4 6 8 12 999",
+    "type": "12 14 16 18 20 24 30 36 48",
+    "line": "0.5 1 1.5 2 3 4",
+    "opacity": "0.25 0.5 0.75 1"
+  },
+  "<Node>": {
+    "color": "$text",
+    "font": "$font",
+    "textSize": 16,
+    "gap": 0.5,
+    "iconSize": 20
+  },
+  "<Code>": {
+    "fill": "neutral-100",
+    "color": "$text",
+    "font": "mono",
+    "textSize": 16,
+    "padding": 0.125,
+    "radius": 4
+  },
+  "<Link>": {
+    "stroke": "neutral-500",
+    "strokeWidth": 2,
+    "<To>": {
+      "head": "arrow",
+      "fill": "$highlight",
+      "stroke": "$accent",
+      "strokeWidth": "$lineWidth"
+    }
+  },
+  "$cell": {
+    "fill": "$surface",
+    "stroke": "neutral-300",
+    "strokeWidth": "$lineWidth",
+    "textSize": 20,
+    "weight": "bold",
+    "padding": "$spacing",
+    "radius": "$radius",
+    "minSize": 2.5
+  },
+  "$card": {
+    "fill": "$surface",
+    "stroke": "neutral-300",
+    "strokeWidth": "$lineWidth",
+    "radius": "$radius",
+    "padding": "$spacing",
+    "gap": 0.25
+  },
+  "$label": {
+    "fill": "$surface",
+    "strokeWidth": "$lineWidth",
+    "textSize": 14,
+    "weight": "bold"
+  },
+  "$caption": {
+    "textSize": 14
+  },
+  "$second": {
+    "fill": "sky-100",
+    "stroke": "neutral-500",
+    "strokeWidth": 1.5
+  },
+  "<Listing>": {
+    "syntax": "keywords",
+    "places": "fill",
+    "lit": {
+      "fill": "amber-200",
+      "radius": 2
+    }
+  }
+}

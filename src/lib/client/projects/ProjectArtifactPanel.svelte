@@ -12,8 +12,6 @@
     choiceEdits,
     choiceRows,
     differingKeys,
-    shortChoiceEdits,
-    shortValues,
     variantDocument
   } from '$lib/client/artifacts/variant-diff';
   import type { DrawnPresentation } from '$lib/client/artifacts/drawn-values';
@@ -133,14 +131,14 @@
   // The choices of the candidate a draft starts from, and their nested document as edited: saving
   // builds with only what the edit changes (see choiceEdits).
   let choicesBase = $state<DesignValues | undefined>();
-  let choicesRoles = $state<Readonly<Record<string, string>> | undefined>();
-  // Whether Choices shows every value of the stored design, rather than the base's name and only
-  // the values that differ from what it gives (see shortValues).
+  let choicesDesign = $state<DesignValues | undefined>();
+  // Whether Choices shows every value each kind takes, rather than the version's design file as it
+  // is stored.
   let allChoices = $state(false);
-  const choicesOf = (variant: DesignValues, roles?: Readonly<Record<string, string>>) =>
-    allChoices ? variant : shortValues(variant, roles);
+  const choicesOf = (variant: DesignValues, design?: DesignValues) =>
+    allChoices ? variant : (design ?? {});
   // The choices the draft's document was written from, in the form shown: an edit is read against it.
-  const choicesShown = $derived(choicesBase && choicesOf(choicesBase, choicesRoles));
+  const choicesShown = $derived(choicesBase && choicesOf(choicesBase, choicesDesign));
   let choicesDraft = $state('');
   let choicesError = $state('');
   let discardRequested = $state(false);
@@ -208,9 +206,9 @@
   });
   // The shown presentations' variants, by the label each has on the stage.
   const shownVariants = $derived(
-    drawnSources.flatMap(({ label, variant, roles, presentationId }, index) =>
+    drawnSources.flatMap(({ label, variant, design, presentationId }, index) =>
       variant
-        ? [{ label: label ?? (index ? 'bottom' : 'top'), variant, roles, presentationId }]
+        ? [{ label: label ?? (index ? 'bottom' : 'top'), variant, design, presentationId }]
         : []
     )
   );
@@ -239,7 +237,7 @@
     if (!shownVariants.length) return undefined;
     const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
     const shown = shownVariants[index];
-    return variantDocument(shown ? choicesOf(shown.variant, shown.roles) : {});
+    return variantDocument(shown ? choicesOf(shown.variant, shown.design) : {});
   });
   const shownVariantOptions = $derived([
     { id: 'differences' as const, name: 'Differences' },
@@ -259,7 +257,7 @@
     }
     const index = typeof shownVariant === 'number' && differences ? shownVariant : 0;
     const shown = shownVariants[index];
-    const variant = shown ? choicesOf(shown.variant, shown.roles) : {};
+    const variant = shown ? choicesOf(shown.variant, shown.design) : {};
     const keys = Object.keys(variant).sort((x, y) => x.localeCompare(y));
     return { caption: 'Choices of the version', columns: [], rows: choiceRows([variant], keys) };
   });
@@ -296,7 +294,7 @@
       drawnSources.find(({ source }) => source === baseSource)?.presentationId;
     const from = drawnSources.find(({ presentationId }) => presentationId === draftFrom);
     choicesBase = from?.variant;
-    choicesRoles = from?.roles;
+    choicesDesign = from?.design;
     choicesDraft = choicesShown ? variantDocument(choicesShown) : '';
     choicesError = '';
     draftSummary = '';
@@ -324,11 +322,7 @@
   async function saveDraft() {
     if (!artifact || !dirty || session.pending || !session.atHead || session.readOnly) return;
     const edits =
-      choicesBase && choicesChanged
-        ? allChoices
-          ? choiceEdits(choicesBase, choicesDraft)
-          : shortChoiceEdits(choicesBase, choicesRoles, choicesDraft)
-        : undefined;
+      choicesShown && choicesChanged ? choiceEdits(choicesShown, choicesDraft) : undefined;
     if (edits && 'error' in edits) {
       choicesError = edits.error;
       tab = 'variant';
@@ -350,7 +344,7 @@
     }
   }
 
-  // Switch Choices between the short form and every value; while editing, only an unchanged draft
+  // Switch Choices between the design file and every value; while editing, only an unchanged draft
   // switches, written again in the other form, so the text is always read against what it shows.
   function toggleAllChoices() {
     if (editMode === 'editing' && choicesChanged) return;
@@ -573,15 +567,15 @@
 
       {#if expanded && editMode === 'editing' && tab === 'variant' && choicesBase}
         <!-- The choices of the candidate the draft starts from, to edit: a
-          value changed or added is chosen, one removed returns to what it follows. -->
+          value changed or added is written into the design file, one removed leaves it. -->
         <div class="flex min-h-48 flex-1 flex-col overflow-hidden">
           <div
             class="flex items-center gap-2 border-b bg-muted px-4 py-2 text-sm text-muted-foreground"
           >
             <span class="mr-auto truncate">
               {allChoices
-                ? 'Every value of the design'
-                : 'The base and the values that differ from it; one removed returns to the base'}
+                ? 'Every value each kind takes; one changed is written into the design'
+                : 'The design file; a value removed returns to what the kind inherits, its base, or none'}
             </span>
             <button
               type="button"
@@ -595,8 +589,8 @@
               title={choicesChanged
                 ? 'Save or discard the changed choices to switch'
                 : allChoices
-                  ? 'Show the base and what differs from it'
-                  : 'Show every value of the design, those the base gives included'}
+                  ? 'Show the design file as it is stored'
+                  : 'Show every value each kind takes, those it inherits included'}
               onclick={toggleAllChoices}>All values</button
             >
           </div>
@@ -660,8 +654,8 @@
                 aria-pressed={allChoices}
                 class={[optionButton, allChoices ? optionOn : 'hover:text-foreground']}
                 title={allChoices
-                  ? 'Every value of the design; turn off to show the base and what differs from it'
-                  : 'Show every value of the design, those the base gives included'}
+                  ? 'Every value each kind takes; turn off to show the design file as it is stored'
+                  : 'Show every value each kind takes, those it inherits included'}
                 onclick={toggleAllChoices}>All values</button
               >
             {/if}

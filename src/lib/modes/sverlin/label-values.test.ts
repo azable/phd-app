@@ -70,7 +70,8 @@ describe('labels read in the view', () => {
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n<Layout name="Inserting"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main"><Node><Inserting /></Node></Layout>\n${scene('')}`
+        `${domain}${insertion}\n<Layout name="Inserting"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main"><Node><Inserting /></Node></Layout>\n${scene('')}`,
+        { chosen: { template: '$starter' } }
       )
     ).resolves.toBeDefined();
   });

@@ -691,7 +691,7 @@
     data-sv-light={lightColour ? `${listing?.places?.look ?? 'fill'}|${lightColour}` : undefined}
     class:cell={holdsOne}
     class:math={__math !== undefined}
-    style:font-size={measured('textSize', 'px')}
+    style:font-size={measured('iconSize', 'px') ?? measured('textSize', 'px')}
     style:font-weight={weight === 'bold' ? 700 : weight === 'normal' ? 400 : undefined}
     style:color={textColour}
     style:background-color={fillColour}

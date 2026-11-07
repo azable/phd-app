@@ -101,6 +101,13 @@ async function saveWaiting(projectId: string): Promise<void> {
       await postNote(projectId, name, why.slice(0, 2000), 'warning');
       continue;
     }
+    // A root example starts a design of its own, so its variant names the template it copies.
+    if (!from && !(values && Object.hasOwn(values, 'template'))) {
+      const why = `The demo example ${name} was not saved: a root example's variant names the template its design copies, as <!-- variant: {"template": "$starter"} -->.`;
+      console.error(why);
+      await postNote(projectId, name, why, 'warning');
+      continue;
+    }
     // Checked as the API checks a command, so an example the project could not load is refused.
     const command = v.safeParse(projectCommandSchema, {
       type: 'save',

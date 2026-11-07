@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterValues } from '../testing/scenes';
 
 import { listingMapsOf, prepareSvelteComponent } from '../compile.server';
 import { bundlePresentation } from '../testing/scenes';
@@ -83,7 +84,7 @@ describe('listings of the source’s own', () => {
 
   it('light each region where the algorithm runs the code with its label, parts of a line apart', () => {
     const prepared = prepareSvelteComponent(insertion);
-    expect(prepared.design.starter['<Listing>.language']).toBe('textbook');
+    expect(starterValues(prepared.design)['<Listing>.language']).toBe('textbook');
     expect(prepared.design.space['<Listing>.language']).toEqual(['textbook', 'none']);
     const { text } = prepared.listings!.textbook;
     const lit = prepared.paced(new Set(['shift', 'place'])).lit.textbook;

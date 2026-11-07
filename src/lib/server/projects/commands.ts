@@ -98,7 +98,7 @@ export function chosenVariantRequests(): VariantRequester {
     const from = options.from
       ? shown.find(({ presentationId }) => presentationId === options.from)
       : shown.at(-1);
-    if (!artifact || !from?.variant) return randomVariantRequests(options);
+    if (!artifact || !from?.design) return randomVariantRequests(options);
     const design: DesignSource = {
       ...from,
       ...sourceBuildFacts(options.document, from.source.sha256)
@@ -124,7 +124,7 @@ export function chosenVariantRequests(): VariantRequester {
       requests: chosenRequests(
         options.seeds,
         modeAssistants[snapshot.mode].design?.variables(design) ?? { options: {}, variables: [] },
-        from.variant,
+        from.design,
         chosen.choices
       )
     };

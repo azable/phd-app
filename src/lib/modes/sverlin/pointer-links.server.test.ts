@@ -5,7 +5,7 @@ import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import linearSearch from './fixtures/linear-search.sverlin?raw';
 import listReverse from './fixtures/list-markers.sverlin?raw';
 import type { SceneBox, SceneNode, SceneStep } from './library';
-import { drawnSteps } from './testing/scenes';
+import { drawnSteps, fixtureDesign } from './testing/scenes';
 
 /** The links each step draws from a variable's own node: those whose start names no element. */
 const fromVariables = (step: SceneStep) => step.links.filter(({ from }) => !from.includes('['));
@@ -125,7 +125,7 @@ describe('a link from a variable', () => {
   });
 
   it('in a free layout, puts the variable under the element it reaches, in room kept there', async () => {
-    const { steps } = await drawnSteps(listReverse);
+    const { steps } = await drawnSteps(listReverse, { chosen: fixtureDesign('list-markers') });
     for (const step of steps)
       for (const link of fromVariables(step)) {
         const start = link.curve?.[0];

@@ -12,6 +12,7 @@ async function version(presentationId: string, javascript?: string) {
   return {
     presentationId,
     seed: 1,
+    design: built.design,
     source: { text: search },
     javascript: { text: javascript ?? built.javascript },
     labels: built.labels

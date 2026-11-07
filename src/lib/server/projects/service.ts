@@ -40,6 +40,7 @@ import type {
 import {
   isSverlinPresentation,
   presentationMode,
+  presentationDesign,
   presentationVariant
 } from '$lib/shared/presentations';
 import { headStillCurrent, projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -249,15 +250,21 @@ export type VariantRequester = (options: {
 }) => Promise<{ document: ProjectDocument; requests: BuildRequest[] }>;
 
 /** New variants drawn at random, every one from the one it was made from. */
-export const randomVariantRequests: VariantRequester = async ({ document, seeds, from }) => ({
-  document,
-  requests: basedRequests(
-    seeds,
-    from ? presentedValues(document, from) : undefined,
-    undefined,
-    true
-  )
-});
+export const randomVariantRequests: VariantRequester = async ({ document, seeds, from }) => {
+  const base = from ? presentedValues(document, from) : undefined;
+  return {
+    document,
+    requests: basedRequests(seeds, base, base ? undefined : startingDesign(document), true)
+  };
+};
+
+/**
+ * The design a project's versions start from where there is no version to build on: its starter's
+ * (see starter-catalog.ts), as `{ template: '$starter' }`.
+ */
+export function startingDesign(document: ProjectDocument): DesignValues {
+  return resolveProjectTemplate(projectSnapshotAt(document).creation).design;
+}
 
 /** Build the accepted artifact for an explicit seed or a fresh presentation set. */
 export function buildProjectPresentations(
@@ -519,10 +526,9 @@ export function reportRuntimeFailure(
 
 /**
  * The variant a failed presentation was made from, when the failure may be its own: built from
- * another variant with values chosen or drawn at random, it is built again from that variant
- * alone. Built from
- * its variant as it was, or from the starter, there is nothing else to show: the failure is the
- * source's.
+ * another version's design file with values chosen or drawn at random, it is built again from that
+ * file alone. Built from its file as it was, or as a first version from a template, there is
+ * nothing else to show: the failure is the source's.
  */
 function variantMadeFrom(
   document: ProjectDocument,
@@ -539,9 +545,10 @@ function variantMadeFrom(
   );
   const variant = built?.payload.variant;
   if (!built || !variant) return undefined;
-  if (!variant.randomise && !Object.keys(variant.chosen ?? {}).length) return undefined;
+  if (!variant.base || (!variant.randomise && !Object.keys(variant.chosen ?? {}).length))
+    return undefined;
   return {
-    request: variant.base ? { base: variant.base } : {},
+    request: { base: variant.base },
     sourceLabel: built.payload.sourceLabel
   };
 }
@@ -577,7 +584,7 @@ async function revertVariant(
   const requests = set.map((event, index): BuildRequest => {
     const shown = event.payload.presentation;
     if (index === failedAt) return { seed: presentation.seed, variant: madeFrom.request };
-    const values = presentationVariant(shown);
+    const values = presentationDesign(shown);
     return {
       seed: shown.format === 'browser-bundle-v1' ? shown.seed : presentation.seed,
       ...(Object.keys(values).length ? { variant: { base: values } } : {})
@@ -947,9 +954,11 @@ async function buildDocument(
     );
   }
   if (seeds.length === 0) throw new Error('At least one seed is required.');
+  // With no version to build on and no values written, the project's starting design; values
+  // written for a first version name their template themselves.
   return buildRequestedDocument(
     document,
-    basedRequests(seeds, base, chosen, randomiseAll),
+    basedRequests(seeds, base, base || chosen ? chosen : startingDesign(document), randomiseAll),
     purpose,
     operationId,
     dependencies
@@ -1185,11 +1194,11 @@ export async function activateBuiltPresentations(
       labels: bundle.labels,
       ...(bundle.steps ? { steps: bundle.steps } : {}),
       ...(bundle.variant ? { variant: bundle.variant } : {}),
+      ...(bundle.design ? { design: bundle.design } : {}),
       ...(bundle.origins ? { origins: bundle.origins } : {}),
       ...(bundle.views ? { views: bundle.views } : {}),
       ...(bundle.listings?.length ? { listings: bundle.listings } : {}),
       ...(bundle.kinds ? { kinds: bundle.kinds } : {}),
-      ...(bundle.roles && Object.keys(bundle.roles).length ? { roles: bundle.roles } : {}),
       ...(bundle.renders ? { renders: bundle.renders } : {}),
       ...(bundle.leftOut ? { leftOut: bundle.leftOut } : {}),
       ...(bundle.readability ? { readability: bundle.readability } : {}),
@@ -1370,11 +1379,11 @@ function presentationIn(
   return presented?.type === 'visualization.presented' ? presented.payload.presentation : undefined;
 }
 
-/** A presentation's variant, when it recorded one. */
+/** A presentation's design file, which a version built on it changes, when it recorded one. */
 export function presentedValues(
   document: ProjectDocument,
   presentationId: string
 ): DesignValues | undefined {
-  const variant = presentationVariant(presentationIn(document, presentationId));
-  return Object.keys(variant).length ? variant : undefined;
+  const design = presentationDesign(presentationIn(document, presentationId));
+  return Object.keys(design).length ? design : undefined;
 }

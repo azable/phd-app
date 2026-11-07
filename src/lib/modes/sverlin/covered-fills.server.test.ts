@@ -93,8 +93,10 @@ ${cellView}
   <Scene name="main" case="main" pause="@visit.look.end"><Main /></Scene>
 </Storyboard>`;
 
+// Each value linked to the template's value frame, the white box that covers.
+const framed = { 'IntCell.inherit': '$cell', 'IntBox.Inner.inherit': '$cell' };
 const covered = async (cellView: string, pointer = false, chosen: Record<string, string> = {}) => {
-  const { built } = await drawnSteps(page(cellView, pointer), { chosen });
+  const { built } = await drawnSteps(page(cellView, pointer), { chosen: { ...framed, ...chosen } });
   return (built.warnings ?? []).filter(({ code }) => code === 'look.fill-covered');
 };
 

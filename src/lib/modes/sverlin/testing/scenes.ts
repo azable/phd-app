@@ -9,36 +9,65 @@ import {
   prepareSvelteComponent,
   type SvelteBundle
 } from '../compile.server';
-import { withStarterBase, type VariantRequest } from '../design.server';
-import { baseKey } from '../library/node/design';
-import { starterBase } from '../library/node/starter-base';
+import { buildVariant, type VariantRequest } from '../design.server';
+import designs from '../fixtures/designs.json';
+import { templateKey } from '../library/node/design';
+import { flatDesign } from '../library/node/design-keys';
+import { templateValues } from '../templates/templates';
 import type { ServedScenes } from '../server-scenes';
 import type { SceneBox, SceneLink, SceneNode, ScenePoint, SceneStep } from '../library';
 
 /**
- * A test's request on the starter base: as a design entering the app (see withStarterBase), and a
- * hand-written variant to build on that names no base, as a test's few values, with the starter base
- * under it, as every variant the app builds holds one.
+ * A test's request with a design: as it is where it names a template; a few values to build on, as
+ * a test writes them, on a copy of `$starter`; and with neither, `$starter` with its chosen values,
+ * as a first version naming that template is.
  */
-export function onStarterBase(request: VariantRequest): VariantRequest {
+export function onStarter(request: VariantRequest): VariantRequest {
   const { base, chosen } = request;
-  const named = [base, chosen].some((values) => values && Object.hasOwn(values, baseKey));
-  return base && Object.keys(base).length && !named
-    ? { ...request, base: { ...starterBase, ...base } }
-    : withStarterBase(request);
+  if (chosen && Object.hasOwn(chosen, templateKey)) return request;
+  if (base && Object.keys(base).length)
+    return { ...request, base: { ...templateValues('starter'), ...base } };
+  return { ...request, chosen: { [templateKey]: '$starter', ...chosen } };
 }
 
-/** The build's bundlePresentation, its request on the starter base where it names none. */
+/**
+ * A fixture's design (fixtures/designs.json), by its path in fixtures without .sverlin, as
+ * `replay/ucs-ten`: the template it copies and the styles its kinds link, flat as a build takes it.
+ */
+export function fixtureDesign(name: string): Record<string, unknown> {
+  const design = (designs as Record<string, Record<string, unknown>>)[name];
+  if (!design) throw new Error(`The fixture ${name} has no design in fixtures/designs.json.`);
+  return flatDesign(design);
+}
+
+/**
+ * Every variable's value as a first version naming `$starter` draws it, with the values `chosen`
+ * beside it, as the styles its kinds link.
+ */
+export const starterValues = (
+  design: ReturnType<typeof prepareSvelteComponent>['design'],
+  chosen: Readonly<Record<string, unknown>> = {}
+): Record<string, string | number | boolean> =>
+  buildVariant(
+    design.space,
+    design.starter,
+    { chosen: { [templateKey]: '$starter', ...chosen } },
+    1,
+    design.fallbacks,
+    design.bases
+  ).values;
+
+/** The build's bundlePresentation, its request on `$starter` where it names no design. */
 export const bundlePresentation = (
   prepared: Parameters<typeof bundleOnBase>[0],
   seed: number,
   request: VariantRequest = {},
   options?: Parameters<typeof bundleOnBase>[3]
-): Promise<SvelteBundle> => bundleOnBase(prepared, seed, onStarterBase(request), options);
+): Promise<SvelteBundle> => bundleOnBase(prepared, seed, onStarter(request), options);
 
 /**
- * Every step's scene of a source, built with a seed and a variant on the starter base where it
- * names none (see onStarterBase), and the build.
+ * Every step's scene of a source, built with a seed and a design, on `$starter` where it names none
+ * (see onStarter), and the build.
  */
 export async function drawnSteps(
   source: string,
