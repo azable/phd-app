@@ -26,6 +26,7 @@
     selectionReferences
   } from './feedback-context';
   import {
+    annotatedLabels,
     referenceChipDetail,
     referenceChipLabel,
     referenceChipTitle,
@@ -351,9 +352,7 @@
                 <span class="min-w-0 flex-1 break-words">
                   {annotation.text}
                   <span class="text-muted-foreground">
-                    · step {annotation.step + 1}{annotation.element
-                      ? ` · ${annotation.element.label}`
-                      : ''}</span
+                    · step {annotation.step + 1}{annotatedLabels(annotation)}</span
                   >
                 </span>
                 <button

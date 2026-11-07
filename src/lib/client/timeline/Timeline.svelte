@@ -28,7 +28,11 @@
     }) => void;
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
-    onElementReference?: (reference: ElementReference) => void;
+    onElementReference?: (
+      presentationId: string,
+      step: number,
+      elements: readonly ElementReference['element'][]
+    ) => void;
     onStepReference?: (presentationId: string, step: number) => void;
     /** Highlight the elements a question about a presentation names, once it is shown. */
     onQuestionElements?: (presentationId: string, elements: readonly string[]) => void;

@@ -141,7 +141,7 @@ async function showStep(step: number) {
 }
 
 // The comment pins the app last sent, shown once the player mounts.
-type Pin = { n: number; element?: string; point?: { x: number; y: number }; text: string };
+type Pin = { n: number; elements?: string[]; point?: { x: number; y: number }; text: string };
 let pins: Pin[] = [];
 const isPin = (pin: unknown): pin is Pin =>
   typeof pin === 'object' &&

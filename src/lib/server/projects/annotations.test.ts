@@ -14,9 +14,12 @@ describe('the elements a message refers to', () => {
           presentationId,
           step: 3,
           stepName: '@visit#2',
-          element: { id: '20:7#1', label: 'B' },
+          elements: [
+            { id: '20:7#1', label: 'B' },
+            { id: '20:7#2', label: 'C' }
+          ],
           point: { x: 10, y: 20 },
-          text: 'Colour the vertex being visited'
+          text: 'Colour the vertices being visited'
         },
         { type: 'annotation', presentationId, step: 0, point: { x: 5, y: 5 }, text: 'Too tight' }
       ])
@@ -27,6 +30,13 @@ describe('the elements a message refers to', () => {
         step: 3,
         stepName: '@visit#2',
         element: { id: '20:7#1', label: 'B' }
+      },
+      {
+        type: 'element-ref',
+        presentationId,
+        step: 3,
+        stepName: '@visit#2',
+        element: { id: '20:7#2', label: 'C' }
       }
     ]);
   });

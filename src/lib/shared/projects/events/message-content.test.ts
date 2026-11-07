@@ -145,17 +145,25 @@ describe('known presentation references', () => {
 
 describe('annotations', () => {
   const pinned = {
-    type: 'annotation',
+    type: 'annotation' as const,
     presentationId,
     step: 1,
-    element: { id: '12:5#2', label: 'the queue' },
+    elements: [{ id: '12:5#2', label: 'the queue' }],
     point: { x: 140.4, y: 62.6 },
     text: 'Make the front of the queue stand out'
-  } as const;
+  };
 
-  it('are message parts a participant sends, with the element, the point, or neither', () => {
+  it('are message parts a participant sends, with elements, the point, or neither', () => {
     const { type, step, text } = pinned;
     expect(v.is(messageContentSegmentSchema, pinned)).toBe(true);
+    const both = [pinned.elements[0], { id: '13:5', label: 'the stack' }];
+    expect(v.is(messageContentSegmentSchema, { ...pinned, elements: both })).toBe(true);
+    expect(v.is(messageContentSegmentSchema, { ...pinned, elements: [] })).toBe(false);
+    expect(
+      v.is(messageContentSegmentSchema, { ...pinned, elements: Array(51).fill(both[0]) })
+    ).toBe(false);
+    const { elements, ...single } = pinned;
+    expect(v.is(messageContentSegmentSchema, { ...single, element: elements[0] })).toBe(false);
     expect(
       v.is(messageContentSegmentSchema, { type, presentationId, step, point: pinned.point, text })
     ).toBe(true);
@@ -170,6 +178,11 @@ describe('annotations', () => {
   it('read as where they are pinned and what they say', () => {
     expect(plainMessageText([pinned])).toBe(
       `[Comment pinned to element "the queue" (12:5#2) at point (140, 63) of the frame at step 2 of presentation ${presentationId}: "Make the front of the queue stand out"]`
+    );
+    const { type, step, text } = pinned;
+    const elements = [...pinned.elements, { id: '13:5', label: 'the stack' }];
+    expect(plainMessageText([{ type, presentationId, step, elements, text }])).toBe(
+      `[Comment pinned to elements "the queue" (12:5#2), "the stack" (13:5) at step 2 of presentation ${presentationId}: "Make the front of the queue stand out"]`
     );
   });
 });

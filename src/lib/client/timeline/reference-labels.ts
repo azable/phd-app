@@ -39,8 +39,15 @@ export function referenceChipTitle(reference: ReferenceSegment): string {
   const step = `step ${reference.step + 1}${reference.stepName ? `, ${reference.stepName}` : ''}`;
   if (reference.type === 'presentation-ref') return `${presentation} · ${step}`;
   if (reference.type === 'annotation')
-    return `${presentation} · ${step}${reference.element ? ` · ${reference.element.label}` : ''}: ${reference.text}`;
+    return `${presentation} · ${step}${annotatedLabels(reference)}: ${reference.text}`;
   return `${presentation} · ${step} · ${reference.element.label}`;
+}
+
+/** What a comment's elements showed, after a separator; nothing for a comment on no element. */
+export function annotatedLabels({
+  elements
+}: Extract<ReferenceSegment, { type: 'annotation' }>): string {
+  return elements ? ` · ${elements.map(({ label }) => label).join(', ')}` : '';
 }
 
 /** A label cut at a word boundary near the chip length, with an ellipsis if cut. */

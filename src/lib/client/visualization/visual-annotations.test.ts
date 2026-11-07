@@ -17,7 +17,7 @@ const comment = (presentationId: string, step: number, text: string, extra = {})
 
 describe('comment pins', () => {
   const sent = [
-    comment(first, 0, 'Bigger cells', { element: { id: '4:3#1', label: '7' } }),
+    comment(first, 0, 'Bigger cells', { elements: [{ id: '4:3#1', label: '7' }] }),
     comment(second, 0, 'Fine as it is'),
     comment(first, 2, 'Label the target', { point: { x: 40, y: 12 } })
   ];
@@ -29,7 +29,7 @@ describe('comment pins', () => {
       { n: 3, text: 'And the index', draft: true }
     ]);
     expect(annotationPins(first, 0, sent, drafts)).toEqual([
-      { n: 1, element: '4:3#1', text: 'Bigger cells' }
+      { n: 1, elements: ['4:3#1'], text: 'Bigger cells' }
     ]);
     expect(annotationPins(second, 2, sent, drafts)).toEqual([]);
   });

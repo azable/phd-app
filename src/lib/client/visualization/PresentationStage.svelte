@@ -414,7 +414,7 @@
     const { presentation } = entry;
     const at = localStep(entry);
     const selected = visualSelections.for(presentation.presentationId, step);
-    const element = selected?.elements.length === 1 ? selected.elements[0] : undefined;
+    const elements = selected?.elements.length ? selected.elements : undefined;
     const clicked = points[presentation.presentationId];
     const stepName = presentationStepName(presentation, at);
     visualAnnotations.add({
@@ -422,7 +422,7 @@
       presentationId: presentation.presentationId,
       step: at,
       ...(stepName ? { stepName } : {}),
-      ...(element ? { element } : {}),
+      ...(elements ? { elements } : {}),
       ...(clicked?.step === at ? { point: clicked.point } : {}),
       text: text.slice(0, annotationTextMaxLength)
     });

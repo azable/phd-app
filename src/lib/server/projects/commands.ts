@@ -458,19 +458,24 @@ async function validateMessageContent(
       throw new Error(`Unknown referenced presentation ${segment.presentationId}.`);
     }
     if (segment.type === 'element-ref') validateElementReference(document, segment);
-    else if (segment.type === 'annotation' && segment.element)
-      validateElementReference(document, annotatedElement(segment)!);
+    else if (segment.type === 'annotation' && segment.elements)
+      for (const reference of annotatedElements(segment))
+        validateElementReference(document, reference);
     else if (segment.step !== undefined)
       validateReferencedStep(document, segment.presentationId, segment.step);
   }
   return content.flatMap((segment): MessageContent => {
     if (segment.type === 'markdown' || segment.type === 'interface-ref') return [segment];
-    // A comment on an element its source does not show keeps its words and its point.
+    // A comment keeps, once each, the elements its source shows; on none, its words and its point.
     if (segment.type === 'annotation') {
-      const element = annotatedElement(segment);
-      if (!element || elementLocated(document, element)) return [named(document, segment)];
-      const kept = { ...segment };
-      delete kept.element;
+      if (!segment.elements) return [named(document, segment)];
+      const ids = new Set<string>();
+      const located = annotatedElements(segment)
+        .filter(({ element }) => !ids.has(element.id) && ids.add(element.id))
+        .filter((reference) => elementLocated(document, reference))
+        .map(({ element }) => element);
+      const kept: Annotation = { ...segment, elements: located };
+      if (!located.length) delete kept.elements;
       return [named(document, kept)];
     }
     if (segment.type !== 'element-ref' || elementLocated(document, segment))
@@ -585,17 +590,21 @@ export function referencedElements(content: MessageContent): ElementReference[] 
     segment.type === 'element-ref'
       ? [segment]
       : segment.type === 'annotation'
-        ? (annotatedElement(segment) ?? [])
+        ? annotatedElements(segment)
         : []
   );
 }
 
-/** The element a comment is pinned to, as a reference to it at the comment's step. */
-function annotatedElement(annotation: Annotation): ElementReference | undefined {
-  const { presentationId, step, stepName, element } = annotation;
-  return element
-    ? { type: 'element-ref', presentationId, step, ...(stepName ? { stepName } : {}), element }
-    : undefined;
+/** The elements a comment is pinned to, each as a reference to it at the comment's step. */
+function annotatedElements(annotation: Annotation): ElementReference[] {
+  const { presentationId, step, stepName, elements = [] } = annotation;
+  return elements.map((element) => ({
+    type: 'element-ref',
+    presentationId,
+    step,
+    ...(stepName ? { stepName } : {}),
+    element
+  }));
 }
 
 export function referencedPresentations(content: MessageContent): string[] {

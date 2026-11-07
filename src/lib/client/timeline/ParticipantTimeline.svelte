@@ -58,7 +58,11 @@
     onPresentationChange?: () => void;
     onReferenceRequest?: (presentation: TimelinePresentation) => void;
     /** Show an element reference: seek to its step and select it in its presentation. */
-    onElementReference?: (reference: ElementReference) => void;
+    onElementReference?: (
+      presentationId: string,
+      step: number,
+      elements: readonly ElementReference['element'][]
+    ) => void;
     /** Show a presentation at a step, as for a comment pinned at a point there. */
     onStepReference?: (presentationId: string, step: number) => void;
     /** Highlight the elements a question about a presentation names, once it is shown. */
@@ -206,18 +210,12 @@
     if (!presentation) return;
     onPresentationChange();
     selection.activate(presentation, session.events, layout, extend);
-    if (reference.type === 'element-ref') onElementReference(reference);
-    // A comment opens its presentation at its step, its element selected where it has one.
+    if (reference.type === 'element-ref')
+      onElementReference(reference.presentationId, reference.step, [reference.element]);
+    // A comment opens its presentation at its step, its elements selected where it has them.
     if (reference.type === 'annotation') {
-      const { presentationId, step, stepName, element } = reference;
-      if (element)
-        onElementReference({
-          type: 'element-ref',
-          presentationId,
-          step,
-          ...(stepName ? { stepName } : {}),
-          element
-        });
+      const { presentationId, step, elements } = reference;
+      if (elements) onElementReference(presentationId, step, elements);
       else onStepReference(presentationId, step);
     }
   }

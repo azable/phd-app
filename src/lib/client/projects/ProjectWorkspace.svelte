@@ -209,12 +209,16 @@
     );
   }
 
-  function showElementReference(reference: ElementReference) {
+  function showElementReference(
+    presentationId: string,
+    at: number,
+    elements: readonly ElementReference['element'][]
+  ) {
     const context = presentationPlaybackContext(
       presentationSelection.selected(session.events, layout)
     );
-    const step = presentationPlayback.seek(context, reference.step);
-    visualSelections.set(reference.presentationId, step, [reference.element]);
+    const step = presentationPlayback.seek(context, at);
+    visualSelections.set(presentationId, step, elements);
   }
   let feedbackComposer = $state<FeedbackComposer>();
   let presentationStage = $state<PresentationStage>();

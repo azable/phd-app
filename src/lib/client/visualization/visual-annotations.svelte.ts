@@ -10,7 +10,7 @@ import type { Annotation, MessageContent } from '$lib/shared/projects/events/mes
 /** A pin as the picture draws it at a step: its number in its presentation, where, and its words. */
 export type AnnotationPin = {
   n: number;
-  element?: string;
+  elements?: string[];
   point?: { x: number; y: number };
   text: string;
   draft?: boolean;
@@ -70,7 +70,7 @@ export function annotationPins(
       ? [
           {
             n: index + 1,
-            ...(annotation.element ? { element: annotation.element.id } : {}),
+            ...(annotation.elements ? { elements: annotation.elements.map(({ id }) => id) } : {}),
             ...(annotation.point ? { point: annotation.point } : {}),
             text: annotation.text,
             ...(draft ? { draft } : {})

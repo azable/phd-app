@@ -33,7 +33,7 @@
   type CanvasView = { zoom: number; panX: number; panY: number };
   type Selected = { id: string; label: string; layouts: ArrangementLayout[]; place?: string };
   /** A comment pinned at this step: its number, where, and what it says; draft until sent. */
-  type Pin = { n: number; element?: string; point?: Point; text: string; draft?: boolean };
+  type Pin = { n: number; elements?: string[]; point?: Point; text: string; draft?: boolean };
 
   let {
     frame,
@@ -400,9 +400,8 @@
   // Each pin on the canvas: at its point, else at its element's top right corner, else not drawn.
   const pinMarks = $derived(
     pins.flatMap((pin) => {
-      const box = pin.element
-        ? (drawn.byId.get(pin.element)?.box ?? selectable.get(pin.element)?.box)
-        : undefined;
+      const first = pin.elements?.[0];
+      const box = first ? (drawn.byId.get(first)?.box ?? selectable.get(first)?.box) : undefined;
       const at = pin.point
         ? onCanvas({ x: pin.point.x, y: pin.point.y, width: 0, height: 0 })
         : box

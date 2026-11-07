@@ -620,10 +620,10 @@ the participant liked, vary it as the guide describes under Free layout.
 
 A message or a comparison's answer may hold comments the participant pinned in a
 presentation, each read as `[Comment pinned to … of presentation …: "…"]`: one
-design, one step, an element (listed with the selected elements, with its
-source), a point in the frame, or both. Each is feedback on that design alone:
-act on every comment, in the version built from that presentation, and say in
-the reply what each changed or why it did not.
+design, one step, one or more elements (each listed with the selected elements,
+with its source), a point in the frame, or both. Each is feedback on that design
+alone: act on every comment, in the version built from that presentation, and
+say in the reply what each changed or why it did not.
 
 Where the source has a listing of its own, the context’s listingMaps gives each
 of its regions, the source each label resolved to (by its text and line), and

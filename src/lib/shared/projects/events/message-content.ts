@@ -85,16 +85,25 @@ export const framePointSchema = v.strictObject({
 export const annotationTextMaxLength = 280;
 
 /**
+ * The most elements one comment is on: as many as a canvas selects at once (`maxSelected` in
+ * SceneView.svelte).
+ */
+export const annotationElementsMaxLength = 50;
+
+/**
  * A short comment a participant pinned in a presentation at a step, sent with a message or a
- * comparison's answer: on the element selected where it was pinned, at the point clicked, or both,
- * so it is feedback on that one design, drawn there as a numbered pin when it is viewed again.
+ * comparison's answer: on the elements selected where it was written, at the point clicked, or
+ * both, so it is feedback on that one design, drawn beside them as a numbered badge when it is
+ * viewed again.
  */
 export const annotationSegmentSchema = v.strictObject({
   type: v.literal('annotation'),
   presentationId: presentationIdSchema,
   step: v.pipe(naturalSchema, v.maxValue(100_000)),
   stepName: v.optional(stepNameSchema),
-  element: v.optional(selectedElementSchema),
+  elements: v.optional(
+    v.pipe(v.array(selectedElementSchema), v.minLength(1), v.maxLength(annotationElementsMaxLength))
+  ),
   point: v.optional(framePointSchema),
   text: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(annotationTextMaxLength))
 });
@@ -196,9 +205,11 @@ export function plainMessageText(content: MessageContent): string {
 }
 
 /** An annotation as a model reads it: where it is pinned, then what it says. */
-function annotationText({ presentationId, step, stepName, element, point, text }: Annotation) {
+function annotationText({ presentationId, step, stepName, elements, point, text }: Annotation) {
   const on = [
-    element ? `element "${element.label}" (${element.id})` : undefined,
+    elements
+      ? `${elements.length === 1 ? 'element' : 'elements'} ${elements.map(({ label, id }) => `"${label}" (${id})`).join(', ')}`
+      : undefined,
     point ? `point (${Math.round(point.x)}, ${Math.round(point.y)}) of the frame` : undefined
   ]
     .filter(Boolean)
