@@ -57,6 +57,12 @@
   </Node>
 </View>
 <View of="VertexIndex" name="IndexText"><Node value={this} /></View>
+<View of="EdgeIndex" name="EdgeMark">
+  <Node layout="column">
+    <Link to={this} />
+    <Node kind="EdgeCaption">{place()}</Node>
+  </Node>
+</View>
 
 <View of="Vertex" name="VertexCard">
   <Node layout="column">
@@ -83,6 +89,7 @@
       {edge}
     {/each}
     <Node kind="Var">{current}</Node>
+    <Node kind="EdgeVar">{e}</Node>
   </Node>
 </Layout>
 

@@ -181,7 +181,9 @@
       return length !== undefined && (end < 0 || end >= length);
     })
   );
-  // The end it draws is no element of the state, so it draws none.
+  // A link with a from in a view of an element, as an edge's, draws that element (data-sv-draws), so
+  // a link from a variable holding its position reaches the link. The end it draws is no element of
+  // the state, so it draws none.
   provideSlot(undefined);
 </script>
 
@@ -209,6 +211,7 @@
     data-head={head}
     data-head-size={headSize}
     data-sv-reach={reach ? 'true' : undefined}
+    data-sv-draws={from !== undefined && !drawn && enclosing ? enclosing : undefined}
     data-target-fill={reach ? target('fill') : undefined}
     data-target-stroke={reach ? target('stroke') : undefined}
     data-target-color={reach ? target('color') : undefined}

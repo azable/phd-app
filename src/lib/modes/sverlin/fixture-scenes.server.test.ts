@@ -62,6 +62,10 @@
  *   from the props a node writes: a node sized by its value is a value (the starter's framed white
  *   box, no padding) rather than a grey bar, and dfa-loops' states, nodes holding a render, are text
  *   rather than circles.
+ * - dijkstra: its current-edge mark is back, as a link from a variable reaches an element drawn as
+ *   a link: an EdgeIndex view's <Link to={this} /> drawn at {e} runs to the edge's middle and its
+ *   <To> paints the edge's line, as commit 65694791 had left it out (replay/dijkstra-demo stays as
+ *   the assistant wrote it).
  */
 
 import { createHash } from 'node:crypto';

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import bfsVisitOrder from './fixtures/bfs-visit-order.sverlin?raw';
+import dijkstra from './fixtures/dijkstra.sverlin?raw';
 import linearSearch from './fixtures/linear-search.sverlin?raw';
 import listReverse from './fixtures/list-markers.sverlin?raw';
 import type { SceneBox, SceneNode, SceneStep } from './library';
@@ -69,6 +70,25 @@ describe('a link from a variable', () => {
     const raised = await fills({ ...apart, 'Arrow.<Link>.<To>:i.layer': 2 });
     expect(raised).toContain('sky-100');
     expect(raised).not.toContain('rose-100');
+  });
+
+  it('reaches an element drawn as a link, an edge, at its middle, painting its line', async () => {
+    const { steps } = await drawnSteps(dijkstra);
+    const reaching = steps.filter((step) => step.links.some(({ from }) => from === 'e'));
+    expect(reaching.length).toBeGreaterThan(3);
+    for (const step of reaching) {
+      const edges = step.links.filter(({ from }) => from.startsWith('vertices['));
+      const strokes = new Map<string, number>();
+      for (const { stroke } of edges) strokes.set(stroke, (strokes.get(stroke) ?? 0) + 1);
+      // The edge e names is painted in its link's <To> stroke, the rest as they were.
+      expect([...strokes.values()].sort()).toEqual([1, edges.length - 1]);
+    }
+    // Where e is out of scope, no edge is painted.
+    const apart = steps.filter((step) => !step.links.some(({ from }) => from === 'e'));
+    for (const step of apart) {
+      const edges = step.links.filter(({ from }) => from.startsWith('vertices['));
+      expect(new Set(edges.map(({ stroke }) => stroke)).size).toBe(1);
+    }
   });
 
   it('reaches a dashed ghost one step past the last element', async () => {

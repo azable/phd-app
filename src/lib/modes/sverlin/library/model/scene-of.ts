@@ -219,6 +219,12 @@ export function sceneOf(
   // The link of each follower, with the child its variable's element is in: its arrow ends just
   // under all that child draws, as a vertex's caption, so it crosses none of it.
   const following = new Map<ModelElement, { left: number; right: number; bottom: number }>();
+  // The links that draw an element of the state, as an edge's (data-sv-draws), by its slot, with the
+  // middle a free layout laid it out at and the scene link drawing it: a link from a variable
+  // holding the element's position reaches that middle and paints that line.
+  const drawingLinks = new Map<string, string>();
+  const linkMiddles = new Map<string, { x: number; y: number }>();
+  const sceneLinks = new Map<string, SceneLink>();
 
   const linkOf = (
     line: Line,
@@ -248,7 +254,10 @@ export function sceneOf(
       stroke,
       strokeWidth: round(pixels * fit)
     });
-    if (link) links.push(link);
+    if (link) {
+      links.push(link);
+      if (line.id) sceneLinks.set(line.id, link);
+    }
   };
 
   /** A placed label: its box centred on the middle of its link, in its own layout. */
@@ -454,6 +463,8 @@ export function sceneOf(
     }
     for (const edge of arranged.edges) {
       if (edge.id !== undefined) laidOut.add(edge.id);
+      if (edge.id !== undefined)
+        linkMiddles.set(edge.id, { x: left + edge.middle.x, y: top + edge.middle.y });
       if (drawsLinks)
         linkOf(
           edge,
@@ -650,6 +661,13 @@ export function sceneOf(
       return { x: c.x + dx * scale, y: c.y + dy * scale };
     };
     const layerOf = ({ marker }: Reaching) => Number(marker.attributes['data-target-layer']) || 1;
+    // A free layout reads its links' markers itself, so the links drawing elements are found here.
+    const findDrawing = (element: ModelElement): void => {
+      const { 'data-sv-draws': draws, 'data-sv-link': link } = element.attributes;
+      if (draws && link) drawingLinks.set(draws, link);
+      for (const child of element.children) if (typeof child !== 'string') findDrawing(child);
+    };
+    if (reaching.length) findDrawing(at.frame);
     for (const { marker, from, hidden } of [...reaching].sort((a, b) => layerOf(a) - layerOf(b))) {
       const attribute = (name: string) => marker.attributes[name];
       const id = attribute('data-sv-link');
@@ -658,6 +676,13 @@ export function sceneOf(
       const to = attribute('data-to') ?? '';
       if (id && laidOut.has(id)) {
         paintTarget(described.get(elementAt(to)?.element as ModelElement), attribute);
+        continue;
+      }
+      const drawing = elementAt(to) ? undefined : drawingLinks.get(to);
+      const linkMiddle = drawing === undefined ? undefined : linkMiddles.get(drawing);
+      if (drawing !== undefined && linkMiddle) {
+        paintLine(sceneLinks.get(drawing), attribute);
+        pointAt(attribute, from, linkMiddle, id, to, head, style);
         continue;
       }
       const reached = elementAt(to) ?? ghostOf(to, attribute);
@@ -695,6 +720,65 @@ export function sceneOf(
         0
       );
     }
+  }
+
+  /**
+   * A link from a variable reaching a link, as an edge a position names: a straight line from the
+   * edge of the variable's node to the link's middle, its head at that middle.
+   */
+  function pointAt(
+    attribute: (name: string) => string | undefined,
+    from: PlacedBox,
+    middle: { x: number; y: number },
+    id: string | undefined,
+    to: string,
+    head: ReturnType<typeof markerLook>['head'],
+    style: ReturnType<typeof markerLook>['style']
+  ) {
+    const c = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
+    const dx = middle.x - c.x;
+    const dy = middle.y - c.y;
+    const scale = Math.min(
+      dx ? from.width / 2 / Math.abs(dx) : Infinity,
+      dy ? from.height / 2 / Math.abs(dy) : Infinity,
+      1
+    );
+    const start = { x: c.x + dx * scale, y: c.y + dy * scale };
+    const length = Math.hypot(middle.x - start.x, middle.y - start.y);
+    if (length < 1) return;
+    const trim = Math.min(length - 1, headTrim(head?.shape, head?.size ?? 0));
+    const end = {
+      x: middle.x - ((middle.x - start.x) * trim) / length,
+      y: middle.y - ((middle.y - start.y) * trim) / length
+    };
+    const third = (k: number) =>
+      `${start.x + ((end.x - start.x) * k) / 3},${start.y + ((end.y - start.y) * k) / 3}`;
+    linkOf(
+      {
+        path: `M ${start.x},${start.y} C ${third(1)} ${third(2)} ${end.x},${end.y}`,
+        link: `${attribute('data-from') ?? ''} -> ${to}`,
+        ...(id ? { id } : {}),
+        heads: { start: false, end: true },
+        ...(head ? { head } : {}),
+        style
+      },
+      style,
+      at.frame,
+      0,
+      0
+    );
+  }
+
+  /** A link end's paint on a link it reaches: its stroke and the stroke's width (see endProps). */
+  function paintLine(link: SceneLink | undefined, attribute: (name: string) => string | undefined) {
+    const value = attribute('data-target-stroke');
+    const split = value?.indexOf('|') ?? -1;
+    if (!link || !value || split < 0) return;
+    const css = substitutedOrNone(value.slice(split + 1), styledOf(at.frame).inherited.custom);
+    if (!css) return;
+    link.stroke = css;
+    const width = Number(attribute('data-target-stroke-width'));
+    if (width > 0) link.strokeWidth = round(Math.max(width, link.strokeWidth / fit) * fit);
   }
 
   /** A link end's paint on the node it reaches: fill, stroke and text colour (see endProps). */

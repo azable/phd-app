@@ -370,8 +370,9 @@ The link paints the element while it points there, in its end's paint, as
 `Arrow.<Link>.<To>.fill` (see Link), and reaches a dashed ghost one past either
 end of an array, so nothing keeps room round the elements. It reaches the node
 drawing the element by a view of its type, as `{vertex}`, or else the node an
-`{#each}` draws the item in, as a bar drawn by its height; it reaches no element
-drawn as a link, as an edge.
+`{#each}` draws the item in, as a bar drawn by its height; and an element drawn
+as a link, an edge a position of the edges names, at the link's middle, its end
+painting the link's line with its `stroke` and `strokeWidth`.
 
 - One choice of view serves every render of a type, so a position drawn as an
   arrow in a lane is an arrow in a sentence too: write a number in words as a
