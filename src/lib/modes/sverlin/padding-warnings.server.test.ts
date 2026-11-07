@@ -1,8 +1,8 @@
 /**
  * Padding nobody sees is told to the assistant, a look only (see padding-warnings.server.ts): on a
  * page's nodes written without a kind, which take the page's margin, on a node arranging others
- * with no box, and on a node that never shows a box; not where a pointer paints it, links end at
- * it, it is small, or it shows a box at some step.
+ * with no box, and on a node that never shows a box; not where a pointer paints it, it is small,
+ * or it shows a box at some step.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -27,7 +27,6 @@ describe('padding warnings', () => {
   it('tells a node that never shows a box, and a node arranging others with none', () => {
     const warnings = paddingWarnings(
       steps([node('1:1', 'Cell'), node('2:1', 'Row', { layout: 'row' })]),
-      { Cell: 'value', Row: 'container' },
       padded,
       new Set()
     );
@@ -37,27 +36,21 @@ describe('padding warnings', () => {
     expect(warnings.every((warning) => warning.endsWith(designOnlyWarning))).toBe(true);
   });
 
-  it('leaves a node that shows a box at some step, links end at, or is small', () => {
-    const roles = { Cell: 'value', Vertex: 'vertex' } as const;
+  it('leaves a node that shows a box at some step, or is small', () => {
     const pages = new Set<string>();
     const boxedLater = steps(
       [node('1:1', 'Cell')],
       [node('1:1', 'Cell', { look: { ...look, fill: 'white', padding: [6, 6, 6, 6] } })]
     );
-    expect(paddingWarnings(boxedLater, roles, padded, pages)).toEqual([]);
-    const vertex = steps([node('1:1', 'Vertex')]);
-    expect(paddingWarnings(vertex, roles, { 'Vertex.padding': 0.5 }, pages)).toEqual([]);
+    expect(paddingWarnings(boxedLater, padded, pages)).toEqual([]);
     const small = steps([node('1:1', 'Cell', { box: { x: 0, y: 0, width: 28, height: 36 } })]);
-    expect(paddingWarnings(small, roles, padded, pages)).toEqual([]);
-    expect(
-      paddingWarnings(steps([node('1:1', 'Cell')]), roles, { 'Cell.padding': 0 }, pages)
-    ).toEqual([]);
+    expect(paddingWarnings(small, padded, pages)).toEqual([]);
+    expect(paddingWarnings(steps([node('1:1', 'Cell')]), { 'Cell.padding': 0 }, pages)).toEqual([]);
   });
 
   it("tells a page's nodes written without a kind, which take the page's margin as padding", () => {
     const warnings = paddingWarnings(
       steps([node('3:3', 'Main', { layout: 'row', parent: '2:1' })]),
-      { Main: 'container' },
       padded,
       new Set(['Main'])
     );
@@ -68,7 +61,6 @@ describe('padding warnings', () => {
   it("tells nothing of the page's root itself, as a grid that is the page", () => {
     const warnings = paddingWarnings(
       steps([node('2:1', 'Main', { layout: 'grid' })]),
-      { Main: 'container' },
       padded,
       new Set(['Main'])
     );

@@ -11,8 +11,9 @@ import {
   placeProps,
   propOptions,
   roleProps,
-  starterLooks
+  roleStyle
 } from './design';
+import { starterBase } from './starter-base';
 
 const styleProps = ['shadow', 'glow', 'fillStyle', 'decoration', 'case'] as const;
 
@@ -25,7 +26,7 @@ describe('style props', () => {
     expect(propOptions.case).toEqual(['normal', 'uppercase', 'small-caps']);
     for (const role of ['container', 'value', 'text'] as const) {
       for (const prop of styleProps) expect(roleProps[role]).toContain(prop);
-      expect(styleProps.map((prop) => starterLooks[role][prop])).toEqual([
+      expect(styleProps.map((prop) => starterBase[`${roleStyle(role)}.${prop}`])).toEqual([
         'none',
         'none',
         'solid',

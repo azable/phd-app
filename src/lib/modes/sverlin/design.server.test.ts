@@ -514,8 +514,8 @@ describe('design tokens and tag groups', () => {
   });
 
   it('gives each prop on a scale only its steps, refusing a value off the scale', () => {
-    // The base's own values must sit on its scale too: the starter's radii 8, 2 and 4 do not.
-    const onScale = { $radius: 6, '$Bar.radius': 0, '$Code.radius': 0 };
+    // The base's own values must sit on its scale too: the starter's radii 8 and 4 do not.
+    const onScale = { $radius: 6, '$Code.radius': 0 };
     expect(() => build({ chosen: { 'scale.radius': '0 6 999' } })).toThrow(
       /\$radius cannot be 8; its options are 0, 6, 999/u
     );

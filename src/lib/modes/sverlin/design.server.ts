@@ -45,8 +45,6 @@ import {
   starterFreeLayout,
   starterGrid,
   starterListing,
-  starterLooks,
-  starterTokens,
   styleOf,
   tagOf,
   tokenProps,
@@ -124,7 +122,21 @@ const starterLook = ({ role, free, lines, collection }: DesignKind, prop: string
           ? collection.steady
             ? 'center'
             : 'start'
-          : (starterLooks[role][prop] ?? starterFreeLayout[prop] ?? starterGrid[prop]);
+          : (starterRoleLook(role, prop) ?? starterFreeLayout[prop] ?? starterGrid[prop]);
+
+/**
+ * A role's look in the starter base, through its tokens: every kind is shown, and takes each other
+ * prop from its role's style there, as `$Value.fill`, so the engine holds no look of its own.
+ */
+function starterRoleLook(role: KindRole, prop: string): DesignValue | undefined {
+  if (prop === 'shown') return true;
+  const value = starterBase[`${roleStyle(role)}.${prop}`];
+  return isToken(value) ? starterBase[value] : value;
+}
+
+/** The starter base's tokens, as `$accent`, each with its value. */
+const starterTokens = (): Record<string, DesignValue> =>
+  Object.fromEntries(Object.keys(tokenProps).map((token) => [token, starterBase[token]]));
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
@@ -225,7 +237,7 @@ function inheritance(
     for (let source = sourceOf(kind); source; source = sourceOf(source)) {
       if (round.includes(source))
         throw new DesignValueError(
-          `${[...round, source].join(' inherits ')}: a kind cannot inherit what inherits it; set one of them to inherit none or a $ style.`
+          `${[...round, source].join(' inherits ')}: a kind cannot inherit what inherits it; leave "..." out of one of them, so it follows its role's look, or have it inherit a $ style.`
         );
       round.push(source);
     }
@@ -487,17 +499,14 @@ export function designSpace(
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, kindOptions(kind, prop)])
       )
     ),
-    // What each kind inherits: none, or a kind of its role; the styles a variant names join these
-    // (see withStyles). The starter sets none, so a variant stores one only where it inherits.
+    // What a kind inherits over its role's look: a kind of its role; the styles a variant names
+    // join these (see withStyles). The starter sets none, so a kind follows its role's look.
     ...Object.fromEntries(
       kinds.map((kind) => [
         inheritKey(kind.key),
-        [
-          'none',
-          ...kinds
-            .filter((other) => other.role === kind.role && other.key !== kind.key)
-            .map(({ key }) => key)
-        ]
+        kinds
+          .filter((other) => other.role === kind.role && other.key !== kind.key)
+          .map(({ key }) => key)
       ])
     ),
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, [...options, 'none']])),
@@ -541,7 +550,7 @@ export function starterVariant(
           'listing.language': ownListings[0] ?? starterListing['listing.language']
         }
       : {}),
-    ...(kinds.length ? starterTokens : {}),
+    ...(kinds.length ? starterTokens() : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLook(kind, prop)])
@@ -551,7 +560,7 @@ export function starterVariant(
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, options[0]])),
     ...Object.fromEntries(
       places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLooks[kind.role][prop]])
+        placePropsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterRoleLook(kind.role, prop)])
       )
     ),
     ...layoutStarter(layouts)
@@ -574,6 +583,12 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       const axis = key.endsWith('.width') ? 'width' : 'height';
       return `${kind}'s ${axis} is bound to its value in the view, ${axis}={…}, so it has no ${axis} variable; ${kind}.${axis === 'width' ? 'x' : 'y'}Anchor places it.`;
     }
+    // A node sized by its value is exactly its length, so it has no padding.
+    const bound = ['width', 'height'].find((axis) =>
+      Object.hasOwn(space, `${kindOf(key)}.${axis}.unit`)
+    );
+    if (key.endsWith('.padding') && bound)
+      return `${kindOf(key)}'s ${bound} is bound to its value in the view, ${bound}={…}, so each node of it is exactly its length and has no padding variable.`;
     if (key.startsWith('pause@'))
       return `The design has no variable ${key}: the steps a scene shows are its pause, in the source, as <Scene name="…" pause="@$.end{key.slice('pause@'.length)}">.`;
     // A view choice, a type's or a place's, is one variable, not a kind and a prop.
@@ -664,6 +679,13 @@ export function buildVariant(
   if (!namesBase({ ...base, ...chosenValues }))
     throw new DesignValueError(
       'The design names no base: write "...": "$starter", or another template, at its top.'
+    );
+  const optedOut = Object.entries(chosenValues)
+    .filter(([key, value]) => key.endsWith('.inherit') && value === 'none')
+    .map(([key]) => key.slice(0, -'.inherit'.length));
+  if (optedOut.length)
+    throw new DesignValueError(
+      `${optedOut.join(', ')}: "...": "none" is gone, as every kind follows its role's look; leave "..." out, and set the props that differ on the kind itself.`
     );
   const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
   if (missing.length)

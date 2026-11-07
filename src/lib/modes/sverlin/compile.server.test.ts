@@ -2879,15 +2879,14 @@ describe('starter looks of a graph', () => {
     expect(design.fallbacks['VertexCard.NameText:this.name.fill']).toBeUndefined();
   });
 
-  it('starts the nodes a free layout’s links join as circles, a state machine’s states', async () => {
+  it('gives the nodes a free layout’s links join the role their written props give, as any node', async () => {
     const { readFileSync } = await import('node:fs');
     const dfa = readFileSync('src/lib/modes/sverlin/fixtures/dfa-loops.sverlin', 'utf8');
     const { design } = prepareSvelteComponent(dfa);
-    expect(design.starter['StateDiagram.StateSlot.radius']).toBe(999);
-    expect(design.starter['StateDiagram.StateSlot.fill']).toBe('white');
-    expect(design.starter['StateDiagram.StateSlot.stroke']).toBe('neutral-400');
-    // A row of cells beside the graph keeps its cells' box.
-    expect(design.starter['TextRow.Characters.radius']).not.toBe(999);
+    // <Node kind="StateSlot">{state}</Node> holds a render: text, its value boxed by its own view.
+    expect(design.roles['StateDiagram.StateSlot']).toBe('text');
+    expect(design.starter['StateDiagram.StateSlot.radius']).toBe(0);
+    expect(design.starter['StateDiagram.StateSlot.fill']).toBe('none');
   });
 });
 

@@ -7,7 +7,6 @@
  */
 
 import type { DesignValue } from './design.server';
-import type { KindRole } from './library/node/design';
 import type { SceneNode, SceneStep } from './library';
 
 /**
@@ -44,14 +43,13 @@ function named(kinds: readonly string[]): string {
 /**
  * The padding warnings of a build's drawn steps, for kinds whose padding the design sets above 0
  * and which show no box at any step: one for those whose nodes arrange others (a layout), one for
- * the rest, where no links end at them (a vertex) and they are not small; a link from a variable
+ * the rest, where they are not small; a link from a variable
  * painting one at a step shows its box there.
  * A page's layout (`pages`) sets the page's margin with its padding, which its nodes written
  * without a kind take too, so its warning says to give them a kind.
  */
 export function paddingWarnings(
   steps: readonly SceneStep[],
-  roles: Readonly<Record<string, KindRole>>,
   values: Readonly<Record<string, DesignValue>>,
   pages: ReadonlySet<string>
 ): string[] {
@@ -71,8 +69,6 @@ export function paddingWarnings(
     if (!drawn.length) continue;
     const padding = values[`${kind}.padding`];
     if (typeof padding !== 'number' || padding <= 0) continue;
-    const role = roles[kind];
-    if (role === 'vertex' || role === 'bar') continue;
     if (drawn.some(boxed)) continue;
     const written = `${kind} (padding ${padding})`;
     if (pages.has(kind)) pageKinds.push(written);

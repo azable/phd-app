@@ -58,6 +58,10 @@
  *   flow="x", draws as it did.
  * - call-frames, fib-calls: a view and a query of the function's label in place of a call type,
  *   which is refused; each source loses its declaration's line, so its ids move.
+ * - bars, insertion-decisions, dfa-loops: the bar and vertex roles are gone, a role coming only
+ *   from the props a node writes: a node sized by its value is a value (the starter's framed white
+ *   box, no padding) rather than a grey bar, and dfa-loops' states, nodes holding a render, are text
+ *   rather than circles.
  */
 
 import { createHash } from 'node:crypto';

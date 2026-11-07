@@ -213,9 +213,13 @@ thickest line). A second state, as visited, inherits `$second`, as
 (“textbook or slide?”) rather than switching unasked. Write a base of your own,
 under a name of your own, as `"...": "$mine"`, only where no template fits what
 the participant asks: set the tokens, role styles (`$Value`, `$Container`,
-`$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon`, `$Link`), scales and palette it
-changes, and the app writes `$starter`'s values out under them, so the base
-holds every role's look.
+`$Text`, `$Code`, `$Icon`, `$Link`), scales and palette it changes, and the app
+writes `$starter`'s values out under them, so the base holds every role's look.
+A kind's role comes only from what its node writes (see Shared values in the
+guide): a vertex or a bar is a value or text like any other node, so a look such
+as round vertices or grey bars is a kind's values, as
+`"StateSlot": {"radius": 999}`. Every kind follows its role's look; leave
+`"..."` out unless it inherits a style or a kind.
 
 <!-- Sources for the principles: projects/phd-app/design.md (workspace),
 "Templates and their sources", cited through Socrates there; the table of
@@ -413,8 +417,8 @@ picture at every step, a value that changes nothing seen (a cell’s least size
 under what its content takes anyway): compare a choice that shows. Where a pair
 differs only at some steps, the note before the participant’s message, the
 interaction and project.waitingComparisons say which (“the two draw differently
-only at steps 3–9 (@scan.check#2.end to @missing#3.end)”), from the pictures as drawn,
-and the pair opens at the first; when asked whether or where two versions
+only at steps 3–9 (@scan.check#2.end to @missing#3.end)”), from the pictures as
+drawn, and the pair opens at the first; when asked whether or where two versions
 differ, point the participant to those steps by their names, alike at every
 other step, and never guess it from the source.
 

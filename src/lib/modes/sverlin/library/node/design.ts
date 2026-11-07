@@ -367,7 +367,7 @@ export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'bar' | 'vertex' | 'text' | 'code' | 'icon' | 'link';
+export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'link';
 
 const nodeProps: readonly DesignProp[] = [
   'shown',
@@ -394,20 +394,10 @@ const nodeProps: readonly DesignProp[] = [
   'case'
 ];
 
-/** The starter's slot: every box as large as its slot, so equal boxes line up. */
-const uniformSlot = {
-  width: 'uniform',
-  height: 'uniform',
-  xAnchor: 'center',
-  yAnchor: 'center'
-} satisfies Partial<Record<DesignProp, string>>;
-
 /** The props a kind of node has: a layout's own, a link's line. */
 export const roleProps: Record<KindRole, readonly DesignProp[]> = {
   container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
   value: nodeProps,
-  bar: nodeProps,
-  vertex: nodeProps,
   text: nodeProps,
   code: nodeProps,
   icon: [...nodeProps, 'icon'],
@@ -541,166 +531,6 @@ export function kindKey(view: string, part?: 'Link'): string {
 /** A variant: each variable's value, by key, as IntCell.fill or views.Int. */
 export type DesignValues = Readonly<Record<string, string | number | boolean>>;
 
-/** The starter's box and text styling, every kind of node's: today's look. */
-const plainStyle = {
-  shadow: 'none',
-  glow: 'none',
-  fillStyle: 'solid',
-  decoration: 'none',
-  case: 'normal'
-} satisfies Partial<Record<DesignProp, string>>;
-
-/** The starter's value for each prop of a kind: plain containers and text, framed values. */
-export const starterLooks: Record<KindRole, Record<string, string | number | boolean>> = {
-  container: {
-    shown: true,
-    fill: 'none',
-    stroke: 'none',
-    strokeWidth: 0,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 16,
-    weight: 'normal',
-    padding: 0,
-    radius: 0,
-    minSize: 0,
-    ...plainStyle,
-    ...uniformSlot,
-    gap: 0.5,
-    align: 'center',
-    justify: 'start',
-    spacing: 'slots'
-  },
-  value: {
-    shown: true,
-    fill: 'white',
-    stroke: 'neutral-300',
-    strokeWidth: 1.5,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 20,
-    weight: 'bold',
-    padding: 0.375,
-    radius: 8,
-    minSize: 2.5,
-    ...plainStyle,
-    ...uniformSlot
-  },
-  // A node sized by its value, as <Node height={this} />: a filled bar with square corners, so a
-  // short one stays a bar rather than rounding into a pill, as wide as a value's frame beside it
-  // (its least size holds across its length only, which is its value).
-  bar: {
-    shown: true,
-    fill: 'neutral-300',
-    stroke: 'neutral-500',
-    strokeWidth: 1,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 20,
-    weight: 'normal',
-    padding: 0,
-    radius: 2,
-    minSize: 2.5,
-    ...plainStyle,
-    ...uniformSlot
-  },
-  // A node a free layout's links join, as a graph's vertex or a machine's state: a circle, so
-  // links meet an edge and do not run into its text.
-  vertex: {
-    shown: true,
-    fill: 'white',
-    stroke: 'neutral-400',
-    strokeWidth: 1.5,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 18,
-    weight: 'bold',
-    padding: 0.5,
-    radius: 999,
-    minSize: 2.5,
-    ...plainStyle,
-    ...uniformSlot
-  },
-  text: {
-    shown: true,
-    fill: 'none',
-    stroke: 'none',
-    strokeWidth: 0,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 16,
-    weight: 'normal',
-    padding: 0,
-    radius: 0,
-    minSize: 0,
-    ...plainStyle,
-    ...uniformSlot
-  },
-  // A caption's token, text naming a place (see listing/places.ts), drawn as inline code.
-  code: {
-    shown: true,
-    fill: 'neutral-100',
-    stroke: 'none',
-    strokeWidth: 0,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues.includes('mono') ? 'mono' : fontValues[0],
-    textSize: 16,
-    weight: 'normal',
-    // A little room inside its tint, so the code does not touch the tint's edge.
-    padding: 0.125,
-    radius: 4,
-    minSize: 0,
-    ...plainStyle,
-    ...uniformSlot
-  },
-  // A node drawing one icon its kind chooses, as <Node icon />, beside other content as a word is.
-  icon: {
-    shown: true,
-    fill: 'none',
-    stroke: 'none',
-    strokeWidth: 0,
-    strokeStyle: 'solid',
-    opacity: 1,
-    color: 'black',
-    font: fontValues[0],
-    textSize: 20,
-    weight: 'normal',
-    padding: 0,
-    radius: 0,
-    minSize: 0,
-    ...plainStyle,
-    ...uniformSlot,
-    icon: 'circle-dot'
-  },
-  link: {
-    shown: true,
-    stroke: 'neutral-500',
-    strokeWidth: 2,
-    opacity: 1,
-    strokeStyle: 'solid',
-    route: 'layout',
-    head: 'arrow',
-    headSize: 9,
-    // A link from a variable paints what it reaches, pale fill and a darker stroke.
-    targetFill: 'amber-100',
-    targetStroke: 'amber-500',
-    targetStrokeWidth: 1.5,
-    targetColor: 'none'
-  }
-};
-
 /**
  * The design's tokens, each written with `$` and holding one value of one prop, as `$accent` a
  * stroke: the values the starter looks share across roles, so one token changes all of them. A
@@ -722,21 +552,6 @@ export type DesignToken = keyof typeof tokenProps;
 /** Whether a key or a value names a token, as `$accent`. */
 export const isToken = (name: unknown): name is DesignToken =>
   typeof name === 'string' && Object.hasOwn(tokenProps, name);
-
-/**
- * Each token's starter value, today's look: text black in the first font on white values, the paint
- * links from variables give amber, and the padding, corners and line width framed values share.
- */
-export const starterTokens: Record<DesignToken, string | number> = {
-  $text: 'black',
-  $font: fontValues[0],
-  $surface: 'white',
-  $accent: 'amber-500',
-  $highlight: 'amber-100',
-  $spacing: 0.375,
-  $radius: 8,
-  $lineWidth: 1.5
-};
 
 /**
  * The tags whose kinds a group sets together, as `<Node>.padding` for every kind a <Node> makes
@@ -921,7 +736,7 @@ export function baseOptions(
   return added.length ? [...scaled, ...added] : scaled;
 }
 
-/** The variable naming what a kind inherits: a style, a kind of its role, or none. */
+/** The variable naming what a kind inherits over its role's look: a style or a kind of its role. */
 export const inheritKey = (kind: string): string => `${kind}.inherit`;
 
 /**
@@ -944,7 +759,7 @@ export function levelFor(
   const prop = key.slice(dot + 1) as DesignProp;
   if (!role || !groupProps(role).includes(prop)) return undefined;
   const source = values[inheritKey(kind)];
-  if (typeof source === 'string' && source !== 'none') {
+  if (typeof source === 'string') {
     const from = `${source}.${prop}`;
     if (Object.hasOwn(values, from)) {
       const value = values[from];

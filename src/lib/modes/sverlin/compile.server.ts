@@ -2675,7 +2675,7 @@ export async function bundlePresentation(
     ),
     ...coded(
       'design.padding',
-      paddingWarnings(drawnSteps, design.roles, values, new Set(scenes.map(({ layout }) => layout)))
+      paddingWarnings(drawnSteps, values, new Set(scenes.map(({ layout }) => layout)))
     )
   );
   const arrangements =
@@ -3173,15 +3173,18 @@ export const libraryProps: Record<'Node' | 'Link', PropNames> = {
 const linkLooks = new Set(['curve', 'route', 'head', 'headSize']);
 
 /**
- * A design without the width or height variable of a kind whose nodes size that axis by their value:
- * there the size is the value, and the kind's anchor places it.
+ * A design without the width or height variable of a kind whose nodes size that axis by their value,
+ * nor its padding: there the size is the value, each node exactly its length, and the kind's anchor
+ * places it.
  */
 function withoutBoundSizes<T>(
   design: Record<string, T>,
   bindings: readonly { kind: string; prop: string }[]
 ): Record<string, T> {
   const bound = new Set(
-    bindings.filter(({ prop }) => lengthProps.has(prop)).map(({ kind, prop }) => `${kind}.${prop}`)
+    bindings
+      .filter(({ prop }) => lengthProps.has(prop))
+      .flatMap(({ kind, prop }) => [`${kind}.${prop}`, `${kind}.padding`])
   );
   return Object.fromEntries(Object.entries(design).filter(([key]) => !bound.has(key)));
 }
@@ -3948,18 +3951,12 @@ function withNodeRefs(
       return 'icon';
     // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
     if (has('icon') && !has('value') && !children.length) return 'text';
-    if (vertices.has(entry.start)) return 'vertex';
-    // A node sized by its value holds nothing (see boundLength): it is a bar.
-    if ((has('height') || has('width')) && !has('value') && !children.length) return 'bar';
     if (has('value') || !children.length || isField(entry)) return 'value';
     return 'text';
   };
-  // The nodes a free layout's links join, its children inside its blocks: a graph's vertices or a
-  // machine's states, which start as circles, so a link meets an edge rather than run into text.
-  // A child outside every {#each} that draws variables or labels by their bare names, as
-  // <Node kind="Var">{cur}</Node>, is a variable's label, no vertex: it follows what its
-  // variable's link reaches, and is marked so at every step (see followers in arrangement.ts).
-  const vertices = new Set<number>();
+  // A child of a free layout outside every {#each} that draws variables or labels by their bare
+  // names, as <Node kind="Var">{cur}</Node>, is a variable's label: it follows what its variable's
+  // link reaches, and is marked so at every step (see followers in arrangement.ts).
   const followers = new Set<number>();
   // A value in braces is a render of its view by now, as {@render RefArrow(cur)}.
   type Expression = { type?: string; arguments?: Expression[] };
@@ -3972,31 +3969,21 @@ function withNodeRefs(
     });
     return renders.length > 0 && renders.every((read) => read?.type === 'Identifier');
   };
-  const childNodes = (value: unknown, inEach: boolean, linked: boolean | undefined): void => {
+  const childNodes = (value: unknown, inEach: boolean): void => {
     if (!value || typeof value !== 'object') return;
-    if (Array.isArray(value)) return value.forEach((child) => childNodes(child, inEach, linked));
+    if (Array.isArray(value)) return value.forEach((child) => childNodes(child, inEach));
     const part = value as Tag;
     if (part.type === 'InlineComponent') {
-      if (part.name !== 'Node' || part.start === undefined) return;
-      if (!inEach && drawsVariables(part)) followers.add(part.start);
-      else if (linked) vertices.add(part.start);
+      if (part.name === 'Node' && part.start !== undefined && !inEach && drawsVariables(part))
+        followers.add(part.start);
       return;
     }
     for (const [key, child] of Object.entries(part))
       if (key === 'children' || key === 'else' || key === 'body' || key === 'consequent')
-        childNodes(child, inEach || part.type === 'EachBlock', linked);
+        childNodes(child, inEach || part.type === 'EachBlock');
   };
   // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = [
-    'container',
-    'icon',
-    'text',
-    'code',
-    'bar',
-    'value',
-    'vertex',
-    'link'
-  ];
+  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'link'];
   const kinds = new Map<string, KindRole>();
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes.
@@ -4016,8 +4003,7 @@ function withNodeRefs(
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
   const apart = (of: KindRole) => (of === 'link' ? of : 'node');
-  for (const entry of tags)
-    if (laidOutFreely(entry)) childNodes(entry.tag.children, false, entry.links);
+  for (const entry of tags) if (laidOutFreely(entry)) childNodes(entry.tag.children, false);
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
     // or in a row or column; one holding a collection's {#each} and links runs as the collection.

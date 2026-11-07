@@ -78,7 +78,7 @@ describe('templates', () => {
       const resolve = (value: unknown) =>
         colourCss(typeof value === 'string' && value.startsWith('$') ? values[value] : value);
       const page = '#ffffff';
-      for (const role of ['$Value', '$Vertex', '$Text', '$Container']) {
+      for (const role of ['$Value', '$Text', '$Container']) {
         const text = resolve(values[`${role}.color`])!;
         const fill = resolve(values[`${role}.fill`]) ?? page;
         expect(contrast(text, fill), `${name} ${role} text`).toBeGreaterThanOrEqual(4.5);

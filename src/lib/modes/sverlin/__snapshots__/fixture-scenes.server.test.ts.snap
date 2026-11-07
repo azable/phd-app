@@ -2,7 +2,7 @@
 
 exports[`every fixture draws the scenes it drew 1`] = `
 {
-  "bars.sverlin": "10d7114c37c3e0ea",
+  "bars.sverlin": "e504ddd832f8b77a",
   "bfs-captions.sverlin": "70e2c05728d28263",
   "bfs-cards.sverlin": "6637fc10fe135987",
   "bfs-dequeue.sverlin": "ed8c244cdc39b0b2",
@@ -16,7 +16,7 @@ exports[`every fixture draws the scenes it drew 1`] = `
   "bubble-layouts.sverlin": "c9cb48e1c0ce3ada",
   "call-frames.sverlin": "21b91fa80b0e247f",
   "count-dots.sverlin": "6bdbf4e70627bd9a",
-  "dfa-loops.sverlin": "9b1cbc313ad8fdea",
+  "dfa-loops.sverlin": "b6c8eb007d14d1e6",
   "dfa-panels.sverlin": "84cae4e22c0a53a6",
   "dijkstra-costs.sverlin": "52b991d4a83027fa",
   "dijkstra-fields.sverlin": "c109cc5182a6acf5",
@@ -25,7 +25,7 @@ exports[`every fixture draws the scenes it drew 1`] = `
   "grid-marks.sverlin": "787efc6be94c226b",
   "grid-view.sverlin": "ad2765889902a16b",
   "heap-tree.sverlin": "adc72383c99c84c6",
-  "insertion-decisions.sverlin": "5996b9fd88733c15",
+  "insertion-decisions.sverlin": "f98813acbdd9d512",
   "lcs-grid.sverlin": "589b41605b88c8b4",
   "linear-search.sverlin": "10859479a67aeed9",
   "list-markers.sverlin": "e1efea2b0f5394c0",

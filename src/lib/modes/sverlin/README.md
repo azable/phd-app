@@ -1472,14 +1472,26 @@ it says when, as `:` says where, so a place drawn from a label's value is
   role, and takes each prop it sets: `IntCell.inherit: "$cell"`, or
   `Goal.inherit: "VertexCard"`. A style's prop is one of its prop's options or a
   token, as `"$cell.fill": "$surface"`, and fits every kind inheriting it. A
-  kind cannot inherit a kind that inherits it back, and inherits nothing by
-  default (`none`).
+  kind cannot inherit a kind that inherits it back. Every kind follows its
+  role's look by default, so a kind leaves `"..."` out unless it inherits a
+  style or a kind; `"...": "none"` is refused.
+- A kind's role comes only from the props written on its node: a `<Link>` is a
+  link; a node with a `layout`, links, or one `{#each}` arranges others
+  (`$Container`); a bare `icon` draws an icon (`$Icon`); a node with `value`, or
+  holding nothing, or only links from it, is a value (`$Value`); a caption's
+  token is code (`$Code`); and any other node, holding text or renders, is text
+  (`$Text`). Where it stands, as among a free layout's vertices, and what binds
+  its size never change its role. A node sized by its value, as
+  `<Node height={this} />`, is exactly its length, so its kind has no `padding`.
 - A base is what every kind starts from, written out in the design as values:
   its tokens; a style for each role's look, as `$Value` for every framed value,
-  `$Container`, `$Bar`, `$Vertex`, `$Text`, `$Code`, `$Icon` and `$Link`, which
-  every kind of that role follows; its scales; its palette; and the listing's
-  look. `"..."` at the top names it, as `"...": "$textbook"`. Every design names
-  its base and holds every role's look: the app has no look of its own. A design
+  `$Container`, `$Text`, `$Code`, `$Icon` and `$Link`, which every kind of that
+  role follows; its scales; its palette; and the listing's look. The engine
+  holds no look: what tells roles apart in the starter base is only what each
+  does (text and containers unboxed, code in the code font), and its colours,
+  corners and lines are the starter's taste, as a template's are its own.
+  `"..."` at the top names it, as `"...": "$textbook"`. Every design names its
+  base and holds every role's look: the app has no look of its own. A design
   that comes in naming none, as a first version's or a demo example's, gets the
   starter base, `"...": "$starter"`, written in; one naming a base but missing a
   role's look is refused, naming what is missing.
@@ -1538,10 +1550,10 @@ it says when, as `:` says where, so a place drawn from a label's value is
 
 A variant gives every variable a value, and a presentation draws one. The
 starter is each type in its first view, each kind in a plain look for what it
-is: values framed, nodes sized by their values filled grey as bars, text and
-layouts unframed, and pointers marked in amber. Every variant shows the same
-steps, those the scenes pause at. A presentation built after a change keeps the
-values of the one it was made from where nothing else sets them, and takes the
+is, as the starter base gives its role: values framed, text and layouts
+unframed, and pointers marked in amber. Every variant shows the same steps,
+those the scenes pause at. A presentation built after a change keeps the values
+of the one it was made from where nothing else sets them, and takes the
 starter's for anything new; the assistant sets values with `vary`, or with
 `edit` or `revise` for the source it changes, and asking for several variants,
 or Another variant (in dev mode), draws the values at random, keeping what the
@@ -2317,10 +2329,9 @@ of the node and returns to it, with its label at the top of the loop. A second
 loop on the same node goes over the first. The node keeps room above it for its
 loops, so the nodes round it stay clear of them.
 
-In a free layout with links, a node directly among its children starts as a
-circle, as a graph's vertex or a machine's state, so links meet its edge; a node
-drawn by a view, or one with a layout of its own, keeps its own look, as does a
-variable's label (see Link).
+A node among a free layout's children takes its role's look from what it writes,
+as every node does; a vertex drawn as a circle is a design's choice, as
+`"StateSlot": { "radius": 999 }`.
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
