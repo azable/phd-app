@@ -220,9 +220,12 @@ the participant asks: set the tokens, role styles (`<Value>`, `<Container>`,
 app writes `<starter>`'s values out under them, so the base holds every role's
 look. A kind's role comes only from what its node writes (see Shared values in
 the guide): a vertex or a bar is a value or text like any other node, so a look
-such as round vertices or grey bars is a kind's values, as
-`"StateSlot": {"radius": 999}`. Every kind follows its role's look; leave
-`"..."` out unless it inherits a style or a kind.
+such as round vertices or grey bars is a kind's values, every prop it needs, as
+`"StateSlot": {"radius": 999, "fill": "white", "stroke": "neutral-400", "strokeWidth": 1.5, "padding": 0.5, "minSize": 2.5}`
+for a vertex holding text, or
+`"Bar": {"fill": "neutral-300", "stroke": "neutral-500", "strokeWidth": 1, "radius": 2}`.
+Every kind follows its role's look; leave `"..."` out unless it inherits a style
+or a kind.
 
 <!-- Sources for the principles: projects/phd-app/design.md (workspace),
 "Templates and their sources", cited through Socrates there; the table of

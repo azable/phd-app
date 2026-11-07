@@ -2345,8 +2345,23 @@ loop on the same node goes over the first. The node keeps room above it for its
 loops, so the nodes round it stay clear of them.
 
 A node among a free layout's children takes its role's look from what it writes,
-as every node does; a vertex drawn as a circle is a design's choice, as
-`"StateSlot": { "radius": 999 }`.
+as every node does; a vertex drawn as a circle is a design's choice, every prop
+it needs set on its kind, as a text kind draws no box of its own:
+
+```json
+{
+  "StateDiagram": {
+    "StateSlot": {
+      "radius": 999,
+      "fill": "white",
+      "stroke": "neutral-400",
+      "strokeWidth": 1.5,
+      "padding": 0.5,
+      "minSize": 2.5
+    }
+  }
+}
+```
 
 A link's direction follows from the data. Where the same `<Link>` joins two
 elements both ways at exactly the same steps, as neighbour lists naming each
