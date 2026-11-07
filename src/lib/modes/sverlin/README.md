@@ -1833,8 +1833,8 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 ### Maths
 
 Write inline maths as LaTeX between `$$` and `$$`, in a node's text or in a
-listing, for example `$$O(n \log n)$$` or `$$\frac{n(n+1)}{2}$$`. `\(…\)` works
-too.
+listing, for example `$$O(n \log n)$$` or `$$\frac{n(n+1)}{2}$$`; `\(…\)` is
+refused.
 
 - In a node, the maths is typeset as in LaTeX: fractions, sums with limits,
   roots, sub- and superscripts, Greek letters and every command of LaTeX's base

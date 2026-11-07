@@ -35,7 +35,7 @@ describe('inline maths written as Unicode', () => {
   ])('writes %s as %s', (latex, unicode) => expect(text(latex)).toBe(unicode));
 
   it('refuses what has no form on one line, saying what to write', () => {
-    expect(problem('\\frac{n}{2}')).toContain('write it on the line, as \\((n+1)/2\\)');
+    expect(problem('\\frac{n}{2}')).toContain('write it on the line, as $$(n+1)/2$$');
     expect(problem('A_{mid}')).toContain('Unicode has no subscript d');
     expect(problem('\\sqrt{n+1}')).toContain('\\sqrt{(n+1)}');
     expect(problem('\\sum\\limits_{i}')).toContain('leave out \\limits');
@@ -53,23 +53,25 @@ describe('inline maths written as Unicode', () => {
   it('draws maths in a caption as a Math node, and in a listing as its text', async () => {
     const caption = `<script algorithm>
 </script>
-<Layout name="Main"><Node><Node>It takes \\(O(n^2)\\) time, as \\(\\{a, b\\}\\) shows.</Node></Node></Layout>
+<Layout name="Main"><Node><Node>It takes $$O(n^2)$$ time, as $$\\{a, b\\}$$ shows.</Node></Node></Layout>
 <Storyboard><Scene name="main"><Main /></Scene></Storyboard>`;
     const prepared = prepareSvelteComponent(caption);
     expect(Object.keys(prepared.design.space).some((key) => key.startsWith('Main.Math.'))).toBe(
       true
     );
     await bundlePresentation(prepared, 1, {});
-    expect(readRegions('while @test[\\(a_i \\le key\\)]').text).toBe('while aᵢ ≤ key');
+    expect(readRegions('while @test[$$a_i \\le key$$]').text).toBe('while aᵢ ≤ key');
   });
 
   it('refuses an unclosed fence and a token inside maths', () => {
     const unclosed =
       'This inline maths is never closed: write it between $$ and $$, as $$O(n \\log n)$$.';
-    expect(readRegions('if \\(a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
     expect(readRegions('if $$a_i').problems.map(({ message }) => message)).toEqual([unclosed]);
-    expect(readRegions('\\(:i[i] + 1\\)').problems[0].message).toContain('inside maths');
     expect(readRegions('$$:i[i] + 1$$').problems[0].message).toContain('inside maths');
+    // The old fence is refused, naming $$…$$.
+    expect(readRegions('if \\(a_i\\)').problems[0].message).toBe(
+      '\\(…\\) is no maths fence: write inline maths between $$ and $$.'
+    );
   });
 
   it('reads $$…$$ as maths, never as a token, and a lone $ as text', () => {

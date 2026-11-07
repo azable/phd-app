@@ -15,7 +15,14 @@ import { spanKey } from '../algorithm/interpret.server';
 import type { Label } from '../algorithm/labels.server';
 import { spanOf } from '../algorithm/parse.server';
 import type { Listing, Mark } from './listing';
-import { mathsFenceAt, mathsText, tokenInMaths, unclosedMaths } from '../maths.server';
+import {
+  mathsFenceAt,
+  mathsText,
+  oldMathsFence,
+  oldMathsMessage,
+  tokenInMaths,
+  unclosedMaths
+} from '../maths.server';
 import { closesOnly, keptLines, opensOnly } from './source-lines';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
@@ -163,6 +170,8 @@ export function readRegions(body: string): {
   for (let index = 0; index < source.length; index++) {
     // Inline maths, $$…$$, is its Unicode text in a listing, holding no region or token: a listing
     // is lines of text, so it draws no SVG.
+    if (source.startsWith(oldMathsFence, index))
+      problems.push({ message: oldMathsMessage, block: 'listing', at: characters[index].at });
     const fence = mathsFenceAt(source, index);
     if (fence) {
       const [open, closing] = fence;

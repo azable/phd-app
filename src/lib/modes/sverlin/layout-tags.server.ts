@@ -12,7 +12,13 @@
 import { drawingTags } from './drawings.server';
 import { fitted } from './layouts.server';
 import { mathsSvg } from './maths-svg.server';
-import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
+import {
+  mathsSpans,
+  oldMathsFence,
+  oldMathsMessage,
+  tokenInMaths,
+  unclosedMaths
+} from './maths.server';
 import { oldPlaceTokenAt, placeTokenAt, placeTokenIn } from './listing/mapped.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
@@ -166,6 +172,12 @@ export function layoutTags(source: string): {
   // and $ are no Svelte expression or token.
   const mathsProblems: Problem[] = [];
   const mathsEdits: { start: number; length: number; text: string }[] = [];
+  for (
+    let at = scanned.indexOf(oldMathsFence);
+    at >= 0;
+    at = scanned.indexOf(oldMathsFence, at + 1)
+  )
+    mathsProblems.push({ message: oldMathsMessage, start: at });
   for (const { start, end, inside } of mathsSpans(scanned)) {
     if (end < 0) {
       mathsProblems.push({ message: unclosedMaths, start });

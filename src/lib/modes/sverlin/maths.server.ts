@@ -243,12 +243,12 @@ const doubleStruck: Record<string, string> = {
 
 /** Commands with no form on one line, each with what to write instead. */
 const refused: Record<string, string> = {
-  frac: 'a fraction stacks: write it on the line, as \\((n+1)/2\\)',
-  dfrac: 'a fraction stacks: write it on the line, as \\((n+1)/2\\)',
-  tfrac: 'a fraction stacks: write it on the line, as \\((n+1)/2\\)',
-  binom: 'a binomial stacks: write it on the line, as \\(C(n, k)\\)',
+  frac: 'a fraction stacks: write it on the line, as $$(n+1)/2$$',
+  dfrac: 'a fraction stacks: write it on the line, as $$(n+1)/2$$',
+  tfrac: 'a fraction stacks: write it on the line, as $$(n+1)/2$$',
+  binom: 'a binomial stacks: write it on the line, as $$C(n, k)$$',
   limits:
-    'limits stacked over a symbol do not fit a line: leave out \\limits, so they sit beside it, as \\(\\sum_{i=1}^n\\)',
+    'limits stacked over a symbol do not fit a line: leave out \\limits, so they sit beside it, as $$\\sum_{i=1}^n$$',
   displaystyle: 'maths here sits in a line of text: leave out \\displaystyle',
   overline: 'a line over a symbol has no form in text: write it in words',
   underline: 'a line under a symbol has no form in text: write it in words',
@@ -447,7 +447,7 @@ export function mathsText(written: string): Converted {
       const mark = marks[character];
       if (mark === undefined)
         fail(
-          `${kind === 'superscript' ? '^' : '_'}{${group}} cannot be written as a ${kind}, as Unicode has no ${kind} ${character}: write it on the line, as ${kind === 'superscript' ? `\\(n \\cdot ${group}\\)` : `\\(A[${group}]\\)`}`
+          `${kind === 'superscript' ? '^' : '_'}{${group}} cannot be written as a ${kind}, as Unicode has no ${kind} ${character}: write it on the line, as ${kind === 'superscript' ? `$$n \\cdot ${group}$$` : `$$A[${group}]$$`}`
         );
       out += mark;
     }
@@ -481,7 +481,7 @@ export function mathsText(written: string): Converted {
           if ([...radicand].length === 1 || /^\(.*\)$/u.test(radicand)) out += `√${radicand}`;
           else
             fail(
-              `\\sqrt{${radicand}} has no bar over a long radicand in text: write one symbol, as \\(\\sqrt{n}\\), or put the radicand in brackets, as \\(\\sqrt{(n+1)}\\)`
+              `\\sqrt{${radicand}} has no bar over a long radicand in text: write one symbol, as $$\\sqrt{n}$$, or put the radicand in brackets, as $$\\sqrt{(n+1)}$$`
             );
         } else if (name === 'bmod' || name === 'mod') out += ' mod ';
         else if (name === 'pmod') out += ` (mod ${convert(argument())})`;
@@ -530,11 +530,12 @@ export function mathsText(written: string): Converted {
 
 class MathsProblem extends Error {}
 
-/** The fences inline maths is written between: `$$…$$`, as the guide shows, or `\(…\)`. */
-const fences = [
-  ['$$', '$$'],
-  ['\\(', '\\)']
-] as const;
+/** The fence inline maths is written between: `$$…$$`. */
+const fences = [['$$', '$$']] as const;
+
+/** The old maths fence, `\(…\)`, which the build refuses, naming `$$…$$`. */
+export const oldMathsFence = '\\(';
+export const oldMathsMessage = '\\(…\\) is no maths fence: write inline maths between $$ and $$.';
 
 /**
  * The inline maths fence opening at an offset of some text, if one does. A second `$` is no name
