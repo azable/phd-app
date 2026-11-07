@@ -10,6 +10,11 @@ import {
   type Duel
 } from './preference-model';
 import { answersAfter } from './variant-guard';
+import { nestedDesign, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+
+/** Design values as a decision writes them: one JSON string of the nested design. */
+const designValues = (values: Record<string, unknown>) =>
+  JSON.stringify(nestedDesign(writtenValues(values)));
 
 const duel = (
   first: string,
@@ -57,7 +62,9 @@ function project() {
         type: 'ai.generation-succeeded',
         payload: {
           response: {
-            text: JSON.stringify({ decision: { action: 'vary', values: [{ variable, value }] } })
+            text: JSON.stringify({
+              decision: { action: 'vary', values: designValues({ [variable]: value }) }
+            })
           }
         }
       });

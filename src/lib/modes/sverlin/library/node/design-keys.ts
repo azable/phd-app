@@ -229,16 +229,49 @@ function sortedDesign<T>(design: NestedDesign<T>): NestedDesign<T> {
   );
 }
 
+/** A design written otherwise than nested, one level for each part of a key (see flatDesign). */
+export class FlatDesignError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FlatDesignError';
+  }
+}
+
+/**
+ * Why a segment of a nested design is no one level of it, or undefined: two parts joined by a dot,
+ * as `"IntCell.fill"` or `"scale.spacing"`, where a place (`":@scan.next"`), a value
+ * (`"=a.b"`), a listing region (`"@insert.key"`), a view choice (`"{Int}:target"`) or an ordered
+ * prop's part (`"fill.hue"`) may hold dots; `inherit`, written `"..."`; and `base`, the top's
+ * `"..."`.
+ */
+function notNested(prefix: string | undefined, segment: string): string | undefined {
+  const under = prefix === undefined ? 'at the top' : `under ${prefix}`;
+  if (segment === 'inherit' && prefix !== undefined)
+    return `"inherit" ${under} is written "...", as {"${prefix.split('.')[0]}": {"...": "$cell"}}.`;
+  if (segment === 'base' && prefix === undefined)
+    return `"base" at the top is written "...", as {"...": "<starter>"}.`;
+  if (/^[:=@{]/u.test(segment) || !segment.includes('.') || segment === '...') return undefined;
+  if (/^[a-z]\w*\.(?:from|hue|order|unit)$/u.test(segment)) return undefined;
+  const [first, ...rest] = segment.split('.');
+  return `"${segment}" ${under} is written flat: a design is written nested, each part of a key a level of its own, as {"${first}": {"${rest.join('": {"')}": …}}.`;
+}
+
 /**
  * A nested design's written keys, each with its value: the path joined back into a key (see
- * nestedDesign), `"..."` as the kind's `inherit`. A key already written flat at any level, as an
- * older `"IntCell.fill": "white"`, is joined as it is, so either form reads. A `null`, as a JSON
+ * nestedDesign), `"..."` as the kind's `inherit`. A design written otherwise, a key flat at any
+ * level or `inherit` for `"..."`, is a FlatDesignError naming the nested form. A `null`, as a JSON
  * Merge Patch writes it to remove a value, is kept under the key or the start of keys it removes.
  */
 export function flatDesign(design: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const flat: Record<string, unknown> = {};
+  const problems: string[] = [];
   const walk = (prefix: string | undefined, object: Readonly<Record<string, unknown>>) => {
     for (const [segment, value] of Object.entries(object)) {
+      const problem = notNested(prefix, segment);
+      if (problem) {
+        problems.push(problem);
+        continue;
+      }
       // `"..."` at the top names the design's base (see baseKey); under a kind, what it inherits.
       const top = segment === '...' ? baseKey : segment;
       const key = prefix === undefined ? top : joined(prefix, segment);
@@ -248,6 +281,7 @@ export function flatDesign(design: Readonly<Record<string, unknown>>): Record<st
     }
   };
   walk(undefined, design);
+  if (problems.length) throw new FlatDesignError(problems.join(' '));
   return flat;
 }
 

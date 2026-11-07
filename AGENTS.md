@@ -120,16 +120,16 @@ alone cannot prove that arbitrary JS will never attempt navigation.
   starting with `<!-- summary: … -->` (what it shows, or what it changes, at
   most 300 characters, a version summary's limit) and, to make it a child of an
   earlier example, `<!-- parent: name -->`, and to build it with chosen values,
-  `<!-- variant: {"Here": {"shown": false}} -->` (nested, or flat as
-  `{"Here.shown": false}`; a root example's variant naming no `"..."` base is
-  built on `<starter>`, written into the version, while a template's name alone
-  is refused, as the demo writes out no template), and to post a note to the
-  chat after it, `<!-- note: … -->` (markdown on one line; code in backticks
-  links to the source): while the page is open, each is saved, in name order, as
-  a version in its chat, and removed from the inbox; one the app refuses is
-  posted to the chat with the reason instead, and a variant value no kind has
-  (as `Main.AtI` for a kind inside `Board`, `Main.Board.AtI`) is left out with a
-  warning posted after it. A version the developer names, as
+  `<!-- variant: {"Here": {"shown": false}} -->` (nested, one level for each
+  part of a key, as the design reads; a root example's variant naming no `"..."`
+  base is built on `<starter>`, written into the version, while a template's
+  name alone is refused, as the demo writes out no template), and to post a note
+  to the chat after it, `<!-- note: … -->` (markdown on one line; code in
+  backticks links to the source): while the page is open, each is saved, in name
+  order, as a version in its chat, and removed from the inbox; one the app
+  refuses is posted to the chat with the reason instead, and a variant value no
+  kind has (as `Main.AtI` for a kind inside `Board`, `Main.Board.AtI`) is left
+  out with a warning posted after it. A version the developer names, as
   `3fa2c1/Misty-Falcon-09` (its copy button, or Alt+Shift+C for the one shown,
   copies it), maps to its example in `.demo/names.json`; when telling the
   developer about an example, name it by that reference, which the chat shows,

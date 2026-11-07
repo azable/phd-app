@@ -1439,13 +1439,15 @@ listing's lit regions set their own fill, stroke, and colour only.
 {
   "{Index}": "Arrow",
   "{Index}:found": "Flag",
-  "Arrow.Link:@pair.compare.left.targetFill": "sky-100",
-  "IntCell:@swap.held.fill": "neutral-100"
+  "Arrow": { "Link": { ":@pair.compare.left": { "targetFill": "sky-100" } } },
+  "IntCell": { ":@swap.held": { "fill": "neutral-100" } }
 }
 ```
 
-In a key the last part is the prop, and the dots after `:` the place's. A label
-and a variable of one name are two places, `:@held` and `:held`.
+A design is written nested (see Shared values); a variable is named by its path,
+as `Arrow.Link:@pair.compare.left.targetFill`, where the last part is the prop
+and the dots after `:` the place's. A label and a variable of one name are two
+places, `:@held` and `:held`.
 
 ### Shared values
 
@@ -1465,10 +1467,10 @@ from a label's value is `:@label`.
   every framed value.
 - A style is a `$` name holding a group of props, as a CSS class does:
   `$cell.stroke`, `$cell.padding`. A kind inherits one style, or one kind of its
-  role, and takes each prop it sets: `IntCell.inherit: "$cell"`, or
-  `Goal.inherit: "VertexCard"`. A style's prop is one of its prop's options or a
-  token, as `"$cell.fill": "$surface"`, and fits every kind inheriting it. A
-  kind cannot inherit a kind that inherits it back. Every kind follows its
+  role, and takes each prop it sets: `"IntCell": {"...": "$cell"}`, or
+  `"Goal": {"...": "VertexCard"}`. A style's prop is one of its prop's options
+  or a token, as `"$cell": {"fill": "$surface"}`, and fits every kind inheriting
+  it. A kind cannot inherit a kind that inherits it back. Every kind follows its
   role's look by default, so a kind leaves `"..."` out unless it inherits a
   style or a kind; `"...": "none"` is refused.
 - A kind's role comes only from the props written on its node: a `<Link>` is a
@@ -1512,10 +1514,13 @@ from a label's value is `:@label`.
   style names `$spacing` 0.25. A kind set apart once stays apart when what it
   follows changes later, and a place, as `IntCell:v.fill`, overrides its kind as
   before.
-- The design reads nested, one object for each style, role style and kind, as
-  project.design's levels and values and the Choices file show it: `"..."` is
-  what a kind inherits, a nested kind sits inside its view's object, and a place
-  or a value is a key inside its kind's:
+- A design is written nested, and only so: one object for each style, role style
+  and kind, as project.design's levels and values and the Choices file show it:
+  `"..."` is what a kind inherits, a nested kind sits inside its view's object,
+  and a place or a value is a key inside its kind's. A key written flat, as
+  `"IntCell.fill"` or `"scale.spacing"`, and `"inherit"` for `"..."` are
+  refused, naming the nested form; a place, a value, a listing region and an
+  ordered prop's part keep their dots, as `":@scan.next"` or `"height.from"`:
 
   ```json
   {

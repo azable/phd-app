@@ -14,6 +14,11 @@ import {
   pictureTree,
   settledValues
 } from './variant-guard';
+import { nestedDesign, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+
+/** Design values as a decision writes them: one JSON string of the nested design. */
+const designValues = (values: Record<string, unknown>) =>
+  JSON.stringify(nestedDesign(writtenValues(values)));
 
 const tree = pictureTree(recorded.source);
 const context = { tree, base: recorded.variant, settled: {} };
@@ -136,7 +141,11 @@ describe('settledValues', () => {
         response: {
           text: JSON.stringify({
             output_text: JSON.stringify({
-              decision: { action: 'vary', values: [{ variable, value }], randomise: [] }
+              decision: {
+                action: 'vary',
+                values: designValues({ [variable]: value }),
+                randomise: []
+              }
             })
           })
         }

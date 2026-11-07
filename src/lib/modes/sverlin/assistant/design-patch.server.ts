@@ -3,12 +3,11 @@
  * (see nestedDesign in modes/sverlin/library/node/design-keys.ts) applied as a JSON Merge Patch
  * (RFC 7396, https://www.rfc-editor.org/rfc/rfc7396), so a value set to `null` returns to what its
  * variable inherits or follows. A string, because strict structured output cannot describe a
- * nested design's free keys; older recorded decisions carry a list of `{variable, value}`, which
- * reads as the same patch.
+ * nested design's free keys.
  */
 
 import { baseKey, isBaseKey } from '$lib/modes/sverlin/library/node/design';
-import { flatDesign } from '$lib/modes/sverlin/library/node/design-keys';
+import { FlatDesignError, flatDesign } from '$lib/modes/sverlin/library/node/design-keys';
 import {
   templateName,
   templateOf,
@@ -31,12 +30,11 @@ export const emptyPatch: DesignPatch = { set: [], remove: [] };
 
 /**
  * The patch a decision's values hold, or why they cannot be read: text that is not JSON, JSON that
- * is not one object, or a value that is not a string, a number, a boolean or null. A missing or
- * empty field sets nothing. An older list of `{variable, value}` reads as it was meant.
+ * is not one object, a key written flat rather than nested (see flatDesign), or a value that is not
+ * a string, a number, a boolean or null. A missing or empty field sets nothing.
  */
 export function readDesignPatch(values: unknown): DesignPatch | { problem: string } {
   if (values === undefined || values === null || values === '') return emptyPatch;
-  if (Array.isArray(values)) return listPatch(values);
   if (typeof values !== 'string')
     return { problem: 'The values must be a JSON object written as a string.' };
   let parsed: unknown;
@@ -53,7 +51,14 @@ export function readDesignPatch(values: unknown): DesignPatch | { problem: strin
     };
   const set: DesignPatch['set'] = [];
   const remove: string[] = [];
-  for (const [variable, value] of Object.entries(flatDesign(parsed as Record<string, unknown>))) {
+  let flat: Record<string, unknown>;
+  try {
+    flat = flatDesign(parsed as Record<string, unknown>);
+  } catch (cause) {
+    if (cause instanceof FlatDesignError) return { problem: cause.message };
+    throw cause;
+  }
+  for (const [variable, value] of Object.entries(flat)) {
     if (value === null) remove.push(variable);
     else if (['string', 'number', 'boolean'].includes(typeof value))
       set.push({ variable, value: value as DesignValue });
@@ -99,19 +104,6 @@ export function designPatch(values: unknown): DesignPatch {
   const patch = readDesignPatch(values);
   if ('problem' in patch) throw new Error(patch.problem);
   return patch;
-}
-
-/** A recorded decision's older list of `{variable, value}`, its malformed items left out. */
-function listPatch(items: readonly unknown[]): DesignPatch {
-  return {
-    set: items.flatMap((item) => {
-      const { variable, value } = (item ?? {}) as { variable?: unknown; value?: unknown };
-      return typeof variable === 'string' && ['string', 'number', 'boolean'].includes(typeof value)
-        ? [{ variable, value: value as DesignValue }]
-        : [];
-    }),
-    remove: []
-  };
 }
 
 /**

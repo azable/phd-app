@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FlatDesignError,
   flatDesign,
   keptKey,
   keptValues,
@@ -169,10 +170,23 @@ describe('the nested form', () => {
     expect(Object.keys(nested.Here as object)).toEqual(['...', 'fill', ':lo', '=true', 'Link']);
   });
 
-  it('reads a key written flat at any level, as older documents were', () => {
-    expect(
-      flatDesign({ 'IntCell.fill': 'white', IntCell: { 'Link.targetFill': 'red-100' } })
-    ).toEqual({ 'IntCell.fill': 'white', 'IntCell.Link.targetFill': 'red-100' });
+  it('refuses a key written flat at any level, inherit and base, naming the nested form', () => {
+    expect(() => flatDesign({ 'IntCell.fill': 'white' })).toThrow(
+      /"IntCell\.fill" at the top is written flat: .*\{"IntCell": \{"fill": …\}\}/u
+    );
+    expect(() => flatDesign({ IntCell: { 'Link.targetFill': 'red-100' } })).toThrow(
+      /"Link\.targetFill" under IntCell is written flat/u
+    );
+    expect(() => flatDesign({ scale: { spacing: '0 1' }, 'scale.radius': '0 4' })).toThrow(
+      /"scale\.radius" at the top is written flat/u
+    );
+    expect(() => flatDesign({ IntCell: { inherit: '$cell' } })).toThrow(
+      /"inherit" under IntCell is written "\.\.\."/u
+    );
+    expect(() => flatDesign({ base: '<starter>' })).toThrow(
+      /"base" at the top is written "\.\.\."/u
+    );
+    expect(() => flatDesign({ IntCell: 1, 'IntCell.fill': 2 })).toThrow(FlatDesignError);
   });
 
   it('keeps a null under the key or the start of keys it removes', () => {

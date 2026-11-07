@@ -18,6 +18,11 @@ import type { ProjectCommandDependencies } from './commands';
 import { MemoryProjectRepository } from './memory-repository.test-support';
 import { runWithProjectOperationSignal } from './operation-context';
 import type { ProjectServiceDependencies } from './service';
+import { nestedDesign, writtenValues } from '$lib/modes/sverlin/library/node/design-keys';
+
+/** Design values as a decision writes them: one JSON string of the nested design. */
+const designValues = (values: Record<string, unknown>) =>
+  JSON.stringify(nestedDesign(writtenValues(values)));
 
 const mocks = vi.hoisted(() => ({
   attemptProfiles: [
@@ -951,15 +956,15 @@ describe('submitProjectFeedback', () => {
       // question and added a pair over five unanswered ones).
       const pair = (question: string, variable: string, left: string, right: string) => ({
         question,
-        left: { label: left, values: [{ variable, value: left }] },
-        right: { label: right, values: [{ variable, value: right }] }
+        left: { label: left, values: designValues({ [variable]: left }) },
+        right: { label: right, values: designValues({ [variable]: right }) }
       });
       const replied = {
         ...generation(undefined, 'Two to compare.'),
         viewHelpers: { type: 'Int', task: 'draw each number another way' },
         decision: {
           action: 'vary',
-          values: [],
+          values: '{}',
           randomise: [],
           count: null,
           comparisons: [
@@ -3442,7 +3447,7 @@ describe('assistant edits', () => {
             replace: '<Result /><Note />'
           }
         ],
-        values: [{ variable: 'Note.fill', value: 'sky-100' }],
+        values: designValues({ ['Note.fill']: 'sky-100' }),
         summary: 'Adds a caption'
       },
       brief: [
@@ -3543,7 +3548,7 @@ describe('assistant edits', () => {
       ...generation(undefined, 'Varied.'),
       decision: {
         action: 'vary' as const,
-        values: [{ variable: 'views.Int', value: 'IntTally' }],
+        values: designValues({ ['views.Int']: 'IntTally' }),
         randomise: ['Highlight.Link.targetFill'],
         summary: 'Draws every value with a tally'
       }
@@ -3620,7 +3625,7 @@ describe('several variants from chat', () => {
     const { result } = await decide(
       {
         action: 'vary',
-        values: [{ variable: 'views.Int', value: 'IntTally' }],
+        values: designValues({ ['views.Int']: 'IntTally' }),
         randomise: [],
         count: 4,
         summary: 'Tallies with four marks'
@@ -3652,7 +3657,7 @@ describe('several variants from chat', () => {
     const { before, result } = await decide(
       {
         action: 'vary',
-        values: [],
+        values: '{}',
         randomise: [],
         count: null,
         comparisons: [views('IntCell', 'IntTally'), { ...marks, brief: tone }],
@@ -3710,7 +3715,7 @@ describe('several variants from chat', () => {
     const { result } = await decide(
       {
         action: 'vary',
-        values: [],
+        values: '{}',
         randomise: [],
         count: null,
         comparisons: [{ ...marks, brief: tone }],
@@ -3741,7 +3746,7 @@ describe('several variants from chat', () => {
       ],
       decision: {
         action: 'vary',
-        values: [],
+        values: '{}',
         randomise: [],
         count: 4,
         comparisons: null,
@@ -3773,7 +3778,7 @@ describe('several variants from chat', () => {
         ...generation(undefined, 'Two questions.'),
         decision: {
           action: 'vary',
-          values: [],
+          values: '{}',
           randomise: [],
           count: null,
           comparisons: [
@@ -3833,7 +3838,7 @@ describe('several variants from chat', () => {
         ...generation(undefined, 'Two questions.'),
         decision: {
           action: 'vary',
-          values: [],
+          values: '{}',
           randomise: [],
           count: null,
           comparisons: [marks],
@@ -3846,7 +3851,7 @@ describe('several variants from chat', () => {
         ...generation(undefined, 'Here it is, in grey.'),
         decision: {
           action: 'vary',
-          values: [],
+          values: '{}',
           randomise: [],
           count: null,
           comparisons: null,
@@ -3889,7 +3894,7 @@ describe('several variants from chat', () => {
   }
   const vary = (reply: string, more: object) => ({
     ...generation(undefined, reply),
-    decision: { action: 'vary', values: [], randomise: [], count: null, summary: 'Asks', ...more }
+    decision: { action: 'vary', values: '{}', randomise: [], count: null, summary: 'Asks', ...more }
   });
   const replies = (events: readonly ProjectEvent[]) =>
     events.flatMap((event) => (event.type === 'assistant.responded' ? [event.payload] : []));
@@ -3902,7 +3907,7 @@ describe('several variants from chat', () => {
               comparisons: [views('IntCell', 'IntBogus'), views('IntCell', 'IntCell')]
             })
           : vary('Tallies, then a question.', {
-              values: [{ variable: 'views.Int', value: 'IntTally' }],
+              values: designValues({ ['views.Int']: 'IntTally' }),
               question: { text: 'Warm or cool highlighting next?', presentation: null }
             }),
       'Accepted reply'
@@ -3947,8 +3952,8 @@ describe('several variants from chat', () => {
   // A cell's least size is under what the highlight keeps, so the two sides draw alike.
   const sizes = {
     question: 'Smaller or larger cells?',
-    left: { label: 'smaller', values: [{ variable: 'IntCell.minSize', value: 0 }] },
-    right: { label: 'larger', values: [{ variable: 'IntCell.minSize', value: 1 }] }
+    left: { label: 'smaller', values: designValues({ ['IntCell.minSize']: 0 }) },
+    right: { label: 'larger', values: designValues({ ['IntCell.minSize']: 1 }) }
   };
 
   it('sends a picture too large to read back once, then shows it as built', async () => {
@@ -4232,8 +4237,8 @@ describe('several variants from chat', () => {
           comparisons: [
             {
               question: 'Cells or words for the numbers?',
-              left: { label: 'cells', values: [{ variable: 'views.Int', value: 'Cell' }] },
-              right: { label: 'words', values: [{ variable: 'views.Int', value: 'Word' }] }
+              left: { label: 'cells', values: designValues({ ['views.Int']: 'Cell' }) },
+              right: { label: 'words', values: designValues({ ['views.Int']: 'Word' }) }
             }
           ]
         }),
@@ -4453,7 +4458,7 @@ describe('several variants from chat', () => {
     const { result } = await decide(
       {
         action: 'vary',
-        values: [],
+        values: '{}',
         randomise: [],
         count: null,
         comparisons: [views('IntCell', 'IntTally'), marks, views('IntTally', 'IntCell')],
@@ -4543,7 +4548,7 @@ describe('several variants from chat', () => {
       decide(
         {
           action: 'vary',
-          values: [],
+          values: '{}',
           randomise: [],
           count: null,
           comparisons: [views('IntCell', 'IntTally'), marks],

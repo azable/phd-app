@@ -177,7 +177,7 @@ export function varyValues(response: string): { variable: string; value: DesignV
     for (const decision of decisions) {
       const vary = decision as { action?: unknown; values?: unknown } | undefined;
       if (vary?.action !== 'vary') continue;
-      // A JSON string of a nested design, or an older list of {variable, value}.
+      // A JSON string of a nested design.
       const patch = readDecisionValues(vary.values);
       if ('problem' in patch) return [];
       return patch.set.map(({ variable, value }) => ({

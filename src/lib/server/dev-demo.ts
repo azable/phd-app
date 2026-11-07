@@ -4,7 +4,7 @@
  * replaces it with a fresh project. An example may begin with `<!-- summary: … -->`, saying what it
  * shows or changes, `<!-- parent: name -->`, naming the earlier example it changes (without a
  * parent it starts a tree of its own), `<!-- variant: {"Here": {"shown": false}} -->`, values to
- * build it with, nested or flat (see designKeys.flat), and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
+ * build it with, nested (see designKeys.flat), and `<!-- note: … -->`, markdown posted to the chat after it as a developer's note.
  * Each presentation it shows is named, by the name the page shows it by, in .demo/names.json.
  * Only the dev server serves it.
  */
@@ -91,6 +91,16 @@ async function saveWaiting(projectId: string): Promise<void> {
       sourcesFile,
       JSON.stringify({ ...sources, [name.replace(/\.svelte$/u, '')]: source })
     );
+    // A variant written otherwise than nested is refused, as the assistant's values are.
+    let values: DesignValues | undefined;
+    try {
+      values = variant ? (designKeys.flat(JSON.parse(variant)) as DesignValues) : undefined;
+    } catch (cause) {
+      const why = `The demo example ${name} was not saved: its variant ${(cause as Error).message}`;
+      console.error(why);
+      await postNote(projectId, name, why.slice(0, 2000), 'warning');
+      continue;
+    }
     // Checked as the API checks a command, so an example the project could not load is refused.
     const command = v.safeParse(projectCommandSchema, {
       type: 'save',
@@ -100,7 +110,7 @@ async function saveWaiting(projectId: string): Promise<void> {
       source,
       presentationCount: 1,
       ...(summary ? { summary } : {}),
-      ...(variant ? { variant: designKeys.flat(JSON.parse(variant)) as DesignValues } : {}),
+      ...(values ? { variant: values } : {}),
       ...(from ? { from } : { root: true })
     });
     if (!command.success) {

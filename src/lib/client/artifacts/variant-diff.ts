@@ -5,6 +5,7 @@
  */
 
 import {
+  FlatDesignError,
   flatDesign,
   keptValues,
   kindKeyParts,
@@ -25,9 +26,9 @@ export function variantDocument(variant: DesignValues): string {
 /**
  * An edit of a version's choices as their document (see variantDocument): the values it changes or
  * adds, to build with as chosen, and the variables it removes, to stop keeping, so every value left
- * as it was keeps following what it inherits, its group or its token; or why the text is not such
- * a document. The document is the whole design, nested or, as older documents were, flat: a key
- * removed, or set to null as a JSON Merge Patch removes one, returns to what it follows. A value is
+ * as it was keeps following what it inherits, its role's style or its token; or why the text is not
+ * such a document. The document is the whole design, nested (see flatDesign): a key removed, or
+ * set to null as a JSON Merge Patch removes one, returns to what it follows. A value is
  * a string, a number or a boolean, as a variant's are.
  */
 export function choiceEdits(
@@ -42,7 +43,14 @@ export function choiceEdits(
   }
   if (!edited || typeof edited !== 'object' || Array.isArray(edited))
     return { error: 'The choices must be one JSON object, each variable to its value.' };
-  const entries = Object.entries(flatDesign(edited as Record<string, unknown>));
+  let flat: Record<string, unknown>;
+  try {
+    flat = flatDesign(edited as Record<string, unknown>);
+  } catch (cause) {
+    if (cause instanceof FlatDesignError) return { error: cause.message };
+    throw cause;
+  }
+  const entries = Object.entries(flat);
   const wrong = entries.find(
     ([, value]) => value !== null && !['string', 'number', 'boolean'].includes(typeof value)
   );

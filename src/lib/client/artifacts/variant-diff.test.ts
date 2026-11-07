@@ -180,12 +180,14 @@ describe("a developer's edit of the choices", () => {
     });
   });
 
-  it('still reads an older flat document', () => {
+  it('refuses a document written flat, naming the nested form', () => {
     const flat = JSON.stringify({
       'IntCell.fill': 'blue-100',
       'IntCell.padding': 0.375,
       $spacing: 0.375
     });
-    expect(choiceEdits(shown, flat)).toEqual({ chosen: { 'IntCell.fill': 'blue-100' }, unset: [] });
+    expect(choiceEdits(shown, flat)).toEqual({
+      error: expect.stringMatching(/"IntCell\.fill" at the top is written flat/u)
+    });
   });
 });

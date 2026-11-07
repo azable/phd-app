@@ -183,7 +183,10 @@ inherits. For a look asked of many kinds at once, as “less padding everywhere�
 or “every pointer teal”, set a token or a role's style, as `<Pointer>` (see
 Shared values in the guide), rather than each kind; for a look several kinds
 share, as “value cells rounder with a darker frame”, set a style's props and
-have those kinds inherit it (`$cell.radius`, `$cell.stroke`, `IntCell.inherit`).
+have those kinds inherit it
+(`{"$cell": {"radius": 4}, "IntCell": {"...": "$cell"}}`). Write values nested,
+one level for each part of a key; a key written flat, as `"IntCell.fill"`, goes
+back to be written again.
 
 Templates are whole bases (see Shared values in the guide), named in values as
 `"...": "$textbook"` and patched with only what differs, as

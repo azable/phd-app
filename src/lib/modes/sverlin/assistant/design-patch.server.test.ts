@@ -35,16 +35,38 @@ describe('design values written as one JSON string', () => {
     });
   });
 
-  it('removes with null, sets nothing when empty, and reads an older list as it was meant', () => {
+  it('removes with null, and sets nothing when empty', () => {
     expect(readDesignPatch('{"Goal": {"fill": null}, "IntCell": null}')).toEqual({
       set: [],
       remove: ['Goal.fill', 'IntCell']
     });
     for (const empty of [undefined, null, '', '{}'])
       expect(readDesignPatch(empty)).toEqual({ set: [], remove: [] });
-    expect(readDesignPatch([{ variable: 'views.Int', value: 'IntTally' }, { bad: 1 }])).toEqual({
-      set: [{ variable: 'views.Int', value: 'IntTally' }],
+  });
+
+  it('refuses a design written flat, inherit for "...", and an older list, naming the nested form', () => {
+    expect(readDesignPatch('{"IntCell.fill": "white"}')).toEqual({
+      problem: expect.stringMatching(
+        /"IntCell\.fill" at the top is written flat: .* \{"IntCell": \{"fill": …\}\}/u
+      )
+    });
+    expect(readDesignPatch('{"IntCell": {"Link.stroke": "red-500"}}')).toMatchObject({
+      problem: expect.stringMatching(/"Link\.stroke" under IntCell is written flat/u)
+    });
+    expect(readDesignPatch('{"IntCell": {"inherit": "$cell"}}')).toMatchObject({
+      problem: expect.stringMatching(/"inherit" under IntCell is written "\.\.\."/u)
+    });
+    expect(
+      readDesignPatch('{"Bar": {"height.from": 12, ":@scan.next": {"fill": "white"}}}')
+    ).toEqual({
+      set: [
+        { variable: 'Bar.height.from', value: 12 },
+        { variable: 'Bar:@scan.next.fill', value: 'white' }
+      ],
       remove: []
+    });
+    expect(readDesignPatch([{ variable: 'views.Int', value: 'IntTally' }])).toMatchObject({
+      problem: expect.any(String)
     });
   });
 
