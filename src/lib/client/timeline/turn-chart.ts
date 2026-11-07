@@ -12,7 +12,7 @@ import { callCost, costText, costTotal, type AiCall } from '$lib/shared/projects
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import { escalationText } from '$lib/shared/projects/events/ai-generation';
 import { backgroundOperationKinds } from '$lib/shared/projects/events/operation-lifecycle';
-import { isSverlinPresentation } from '$lib/shared/presentations';
+import { isSverlinPresentation, presentationWarningText } from '$lib/shared/presentations';
 
 import { agentRequests } from './agent-requests';
 
@@ -170,7 +170,7 @@ export function turnChart(
   const warnings = new Set(
     related.flatMap((event) =>
       event.type === 'visualization.presented' && isSverlinPresentation(event.payload.presentation)
-        ? (event.payload.presentation.warnings ?? [])
+        ? (event.payload.presentation.warnings ?? []).map(presentationWarningText)
         : []
     )
   );

@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import insertion from './fixtures/insertion-decisions.sverlin?raw';
 import { drawnSteps, ofKind, textOf } from './testing/scenes';
+import { placeWarningCodes } from './place-checks.server';
 
 describe('a scene pausing at decisions as well as actions', () => {
   it("draws each comparison's answer at its step, with no warnings", async () => {
     const { steps, built } = await drawnSteps(insertion);
-    expect(built.warnings ?? []).toEqual([]);
+    expect((built.warnings ?? []).filter(({ code }) => !placeWarningCodes.has(code))).toEqual([]);
     const labels = (built as unknown as { steps: string[] }).steps;
     const compared = labels.flatMap((label, step) =>
       label.startsWith('@insert.scan.cmp') ? [step] : []

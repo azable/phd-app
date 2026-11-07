@@ -482,6 +482,12 @@ Alt+Shift+C for the presentation shown, copies to paste elsewhere; see
 written to the cache, output, reasoning) and cost, each operation's and the
 project's, and the manifest adds them up across projects; prices are in
 [`src/lib/shared/projects/ai-costs.ts`](src/lib/shared/projects/ai-costs.ts).
+`warnings-summary.json` counts each build warning code across the exported
+projects, each version once by its source: how often, in how many projects, by
+model and by what wrote the version (initial, repair, a helper's pick), how
+often it sent a version back and how often the next version lacked it, with each
+occurrence's generation request, which holds the prompt; see
+[`src/lib/server/warning-summary.ts`](src/lib/server/warning-summary.ts).
 Developer view shows the project's total in the admin bar, by turn in its menu,
 and the web process logs each call as an `ai.call` JSON line and each
 operation's total as `ai.turn-cost`. Each time a Sverlin presentation first

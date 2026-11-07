@@ -33,13 +33,18 @@ const typedIn = search
 describe('inputs the view draws but nothing reads', () => {
   it('warn of one typed into the case, as its picture does not come from the run', async () => {
     const { warnings } = await bundlePresentation(prepareSvelteComponent(typedIn), 1);
-    expect(warnings).toContainEqual(
-      expect.stringMatching(/^The view draws the input parts, but the algorithm never reads it/u)
-    );
+    expect(warnings).toContainEqual({
+      code: 'input.unread',
+      message: expect.stringMatching(
+        /^The view draws the input parts, but the algorithm never reads it/u
+      )
+    });
   });
 
   it('warn of none the algorithm reads', async () => {
     const { warnings = [] } = await bundlePresentation(prepareSvelteComponent(search), 1);
-    expect(warnings.filter((warning) => warning.includes('never reads it'))).toEqual([]);
+    expect(
+      warnings.map(({ message }) => message).filter((warning) => warning.includes('never reads it'))
+    ).toEqual([]);
   });
 });

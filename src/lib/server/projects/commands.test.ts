@@ -1929,6 +1929,14 @@ describe('submitProjectFeedback', () => {
       expect(returnedWarnings([guessed, steps], false)).toEqual([guessed, steps]);
     });
 
+    it('sends a clumped label back, but only tells a change a listing region marks nowhere', async () => {
+      const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
+      const clumped = { code: 'label.clumped', message: '@first holds 2 statements.' };
+      const unmarked = { code: 'listing.unmarked-read', message: 'The region @start changes i.' };
+      expect(returnedWarnings([clumped, unmarked], true)).toEqual([clumped.message]);
+      expect(returnedWarnings([clumped, unmarked], false)).toEqual([clumped.message]);
+    });
+
     it('never sends a picture back for padding nobody sees, a look only', async () => {
       const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const padding =
@@ -3976,6 +3984,47 @@ describe('several variants from chat', () => {
     );
   });
 
+  it('sends a picture with a clumped label back, recording the warning’s code', async () => {
+    const clumped = [
+      '<script domain>',
+      "  const Int = type('integer', { min: 0, max: 20 });",
+      '  const Values = array(Int, { max: 5 });',
+      '  const Index = index(Values);',
+      '</script>',
+      '<script input>',
+      '  const values = Values;',
+      '  const target = Int;',
+      '</script>',
+      '<script algorithm>',
+      '  @start[let i = Index(values, 0); let k = Index(values, 0);]',
+      '  while (@compare[values[i] !== target]) @next[i++;]',
+      '</script>',
+      '<View of="Int" name="Cell"><Node value={this} /></View>',
+      '<View of="Index" name="IndexCell"><Node value={this} /></View>',
+      '<Layout name="Scan">',
+      '  <Node><Node>{#each values as v}{v}{/each}</Node>{i}</Node>',
+      '</Layout>',
+      '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
+      '<Storyboard>',
+      '  <Scene name="scan" case="main" pause="@start, @next"><Scan /></Scene>',
+      '</Storyboard>'
+    ].join('\n');
+    const result = await attempts(
+      () => ({
+        ...generation(undefined, 'Each check.'),
+        decision: { action: 'revise', source: clumped, summary: 'Each check' }
+      }),
+      'Clumped'
+    );
+    const [rejected] = result.appendedEvents.filter(
+      ({ type }) => type === 'revision.edits-rejected'
+    );
+    expect(rejected?.payload).toMatchObject({
+      rejected: 'warnings',
+      codes: expect.arrayContaining(['label.clumped'])
+    });
+  });
+
   it('sends a picture built with warnings back once, then shows it as built', async () => {
     const repeated = [
       '<script domain>',
@@ -4211,9 +4260,7 @@ describe('several variants from chat', () => {
     const asked = unofferedAlternatives(bundle, new Set(), shown);
     expect(asked).toContain('views.Seen');
     expect(asked).not.toContain('views.Int');
-    expect(
-      unofferedAlternatives(bundle, new Set(), { views: bundle.views })
-    ).toBeUndefined();
+    expect(unofferedAlternatives(bundle, new Set(), { views: bundle.views })).toBeUndefined();
   });
 
   it('shows a version whose source offers no other form at once', async () => {

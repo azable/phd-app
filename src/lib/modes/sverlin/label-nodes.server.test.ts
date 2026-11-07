@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { drawnSteps, textOf } from './testing/scenes';
+import type { BuildWarning } from './warnings';
 
 const fixture = readFileSync('src/lib/modes/sverlin/fixtures/insertion-decisions.sverlin', 'utf8');
-const neverDrawn = (warnings: readonly string[] = []) =>
-  warnings.filter((warning) => warning.includes('drawn at no step'));
+const neverDrawn = (warnings: readonly BuildWarning[] = []) =>
+  warnings.map(({ message }) => message).filter((warning) => warning.includes('drawn at no step'));
 
 describe('a node reading labels', () => {
   it('is drawn at its label’s steps, whether its layout lists its variables or not', async () => {

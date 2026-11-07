@@ -5,6 +5,7 @@ import { modeCatalog } from './catalog';
 import type {
   BrowserBundlePresentation,
   DesignValues,
+  PresentationWarning,
   VisualizationMode,
   RenderablePresentation,
   VariantRequest
@@ -46,8 +47,8 @@ export type ModeBuildResult =
         renders?: Record<string, string>;
         // The <Node> tags the presentation leaves out, by their line:column.
         leftOut?: string[];
-        // Each step a scene leaves out, drawing what the step before it drew, for the assistant.
-        warnings?: string[];
+        // What the build warns of, each with its code, for the assistant.
+        warnings?: PresentationWarning[];
         // What it draws, in kinds and links, laid out on the server, for the assistant.
         drawing?: string;
         // Each label's spans, and how many change what the view draws, for the assistant.

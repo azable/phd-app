@@ -625,7 +625,12 @@ together. Write code inside a sentence as a token, never as plain text:
 `:i[A[i]]` for a place the layout draws, `:@front[values[j] > key]` for a moment
 of the run, a label, which lights with that label's region and needs no render.
 Code that refers to nothing in the algorithm stays plain text, and should be
-rare.
+rare. In a listing, write every mention of a variable the view draws as a token,
+past the heading line, as `@next[:i[i] = :i[i] + 1]`, and mark every line that
+runs with its label's region. Label finely in the algorithm and the listing, one
+label for each operation a learner may step through, nested to group them, and
+choose the level in the view: a scene pausing at the outer label shows the group
+as one step.
 
 The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),

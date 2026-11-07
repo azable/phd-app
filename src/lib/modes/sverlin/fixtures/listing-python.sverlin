@@ -20,11 +20,11 @@
 
 <script listing="python">
 def linear_search(values, target):
-    @start[i = 0]
-    while @more[i < len(values)]:
-        @scan[if @hit[values[i] == target]:
-            @found[return i]  # found it
-        @next[i += 1]]
+    @start[:i[i] = 0]
+    while @more[:i[i] < len(values)]:
+        @scan[if @hit[values[:i[i]] == target]:
+            @found[return :i[i]]  # found it
+        @next[:i[i] += 1]]
     @missing[return None]
 </script>
 

@@ -430,6 +430,16 @@ view for all pointers. -->
   `@scan#1`, then `@next#1`, then `@more#2`. The header's labels sit beside the
   body's, not inside it: inside `@visit`, they are `visit.start`, `visit.more`
   and `visit.next`, never `visit.scan.start`, and a listing marks them so.
+- Label finely, and choose the level in the view: each operation a learner may
+  step through has a label of its own, and labels nest to group them, as
+  `@swap{@save[const moved = values[j];] @move[values[j] = values[j + 1];] @put[values[j + 1] = moved;]}`
+  or `@halves[@left[sort(a, b, lo, mid);] @right[sort(a, b, mid, hi);]]`. A
+  scene pausing at `@swap` alone steps and lights the group as one, its listing
+  region lighting over the regions inside it, and one pausing at the inner
+  labels steps each, so nesting changes no picture until a scene pauses inside.
+  The build warns of a label holding two or more statements not each labelled,
+  and of a listing region over two or more lines with no region of their own
+  (label.clumped).
 - A label inside another takes its name as a prefix: `@shift[…]` inside
   `@insert{` is `insert.shift`. A label around statements in a row runs from the
   first to the last, the labels inside it included:
@@ -526,10 +536,10 @@ Binary search, stopping where it finds the target:
 </script>
 
 <script algorithm>
-  @range[let lo = Index(0);
-  let hi = values.length - 1;]
+  @range[@from[let lo = Index(0);]
+  @to[let hi = values.length - 1;]]
   while (@open[lo <= hi]) @probe{
-    const mid = Index(Math.floor((lo + hi) / 2));
+    @middle[const mid = Index(Math.floor((lo + hi) / 2));]
     @check[if (@found[values[mid] === target]) break;]
     if (@low[values[mid] < target]) @right{ lo = mid + 1; } else @left{ hi = mid - 1; }
   }
@@ -724,13 +734,13 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
 </script>
 
 <script algorithm>
-  @begin[let prev = Next(End('end'));
-  let cur = Next(head);]
+  @begin[@none[let prev = Next(End('end'));]
+  @front[let cur = Next(head);]]
   while (@more[cur !== 'end']) @rewire{
-    const after = cur.next;
-    cur.next = prev;
-    prev = cur;
-    cur = after;
+    @keep[const after = cur.next;]
+    @flip[cur.next = prev;]
+    @back[prev = cur;]
+    @ahead[cur = after;]
   }
 </script>
 
@@ -903,9 +913,9 @@ place:
   for (@last[let end = values.length]; @more[Index(values, 1) < end]; @shrink[end--]) @sweep{
     for (@first[let i = Index(values, 1)]; @inside[i < end]; @step[i++]) @pair{
       if (@test[values[i - 1] > values[i]]) @swap{
-        const moved = values[i - 1];
-        values[i - 1] = values[i];
-        values[i] = moved;
+        @save[const moved = values[i - 1];]
+        @move[values[i - 1] = values[i];]
+        @put[values[i] = moved;]
       }
     }
   }
@@ -1714,6 +1724,13 @@ the scenes' pauses decide whether to pause there.
   other references. A token naming a place nothing renders is refused. Write
   code inside a sentence as a token, never as plain text; code that refers to
   nothing in the algorithm stays text.
+- Mark every mention of a variable the view draws, in the listing past its
+  heading and in a caption's or sentence's words, as a token, as `:i[i]` in
+  `@next[:i[i] = :i[i] + 1]`, and every line that runs with the region of its
+  label, so each lights with its place and its step. The build warns of each it
+  finds plain (listing.plain-variable, view.caption-name, view.plain-code,
+  listing.line-without-region), and tells a variable a region's code changes
+  that its text marks by no name, as `:values[A]` (listing.unmarked-read).
 - A token can name a label, a moment of the run, as its place `:@name`:
   `<Node kind="Note">The loop stops when :@front[A[j] > key] is false.</Node>`,
   or in the listing, `while @front[j ≥ 0 and :@front[A[j] > key]]`. The label is
@@ -1773,13 +1790,13 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 
 <script listing="textbook">
   INSERTION-SORT(A, n)
-  1  for @start[i = 2] @more[to n] @next[step 1]
+  1  for @start[:i[i] = 2] @more[to n] @next[step 1]
   2      @insert[@key[:key[key] = :i[A[i]]]
   3      // Insert A[i] into the sorted subarray A[1 : i - 1].
-  4      @init[j = i - 1]
-  5      while @test[@bound[j > 0] and @cmp[A[j] > :key[key]]]
-  6          @shift[@copy[:j[A[j + 1]] = A[j]]
-  7          @down[j = j - 1]]
+  4      @init[:j[j] = :i[i] - 1]
+  5      while @test[@bound[:j[j] > 0] and @cmp[A[:j[j]] > :key[key]]]
+  6          @shift[@copy[:j[A[j + 1]] = A[:j[j]]]
+  7          @down[:j[j] = :j[j] - 1]]
   8      @place[:j[A[j + 1]] = :key[key]]]
 </script>
 
@@ -1953,11 +1970,9 @@ lanes below them, `j` reaching −1 before the first cell:
 
 <script algorithm>
   for (@start[let i = Position(1)]; @more[i < values.length]; @next[i++]) @insert{
-    @take[const key = values[i];
-    let j = Position(i - 1);]
+    @take[@lift[const key = values[i];] @back[let j = Position(i - 1);]]
     while (@front[j >= 0 && values[j] > key]) @shift{
-      @move[values[j + 1] = values[j];
-      j--;]
+      @move[@copy[values[j + 1] = values[j];] @down[j--;]]
     }
     @drop[values[j + 1] = key;]
   }
@@ -2357,14 +2372,12 @@ at marked and the queue drawn by number:
 <script algorithm>
   @init[let queue = Queue([0]);]
   while (@more[queue.length > 0]) @visit{
-    @take[const current = queue[0];
-    queue.shift();
-    const around = out[current];]
+    @take[@front[const current = queue[0];] @dequeue[queue.shift();] @row[const around = out[current];]]
     for (@first[let slot = Slot(around, 0)]; @another[slot < around.length]; @step[slot++]) @look{
-      const w = around[slot];
+      @pick[const w = around[slot];]
       if (@check[!vertices[@next[w]].seen]) @add{
-        vertices[w].seen = true;
-        queue.push(w);
+        @mark[vertices[w].seen = true;]
+        @enqueue[queue.push(w);]
       }
     }
   }

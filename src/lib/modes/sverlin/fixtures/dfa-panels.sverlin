@@ -43,12 +43,12 @@
   RUN-DFA(word)
   @begin[state = q0]
   @start[for position = 0] @more[while position < length(word)]
-      @run[read symbol at position
-      if @isZero[symbol is 0]
+      @run[read :symbol[symbol] at position
+      if @isZero[:symbol[symbol] is 0]
           @zero[state = δ(state, 0)]
       else
           @one[state = δ(state, 1)]]
-      @next[move to the next symbol]
+      @next[move to the next :symbol[symbol]]
   if @accepting[state is accepting]
       @accepted[accept]
   @rejected[reject]

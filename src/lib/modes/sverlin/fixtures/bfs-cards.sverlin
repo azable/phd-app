@@ -35,15 +35,15 @@
 
 <script listing="textbook">
 BFS(start)
-@init[queue = [start]]
-while @more[the queue is not empty]
-  @visit[@take[current = remove the front vertex]
-  @first[slot = the first neighbour of current]
+@init[:queue[queue] = [:start[start]]]
+while @more[the :queue[queue] is not empty]
+  @visit[@take[:current[current] = remove the front vertex]
+  @first[slot = the first neighbour of :current[current]]
   while @another[slot is a neighbour]
     @look[w = neighbour slot
     if @unseen[w is unseen]
       @add[mark w as seen
-      add w to the queue]]
+      add w to the :queue[queue]]]
     @step[slot = the next neighbour]]
 </script>
 

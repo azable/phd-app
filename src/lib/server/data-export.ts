@@ -32,6 +32,7 @@ import type { VisualizationMode } from '$lib/shared/presentations';
 import type { StudyDefinition } from '$lib/shared/study/definition';
 import { projectStudyFlow, type StudyFlow } from '$lib/shared/study/projection';
 import { registeredStudyDefinitions, studyDefinition } from '$lib/shared/study/registry';
+import { warningSummary } from './warning-summary';
 
 const exportFormat = 'sverlin-data-export';
 const exportVersion = 1;
@@ -628,6 +629,15 @@ export async function writeDataExport(
       document: project.document
     });
   }
+  // How often each build warning occurs, each version once, attributed to what wrote it.
+  await appendJson(
+    sink,
+    files,
+    'warnings-summary.json',
+    warningSummary(
+      snapshot.projects.map((project) => ({ id: project.id, events: project.document.events }))
+    )
+  );
   const interactionExport = await prepareInteractionExport(source, scope, exportedAt);
   for (const file of interactionExport.files) {
     await appendBytes(sink, files, file.path, file.bytes, file.mediaType);

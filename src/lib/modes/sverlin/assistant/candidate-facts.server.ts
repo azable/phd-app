@@ -116,7 +116,7 @@ export function candidateFacts(
     labelsRun: declared.filter((label) => shown.has(label)),
     labelsNotRun: declared.filter((label) => !shown.has(label)),
     ...(crossings !== undefined ? { crossings } : {}),
-    warnings: [...(built.warnings ?? []), ...built.layout.errors]
+    warnings: [...(built.warnings ?? []).map(({ message }) => message), ...built.layout.errors]
   };
   const met: string[] = [];
   const broken: string[] = [];

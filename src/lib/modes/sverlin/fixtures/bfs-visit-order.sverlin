@@ -37,16 +37,16 @@
 
 <script listing="textbook">
 BFS(start)
-  @init[queue = [start]]
-  while @more[queue is not empty]
-    @visit[@take[current = remove front of queue
-    record current as visited]
-    @first[slot = the first neighbour of current]
+  @init[:queue[queue] = [start]]
+  while @more[:queue[queue] is not empty]
+    @visit[@take[:current[current] = remove front of :queue[queue]
+    record :current[current] as visited]
+    @first[slot = the first neighbour of :current[current]]
     while @another[slot is a neighbour]
       @look[neighbour = neighbour slot
       if @check[@neighbour[neighbour] has not been seen]
         @add[mark neighbour as seen
-        add neighbour to the queue]]
+        add neighbour to the :queue[queue]]]
       @step[slot = the next neighbour]]
 </script>
 

@@ -147,7 +147,7 @@ describe('spans', () => {
     const { steps, built } = await drawnSteps(
       sort(`${valuesBelow}\n    <Node>one</Node>\n    <Node>two</Node>`)
     );
-    expect(built.warnings).toContainEqual(
+    expect(built.warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringMatching(/^Two cells of a grid cover row 0, col 0 at one step/u)
     );
     const texts = steps[1].nodes.filter((node) =>
@@ -285,7 +285,7 @@ describe('typed grid coordinates', () => {
       sort(`${valuesRow}
     <Node row={1} col={values.length - 1}>last</Node>`)
     );
-    expect(built.warnings).toContainEqual(
+    expect(built.warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringMatching(/^col=\{values\.length - 1\} takes values the build cannot work out/u)
     );
     expect(steps[1].nodes.some((node) => node.runs?.some((run) => run.text === 'last'))).toBe(true);
@@ -396,7 +396,7 @@ describe('subgrids', () => {
       sort(`    <Node kind="Band" row={0}>{#each values as v}<Node>{v}</Node>{/each}</Node>`),
       { chosen: { 'Main.Band.justify': 'between' } }
     );
-    expect(built.warnings).toContainEqual(
+    expect(built.warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringMatching(/^A subgrid takes its grid's tracks/u)
     );
   });

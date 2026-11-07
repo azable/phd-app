@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import type { SceneNode, SceneStep } from './library';
 import { designOnlyWarning, paddingWarnings } from './padding-warnings.server';
 import { drawnSteps } from './testing/scenes';
+import type { BuildWarning } from './warnings';
 
 const look = { color: 'black', font: 'Vis Sans', fontSize: 16, fontWeight: 400 };
 const node = (id: string, kind: string, more: Partial<SceneNode> = {}): SceneNode => ({
@@ -105,16 +106,22 @@ describe('padding warnings of a build', () => {
     const { built } = await drawnSteps(
       page('<Node layout="row">{values}<Node>at {i}</Node></Node>')
     );
-    expect(built.warnings?.some((warning) => warning.startsWith('Main (padding 1.5)'))).toBe(true);
+    expect(
+      built.warnings
+        ?.map(({ message }) => message)
+        .some((warning) => warning.startsWith('Main (padding 1.5)'))
+    ).toBe(true);
   });
 
   it('tells nothing where the page holds only nodes of kinds of their own', async () => {
     const { built } = await drawnSteps(
       page('<Node kind="Panel" layout="row">{values}<Node kind="Caption">at {i}</Node></Node>')
     );
-    expect(built.warnings?.filter((warning) => warning.endsWith(designOnlyWarning)) ?? []).toEqual(
-      []
-    );
+    expect(
+      built.warnings
+        ?.map(({ message }) => message)
+        .filter((warning) => warning.endsWith(designOnlyWarning)) ?? []
+    ).toEqual([]);
   });
 
   it('tells nothing of a grid that is the page, and tells a cell in it without a kind', async () => {
@@ -126,8 +133,10 @@ describe('padding warnings of a build', () => {
     {#each values as v, k}${cell}{/each}
   </Node>`
       );
-    const pageWarning = (warnings: string[] | undefined) =>
-      (warnings ?? []).filter((warning) => warning.startsWith('Main (padding'));
+    const pageWarning = (warnings: BuildWarning[] | undefined) =>
+      (warnings ?? [])
+        .map(({ message }) => message)
+        .filter((warning) => warning.startsWith('Main (padding'));
     const kinded = await drawnSteps(grid('<Node kind="Cell" row={1} col={k}>{v}</Node>'));
     expect(pageWarning(kinded.built.warnings)).toEqual([]);
     const bare = await drawnSteps(grid('<Node row={1} col={k} layout="row">{v}</Node>'));

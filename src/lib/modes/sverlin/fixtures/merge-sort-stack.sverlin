@@ -13,7 +13,7 @@
   function sort(a, b, lo, hi) @sort{
     if (@base[hi - lo < 2]) @single[return;]
     @split[const mid = Index(a, Math.floor((lo + hi) / 2));]
-    @halves[sort(a, b, lo, mid); sort(a, b, mid, hi);]
+    @halves[@left[sort(a, b, lo, mid);] @right[sort(a, b, mid, hi);]]
     @merge[
       for (@copyStart[let c = lo]; @copyMore[c < hi]; @copyNext[c++]) @copy{
         b[c] = a[c];

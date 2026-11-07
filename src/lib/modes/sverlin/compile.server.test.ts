@@ -629,7 +629,11 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
 <Storyboard><Scene name="main" case="main"><Main values={values} /></Scene></Storyboard>`;
     const { warnings } = await bundlePresentation(prepareCurrent(source), 1);
     // The third node holds words of its own, so its children are read as a sentence.
-    expect(warnings?.filter((warning) => warning.includes('with no layout'))).toEqual([
+    expect(
+      warnings
+        ?.map(({ message }) => message)
+        .filter((warning) => warning.includes('with no layout'))
+    ).toEqual([
       '<Node kind="Problem">, a node with no layout, holds <Goal />, <Cells /> and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.',
       'A node with no layout in Main holds {values}, a node with a layout and no words of its own: with no layout its children flow as text, wrapping against each other with no gap. Give it a layout, as layout="column" to stack them or layout="row" to set them side by side.'
     ]);
@@ -795,7 +799,9 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
       message: expect.stringContaining('One.radius cannot be 3')
     });
     const { warnings } = await bundlePresentation(prepared, 3, { chosen: { 'One.depth': 2 } });
-    expect(warnings).toContainEqual(expect.stringContaining('One has no prop depth'));
+    expect(warnings?.map(({ message }) => message)).toContainEqual(
+      expect.stringContaining('One has no prop depth')
+    );
   });
 
   it('takes the page frame from the layout’s values in the variant', async () => {
@@ -1589,7 +1595,7 @@ describe('pauses at labels', () => {
     const { warnings } = await bundlePresentation(prepared, 1, {
       chosen: { 'pause@insert.swap': 'on' }
     });
-    expect(warnings).toContainEqual(
+    expect(warnings?.map(({ message }) => message)).toContainEqual(
       expect.stringContaining('the steps a scene shows are its pause')
     );
   });
@@ -2647,7 +2653,7 @@ describe('slots and boxes', () => {
     const { warnings } = await bundlePresentation(prepared, 1, {
       chosen: { 'Bar.height': 'varying' }
     });
-    expect(warnings).toContain(
+    expect(warnings?.map(({ message }) => message)).toContain(
       "Bar's height is bound to its value in the view, height={…}, so it has no height variable; Bar.yAnchor places it. The value is left out."
     );
   }, 60_000);

@@ -37,6 +37,13 @@
  *   keep a stack's room (the largest branch); stack-highlight's board sits 26 px higher, its cells
  *   4 px smaller, as its notes' stack keeps room for both. The replay fixtures still write the old
  *   forms, which still build, so theirs are as they were.
+ * - 11 fixtures with listings (bfs-cards, bfs-visit-order, dfa-loops, dfa-panels, dijkstra-fields,
+ *   insertion-decisions, linear-search, list-markers, listing-*, search-places): each mention in a
+ *   listing of a variable the view draws is a token, as :i[i], so it lights with its place
+ *   (listing.plain-variable); the words are as they were, so only the lights change. Captions stay
+ *   words, as a token draws its words as inline code. bars and merge-sort-stack label each
+ *   statement of a clumped label inside it (label.clumped), which leaves their scenes as they were.
+ *   replay/* stay as the assistant wrote them.
  */
 
 import { createHash } from 'node:crypto';

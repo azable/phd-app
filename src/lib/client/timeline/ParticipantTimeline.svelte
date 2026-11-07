@@ -32,7 +32,11 @@
     type TimelinePresentation
   } from '$lib/client/visualization/presentation-history';
   import type { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
-  import { isSverlinPresentation, type PresentationLayout } from '$lib/shared/presentations';
+  import {
+    isSverlinPresentation,
+    presentationWarningText,
+    type PresentationLayout
+  } from '$lib/shared/presentations';
   import type {
     ElementReference,
     MessageContent as Content,
@@ -244,7 +248,7 @@
     sourceShown={sourceHash !== undefined && chosenSource === sourceHash}
     onAdd={session.readOnly ? undefined : () => onReferenceRequest(pill.value)}
     warnings={audit && isSverlinPresentation(pill.value.presentation)
-      ? pill.value.presentation.warnings
+      ? pill.value.presentation.warnings?.map(presentationWarningText)
       : undefined}
   />
 {/snippet}

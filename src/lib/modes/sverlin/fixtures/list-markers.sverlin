@@ -27,14 +27,14 @@
 
 <script listing="textbook">
 REVERSE(head)
-@begin[prev = ∅
-cur = head]
-while @more[cur ≠ ∅]
-    @rewire[@save[next = cur.next]
-    @reverse[cur.next = prev]
-    @advance[prev = cur
-    cur = next]]
-@finish[return prev]
+@begin[:prev[prev] = ∅
+:cur[cur] = head]
+while @more[:cur[cur] ≠ ∅]
+    @rewire[@save[:next[next] = :cur[cur].next]
+    @reverse[:cur[cur].next = :prev[prev]]
+    @advance[:prev[prev] = :cur[cur]
+    :cur[cur] = :next[next]]]
+@finish[return :prev[prev]]
 </script>
 
 <View of="Name" name="NameCell">

@@ -24,7 +24,7 @@ import { createProjectSkeleton, draftEvent } from '$lib/server/projects/service'
 import { withoutHeader } from '$lib/server/dev-demo-header';
 import { withExampleNames } from '$lib/server/dev-demo-names';
 import { designKeys } from '$lib/modes/server';
-import type { DesignValues } from '$lib/shared/presentations';
+import { presentationWarningText, type DesignValues } from '$lib/shared/presentations';
 import { projectCommandSchema, type ProjectDocument } from '$lib/shared/projects/model';
 
 const folder = path.resolve('.demo');
@@ -124,7 +124,7 @@ async function saveWaiting(projectId: string): Promise<void> {
         event.operationId === operationId &&
         event.type === 'visualization.presented' &&
         event.payload.presentation.format === 'browser-bundle-v1'
-          ? (event.payload.presentation.warnings ?? [])
+          ? (event.payload.presentation.warnings ?? []).map(presentationWarningText)
           : []
       )
       .filter((warning) => warning.endsWith('The value is left out.'));

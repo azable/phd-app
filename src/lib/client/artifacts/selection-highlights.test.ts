@@ -62,7 +62,7 @@ describe('a selected listing line', () => {
 
   it('lights its line in the listing block first, then its tag and its label’s code', () => {
     expect(shown(elementHighlights(sverlin, { id }))).toEqual([
-      '3      @scan.check[if A[:i[i]] = target]',
+      '3      @scan.check[if A[:i[i]] = :target[target]]',
       '<Listing />',
       '@check[values[i] === target]'
     ]);
@@ -71,7 +71,7 @@ describe('a selected listing line', () => {
   it('lights a clicked token’s place, where its variable is declared and drawn, not the label', () => {
     const highlights = shown(elementHighlights(sverlin, { id, place: ':i' }));
     expect(highlights.slice(0, 2)).toEqual([
-      '3      @scan.check[if A[:i[i]] = target]',
+      '3      @scan.check[if A[:i[i]] = :target[target]]',
       '<Listing />'
     ]);
     expect(highlights).toContain('i');
