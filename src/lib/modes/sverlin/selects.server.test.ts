@@ -15,11 +15,29 @@ describe('query rows', () => {
       before: {
         state: { values: [4, 2], scratch: [0, 0], lo: 1, k: 0 },
         types: { lo: 'Index', k: 'ScratchIndex' },
-        targets: { lo: 'values', k: 'scratch' }
+        targets: { lo: 'values', k: 'scratch' },
+        identities: { ids: { values: 1, 'values[0]': 2, lo: 5 }, copies: {}, refs: {} }
       }
     };
-    const step: MasterStep = { stop: 2, state: { values: [4, 2] }, types: {} };
+    const step: MasterStep = {
+      stop: 2,
+      state: { values: [4, 2] },
+      types: {},
+      identities: { ids: { values: 1, 'values[0]': 2 }, copies: { 9: 2 }, refs: {} }
+    };
     const [row] = withSelectRows([step], [record], selects, new Set(['values']));
     expect(row.targets).toEqual({ 'calls[0].lo': 'values', 'calls[0].k': 'calls[0].scratch' });
+    // Its values are the same values as where the record held them, so they move as those do.
+    expect(row.identities).toEqual({
+      ids: {
+        values: 1,
+        'values[0]': 2,
+        'calls[0].values': 1,
+        'calls[0].values[0]': 2,
+        'calls[0].lo': 5
+      },
+      copies: { 9: 2 },
+      refs: {}
+    });
   });
 });

@@ -85,6 +85,10 @@
  * - 33 fixtures whose links from variables paint what they reach: a node so painted names the end
  *   whose fill it shows (paintedBy), for the covered-fill warning; with that field left out, each
  *   hashes as before (checked 7 November 2026).
+ * - call-frames, fib-calls, merge-sort-stack: a query's row keeps the identities its record has,
+ *   so the values a call shows (its lo and hi, its part of the array) carry the identities of the
+ *   values they are; only nodes' identity fields are added, no box, text or link changes (checked
+ *   against the scenes without them, 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';
