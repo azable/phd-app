@@ -6,10 +6,13 @@
   pointer, or, on the frame's empty space, the page, Shift, Ctrl or Cmd adding or removing one, and
   dragging draws a box; the wheel zooms, dragging with the middle button or with Space held pans,
   and a double click on empty space resets; hovering a reference to a place outlines every other.
-  The app's comment pins are drawn over the frame, each at its point, or else at its element's top
-  right corner, numbered, its words on hover; a click reports where it fell in the frame.
+  The app's comments are drawn over the frame as numbered badges beside the elements they are on
+  (see annotation-place.ts), or at their points: hovering one outlines its elements and previews
+  its words, choosing it opens a card with them, and a comment being written opens its card beside
+  the selection; a click reports where it fell in the frame.
 -->
 <script lang="ts">
+  import { badgeAt, badgeSize, cardPlacement, commentAnchor, overlap } from './annotation-place';
   import { motionDuration } from './motion';
   import { glowHalo, shadows } from './node/design';
   import {
@@ -32,16 +35,24 @@
 
   type CanvasView = { zoom: number; panX: number; panY: number };
   type Selected = { id: string; label: string; layouts: ArrangementLayout[]; place?: string };
-  /** A comment pinned at this step: its number, where, and what it says; draft until sent. */
-  type Pin = { n: number; elements?: string[]; point?: Point; text: string; draft?: boolean };
+  /** What a comment is on: elements, by id, a point in the frame, or both. */
+  type CommentOn = { elements?: string[]; point?: Point };
+  /**
+   * A comment pinned at this step: its number, what it is on, and what it says; draft until sent,
+   * highlighted while the app points at it.
+   */
+  type Pin = CommentOn & { n: number; text: string; draft?: boolean; highlighted?: boolean };
 
   let {
     frame,
     selection = [],
     pins: startPins = [],
+    composing: startComposing,
     view,
     onselection,
     onpoint,
+    oncomment,
+    oncomposecancel,
     onview,
     onsettled
   }: {
@@ -49,8 +60,14 @@
     selection?: readonly string[];
     /** The comments pinned at the step shown. */
     pins?: readonly Pin[];
+    /** What the comment being written is on, if one is. */
+    composing?: CommentOn;
     /** Told where a click fell, in the frame's coordinates. */
     onpoint?: (point: Point) => void;
+    /** Told the words of the comment written. */
+    oncomment?: (text: string) => void;
+    /** Told the comment being written was given up. */
+    oncomposecancel?: () => void;
     /** The zoom and pan to start from, as the app restores them. */
     view?: Partial<CanvasView>;
     /** Told the nodes selected, with what a selection names each by and the layouts round each. */
@@ -114,6 +131,19 @@
   export function annotate(next: readonly Pin[]): void {
     pins = next;
   }
+
+  // svelte-ignore state_referenced_locally
+  let composing = $state.raw<CommentOn | undefined>(startComposing);
+  /** Open the card to write a comment on this, or close it. */
+  export function compose(on: CommentOn | undefined): void {
+    composing = on;
+    if (on) opened = undefined;
+    else draft = '';
+  }
+  // The comment whose card is open, by its number: one card at a time, a draft's included.
+  let opened = $state<number>();
+  // The comment whose badge the pointer or focus is on.
+  let pointed = $state<number>();
 
   // The canvas fills the page, and the frame fits inside it with a margin, as Frame.svelte fits it.
   let viewport = $state({ width: window.innerWidth, height: window.innerHeight });
@@ -276,7 +306,13 @@
     reportView();
   }
 
+  /** Whether an event's target is in a comment's badge, preview or card, which select nothing. */
+  const inNote = (target: EventTarget | null) =>
+    target instanceof Element && target.closest('[data-sv-note]') !== null;
+
   function onPointerDown(event: PointerEvent) {
+    if (inNote(event.target)) return;
+    opened = undefined;
     canvas?.focus({ preventScroll: true });
     const pans = event.button === 1 || (event.button === 0 && spaceHeld);
     if (!pans && event.button !== 0) return;
@@ -332,6 +368,7 @@
   }
 
   function onDoubleClick(event: MouseEvent) {
+    if (inNote(event.target)) return;
     const part = partAt(event.target);
     // The page is selectable as a whole, but empty space all the same.
     if (part && part !== frame.node?.id) return;
@@ -342,11 +379,14 @@
   }
 
   function onKey(event: KeyboardEvent) {
-    if (event.key === ' ') {
+    // Space in a comment's text or on its buttons types or presses, rather than panning.
+    if (event.key === ' ' && !inNote(event.target)) {
       event.preventDefault();
       spaceHeld = event.type === 'keydown';
-    } else if (event.key === 'Escape' && event.type === 'keydown' && selected.length)
-      setSelection([]);
+    } else if (event.key !== 'Escape' || event.type !== 'keydown') return;
+    else if (composing) oncomposecancel?.();
+    else if (opened !== undefined) closeCard();
+    else if (selected.length) setSelection([]);
   }
 
   // The places of the reference under the pointer, whose every reference is outlined.
@@ -397,19 +437,83 @@
     })
   );
 
-  // Each pin on the canvas: at its point, else at its element's top right corner, else not drawn.
-  const pinMarks = $derived(
+  // The canvas, and the part of the frame showing on it, where comments' cards are kept.
+  const canvasBox = $derived({ left: 0, top: 0, width: viewport.width, height: viewport.height });
+  const room = $derived(
+    overlap(onCanvas({ x: 0, y: 0, width: frame.width, height: frame.height }), canvasBox) ??
+      canvasBox
+  );
+  const toCanvas = (point: Point) => ({
+    x: corner.x + point.x * shown,
+    y: corner.y + point.y * shown
+  });
+  /**
+   * What a comment is on, on the canvas: an element counts only where the step moved to draws it,
+   * its box as it is drawn now, so the badge moves with it.
+   */
+  const anchorOf = (on: CommentOn) =>
+    commentAnchor({ elements: on.elements, point: on.point && toCanvas(on.point) }, (id) => {
+      const box = selectable.has(id)
+        ? (drawn.byId.get(id)?.box ?? selectable.get(id)?.box)
+        : undefined;
+      return box && onCanvas(box);
+    });
+
+  // Each comment's badge, beside what it is on at this step; none where the step draws none of it.
+  const badges = $derived(
     pins.flatMap((pin) => {
-      const first = pin.elements?.[0];
-      const box = first ? (drawn.byId.get(first)?.box ?? selectable.get(first)?.box) : undefined;
-      const at = pin.point
-        ? onCanvas({ x: pin.point.x, y: pin.point.y, width: 0, height: 0 })
-        : box
-          ? onCanvas({ x: box.x + box.width, y: box.y, width: 0, height: 0 })
-          : undefined;
-      return at ? [{ ...pin, left: at.left, top: at.top }] : [];
+      const anchor = anchorOf(pin);
+      return anchor ? [{ pin, anchor, at: badgeAt(anchor.box, canvasBox) }] : [];
     })
   );
+  const openBadge = $derived(badges.find(({ pin }) => pin.n === opened));
+  // The card's size, measured once it shows, guessed until then.
+  const cardWidth = 240;
+  let cardHeight = $state(96);
+  // The open card: a comment written, or the one being written, beside what it is on.
+  const card = $derived.by(() => {
+    if (!composing && !openBadge) return undefined;
+    const anchor = composing ? anchorOf(composing) : openBadge?.anchor;
+    const box = anchor?.box ?? {
+      left: room.left + room.width / 2,
+      top: room.top,
+      width: 0,
+      height: 0
+    };
+    return {
+      boxes: anchor?.boxes ?? [],
+      ...cardPlacement(
+        box,
+        { width: Math.min(cardWidth, canvasBox.width), height: cardHeight },
+        room
+      )
+    };
+  });
+  // Faint outlines round the elements of the comment pointed at, in the app or here, or open.
+  const noteOutlines = $derived(
+    badges
+      .filter(({ pin }) => pin.n === pointed || pin.highlighted || pin.n === opened)
+      .flatMap(({ anchor }) => anchor.boxes)
+      .concat(composing ? (card?.boxes ?? []) : [])
+  );
+  const previewed = $derived(
+    badges.find(({ pin }) => pin.n !== opened && (pin.n === pointed || pin.highlighted))
+  );
+
+  function closeCard() {
+    const n = opened;
+    opened = undefined;
+    canvas?.querySelector<HTMLElement>(`[data-sv-badge="${n}"]`)?.focus();
+  }
+  // The words of the comment being written.
+  let draft = $state('');
+  function pinDraft() {
+    const text = draft.trim();
+    if (!text) return;
+    oncomment?.(text);
+    draft = '';
+  }
+  const focusOnMount = (node: HTMLElement) => node.focus({ preventScroll: true });
 
   const dash = (style: string | undefined, width: number) =>
     style === 'dashed'
@@ -720,18 +824,105 @@
       style:height="{outline.height}px"
     ></div>
   {/each}
-  {#each pinMarks as pin (pin.n)}
+  {#each noteOutlines as outline, i (i)}
     <div
-      class={['sv-scene-pin', pin.draft && 'draft']}
-      style:left="{pin.left}px"
-      style:top="{pin.top}px"
-      title={pin.text}
-      role="note"
-      aria-label="Comment {pin.n}: {pin.text}"
+      class="sv-scene-hovered sv-scene-noted"
+      style:left="{outline.left}px"
+      style:top="{outline.top}px"
+      style:width="{outline.width}px"
+      style:height="{outline.height}px"
+    ></div>
+  {/each}
+  {#if card}
+    <svg class="sv-scene-leader" width={viewport.width} height={viewport.height} aria-hidden="true">
+      <line x1={card.from.x} y1={card.from.y} x2={card.to.x} y2={card.to.y} />
+    </svg>
+  {/if}
+  {#each badges as { pin, at } (pin.n)}
+    <button
+      type="button"
+      data-sv-badge={pin.n}
+      class={['sv-scene-badge', pin.draft && 'draft', pin.n === opened && 'open']}
+      style:left="{at.x}px"
+      style:top="{at.y}px"
+      data-sv-note
+      aria-label="Comment {pin.n}{pin.draft ? ' (not sent yet)' : ''}: {pin.text}"
+      aria-expanded={pin.n === opened}
+      aria-controls={pin.n === opened ? 'sv-comment-card' : undefined}
+      onclick={() => {
+        if (pin.n === opened) return closeCard();
+        if (composing) oncomposecancel?.();
+        opened = pin.n;
+      }}
+      onpointerenter={() => (pointed = pin.n)}
+      onpointerleave={() => (pointed = undefined)}
+      onfocus={() => (pointed = pin.n)}
+      onblur={() => (pointed = undefined)}
     >
       {pin.n}
-    </div>
+    </button>
   {/each}
+  {#if previewed}
+    <div
+      class="sv-scene-preview"
+      style:left="{previewed.at.x + badgeSize + 4}px"
+      style:top="{previewed.at.y}px"
+      data-sv-note
+      aria-hidden="true"
+    >
+      {previewed.pin.text}
+    </div>
+  {/if}
+  {#if card}
+    <div
+      id="sv-comment-card"
+      class="sv-scene-card"
+      style:left="{card.left}px"
+      style:top="{card.top}px"
+      style:width="{Math.min(cardWidth, canvasBox.width)}px"
+      bind:offsetHeight={cardHeight}
+      data-sv-note
+      role="dialog"
+      aria-label={composing ? 'New comment' : `Comment ${openBadge?.pin.n}`}
+    >
+      {#if composing}
+        <!-- No form: the sandbox, without allow-forms, never submits one. The app's
+          annotationTextMaxLength, which the app checks again. -->
+        <textarea
+          bind:value={draft}
+          maxlength="280"
+          rows="3"
+          placeholder="Comment on this…"
+          aria-label="Comment"
+          {@attach focusOnMount}
+          onkeydown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              pinDraft();
+            }
+          }}
+        ></textarea>
+        <div class="sv-scene-card-actions">
+          <button type="button" class="secondary" onclick={() => oncomposecancel?.()}>
+            Cancel
+          </button>
+          <button type="button" disabled={!draft.trim()} onclick={pinDraft}>Pin</button>
+        </div>
+      {:else if openBadge}
+        <div class="sv-scene-card-head">
+          <span>Comment {openBadge.pin.n}{openBadge.pin.draft ? ' · not sent yet' : ''}</span>
+          <button
+            type="button"
+            class="sv-scene-card-close"
+            aria-label="Close comment {openBadge.pin.n}"
+            {@attach focusOnMount}
+            onclick={closeCard}>×</button
+          >
+        </div>
+        <p>{openBadge.pin.text}</p>
+      {/if}
+    </div>
+  {/if}
   {#if area}
     <div
       class="sv-scene-box"
@@ -801,28 +992,139 @@
     border: 1px solid var(--sv-select);
     background: color-mix(in srgb, var(--sv-select) 10%, transparent);
   }
-  /* A comment pin: a numbered drop whose tip is its point; a draft, not yet sent, is outlined. */
-  .sv-scene-pin {
+  /* The elements of the comment pointed at or open, outlined faintly. */
+  .sv-scene-noted {
+    --sv-hover: color-mix(in srgb, var(--sv-select) 55%, transparent);
+    outline-width: 1.5px;
+  }
+  /* Comments: the app's card look (shadcn-svelte's), as the page has none of the app's styles. */
+  .sv-scene-leader {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .sv-scene-leader line {
+    stroke: var(--sv-select);
+    stroke-width: 1;
+  }
+  /* A comment's badge, numbered; a draft, not yet sent, is dashed. */
+  .sv-scene-badge {
     position: absolute;
     box-sizing: border-box;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    transform: translate(-2px, -100%);
-    border-radius: 11px 11px 11px 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border: none;
+    border-radius: 8px 8px 8px 2px;
     background: var(--sv-select);
     color: white;
     font:
-      600 12px/22px system-ui,
+      600 10px/16px system-ui,
       sans-serif;
     text-align: center;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
-    cursor: default;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+    cursor: pointer;
   }
-  .sv-scene-pin.draft {
+  .sv-scene-badge.draft {
     background: white;
     color: var(--sv-select);
-    border: 2px dashed var(--sv-select);
-    line-height: 18px;
+    border: 1.5px dashed var(--sv-select);
+    line-height: 13px;
+  }
+  .sv-scene-badge:focus-visible,
+  .sv-scene-card button:focus-visible,
+  .sv-scene-card textarea:focus-visible {
+    outline: 2px solid var(--sv-select);
+    outline-offset: 2px;
+  }
+  .sv-scene-preview,
+  .sv-scene-card {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #0f172a;
+    font:
+      12px/1.4 system-ui,
+      sans-serif;
+    box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
+  }
+  .sv-scene-preview {
+    max-width: 240px;
+    padding: 0 6px;
+    border-radius: 4px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .sv-scene-card {
+    padding: 8px 10px;
+    border-radius: 8px;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: auto;
+  }
+  .sv-scene-card p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .sv-scene-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #64748b;
+    font-weight: 600;
+  }
+  .sv-scene-card button {
+    border: none;
+    border-radius: 6px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .sv-scene-card .sv-scene-card-close {
+    width: 20px;
+    height: 20px;
+    background: none;
+    color: #64748b;
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .sv-scene-card .sv-scene-card-close:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+  .sv-scene-card textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font: inherit;
+    resize: none;
+  }
+  .sv-scene-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .sv-scene-card-actions button {
+    height: 24px;
+    padding: 0 8px;
+    background: #0f172a;
+    color: #f8fafc;
+    font-weight: 500;
+  }
+  .sv-scene-card-actions button.secondary {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+  .sv-scene-card-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 </style>

@@ -7,17 +7,24 @@
 import type { ProjectEvent } from '$lib/shared/projects/events';
 import type { Annotation, MessageContent } from '$lib/shared/projects/events/message-content';
 
-/** A pin as the picture draws it at a step: its number in its presentation, where, and its words. */
-export type AnnotationPin = {
+/** What a comment is on, as a picture draws it: elements, by id, a point in its frame, or both. */
+export type CommentAnchor = { elements?: string[]; point?: { x: number; y: number } };
+
+/**
+ * A pin as the picture draws it at a step: its number in its presentation, where, and its words;
+ * highlighted while the participant points at the comment in the chat.
+ */
+export type AnnotationPin = CommentAnchor & {
   n: number;
-  elements?: string[];
-  point?: { x: number; y: number };
   text: string;
   draft?: boolean;
+  highlighted?: boolean;
 };
 
 export class VisualAnnotations {
   drafts = $state.raw<Annotation[]>([]);
+  /** The comment the participant points at in the chat, outlined in its picture. */
+  pointed = $state.raw<Annotation>();
 
   add(annotation: Annotation): void {
     this.drafts = [...this.drafts, annotation];
@@ -53,13 +60,14 @@ export function sentAnnotations(events: readonly ProjectEvent[]): Annotation[] {
 /**
  * The pins one presentation draws at a step: its sent comments, then its drafts, each numbered
  * by its place among all of that presentation's comments, so a number names one comment at every
- * step.
+ * step; the one pointed at, the same object as a sent or draft comment, highlighted.
  */
 export function annotationPins(
   presentationId: string,
   step: number,
   sent: readonly Annotation[],
-  drafts: readonly Annotation[]
+  drafts: readonly Annotation[],
+  pointed?: Annotation
 ): AnnotationPin[] {
   const own = [
     ...sent.map((annotation) => ({ annotation, draft: false })),
@@ -70,12 +78,23 @@ export function annotationPins(
       ? [
           {
             n: index + 1,
-            ...(annotation.elements ? { elements: annotation.elements.map(({ id }) => id) } : {}),
-            ...(annotation.point ? { point: annotation.point } : {}),
+            ...annotationAnchor(annotation),
             text: annotation.text,
-            ...(draft ? { draft } : {})
+            ...(draft ? { draft } : {}),
+            ...(annotation === pointed ? { highlighted: true } : {})
           }
         ]
       : []
   );
+}
+
+/** What a comment is on, as its picture draws it. */
+export function annotationAnchor({
+  elements,
+  point
+}: Pick<Annotation, 'elements' | 'point'>): CommentAnchor {
+  return {
+    ...(elements ? { elements: elements.map(({ id }) => id) } : {}),
+    ...(point ? { point } : {})
+  };
 }

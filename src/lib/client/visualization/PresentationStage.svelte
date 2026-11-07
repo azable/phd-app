@@ -25,6 +25,7 @@
   import type { ProjectCommandInput } from '$lib/shared/projects/model';
   import {
     annotationTextMaxLength,
+    type Annotation,
     type FramePoint,
     type MessageContent as Message
   } from '$lib/shared/projects/events/message-content';
@@ -52,8 +53,10 @@
   import { assistantTurnAfter, blankStarter, stageActivity } from './stage-activity';
   import type { VisualSelection, VisualSelections } from './visual-selection.svelte';
   import {
+    annotationAnchor,
     annotationPins,
     sentAnnotations,
+    type CommentAnchor,
     type VisualAnnotations
   } from './visual-annotations.svelte';
   import type { CanvasView } from '$lib/modes/sandbox';
@@ -402,31 +405,43 @@
 
   // Where the last click fell in each presentation, at the step it showed, to pin a comment there.
   let points = $state<Record<string, { step: number; point: FramePoint }>>({});
-  // The presentation a comment is being written for, and its words so far.
-  let commenting = $state<string>();
-  let commentText = $state('');
+  // The comment being written, on what was selected and clicked when Comment was chosen, and that
+  // as its picture draws it, made once so the picture is not told it again; its card, in the
+  // picture, takes its words.
+  let commenting = $state.raw<{ comment: Omit<Annotation, 'text'>; anchor: CommentAnchor }>();
   const sent = $derived(sentAnnotations(session.events));
 
-  /** Keep the words written as a draft pinned where the participant clicked and selected. */
-  function pinComment(entry: (typeof visible)[number]) {
-    const text = commentText.trim();
-    if (!text) return;
+  /** Open a card to write a comment on the elements selected, the point clicked, or both. */
+  function startComment(entry: (typeof visible)[number]) {
     const { presentation } = entry;
     const at = localStep(entry);
     const selected = visualSelections.for(presentation.presentationId, step);
     const elements = selected?.elements.length ? selected.elements : undefined;
     const clicked = points[presentation.presentationId];
     const stepName = presentationStepName(presentation, at);
-    visualAnnotations.add({
+    const comment: Omit<Annotation, 'text'> = {
       type: 'annotation',
       presentationId: presentation.presentationId,
       step: at,
       ...(stepName ? { stepName } : {}),
       ...(elements ? { elements } : {}),
-      ...(clicked?.step === at ? { point: clicked.point } : {}),
-      text: text.slice(0, annotationTextMaxLength)
-    });
-    commentText = '';
+      ...(clicked?.step === at ? { point: clicked.point } : {})
+    };
+    commenting = { comment, anchor: annotationAnchor(comment) };
+  }
+
+  /** What the comment being written in this presentation at the step it shows is on, if one is. */
+  function composingIn(entry: (typeof visible)[number]) {
+    return commenting?.comment.presentationId === entry.presentation.presentationId &&
+      commenting.comment.step === localStep(entry)
+      ? commenting.anchor
+      : undefined;
+  }
+
+  /** Keep the words written as a draft on what the comment is on. */
+  function pinComment(text: string) {
+    if (!commenting) return;
+    visualAnnotations.add({ ...commenting.comment, text: text.slice(0, annotationTextMaxLength) });
     commenting = undefined;
   }
 
@@ -687,29 +702,7 @@
           {/if}
           {#if !session.readOnly && isSverlinPresentation(entry.presentation)}
             <div class="absolute bottom-2 left-2 z-10 flex max-w-[85%] items-center gap-1">
-              {#if commenting === presentationId}
-                <form
-                  class="flex items-center gap-1 rounded-md bg-background p-1 shadow-sm"
-                  onsubmit={(event) => {
-                    event.preventDefault();
-                    pinComment(entry);
-                  }}
-                >
-                  <!-- svelte-ignore a11y_autofocus -->
-                  <input
-                    class="h-6 w-64 max-w-full rounded border px-2 text-xs"
-                    maxlength={annotationTextMaxLength}
-                    placeholder="Comment on this spot…"
-                    aria-label="Comment pinned here"
-                    autofocus
-                    bind:value={commentText}
-                    onkeydown={(event) => {
-                      if (event.key === 'Escape') commenting = undefined;
-                    }}
-                  />
-                  <Button size="xs" type="submit" disabled={!commentText.trim()}>Pin</Button>
-                </form>
-              {:else}
+              {#if !composingIn(entry)}
                 {#if selected}
                   <Button
                     size="xs"
@@ -727,10 +720,7 @@
                     size="xs"
                     variant="secondary"
                     class="shadow-sm"
-                    onclick={() => {
-                      commentText = '';
-                      commenting = presentationId;
-                    }}
+                    onclick={() => startComment(entry)}
                   >
                     <MessageSquarePlusIcon data-icon="inline-start" /> Comment
                   </Button>
@@ -799,8 +789,12 @@
                 presentationId,
                 localStep(entry),
                 sent,
-                visualAnnotations.drafts
+                visualAnnotations.drafts,
+                visualAnnotations.pointed
               )}
+              composing={composingIn(entry)}
+              onComment={pinComment}
+              onComposeCancel={() => (commenting = undefined)}
               onPoint={(point) => (points[presentationId] = { step: localStep(entry), point })}
               onViewChange={(view) => onViewChange(presentationId, view)}
               onRuntimeError={(failure) =>

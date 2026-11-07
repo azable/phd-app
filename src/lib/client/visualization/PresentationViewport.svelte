@@ -3,7 +3,7 @@
   import { Skeleton } from '$lib/client/components/ui/skeleton';
   import { modeCatalog } from '$lib/modes/catalog';
   import type { SelectedElement } from './visual-selection.svelte';
-  import type { AnnotationPin } from './visual-annotations.svelte';
+  import type { AnnotationPin, CommentAnchor } from './visual-annotations.svelte';
   import type { FramePoint } from '$lib/shared/projects/events/message-content';
   import type { CanvasView } from '$lib/modes/sandbox';
   import type { RenderedFile, RenderTarget } from '$lib/modes/render-targets';
@@ -25,6 +25,12 @@
     onSelectionChange?: (elements: SelectedElement[]) => void;
     /** The comments pinned at the step shown, in modes that support selection. */
     pins?: readonly AnnotationPin[];
+    /** What the comment being written is on, its card open beside it, in modes with comments. */
+    composing?: CommentAnchor;
+    /** The words of the comment written in its card. */
+    onComment?: (text: string) => void;
+    /** The comment being written was given up in its card. */
+    onComposeCancel?: () => void;
     /** Where a click fell in the frame, in modes that support selection. */
     onPoint?: (point: FramePoint) => void;
     onViewChange?: (view: CanvasView) => void;
@@ -47,6 +53,9 @@
     selection,
     onSelectionChange,
     pins,
+    composing,
+    onComment,
+    onComposeCancel,
     onPoint,
     onViewChange,
     onRuntimeError,
@@ -95,6 +104,9 @@
       {selection}
       {onSelectionChange}
       {pins}
+      {composing}
+      {onComment}
+      {onComposeCancel}
       {onPoint}
       {onViewChange}
       {onRuntimeError}

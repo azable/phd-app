@@ -16,11 +16,15 @@
     type PresentationLoadTiming
   } from '$lib/shared/presentation-load-timing';
   import {
+    annotationSegmentSchema,
     framePointSchema,
     selectedElementSchema,
     type FramePoint
   } from '$lib/shared/projects/events/message-content';
-  import type { AnnotationPin } from '$lib/client/visualization/visual-annotations.svelte';
+  import type {
+    AnnotationPin,
+    CommentAnchor
+  } from '$lib/client/visualization/visual-annotations.svelte';
   import { fetchExport, fetchScenes, StaleScenesError } from './server-scenes';
   import { sverlinTargets } from './targets';
   import type { RenderedFile, RenderTarget } from '../render-targets';
@@ -32,6 +36,9 @@
     label,
     selection = [],
     pins = [],
+    composing,
+    onComment = () => {},
+    onComposeCancel = () => {},
     onSelectionChange = () => {},
     onPoint = () => {},
     onViewChange = () => {},
@@ -49,6 +56,12 @@
     onSelectionChange?: (elements: SelectedElement[]) => void;
     /** The comments pinned at the step shown, drawn over the picture. */
     pins?: readonly AnnotationPin[];
+    /** What the comment being written is on, its card open beside it, if one is being written. */
+    composing?: CommentAnchor;
+    /** The words of the comment written in its card. */
+    onComment?: (text: string) => void;
+    /** The comment being written was given up, by its Cancel or Escape. */
+    onComposeCancel?: () => void;
     /** Where a click fell, in the frame's coordinates. */
     onPoint?: (point: FramePoint) => void;
     /** The canvas zoom and pan the participant left the presentation at. */
@@ -344,6 +357,12 @@
         if (parsed.success) onPoint(parsed.output);
         return;
       }
+      if (data?.type === 'sverlin:comment') {
+        const parsed = v.safeParse(commentMessage, data);
+        if (parsed.success) onComment(parsed.output.text);
+        return;
+      }
+      if (data?.type === 'sverlin:compose-cancel') return onComposeCancel();
       if (data?.type === 'sverlin:selection') {
         const parsed = v.safeParse(selectionMessage, data);
         if (parsed.success) onSelectionChange(parsed.output.elements);
@@ -361,6 +380,19 @@
   $effect(() => {
     const shown = pins.map((pin) => ({ ...pin }));
     if (loaded) iframe?.contentWindow?.postMessage({ type: 'sverlin:pins', pins: shown }, '*');
+  });
+
+  // The comment being written, sent once the page can take it, the page focused so its card can
+  // take the words.
+  const commentMessage = v.object({ text: annotationSegmentSchema.entries.text });
+  $effect(() => {
+    const on = composing && {
+      ...(composing.elements ? { elements: [...composing.elements] } : {}),
+      ...(composing.point ? { point: { ...composing.point } } : {})
+    };
+    if (!loaded) return;
+    iframe?.contentWindow?.postMessage({ type: 'sverlin:compose', on: on ?? null }, '*');
+    if (on) iframe?.focus();
   });
 
   // Show a selection the app sets, such as from a reference in the timeline, without reloading.

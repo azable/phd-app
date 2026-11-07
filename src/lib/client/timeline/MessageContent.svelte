@@ -30,6 +30,8 @@
     interactive?: boolean;
     inverted?: boolean;
     onReferenceActivate?: (reference: ReferenceSegment, extend: boolean) => void;
+    /** The reference the pointer or focus is on, as it comes onto one and, undefined, leaves it. */
+    onReferenceHover?: (reference: ReferenceSegment | undefined) => void;
     /** The source code it names is found in, where not the one the panel shows, as a version's own. */
     source?: string;
     /** Before revealing in a source of its own: show that source, as a pill's code button does. */
@@ -49,6 +51,7 @@
     interactive = true,
     inverted = false,
     onReferenceActivate = () => {},
+    onReferenceHover = () => {},
     source,
     onRevealSource = () => {},
     design,
@@ -194,6 +197,10 @@
               class:text-foreground={inverted}
               title={referenceChipTitle(reference)}
               onclick={(event) => onReferenceActivate(reference, event.shiftKey)}
+              onpointerenter={() => onReferenceHover(reference)}
+              onpointerleave={() => onReferenceHover(undefined)}
+              onfocus={() => onReferenceHover(reference)}
+              onblur={() => onReferenceHover(undefined)}
             >
               {@render chip(reference)}
             </button>

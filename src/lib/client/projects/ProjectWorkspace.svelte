@@ -757,6 +757,7 @@
                     ),
                     step
                   )}
+                onAnnotationHover={(annotation) => (visualAnnotations.pointed = annotation)}
                 onQuestionElements={showQuestionElements}
                 chosenSource={chosenOf?.sourceHash}
                 onChooseSource={(source) => {

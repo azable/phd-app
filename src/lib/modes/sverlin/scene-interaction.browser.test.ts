@@ -206,3 +206,77 @@ it.skipIf(!enabled)(
     ).toBeGreaterThan(0);
   }
 );
+
+it.skipIf(!enabled)(
+  'draws comments as badges beside their elements, opened and written in cards',
+  { timeout: 300_000 },
+  async () => {
+    const hosted = await hostedAt(pausingEveryLabel(dijkstra), 3);
+    const { page, frame } = hosted;
+    // Two drawn nodes of the step, apart from the page.
+    const [a, b] = await frame.evaluate(() =>
+      [...document.querySelectorAll<SVGGElement>('svg[data-sv-scene] g[data-sv-node]')]
+        .filter((group) => group.getBBox().width > 12 && group.getBBox().width < 300)
+        .slice(-2)
+        .map((group) => group.dataset.svNode!)
+    );
+    const [boxA, boxB] = [
+      (await boxOf(frame, `g[data-sv-node="${a}"]`))!,
+      (await boxOf(frame, `g[data-sv-node="${b}"]`))!
+    ];
+    const union = {
+      right: Math.max(boxA.x + boxA.width, boxB.x + boxB.width),
+      top: Math.min(boxA.y, boxB.y)
+    };
+    await hosted.send({
+      type: 'sverlin:pins',
+      pins: [
+        { n: 1, elements: [a, b, '1:1'], text: 'Make these bigger' },
+        { n: 2, elements: ['1:1'], text: 'On nothing drawn' },
+        { n: 3, point: { x: 20, y: 20 }, text: 'Here' }
+      ]
+    });
+    await frame.waitForSelector('[data-sv-badge="1"]');
+    const labels = await frame.evaluate(() =>
+      [...document.querySelectorAll('[data-sv-badge]')].map((badge) =>
+        badge.getAttribute('aria-label')
+      )
+    );
+    expect(labels).toEqual(['Comment 1: Make these bigger', 'Comment 3: Here']);
+    const badge = (await boxOf(frame, '[data-sv-badge="1"]'))!;
+    expect(badge.x).toBeGreaterThanOrEqual(union.right);
+    expect(badge.y + badge.height).toBeLessThanOrEqual(union.top);
+
+    const count = (selector: string) =>
+      frame.evaluate((selector) => document.querySelectorAll(selector).length, selector);
+    await page.mouse.move(badge.x + 8, badge.y + 8);
+    expect(await count('.sv-scene-noted')).toBe(2);
+    expect(await frame.textContent('.sv-scene-preview')).toContain('Make these bigger');
+
+    const selections = (await hosted.messages('sverlin:selection')).length;
+    await page.mouse.click(badge.x + 8, badge.y + 8);
+    await frame.waitForSelector('#sv-comment-card');
+    expect(await frame.textContent('#sv-comment-card')).toContain('Make these bigger');
+    expect(await count('.sv-scene-leader line')).toBe(1);
+    const active = () => frame.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    expect(await active()).toBe('Close comment 1');
+    await page.keyboard.press('Escape');
+    expect(await count('#sv-comment-card')).toBe(0);
+    expect(await active()).toBe('Comment 1: Make these bigger');
+    expect((await hosted.messages('sverlin:selection')).length).toBe(selections);
+
+    // Writing one: the card opens beside the element, takes spaces, and sends its words on Enter.
+    await page.evaluate(() => document.querySelector('iframe')!.focus());
+    await hosted.send({ type: 'sverlin:compose', on: { elements: [a] } });
+    await frame.waitForSelector('#sv-comment-card textarea');
+    expect(await frame.evaluate(() => document.activeElement?.tagName)).toBe('TEXTAREA');
+    await page.keyboard.type('Bolder text here');
+    expect(await frame.inputValue('#sv-comment-card textarea')).toBe('Bolder text here');
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(async () => (await hosted.messages('sverlin:comment')).at(-1))
+      .toEqual({ type: 'sverlin:comment', text: 'Bolder text here' });
+    await page.keyboard.press('Escape');
+    await expect.poll(async () => (await hosted.messages('sverlin:compose-cancel')).length).toBe(1);
+  }
+);

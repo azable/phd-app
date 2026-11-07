@@ -114,6 +114,7 @@ type ScenePlayer = {
   show(step: number, scene: SceneStep): void;
   select(ids: readonly string[]): void;
   annotate(pins: readonly unknown[]): void;
+  compose(on: CommentOn | undefined): void;
 };
 let player: ScenePlayer | undefined;
 let ready = false;
@@ -140,9 +141,12 @@ async function showStep(step: number) {
     if (near >= 0 && near < stepCount) void sceneOf(near).catch(() => undefined);
 }
 
-// The comment pins the app last sent, shown once the player mounts.
-type Pin = { n: number; elements?: string[]; point?: { x: number; y: number }; text: string };
+// The comment pins the app last sent, and what the comment being written is on, if one is, shown
+// once the player mounts.
+type CommentOn = { elements?: string[]; point?: { x: number; y: number } };
+type Pin = CommentOn & { n: number; text: string };
 let pins: Pin[] = [];
+let composing: CommentOn | undefined;
 const isPin = (pin: unknown): pin is Pin =>
   typeof pin === 'object' &&
   pin !== null &&
@@ -159,8 +163,11 @@ function mountPlayer(): ScenePlayer {
         : [],
       view: playback.__sverlinView,
       pins,
+      composing,
       onselection: (elements: unknown[]) => post({ type: 'sverlin:selection', elements }),
       onpoint: (point: { x: number; y: number }) => post({ type: 'sverlin:point', ...point }),
+      oncomment: (text: string) => post({ type: 'sverlin:comment', text }),
+      oncomposecancel: () => post({ type: 'sverlin:compose-cancel' }),
       onview: (view: { zoom: number; panX: number; panY: number }) => {
         playback.__sverlinView = view;
         post({ type: 'sverlin:view', ...view });
@@ -194,10 +201,22 @@ addEventListener('message', (event: MessageEvent) => {
     selection?: unknown;
     ids?: unknown;
     pins?: unknown;
+    on?: unknown;
   };
   if (data?.type === 'sverlin:pins') {
     pins = Array.isArray(data.pins) ? data.pins.filter(isPin) : [];
     return player?.annotate(pins);
+  }
+  if (data?.type === 'sverlin:compose') {
+    const on = data.on as CommentOn | null | undefined;
+    composing =
+      typeof on === 'object' && on !== null
+        ? {
+            ...(Array.isArray(on.elements) ? { elements: on.elements.map(String) } : {}),
+            ...(on.point ? { point: on.point } : {})
+          }
+        : undefined;
+    return player?.compose(composing);
   }
   if (data?.type === 'sverlin:scenes') return takeScenes(data as Parameters<typeof takeScenes>[0]);
   if (data?.type === 'sverlin:select')

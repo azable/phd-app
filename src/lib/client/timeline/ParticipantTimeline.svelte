@@ -38,6 +38,7 @@
     type PresentationLayout
   } from '$lib/shared/presentations';
   import type {
+    Annotation,
     ElementReference,
     MessageContent as Content,
     MessageContentSegment
@@ -65,6 +66,8 @@
     ) => void;
     /** Show a presentation at a step, as for a comment pinned at a point there. */
     onStepReference?: (presentationId: string, step: number) => void;
+    /** The comment the pointer or focus is on in the chat, as it comes onto one and leaves it. */
+    onAnnotationHover?: (annotation: Annotation | undefined) => void;
     /** Highlight the elements a question about a presentation names, once it is shown. */
     onQuestionElements?: (presentationId: string, elements: readonly string[]) => void;
     /** The source chosen on its own, by a pill's code button, if any. */
@@ -92,6 +95,7 @@
     onReferenceRequest = () => {},
     onElementReference = () => {},
     onStepReference = () => {},
+    onAnnotationHover = () => {},
     onQuestionElements = () => {},
     chosenSource,
     onChooseSource = () => {},
@@ -200,6 +204,11 @@
     selection.showPair(pair, session.events, layout);
   }
 
+  /** Point at a comment in its picture while the pointer or focus is on it here. */
+  function hoverReference(reference: MessageContentSegment | undefined) {
+    onAnnotationHover(reference?.type === 'annotation' ? reference : undefined);
+  }
+
   function activateReference(
     reference: Exclude<MessageContentSegment, { type: 'markdown' | 'interface-ref' }>,
     extend: boolean
@@ -263,7 +272,12 @@
           </Avatar.Root>
           <p class="text-base font-medium">{session.userAuthorLabel}</p>
         </div>
-        <MessageContent content={item.content} inverted onReferenceActivate={activateReference} />
+        <MessageContent
+          content={item.content}
+          inverted
+          onReferenceActivate={activateReference}
+          onReferenceHover={hoverReference}
+        />
       </article>
     {:else if item.kind === 'turn'}
       {@const pills = item.pills}
@@ -291,6 +305,7 @@
           <MessageContent
             content={withAppended(item.content, item.appended)}
             onReferenceActivate={activateReference}
+            onReferenceHover={hoverReference}
             pill={inline}
             pilled={(id) => id in pills}
           />
@@ -418,7 +433,7 @@
               {#if comment}
                 <div class="mt-1 border-l-2 pl-2 text-muted-foreground">
                   <span class="sr-only">Your note:</span>
-                  <MessageContent content={comment} />
+                  <MessageContent content={comment} onReferenceHover={hoverReference} />
                 </div>
               {/if}
             </div>

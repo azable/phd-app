@@ -344,7 +344,11 @@
             aria-label="Comments pinned in the pictures, sent with your next message or answer"
           >
             {#each pinned as annotation, index (annotation)}
-              <li class="flex items-start gap-2">
+              <li
+                class="flex items-start gap-2"
+                onpointerenter={() => annotations && (annotations.pointed = annotation)}
+                onpointerleave={() => annotations && (annotations.pointed = undefined)}
+              >
                 <span
                   class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-primary text-xs font-semibold text-primary"
                   >{index + 1}</span

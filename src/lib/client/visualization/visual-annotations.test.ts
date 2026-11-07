@@ -34,6 +34,12 @@ describe('comment pins', () => {
     expect(annotationPins(second, 2, sent, drafts)).toEqual([]);
   });
 
+  it('highlight the comment pointed at in the chat', () => {
+    expect(annotationPins(first, 2, sent, [], sent[2])).toEqual([
+      { n: 2, point: { x: 40, y: 12 }, text: 'Label the target', highlighted: true }
+    ]);
+  });
+
   it('come back from the messages and answers that sent them', () => {
     const events = [
       {

@@ -8,7 +8,7 @@
   import type { PresentationSelection } from '$lib/client/visualization/presentation-selection.svelte';
   import type { PresentationLayout } from '$lib/shared/presentations';
   import type { TimelinePresentation } from '$lib/client/visualization/presentation-history';
-  import type { ElementReference } from '$lib/shared/projects/events/message-content';
+  import type { Annotation, ElementReference } from '$lib/shared/projects/events/message-content';
 
   import ParticipantTimeline from './ParticipantTimeline.svelte';
 
@@ -34,6 +34,8 @@
       elements: readonly ElementReference['element'][]
     ) => void;
     onStepReference?: (presentationId: string, step: number) => void;
+    /** The comment the pointer or focus is on in the chat, as it comes onto one and leaves it. */
+    onAnnotationHover?: (annotation: Annotation | undefined) => void;
     /** Highlight the elements a question about a presentation names, once it is shown. */
     onQuestionElements?: (presentationId: string, elements: readonly string[]) => void;
     /** The source chosen on its own, by a pill's code button, if any. */
@@ -60,6 +62,7 @@
     onReferenceRequest = () => {},
     onElementReference = () => {},
     onStepReference = () => {},
+    onAnnotationHover = () => {},
     onQuestionElements = () => {},
     chosenSource,
     onChooseSource = () => {},
@@ -122,6 +125,7 @@
         {onReferenceRequest}
         {onElementReference}
         {onStepReference}
+        {onAnnotationHover}
         {onQuestionElements}
         {chosenSource}
         {onChooseSource}
