@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from '$lib/modes/sverlin/compile.server';
 import { buildVariant as buildOnBase, type VariantRequest } from '$lib/modes/sverlin/design.server';
-import { onStarterBase } from '$lib/modes/sverlin/testing/scenes';
+import { onStarter, starterValues } from '$lib/modes/sverlin/testing/scenes';
 import bfs from '$lib/modes/sverlin/fixtures/bfs-visit-order.sverlin?raw';
 import bst from '$lib/modes/sverlin/fixtures/bst.sverlin?raw';
 import { propOptions } from '$lib/modes/sverlin/library/node/design';
@@ -26,7 +26,7 @@ const buildVariant = (
   ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
     ? R
     : never
-) => buildOnBase(offered, start, onStarterBase(request), ...rest);
+) => buildOnBase(offered, start, onStarter(request), ...rest);
 
 const operationId = '12345678-1234-4123-8123-123456789abc';
 const sha256 = 'a'.repeat(64);
@@ -301,7 +301,7 @@ describe('source versions in the AI context', () => {
 });
 
 describe('design variables in the AI context', () => {
-  it('writes out in full only views, pointers, special option sets and values chosen or drawn', () => {
+  it('tells the stored file as it is, kinds by their props, and in full only views and special option sets', () => {
     const design = designContext({
       options: { fill: ['none', 'white'], gap: [0.5, 1] },
       variables: [
@@ -309,19 +309,18 @@ describe('design variables in the AI context', () => {
         { variable: 'Map.fill', options: 'fill', value: 'none', origin: 'kept' },
         { variable: 'Map.gap', options: 'gap', value: 0.5, origin: 'starter' },
         { variable: 'Cell.fill', options: 'fill', value: 'white', origin: 'chosen' },
-        { variable: 'Cell.overflow', options: 'overflow.collection', value: 'scroll' }
-      ]
+        { variable: 'Cell.overflow', options: 'overflow.collection', value: 'scroll' },
+        { variable: '$text', options: 'color', value: 'black' }
+      ],
+      file: { 'Cell.fill': 'white', $text: 'black', 'views.Int': 'IntCell' }
     });
-    expect(design.variables.map(({ variable }) => variable)).toEqual([
-      '{Int}',
-      'Cell.fill',
-      'Cell.overflow'
-    ]);
-    expect(design.values).toEqual({ Map: { fill: 'none', gap: 0.5 } });
+    expect(design.variables.map(({ variable }) => variable)).toEqual(['{Int}', 'Cell.overflow']);
+    expect(design.kinds).toEqual({ Map: 'fill gap', Cell: 'fill' });
+    expect(design.file).toEqual({ $text: 'black', '{Int}': 'IntCell', Cell: { fill: 'white' } });
     expect(design.options).toEqual({ fill: ['none', 'white'], gap: [0.5, 1] });
   });
 
-  it('tells kinds with alike values once, and a colour grid as a rule', () => {
+  it('tells kinds with the same props once, and a colour grid as a rule', () => {
     const hues = ['neutral', 'red', 'blue', 'green', 'amber'];
     const shades = [100, 200, 300, 400, 500];
     const colours = ['none', 'white', ...hues.flatMap((hue) => shades.map((s) => `${hue}-${s}`))];
@@ -332,81 +331,39 @@ describe('design variables in the AI context', () => {
         { variable: 'Note.gap', options: 'gap', value: 0.5, origin: 'starter' },
         { variable: 'Status.fill', options: 'fill', value: 'none', origin: 'starter' },
         { variable: 'Status.gap', options: 'gap', value: 0.5, origin: 'starter' },
-        { variable: 'Cell.fill', options: 'fill', value: 'white', origin: 'kept' },
-        { variable: 'Cell.gap', options: 'gap', value: 0.5, origin: 'kept' }
+        { variable: 'Cell.fill', options: 'fill', value: 'white', origin: 'kept' }
       ]
     });
-    expect(design.values).toEqual({
-      'Note, Status': { fill: 'none', gap: 0.5 },
-      Cell: { fill: 'white', gap: 0.5 }
-    });
+    expect(design.kinds).toEqual({ 'Note, Status': 'fill gap', Cell: 'fill' });
     expect(design.options.fill).toBe(
       'none, white, or a hue-shade, as red-300: hues neutral, red, blue, green, amber; shades 100, 200, 300, 400, 500'
     );
     expect(design.options.gap).toEqual([0.5, 1]);
   });
 
-  it('tells tokens and role styles once, a kind following a role style not at all, and one following a token as the token', () => {
+  it('tells what a kind inherits as "...", taking any kind or style the file writes', () => {
     const { design: built } = prepareSvelteComponent(bfs);
-    const chosen = { $spacing: 0.25, '<Value>.fill': 'sky-100' };
-    const { values, origins } = buildVariant(
-      built.space,
-      built.starter,
-      { chosen },
-      1,
-      built.fallbacks,
-      built.roles
-    );
-    const design = designContext(designVariables({ variant: values, origins, roles: built.roles }));
-    expect(design.levels?.['$spacing']).toBe(0.25);
-    const node = design.levels?.['<Value>'] as Record<string, string>;
-    expect(node.fill).toBe('sky-100');
-    const valueKind = Object.keys(built.roles).find((kind) => built.roles[kind] === 'value')!;
-    expect(node.kinds.split(', ')).toContain(valueKind);
-    const told = Object.entries(design.values).find(([kinds]) =>
-      kinds.split(', ').includes(valueKind)
-    )?.[1];
-    expect(told?.fill).toBeUndefined();
-    expect(told?.padding).toBe('$spacing');
-    expect(design.variables.some(({ variable }) => variable === `${valueKind}.fill`)).toBe(false);
-  });
-
-  it('tells a style as a level with the kinds inheriting it, and a kind’s source as "..."', () => {
-    const { design: built } = prepareSvelteComponent(bfs);
-    const valueKind = Object.keys(built.roles).find((kind) => built.roles[kind] === 'value')!;
+    const valueKind = Object.keys(built.bases).find((kind) => built.bases[kind] === '<Value>')!;
     const chosen = {
       '$cell.radius': 2,
       '$cell.stroke': 'neutral-500',
       [`${valueKind}.inherit`]: '$cell'
     };
-    const { values, origins } = buildVariant(
-      built.space,
-      built.starter,
-      { chosen },
-      1,
-      built.fallbacks,
-      built.roles
-    );
-    const variables = designVariables({ variant: values, origins, roles: built.roles });
-    expect(
-      variables.variables.find(({ variable }) => variable === `${valueKind}.radius`)
-    ).toMatchObject({
-      follows: '$cell.radius'
-    });
-    expect(
-      variables.variables.find(({ variable }) => variable === `${valueKind}.inherit`)?.options
-    ).toContain('$cell');
+    const {
+      values,
+      origins,
+      design: file
+    } = buildVariant(built.space, built.starter, { chosen }, 1, built.fallbacks, built.bases);
+    const variables = designVariables({ variant: values, origins, design: file });
+    expect(variables.options.inherit).toContain('$cell');
+    expect(variables.options.inherit).toContain(valueKind);
     const design = designContext(variables);
-    expect(design.levels?.['$cell']).toEqual({
-      radius: 2,
-      stroke: 'neutral-500',
-      kinds: valueKind
-    });
-    const told = Object.entries(design.values).find(([kinds]) =>
+    expect(design.file.$cell).toEqual({ radius: 2, stroke: 'neutral-500' });
+    expect((design.file[valueKind] as Record<string, unknown>)['...']).toBe('$cell');
+    const props = Object.entries(design.kinds).find(([kinds]) =>
       kinds.split(', ').includes(valueKind)
     )?.[1];
-    expect(told?.['...']).toBe('$cell');
-    expect(told?.radius).toBeUndefined();
+    expect(props?.split(' ')).toContain('...');
   });
 
   it('gives each label’s runs from the base’s newest build, to pace a new source by', () => {
@@ -465,11 +422,13 @@ describe('design variables in the AI context', () => {
   });
 
   it('offers the style props exactly their options', () => {
-    const { starter } = prepareSvelteComponent(bfs).design;
-    const design = designVariables({ variant: starter });
+    const design = designVariables({ variant: starterValues(prepareSvelteComponent(bfs).design) });
     for (const prop of ['shadow', 'glow', 'fillStyle', 'decoration', 'case'] as const) {
       expect(design.options[prop]).toEqual(propOptions[prop]);
-      const variables = design.variables.filter(({ variable }) => variable.endsWith(`.${prop}`));
+      // A kind's; a base's, as <Node>.shadow, also takes the tokens that fit it.
+      const variables = design.variables.filter(
+        ({ variable }) => variable.endsWith(`.${prop}`) && !variable.startsWith('<')
+      );
       expect(variables.length).toBeGreaterThan(0);
       for (const { options } of variables) expect(options).toBe(prop);
     }
@@ -477,8 +436,9 @@ describe('design variables in the AI context', () => {
 
   it('offers each free layout exactly the forms and directions its design takes', () => {
     for (const source of [bfs, bst]) {
-      const { space, starter, structures } = prepareSvelteComponent(source).design;
-      const design = designVariables({ variant: starter }, structures);
+      const prepared = prepareSvelteComponent(source).design;
+      const { space, structures } = prepared;
+      const design = designVariables({ variant: starterValues(prepared) }, structures);
       const layout = design.variables.filter(({ variable }) =>
         /\.(form|direction)$/u.test(variable)
       );

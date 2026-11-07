@@ -15,7 +15,8 @@ import holeHelper from './hole-helper.md?raw';
 import layoutHelper from './layout-helper.md?raw';
 import viewHelper from './view-helper.md?raw';
 import { bundlePresentation, prepareSvelteComponent } from '../compile.server';
-import { viewKey, withStarterBase } from '../design.server';
+import { viewKey } from '../design.server';
+import type { DesignValues } from '$lib/shared/presentations';
 
 /** Prompt text from a Markdown file: its HTML comments are notes for maintainers. */
 const promptText = (markdown: string) => markdown.replace(/<!--[\s\S]*?-->\s*/gu, '').trim();
@@ -288,15 +289,22 @@ export function drawingShape(built: Built): string | undefined {
  */
 export async function checkLayoutCandidate(
   source: string,
+  design: DesignValues,
   layout: string,
   proposal: ProposedView
 ): Promise<ViewCandidate> {
   const made = skeletonFor(source, { layout });
   if (!made) return { kept: false, name: proposal.name, reason: `no layout named ${layout}` };
-  const checked = await checkFills(made.skeleton, { layout: proposal.markup }, made.originals, {
-    name: proposal.name,
-    description: proposal.description
-  });
+  const checked = await checkFills(
+    made.skeleton,
+    design,
+    { layout: proposal.markup },
+    made.originals,
+    {
+      name: proposal.name,
+      description: proposal.description
+    }
+  );
   return checked.kept ? { ...checked, name: layout } : checked;
 }
 
@@ -306,23 +314,26 @@ export async function checkLayoutCandidate(
  */
 export async function checkCandidate(
   source: string,
+  design: DesignValues,
   type: string,
   view: ProposedView
 ): Promise<ViewCandidate> {
   if (!new RegExp(`^\\s*<View of="${type}" name="${view.name}">`, 'u').test(view.markup))
     return { kept: false, name: view.name, reason: `not one view of ${type} named ${view.name}` };
   const { skeleton, originals } = skeletonFor(source, { type })!;
-  return checkFills(skeleton, { view: view.markup }, originals, view);
+  return checkFills(skeleton, design, { view: view.markup }, originals, view);
 }
 
 /**
  * Check one proposal's fills of a skeleton: each of its hole's kind, a layout reading what the one
  * it replaces read, and the source they make building, its picture readable on a typical stage and
  * keeping to the constraints the app can check. Holes the proposal leaves empty take `others`, what
- * they held before or another group's fill. A new view is shown, as its type's chosen view.
+ * they held before or another group's fill. It is built on the version's design file (`design`),
+ * and a new view is shown, as its type's chosen view.
  */
 export async function checkFills(
   skeleton: string,
+  design: DesignValues,
   fills: Readonly<Record<string, string>>,
   others: Readonly<Record<string, string>>,
   proposal: { name: string; description: string },
@@ -349,7 +360,7 @@ export async function checkFills(
   );
   try {
     const prepared = prepareSvelteComponent(filled.source);
-    const built = await bundlePresentation(prepared, 1, withStarterBase({ chosen }));
+    const built = await bundlePresentation(prepared, 1, { base: design, chosen });
     const part = own.map((hole) => hole.of ?? hole.name).join(', ');
     const checked = measured(
       built,

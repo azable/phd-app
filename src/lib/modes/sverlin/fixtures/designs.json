@@ -1,0 +1,143 @@
+{
+  "bars": {
+    "template": "$starter"
+  },
+  "bfs-captions": {
+    "template": "$starter"
+  },
+  "bfs-cards": {
+    "template": "$starter"
+  },
+  "bfs-dequeue": {
+    "template": "$starter"
+  },
+  "bfs-neighbours": {
+    "template": "$starter"
+  },
+  "bfs-queue-names": {
+    "template": "$starter"
+  },
+  "bfs-references": {
+    "template": "$starter"
+  },
+  "bfs-undirected": {
+    "template": "$starter"
+  },
+  "bfs-visit-order": {
+    "template": "$starter"
+  },
+  "bst": {
+    "template": "$starter"
+  },
+  "bubble-arrow": {
+    "template": "$starter"
+  },
+  "bubble-layouts": {
+    "template": "$starter"
+  },
+  "call-frames": {
+    "template": "$starter"
+  },
+  "count-dots": {
+    "template": "$starter"
+  },
+  "dfa-loops": {
+    "template": "$starter"
+  },
+  "dfa-panels": {
+    "template": "$starter"
+  },
+  "dijkstra-costs": {
+    "template": "$starter"
+  },
+  "dijkstra-fields": {
+    "template": "$starter"
+  },
+  "dijkstra": {
+    "template": "$starter"
+  },
+  "fib-calls": {
+    "template": "$starter"
+  },
+  "grid-marks": {
+    "template": "$starter"
+  },
+  "grid-view": {
+    "template": "$starter"
+  },
+  "heap-tree": {
+    "template": "$starter"
+  },
+  "insertion-decisions": {
+    "template": "$starter"
+  },
+  "lcs-grid": {
+    "template": "$starter"
+  },
+  "linear-search": {
+    "template": "$starter"
+  },
+  "list-markers": {
+    "template": "$starter"
+  },
+  "listing-pseudocode": {
+    "template": "$starter"
+  },
+  "listing-python": {
+    "template": "$starter"
+  },
+  "merge-sort-levels": {
+    "template": "$starter"
+  },
+  "merge-sort-stack": {
+    "template": "$starter"
+  },
+  "replay/bfs-icons": {
+    "template": "$starter"
+  },
+  "replay/bfs-reveal": {
+    "template": "$starter"
+  },
+  "replay/binary-search-bars": {
+    "template": "$starter"
+  },
+  "replay/binary-search-compact": {
+    "template": "$starter"
+  },
+  "replay/binary-search-recursive": {
+    "template": "$starter"
+  },
+  "replay/cards-drawings": {
+    "template": "$starter"
+  },
+  "replay/dijkstra-demo": {
+    "template": "$starter"
+  },
+  "replay/linear-search": {
+    "template": "$starter"
+  },
+  "replay/merge-sort-fallback": {
+    "template": "$starter"
+  },
+  "replay/merge-sort-overview": {
+    "template": "$starter"
+  },
+  "replay/ucs-ten": {
+    "template": "$starter"
+  },
+  "search-at": {
+    "template": "$starter"
+  },
+  "search-labels": {
+    "template": "$starter"
+  },
+  "search-places": {
+    "template": "$starter"
+  },
+  "stack-highlight": {
+    "template": "$starter"
+  },
+  "ucs-compare": {
+    "template": "$starter"
+  }
+}

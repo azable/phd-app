@@ -48,7 +48,20 @@ const mocks = vi.hoisted(() => ({
     }
   ],
   preparePrompt: vi.fn(),
-  generatePrepared: vi.fn()
+  generatePrepared: vi.fn(),
+  // A source decision that writes no values names the starter template, as a first version must
+  // (assistant.md, Design): a test's decisions write values only where they change the design.
+  templated: (generated: unknown) => {
+    const decision = (generated as { decision?: { action?: string } } | undefined)?.decision;
+    return decision &&
+      ['revise', 'edit'].includes(decision.action ?? '') &&
+      !Object.hasOwn(decision, 'values')
+      ? {
+          ...(generated as object),
+          decision: { ...decision, values: '{"template": "$starter"}' }
+        }
+      : generated;
+  }
 }));
 
 vi.mock('$lib/server/ai/bots/registry', () => ({
@@ -59,13 +72,15 @@ vi.mock('$lib/server/ai/bots/registry', () => ({
   getChatbot: () => ({
     config: { attemptProfiles: mocks.attemptProfiles },
     preparePrompt: mocks.preparePrompt,
-    generatePrepared: mocks.generatePrepared,
+    generatePrepared: (...args: unknown[]) =>
+      Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
     requestTimeoutMs: () => 180_000
   }),
   getCandidateChatbot: () => ({
     config: { attemptProfiles: mocks.attemptProfiles },
     preparePrompt: mocks.preparePrompt,
-    generatePrepared: mocks.generatePrepared,
+    generatePrepared: (...args: unknown[]) =>
+      Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
     requestTimeoutMs: () => 180_000
   }),
   getParticipantIntakeClassifier: () => ({
@@ -79,7 +94,8 @@ vi.mock('$lib/server/ai/bots/registry', () => ({
       ]
     },
     preparePrompt: mocks.preparePrompt,
-    generatePrepared: mocks.generatePrepared,
+    generatePrepared: (...args: unknown[]) =>
+      Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
     requestTimeoutMs: () => 180_000
   })
 }));
@@ -132,14 +148,16 @@ beforeEach(() => {
       ({
         config: { attemptProfiles: mocks.attemptProfiles },
         preparePrompt: mocks.preparePrompt,
-        generatePrepared: mocks.generatePrepared,
+        generatePrepared: (...args: unknown[]) =>
+          Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
         requestTimeoutMs: () => 180_000
       }) as unknown as ReturnType<ProjectCommandDependencies['getChatbot']>,
     getCandidateChatbot: () =>
       ({
         config: { attemptProfiles: mocks.attemptProfiles },
         preparePrompt: mocks.preparePrompt,
-        generatePrepared: mocks.generatePrepared,
+        generatePrepared: (...args: unknown[]) =>
+          Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
         requestTimeoutMs: () => 180_000
       }) as unknown as ReturnType<ProjectCommandDependencies['getCandidateChatbot']>,
     getParticipantIntakeClassifier: () =>
@@ -154,7 +172,8 @@ beforeEach(() => {
           ]
         },
         preparePrompt: mocks.preparePrompt,
-        generatePrepared: mocks.generatePrepared,
+        generatePrepared: (...args: unknown[]) =>
+          Promise.resolve(mocks.generatePrepared(...args)).then(mocks.templated),
         requestTimeoutMs: () => 180_000
       }) as unknown as ReturnType<ProjectCommandDependencies['getParticipantIntakeClassifier']>
   };
@@ -3576,9 +3595,12 @@ describe('assistant edits', () => {
     // A place's view choice follows views.Int, and its paint the randomised fill (see buildVariant).
     const follows = (key: string) =>
       /^views\.(\w+\.)?Int:/u.test(key) || /^Highlight\.<Link>\.<To>:@?\w+\.fill$/u.test(key);
+    // Every other value is as it was: kept where the viewed version's design file writes it.
     for (const [key, { value, origin }] of Object.entries(origins(first)))
-      if (key !== 'views.Int' && key !== 'Highlight.<Link>.<To>.fill' && !follows(key))
-        expect({ value, origin }).toEqual({ value: before[key], origin: 'kept' });
+      if (key !== 'views.Int' && key !== 'Highlight.<Link>.<To>.fill' && !follows(key)) {
+        expect(value).toEqual(before[key]);
+        if (Object.hasOwn(viewed.design ?? {}, key)) expect(origin).toBe('kept');
+      }
   });
 });
 

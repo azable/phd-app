@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
+import { starterValues } from './testing/scenes';
 
 import { buildBatch } from './build.server';
 import { prepareSvelteComponent } from './compile.server';
@@ -92,7 +93,7 @@ describe('laying out on the server', () => {
   it('fails the build of a presentation the server cannot lay out, saying what to change', async () => {
     const source = readFileSync('src/lib/modes/sverlin/fixtures/search-at.sverlin', 'utf8');
     const [result] = await buildBatch(source.replace('<Node>lo</Node>', '<Node>漢字</Node>'), [
-      { seed: 1 }
+      { seed: 1, variant: { chosen: { template: '$starter' } } }
     ]);
     expect(result).toMatchObject({ ok: false, failureKind: 'source' });
     expect(result.ok || result.diagnostics[0]).toMatchObject({
@@ -146,7 +147,9 @@ describe('laying out on the server', () => {
         '{#each states as state, k}{@const row = DeltaIndex(delta, k)}'
       )
       .replaceAll('delta[k]', 'delta[row]');
-    const [result] = await buildBatch(source, [{ seed: 1 }]);
+    const [result] = await buildBatch(source, [
+      { seed: 1, variant: { chosen: { template: '$starter' } } }
+    ]);
     expect(result.ok || result.diagnostics[0]).toMatchObject({
       code: 'draw_failed',
       message: expect.stringMatching(
@@ -428,7 +431,7 @@ describe('link labels', () => {
 
   it('start as plain text where their type is drawn only on links, keeping room for the words', async () => {
     const prepared = prepareSvelteComponent(source);
-    expect(prepared.design.starter).toMatchObject({
+    expect(starterValues(prepared.design)).toMatchObject({
       'WeightText.padding': 0,
       'WeightText.minSize': 0,
       'WeightText.stroke': 'none',
@@ -451,6 +454,6 @@ describe('link labels', () => {
       '<View of="Weight" name="WeightText"><Node value={this} /></View>',
       '<View of="Weight" name="WeightText"><Node value={this} /></View>\n<Layout name="Extra"><Node>{edges[0].weight}</Node></Layout>'
     );
-    expect(prepareSvelteComponent(shared).design.starter['WeightText.minSize']).not.toBe(0);
+    expect(starterValues(prepareSvelteComponent(shared).design)['WeightText.minSize']).not.toBe(0);
   });
 });

@@ -359,7 +359,6 @@ export const listingOptions: Record<string, readonly (string | number)[]> & {
  */
 export const listingPlacesOptions = ['none', 'fill', 'underline', 'outline'] as const;
 export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
-export const starterListingPlaces: ListingPlacesLook = 'fill';
 
 /** What a kind of node is, which says the props it has. */
 export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'link' | 'pointer';
@@ -422,14 +421,6 @@ export const freeLayoutProps: readonly DesignProp[] = ['form', 'direction', 'cur
  * its columns run along and of the one its rows run along, starting square, as a table.
  */
 export const gridProps: readonly DesignProp[] = ['colX', 'colY', 'rowX', 'rowY'];
-export const starterGrid: Record<string, number> = { colX: 1, colY: 0, rowX: 0, rowY: 1 };
-
-/** A free layout's starting look, but for its direction (see starterLook in design.server.ts). */
-export const starterFreeLayout: Record<string, string | number> = {
-  form: 'natural',
-  curve: 'straight',
-  layoutSeed: 1
-};
 
 /**
  * Paint: how a node looks in its room, never how much room it takes. Whatever changes a look from
@@ -582,8 +573,8 @@ export function roleStyleOptions(
 
 /**
  * A style, written with `$` as a token is but holding a group of props, as `$cell` with
- * `$cell.stroke` and `$cell.padding`, which kinds inherit (see levelFor). A token's name is never a
- * style's.
+ * `$cell.stroke` and `$cell.padding`, which kinds inherit (see resolvedValue in
+ * ../../design.server.ts). A token's name is never a style's.
  */
 export const isStyle = (name: unknown): name is `$${string}` =>
   typeof name === 'string' &&
@@ -597,7 +588,6 @@ export const isStyle = (name: unknown): name is `$${string}` =>
  */
 export function oldBuiltIn(key: string): { old: string; now: string } | undefined {
   const first = /^(\$[A-Za-z]\w*|<[A-Za-z]+>|listing)(?=\.|$)/u.exec(key)?.[1];
-  if (first === '$starter') return { old: first, now: starterName };
   if (first === 'listing') return { old: first, now: '<Listing>' };
   if (first === '<Node>')
     return { old: first, now: nodeRoles.map((role) => roleStyle(role)).join(', ') };
@@ -611,9 +601,6 @@ export function oldBuiltIn(key: string): { old: string; now: string } | undefine
 /** The roles of a node's kinds, those the old `<Node>` group set together. */
 const nodeRoles: readonly KindRole[] = ['container', 'value', 'text', 'code', 'icon'];
 
-/** The starter base's name: built in, so written in angle brackets, as every built-in name is. */
-export const starterName = '<starter>';
-
 /** A style's prop, as `$cell` and padding for `$cell.padding`. */
 export function styleOf(key: string): { style: `$${string}`; prop: string } | undefined {
   const match = /^(\$[A-Za-z]\w*)\.([a-z]\w*)$/u.exec(key);
@@ -624,9 +611,8 @@ export function styleOf(key: string): { style: `$${string}`; prop: string } | un
 
 /**
  * The style holding a role's look in a design's base, written in angle brackets as every built-in
- * name is, as `<Value>` for every value kind: each prop a kind of the role follows, so the base sets
- * every role's look as data and the engine has none of its own (see starter-base.ts and
- * missingRoleLooks).
+ * name is, as `<Value>` for every value kind: each prop a kind of the role follows where neither it
+ * nor what it inherits writes the prop, so a template sets every role's look as data.
  */
 export const roleStyle = (role: KindRole): string => `<${role[0].toUpperCase()}${role.slice(1)}>`;
 
@@ -657,14 +643,11 @@ export const kindLookProps = (role: KindRole, kind: string): readonly DesignProp
   isLinkEnd(kind) ? endProps : lookProps(role);
 
 /**
- * The base a design starts from, written `"...": "$textbook"` at its top: the name of the template
- * the assistant wrote out in full into the design (see ../../templates), or of a base the model
- * wrote itself, so the base's values are the design's own and the name records where they came from.
+ * The key a request names a template by, as `"template": "$slide"`: the build copies that
+ * template's file in as the design (see ../../templates), so the version holds every value it draws
+ * with and keeps no link to the template; the stored design never names one.
  */
-export const baseKey = 'base';
-
-/** A base's name: `$` and a short name, as `$textbook`, or `$mine` for a base the model wrote. */
-export const baseName = /^(?:<starter>|\$(?!starter$)[a-z][\w-]{0,31})$/u;
+export const templateKey = 'template';
 
 /**
  * A base's scales, each the steps its props take (see scaleKey): spacing for padding and gaps, in
@@ -714,15 +697,13 @@ export const scaleOf = (prop: string): ScaleName | undefined =>
 export const paletteKey = /^palette\.[a-z]\w*$/u;
 
 /**
- * Whether a variable belongs to a base, which holds every value whether the source uses it or not:
- * a token, a role's style, a scale, a colour of the palette, the base's name, and the listing's
- * look. A source with no use for one, as a listing's look where the view places no <Listing />,
+ * Whether a variable belongs to a template's file, which holds every value whether the source uses
+ * it or not: a token, a role's style, a scale, a colour of the palette, and the listing's look. A source with no use for one, as a listing's look where the view places no <Listing />,
  * leaves it out without a word.
  */
 export function isBaseKey(key: string): boolean {
   return (
     isToken(key) ||
-    key === baseKey ||
     paletteKey.test(key) ||
     /^scale\.[a-z]+$/u.test(key) ||
     roleStyleOf(key) !== undefined ||
@@ -757,54 +738,73 @@ export function baseOptions(
   return added.length ? [...scaled, ...added] : scaled;
 }
 
-/** The variable naming what a kind inherits over its role's look: a style or a kind of its role. */
+/** The variable naming what a kind inherits over its base: a style or another kind. */
 export const inheritKey = (kind: string): string => `${kind}.inherit`;
 
 /**
- * What a kind's prop follows, and the variable its value comes from: what the kind inherits where
- * that sets the prop (a style's prop, naming a token or a value, or a kind of its role's own value),
- * else its role's style in the base (see roleStyle), through tokens; no value where the base sets
- * none, which the build refuses (see missingRoleLooks). Undefined for a variable that is no kind's
- * prop a role style sets (a place's, a frame's, a view choice).
- * Shared by the build and the assistant's design, so both tell what follows what alike.
+ * The value every prop takes where nothing writes it, the same for every kind: no paint, no room,
+ * plain text, and a layout's first form. A design's template writes what it uses (see
+ * ../../templates).
  */
-export function levelFor(
-  values: Readonly<Record<string, string | number | boolean>>,
-  roles: Readonly<Record<string, KindRole>>,
-  key: string
-): { value: string | number | boolean | undefined; from?: string } | undefined {
-  const dot = key.lastIndexOf('.');
-  const kind = key.slice(0, Math.max(0, dot));
-  const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-  const prop = key.slice(dot + 1) as DesignProp;
-  if (!role || !kindLookProps(role, kind).includes(prop)) return undefined;
-  const source = values[inheritKey(kind)];
-  if (typeof source === 'string') {
-    const from = `${source}.${prop}`;
-    if (Object.hasOwn(values, from)) {
-      const value = values[from];
-      return isToken(value) ? { value: values[value], from: value } : { value, from };
-    }
-  }
-  const from = `${kindStyle(role, kind)}.${prop}`;
-  if (!Object.hasOwn(values, from)) return { value: undefined };
-  const level = values[from];
-  return isToken(level) ? { value: values[level], from: level } : { value: level, from };
-}
+export const neutralValues: Readonly<Record<DesignProp, string | number | boolean>> = {
+  shown: true,
+  fill: 'none',
+  stroke: 'none',
+  strokeWidth: 0,
+  opacity: 1,
+  color: 'black',
+  font: 'sans',
+  textSize: 16,
+  weight: 'normal',
+  padding: 0,
+  radius: 0,
+  minSize: 0,
+  width: 'uniform',
+  height: 'uniform',
+  xAnchor: 'center',
+  yAnchor: 'center',
+  gap: 0,
+  spacing: 'slots',
+  align: 'center',
+  justify: 'start',
+  strokeStyle: 'solid',
+  shadow: 'none',
+  glow: 'none',
+  fillStyle: 'solid',
+  decoration: 'none',
+  case: 'normal',
+  form: 'natural',
+  direction: 'right',
+  curve: 'straight',
+  route: 'layout',
+  head: 'none',
+  headSize: 9,
+  layoutSeed: 1,
+  layer: 1,
+  icon: 'circle-dot',
+  colX: 1,
+  colY: 0,
+  rowX: 0,
+  rowY: 1
+};
 
-/**
- * The role styles a design's base leaves out, as `<Value>.fill`, among the roles its kinds have: a
- * base sets every role's look its kinds follow, so no kind falls back to a look nobody chose.
- */
-export function missingRoleLooks(
-  values: Readonly<Record<string, unknown>>,
-  roles: Readonly<Record<string, KindRole>>
-): string[] {
-  const keys = Object.entries(roles).flatMap(([kind, role]) =>
-    kindLookProps(role, kind).map((prop) => `${kindStyle(role, kind)}.${prop}`)
-  );
-  return [...new Set(keys)].filter((key) => !Object.hasOwn(values, key));
-}
+/** A prop's neutral value (see neutralValues); a link end's text colour is none, leaving it as it is. */
+export const neutralValue = (prop: DesignProp, end = false): string | number | boolean =>
+  end && prop === 'color' ? 'none' : neutralValues[prop];
+
+/** The listing's neutral look: plain text, nothing lit, no places lit with its tokens. */
+export const neutralListing: Readonly<Record<string, string | number>> = {
+  '<Listing>.syntax': 'none',
+  '<Listing>.places': 'none',
+  '<Listing>.lit.fill': 'none',
+  '<Listing>.lit.stroke': 'none',
+  '<Listing>.lit.strokeWidth': 0,
+  '<Listing>.lit.strokeStyle': 'solid',
+  '<Listing>.lit.radius': 0,
+  '<Listing>.lit.color': 'none',
+  '<Listing>.lit.weight': 'normal',
+  '<Listing>.lit.padding': 0
+};
 
 export const starterFrame: Record<keyof typeof frameOptions, string | number> = {
   ratio: 'fit',

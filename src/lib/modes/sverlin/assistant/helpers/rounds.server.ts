@@ -5,7 +5,8 @@
  * go together, and the app builds only those. Each stage can be switched off on its own.
  */
 
-import type { EventId } from '$lib/shared/projects/events';
+import type { EventId, ProjectEventOf } from '$lib/shared/projects/events';
+import { presentationDesign } from '$lib/shared/presentations';
 import type { ProjectDocument } from '$lib/shared/projects/model';
 import { waitingComparisons } from '$lib/shared/projects/presentation-buffer';
 import { projectHead, projectSnapshotAt } from '$lib/shared/projects/projection';
@@ -332,6 +333,15 @@ export async function runViewHelpers(
   const parsed = made ? holesOf(made.skeleton) : undefined;
   if (!made || !parsed || 'problems' in parsed) return document;
   const { skeleton, originals } = made;
+  // Each fill is built on the design file of the newest version of this source.
+  const design = presentationDesign(
+    document.events.findLast(
+      (event): event is ProjectEventOf<'visualization.presented'> =>
+        event.type === 'visualization.presented' &&
+        event.payload.presentation.format === 'browser-bundle-v1' &&
+        event.payload.presentation.source.text === source
+    )?.payload.presentation
+  );
   const constraints = request.skeleton !== undefined ? (request.constraints ?? []) : [];
   const adapter = dependencies.viewHelperAdapter ?? openAIAdapter;
   const operation = currentProjectOperationSignal();
@@ -511,7 +521,7 @@ export async function runViewHelpers(
     const fills = Object.fromEntries(
       Object.entries(fillsOf(proposal)).filter(([hole]) => own.has(hole))
     );
-    const result = await checkFills(skeleton, fills, others, proposal, constraints);
+    const result = await checkFills(skeleton, design, fills, others, proposal, constraints);
     longest = Math.max(longest, performance.now() - begun);
     return result;
   };
@@ -706,7 +716,7 @@ export async function runViewHelpers(
       const result =
         picked.length === 1
           ? picked[0]
-          : await checkFills(skeleton, fills, others, {
+          : await checkFills(skeleton, design, fills, others, {
               name: picked.map((candidate) => candidate.name).join(' + '),
               description: picked
                 .map((candidate) => (candidate.kept ? candidate.description : ''))

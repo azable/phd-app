@@ -5,6 +5,7 @@ import bfs from '../fixtures/bfs-undirected.sverlin?raw';
 import bot, { viewHelpersRequest } from './bot.server';
 import { holeHelperTask } from './helper-proposals.server';
 import { skeletonFor } from './skeleton.server';
+import { templateValues } from '../templates/templates';
 import {
   bestCandidates,
   checkCandidate,
@@ -17,6 +18,9 @@ import {
   mainViewType,
   viewHelperDirections
 } from './view-helpers.server';
+
+// Each candidate is built on the design file of a first version copying `$starter`.
+const starter = templateValues('starter');
 
 describe('view helpers', () => {
   it('take the guide by heading, each section up to the next heading', () => {
@@ -31,14 +35,14 @@ describe('view helpers', () => {
   });
 
   it('keep a view that builds and reads, and leave out one that does not', async () => {
-    const kept = await checkCandidate(bars, 'Int', {
+    const kept = await checkCandidate(bars, starter, 'Int', {
       name: 'IntCell',
       description: 'the number in a cell',
       markup: '<View of="Int" name="IntCell"><Node value={this} /></View>'
     });
     expect(kept).toMatchObject({ kept: true, name: 'IntCell', type: 'Int' });
 
-    const drawing = await checkCandidate(bars, 'Int', {
+    const drawing = await checkCandidate(bars, starter, 'Int', {
       name: 'IntDial',
       description: 'a dial whose hand turns with the number',
       markup:
@@ -46,14 +50,14 @@ describe('view helpers', () => {
     });
     expect(drawing).toMatchObject({ kept: true, name: 'IntDial' });
 
-    const broken = await checkCandidate(bars, 'Int', {
+    const broken = await checkCandidate(bars, starter, 'Int', {
       name: 'IntBroken',
       description: 'reads a name nothing gives it',
       markup: '<View of="Int" name="IntBroken"><Node value={missing} /></View>'
     });
     expect(broken).toMatchObject({ kept: false, name: 'IntBroken' });
 
-    const other = await checkCandidate(bars, 'Int', {
+    const other = await checkCandidate(bars, starter, 'Int', {
       name: 'Elsewhere',
       description: 'a view of another type',
       markup:
@@ -149,7 +153,7 @@ describe('layout helpers', () => {
   });
 
   it('keep an arrangement that builds in place of the old layout, with how it draws', async () => {
-    const kept = await checkLayoutCandidate(bfs, 'Main', {
+    const kept = await checkLayoutCandidate(bfs, starter, 'Main', {
       name: 'Main',
       description: 'the queue beside the graph',
       markup: beside
@@ -163,7 +167,7 @@ describe('layout helpers', () => {
 
   it('leave out an arrangement that is no layout of that name', async () => {
     expect(
-      await checkLayoutCandidate(bfs, 'Main', {
+      await checkLayoutCandidate(bfs, starter, 'Main', {
         name: 'Main',
         description: '',
         markup: beside.replace('name="Main"', 'name="Page"')

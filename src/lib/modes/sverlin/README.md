@@ -1283,16 +1283,16 @@ round the boxes, side by side apart); and `headSize`, 6, 9 (the start), 12, or
 16 pixels. Its end, `<To>`, a kind inside it, as `Arrow.<Link>.<To>`, has the
 `head` drawn there, `none`, `arrow` (a filled triangle), `open` (an outlined
 one), `vee`, `dot`, `diamond`, or `bar`, which starts at `none` where every link
-of the kind is a two-way line, whose `<To>` is both its ends, and the base's
-otherwise; and, for a link from a variable (see Link), the paint it gives the
-element it reaches while it is drawn: `fill`, `stroke` and `color`, each `none`
-(leaving that paint as it is) or a colour, and `strokeWidth`, its stroke's
-width, drawn inside the element's box; and `layer`, 1 (the start), 2 or 3: where
-several links paint one element, each setting is the one from the link on the
-highest layer, and on one layer the link written later. An end sets paint only,
-never a size and never whether anything is shown, so no box changes size; it
-starts as its role's end in the base, `<Link>.<To>` painting nothing and
-`<Pointer>.<To>` the starter's amber, and a place sets its own, as
+of the kind is a two-way line, whose `<To>` is both its ends, and its role's
+end's otherwise; and, for a link from a variable (see Link), the paint it gives
+the element it reaches while it is drawn: `fill`, `stroke` and `color`, each
+`none` (leaving that paint as it is) or a colour, and `strokeWidth`, its
+stroke's width, drawn inside the element's box; and `layer`, 1 (the start), 2 or
+3: where several links paint one element, each setting is the one from the link
+on the highest layer, and on one layer the link written later. An end sets paint
+only, never a size and never whether anything is shown, so no box changes size;
+it follows its role's end, `<Link>.<To>` or `<Pointer>.<To>` (`$starter`'s
+paints nothing and amber), and a place sets its own, as
 `Mark.<Link>.<To>:j.fill`. A label's look is its own nodes' kind.
 
 A kind with a free layout (see Free layout and links) also has that layout's
@@ -1461,18 +1461,18 @@ places, `:@held` and `:held`.
 
 A key's mark says what it sets: `$` a token or a style, the author's names;
 `<…>` a built-in name, a role's style (`<Value>`, `<Container>`, `<Text>`,
-`<Code>`, `<Icon>`, `<Link>`, `<Pointer>`), the listing (`<Listing>`) or the
-starter base (`<starter>`), or a link's end (`<To>`); `{…}` the view a type is
-drawn with, `:` a place, `=` a value of the data, and no mark one kind. `@`
-names only a part of the run, a label, as in the source: it says when, as `:`
-says where, so a place drawn from a label's value is `:@label`.
+`<Code>`, `<Icon>`, `<Link>`, `<Pointer>`), the listing (`<Listing>`), or a
+link's end (`<To>`); `{…}` the view a type is drawn with, `:` a place, `=` a
+value of the data, and no mark one kind. `@` names only a part of the run, a
+label, as in the source: it says when, as `:` says where, so a place drawn from
+a label's value is `:@label`.
 
-- A token is one value the starter's kinds share: `$text` (text colour),
-  `$font`, `$surface` (the fill of framed values), `$accent` and `$highlight`
-  (the stroke and fill a link from a variable paints what it reaches with),
-  `$spacing` (framed values' padding), `$radius` and `$lineWidth`. Every kind
-  that starts with a token's value follows it, so `{"$spacing": 0.25}` tightens
-  every framed value.
+- A token is one value many kinds share: `$text` (text colour), `$font`,
+  `$surface` (the fill of framed values), `$accent` and `$highlight` (the stroke
+  and fill a link from a variable paints what it reaches with), `$spacing`
+  (framed values' padding), `$radius` and `$lineWidth`. Every kind that starts
+  with a token's value follows it, so `{"$spacing": 0.25}` tightens every framed
+  value.
 - A style is a `$` name holding a group of props, as a CSS class does:
   `$cell.stroke`, `$cell.padding`. A kind inherits one style, or one kind of its
   role, and takes each prop it sets: `"IntCell": {"...": "$cell"}`, or
@@ -1490,20 +1490,28 @@ says where, so a place drawn from a label's value is `:@label`.
   (`<Text>`). Where it stands, as among a free layout's vertices, and what binds
   its size never change its role. A node sized by its value, as
   `<Node height={this} />`, is exactly its length, so its kind has no `padding`.
-- A base is what every kind starts from, written out in the design as values:
-  its tokens; a style for each role's look, as `<Value>` for every framed value,
-  `<Container>`, `<Text>`, `<Code>`, `<Icon>`, `<Link>` and `<Pointer>`, which
-  every kind of that role follows (never its `shown`), its prop one of the
+- A design is a file, a copy of a template and the changes made to it since. A
+  first version names the template it copies, `"template": "$starter"`,
+  `"$textbook"`, `"$slide"` or `"$high-contrast"`, and a first version naming
+  none is refused, listing them; the file keeps no link to it, and naming
+  another template later copies that file in place of the version's. A template
+  holds its tokens; a style for each role's look, as `<Value>` for every framed
+  value, `<Container>`, `<Text>`, `<Code>`, `<Icon>`, `<Link>` and `<Pointer>`,
+  which every kind of that role follows (never its `shown`), its prop one of the
   prop's options or a token, as `"<Value>": {"fill": "$surface"}`; its scales;
   its palette; and the listing's look. The engine holds no look: what tells
-  roles apart in the starter base is only what each does (text and containers
-  unboxed, code in the code font), and its colours, corners and lines are the
-  starter's taste, as a template's are its own. `"..."` at the top names it, as
-  `"...": "$textbook"`. Every design names its base and holds every role's look:
-  the app has no look of its own. A design that comes in naming none, as a first
-  version's or a demo example's, gets the starter base, `"...": "<starter>"`,
-  written in; one naming a base but missing a role's look is refused, naming
-  what is missing.
+  roles apart in `$starter` is only what each does (text and containers unboxed,
+  code in the code font), and its colours, corners and lines are its taste, as
+  each template's are its own.
+- A prop nothing writes, not the kind, what it inherits, nor its role's style,
+  has its neutral value: no `fill`, no `stroke`, `strokeWidth` 0, `opacity` 1,
+  `color` black (a link end's none), the `sans` font, `textSize` 16, `weight`
+  normal, `padding`, `radius`, `minSize` and `gap` 0, a slot's `width` and
+  `height` uniform and centred, no `shadow`, `glow` or `decoration`, a solid
+  `fillStyle` and `strokeStyle`, `case` normal, `align` center, `justify` start,
+  `spacing` slots, a free layout natural, running right and straight, `route`
+  layout, no `head`, `headSize` 9, `layer` 1, and the listing plain, nothing
+  lit. A template writes only the props it uses.
   - A scale is the steps a prop takes, numbers separated by spaces:
     `scale.spacing` for `padding` and `gap` (em), `scale.radius`, `scale.type`
     for `textSize` and `scale.line` for `strokeWidth` (pixels), and
@@ -1513,22 +1521,23 @@ says where, so a place drawn from a label's value is `:@label`.
   - A palette names exact colours, as `"palette": {"accent": "#E69F00"}`, and
     each is then an option of every `fill`, `stroke` and `color` beside the
     named colours.
-  - A base holds values the source may not use, as the listing's look where no
-    `<Listing />` is placed; those are left out without a word.
-- A kind's own value overrides what it inherits, that its role's style in the
-  base, and that the token: with
+  - A template holds values the source may not use, as the listing's look where
+    no `<Listing />` is placed; the file keeps them, and the picture is drawn
+    without them, without a word.
+- A kind's own value overrides what it inherits, that its role's style, and that
+  the token: with
   `{"$spacing": 0.25, "<Value>": {"padding": 0.5}, "IntCell": {"padding": 0}}`,
   every value's kind takes 0.5, IntCell none, and every other kind whose role's
-  style names `$spacing` 0.25. A kind set apart once stays apart when what it
-  follows changes later, and a place, as `IntCell:v.fill`, overrides its kind as
-  before.
+  style names `$spacing` 0.25. A value the file writes for a kind stays its own
+  when what it would follow changes later, and a place, as `IntCell:v.fill`,
+  overrides its kind as before.
 - A design is written nested, and only so: one object for each style, role style
-  and kind, as project.design's levels and values and the Choices file show it:
-  `"..."` is what a kind inherits, a nested kind sits inside its view's object,
-  and a place or a value is a key inside its kind's. A key written flat, as
-  `"IntCell.fill"` or `"scale.spacing"`, and `"inherit"` for `"..."` are
-  refused, naming the nested form; a place, a value, a listing region and an
-  ordered prop's part keep their dots, as `":@scan.next"` or `"height.from"`:
+  and kind, as project.design's file and the Choices file show it: `"..."` is
+  what a kind inherits, a nested kind sits inside its view's object, and a place
+  or a value is a key inside its kind's. A key written flat, as `"IntCell.fill"`
+  or `"scale.spacing"`, and `"inherit"` for `"..."` are refused, naming the
+  nested form; a place, a value, a listing region and an ordered prop's part
+  keep their dots, as `":@scan.next"` or `"height.from"`:
 
   ```json
   {
@@ -1540,10 +1549,11 @@ says where, so a place drawn from a label's value is `:@label`.
   ```
 
   The assistant writes the values it sets in the same nested form, as one JSON
-  object in a string, applied over the viewed variant's values as a JSON Merge
-  Patch: an object merges into what it names, and `null` removes a value, so it
-  returns to what it inherits or follows. To make the value cells rounder with a
-  darker frame, the goal's own fill removed, and every number shown as a tally:
+  object in a string, applied over the viewed version's design file as a JSON
+  Merge Patch: an object merges into what it names, and `null` removes a value,
+  so it returns to what it inherits or follows. To make the value cells rounder
+  with a darker frame, the goal's own fill removed, and every number shown as a
+  tally:
 
   ```json
   {
@@ -1561,18 +1571,16 @@ says where, so a place drawn from a label's value is `:@label`.
 
 ### Variants
 
-A variant gives every variable a value, and a presentation draws one. The
-starter is each type in its first view, each kind in a plain look for what it
-is, as the starter base gives its role: values framed, text and layouts
-unframed, and pointers marked in amber. Every variant shows the same steps,
-those the scenes pause at. A presentation built after a change keeps the values
-of the one it was made from where nothing else sets them, and takes the
-starter's for anything new; the assistant sets values with `vary`, or with
-`edit` or `revise` for the source it changes, and asking for several variants,
-or Another variant (in dev mode), draws the values at random, keeping what the
-conversation settled. A value for a variable the design does not have is left
-out, and the build warns, naming it; a value outside its variable's options is
-refused.
+A variant gives every variable a value, from the version's design file, and a
+presentation draws one. A variable the file does not write takes its kind's
+look, as above, or, for a type's view, its first. Every variant shows the same
+steps, those the scenes pause at. A version built after a change keeps the file
+of the one it was made from, with the changes its values make; the assistant
+sets values with `vary`, or with `edit` or `revise` for the source it changes,
+and asking for several variants, or Another variant (in dev mode), draws the
+file's values at random, keeping what the conversation settled. A value for a
+variable the design does not have is left out, and the build warns, naming it; a
+value outside its variable's options is refused.
 
 ### Declare what varies
 

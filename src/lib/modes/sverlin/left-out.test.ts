@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterValues } from './testing/scenes';
 
 import { leftOutOf, phasesOf, prepareSvelteComponent } from './compile.server';
 import { hiddenAt, siteOf } from './left-out';
@@ -55,7 +56,7 @@ const wholePass = (text: string) =>
   );
 const whole = prepareSvelteComponent(wholePass(source));
 const left = (built: typeof prepared, values: Record<string, unknown> = {}) => {
-  const design = { ...built.design.starter, ...values };
+  const design = { ...starterValues(built.design), ...values };
   const views = Object.fromEntries(
     Object.keys(built.design.views).map((type) => [type, design[`views.${type}`]])
   );
@@ -64,7 +65,7 @@ const left = (built: typeof prepared, values: Record<string, unknown> = {}) => {
 const hiddenIn = (built: ReturnType<typeof prepareSvelteComponent>, absent: string[]) =>
   hiddenAt(
     built.leftOut!.model,
-    built.design.starter,
+    starterValues(built.design),
     { Int: 'IntCell' },
     new Set(built.leftOut!.components),
     new Set(absent),
@@ -178,7 +179,7 @@ describe('left out', () => {
     expect(hidden).not.toContain(first('Column'));
     expect(hidden).not.toContain(first('Mixed'));
     // Per presentation, stepping over whole passes, the same: neither is left out.
-    const design = passes.design.starter;
+    const design = starterValues(passes.design);
     const left = leftOutOf(passes, design, { Int: design['views.Int'] }, phasesOf(passes.master));
     expect(left.nodes).not.toContain(first('Column'));
     expect(left.nodes).not.toContain(first('Mixed'));

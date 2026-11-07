@@ -139,7 +139,7 @@ describe('the nested form', () => {
     ['IntCell.inherit', { IntCell: { '...': 1 } }],
     ['Main.Problem.gap', { Main: { Problem: { gap: 1 } } }],
     ['Stacked.ratio', { Stacked: { ratio: 1 } }],
-    ['base', { '...': 1 }],
+    ['template', { template: 1 }],
     ['scale.spacing', { scale: { spacing: 1 } }],
     ['palette.accent', { palette: { accent: 1 } }],
     ['<Value>.fill', { '<Value>': { fill: 1 } }]
@@ -173,7 +173,7 @@ describe('the nested form', () => {
     expect(Object.keys(nested.Here as object)).toEqual(['...', 'fill', ':lo', '=true', '<Link>']);
   });
 
-  it('refuses a key written flat at any level, inherit and base, naming the nested form', () => {
+  it('refuses a key written flat at any level, inherit and a base at the top, naming the nested form', () => {
     expect(() => flatDesign({ 'IntCell.fill': 'white' })).toThrow(
       /"IntCell\.fill" at the top is written flat: .*\{"IntCell": \{"fill": …\}\}/u
     );
@@ -186,9 +186,10 @@ describe('the nested form', () => {
     expect(() => flatDesign({ IntCell: { inherit: '$cell' } })).toThrow(
       /"inherit" under IntCell is written "\.\.\."/u
     );
-    expect(() => flatDesign({ base: '<starter>' })).toThrow(
-      /"base" at the top is written "\.\.\."/u
-    );
+    for (const base of ['base', '...'])
+      expect(() => flatDesign({ [base]: '<starter>' })).toThrow(
+        /at the top named a base the design followed, which is gone: .*\{"template": "\$starter"\}/u
+      );
     expect(() => flatDesign({ IntCell: 1, 'IntCell.fill': 2 })).toThrow(FlatDesignError);
   });
 

@@ -17,7 +17,9 @@ import { versionScenes } from './scenes.server';
 const text = (value: string) => ({ text: value, sha256: '0'.repeat(64), mediaType: 'text/plain' });
 
 it('gives a version the scenes its build drew, of the steps asked for', async () => {
-  const [result] = await buildBatch(bars, [{ seed: 3, variant: { randomise: true } }]);
+  const [result] = await buildBatch(bars, [
+    { seed: 3, variant: { chosen: { template: '$starter' }, randomise: true } }
+  ]);
   if (!result.ok) throw new Error(result.error);
   const presentation = {
     presentationId: crypto.randomUUID(),
@@ -29,10 +31,11 @@ it('gives a version the scenes its build drew, of the steps asked for', async ()
     source: text(bars),
     html: text(''),
     javascript: text(result.bundle.javascript),
-    variant: result.bundle.variant
+    variant: result.bundle.variant,
+    design: result.bundle.design
   } satisfies BrowserBundlePresentation;
   const built = await bundlePresentation(prepareSvelteComponent(bars), 3, {
-    base: result.bundle.variant
+    base: result.bundle.design
   });
   const all = await versionScenes(presentation);
   expect(all).toEqual(built.layout.scenes);

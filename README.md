@@ -80,31 +80,31 @@ decisions settled ([`choosers.ts`](src/lib/server/projects/choosers.ts)). The
 assistant gives alternatives it wants shown as `comparisons` with explicit
 values. The assistant is the one author of a turn: its change to the source, or
 a `vary` without a `count` (which sets values without changing the source),
-shows as one version, its first build, with the viewed variant's values where
-they still fit and the starter's for anything new; an `edit` or `revise` may
-give `values` of its own over those, which unlike a `vary`'s settle nothing
-(every decision writes its values, and each comparison side's, as one JSON
-object in a string, nested as the design reads and applied as a JSON Merge
-Patch, `null` removing a value; text that is not one object goes back as a slip
-of writing:
-[`design-patch.server.ts`](src/lib/modes/sverlin/assistant/design-patch.server.ts);
-values naming a template as their base, as `"...": "$textbook"`, get the
-template written out in full under them, from the JSON files in
-[`templates/`](src/lib/modes/sverlin/templates/templates.ts); every design names
-its base, and a build whose design names none, as a first version's or a demo
-example's, gets the starter base written in:
-[`withStarterBase`](src/lib/modes/sverlin/design.server.ts)); after a manual
-change the first presentation keeps the viewed variant's values and the second
-is randomised; a manual change can also edit the viewed variant's choices as
-nested JSON (the Choices tab while editing): the values it changes or adds are
-built as chosen and those it removes or sets to null are no longer kept, so the
-rest still follow what they inherit, their groups and tokens (`choiceEdits`).
-Choices shows a version's design in short by default, the base's name and only
-the values that differ from what it gives, as the assistant's context does; its
-All values switch shows every stored value. In short, a value removed returns to
-what the base gives and the values it leaves out are kept (`shortValues`,
-`shortChoiceEdits` in
-[`variant-diff.ts`](src/lib/client/artifacts/variant-diff.ts)); refills of the
+shows as one version, its first build, on the viewed version's design file; an
+`edit` or `revise` may give `values` of its own over it, which unlike a `vary`'s
+settle nothing (every decision writes its values, and each comparison side's, as
+one JSON object in a string, nested as the design reads and applied as a JSON
+Merge Patch over the file, `null` removing a value; text that is not one object
+goes back as a slip of writing:
+[`design-patch.server.ts`](src/lib/modes/sverlin/assistant/design-patch.server.ts)).
+A version's design is a file stored with each presentation (`design`, beside the
+`variant` of every value built from it): a first version names a template, as
+`"template": "$textbook"`, and the build copies that template's file, from the
+JSON files in [`templates/`](src/lib/modes/sverlin/templates/templates.ts), into
+the version; one naming none is refused, and later versions change the copy
+(`buildVariant` in
+[`design.server.ts`](src/lib/modes/sverlin/design.server.ts)). A build that
+writes no values and has no version to build on, as a starter project's first
+build or a resample of a source never shown, uses its project starter's design
+([`starter-catalog.ts`](src/lib/server/projects/starter-catalog.ts)). After a
+manual change the first presentation keeps the viewed version's file and the
+second is randomised; a manual change can also edit the viewed version's choices
+as nested JSON (the Choices tab while editing): the values it changes or adds
+are written into the file and those it removes or sets to null leave it
+(`choiceEdits` in
+[`variant-diff.ts`](src/lib/client/artifacts/variant-diff.ts)). Choices shows
+the version's design file as it is stored by default, as the assistant's context
+does; its All values switch shows every value each kind takes. Refills of the
 presentation buffer stay random, as most are never shown
 ([`service.ts`](src/lib/server/projects/service.ts) `basedRequests`). With a
 `count` (at most 8, in whole pairs), a `vary` or `resample` makes that many,

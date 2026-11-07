@@ -35,14 +35,14 @@ export type ModeBuildResult =
         stepSignature?: string;
         // Modes with a design space: the variant, where each value came from, and each type's views.
         variant?: DesignValues;
+        // The design file the variant is built from.
+        design?: DesignValues;
         origins?: Record<string, 'chosen' | 'kept' | 'random' | 'starter'>;
         views?: Record<string, string[]>;
         // The source's own listings, the first options of its <Listing>.language variable.
         listings?: string[];
         // The kind of each tag, by its line:column.
         kinds?: Record<string, string[]>;
-        // Each kind of node's role, whose role levels its props follow.
-        roles?: Record<string, string>;
         // The variable each render of a type by name reads, by its line:column.
         renders?: Record<string, string>;
         // The <Node> tags the presentation leaves out, by their line:column.

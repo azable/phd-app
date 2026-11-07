@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterValues } from '../testing/scenes';
 
 import { prepareSvelteComponent, shownListing } from '../compile.server';
 import { readRegions } from './mapped.server';
@@ -92,7 +93,7 @@ function touched(source: string, pauses: readonly string[]) {
   const prepared = prepareSvelteComponent(source);
   const listing = shownListing(
     prepared,
-    prepared.design.starter,
+    starterValues(prepared.design),
     prepared.paced(new Set(pauses)).lit
   );
   return listing?.places?.touched ?? [];
@@ -138,13 +139,13 @@ describe('tokens naming places in a listing', () => {
   it('give the design <Listing>.places only where a listing has tokens', () => {
     const { design } = prepareSvelteComponent(binarySearch(tokened));
     expect(design.space['<Listing>.places']).toEqual(['none', 'fill', 'underline', 'outline']);
-    expect(design.starter['<Listing>.places']).toBe('fill');
+    expect(starterValues(design)['<Listing>.places']).toBe('fill');
     const plain = prepareSvelteComponent(
       binarySearch(tokened.replace(/:\w+\[([^\]]*\]?)\]/gu, '$1'))
     );
     expect(plain.listings?.pseudocode.tokens).toBeUndefined();
     expect(plain.design.space['<Listing>.places']).toBeUndefined();
-    expect(plain.design.starter['<Listing>.places']).toBeUndefined();
+    expect(starterValues(plain.design)['<Listing>.places']).toBeUndefined();
   });
 
   it('leave a source without tokens as it was', () => {
@@ -153,7 +154,11 @@ describe('tokens naming places in a listing', () => {
     expect(prepared.listings?.pseudocode.text).toBe(
       prepareSvelteComponent(binarySearch(tokened)).listings?.pseudocode.text
     );
-    const listing = shownListing(prepared, prepared.design.starter, prepared.paced(new Set()).lit);
+    const listing = shownListing(
+      prepared,
+      starterValues(prepared.design),
+      prepared.paced(new Set()).lit
+    );
     expect(listing && Object.keys(listing)).toEqual(['text', 'regions', 'syntax', 'lit']);
   });
 
@@ -174,7 +179,7 @@ describe('tokens naming places in a listing', () => {
   it('light each place in its mark’s fill, or its stroke where the fill is none or white', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
     const values = {
-      ...prepared.design.starter,
+      ...starterValues(prepared.design),
       'Arrow.<Link>.<To>:mid.fill': 'sky-200',
       'IntCell:target.fill': 'white',
       'IntCell:target.stroke': 'violet-500'
@@ -183,7 +188,7 @@ describe('tokens naming places in a listing', () => {
     expect(listing?.places?.paints).toMatchObject({
       ':mid': 'sky-200',
       ':target': 'violet-500',
-      ':lo': prepared.design.starter['Arrow.<Link>.<To>.fill']
+      ':lo': starterValues(prepared.design)['Arrow.<Link>.<To>.fill']
     });
     expect(listing?.places?.look).toBe('fill');
     // A place's own fill falls back to its kind's.
@@ -212,7 +217,7 @@ describe('tokens naming places in a listing', () => {
 
   it('are told to the assistant with the variable that removes them, as no node prop does', () => {
     const prepared = prepareSvelteComponent(binarySearch(tokened));
-    const values = { ...prepared.design.starter, 'Arrow.<Link>.<To>:mid.fill': 'sky-200' };
+    const values = { ...starterValues(prepared.design), 'Arrow.<Link>.<To>:mid.fill': 'sky-200' };
     const listing = shownListing(prepared, values, prepared.paced(new Set()).lit);
     const text = placeLightsText(listing?.places);
     expect(text).toContain('<Listing>.places fill');

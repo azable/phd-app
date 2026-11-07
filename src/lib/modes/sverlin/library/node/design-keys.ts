@@ -1,7 +1,6 @@
 /**
  * Design keys as written, which is also how the app keeps them. Each mark has one meaning: `$` a
- * token or a style, `<…>` a built-in name (a role's style, as `<Value>`, the listing, `<Listing>`,
- * and the starter base, `<starter>`), `{Type}` the view a type is drawn with, `:` a place on the page, `=`
+ * token or a style, `<…>` a built-in name (a role's style, as `<Value>`, and the listing, `<Listing>`), `{Type}` the view a type is drawn with, `:` a place on the page, `=`
  * a value of the data, no mark a kind; `@` only a part of the run, a label, as a label marks a
  * moment or span of it. A place drawn from a label's value keeps the label's `@` after its `:`.
  * Only a view choice is kept apart from how it is written, as a choice holds a view's name rather
@@ -20,7 +19,7 @@
  * nested (see nestedDesign).
  */
 
-import { baseKey, placeCaption } from './design';
+import { placeCaption, templateKey } from './design';
 
 /** A place as kept and written: a variable or field (`lo`, `pair.left`), or a label (`@scan.next`). */
 const placePattern = String.raw`@?[\w$.]+?`;
@@ -141,7 +140,7 @@ export function keptValues<T>(values: Readonly<Record<string, T>>): Record<strin
  * | `Card:this.seen=true.stroke`   | `"Card": { ":this.seen": { "=true": … } }`    |
  * | `Bar.height.from`              | `"Bar": { "height.from": … }`                 |
  * | `IntCell.inherit`              | `"IntCell": { "...": … }`                     |
- * | `base`                         | `"...": "$textbook"` (at the top)             |
+ * | `template`                     | `"template": "$textbook"` (a request's only)  |
  * | `scale.spacing`                | `"scale": { "spacing": … }`                   |
  * | `palette.accent`               | `"palette": { "accent": … }`                  |
  *
@@ -169,7 +168,6 @@ export type NestedDesign<T> = { [key: string]: T | NestedDesign<T> };
 /** A written key's path in the nested form (see nestedDesign). */
 function pathOf(key: string): string[] {
   if (key.startsWith('{')) return [key];
-  if (key === baseKey) return ['...'];
   const caption = placeCaption.exec(key);
   if (caption) return [`:${caption[1]}`, 'label'];
   const ofBase = /^(scale|palette)\.([a-z]\w*)$/u.exec(key);
@@ -241,15 +239,15 @@ export class FlatDesignError extends Error {
  * Why a segment of a nested design is no one level of it, or undefined: two parts joined by a dot,
  * as `"IntCell.fill"` or `"scale.spacing"`, where a place (`":@scan.next"`), a value
  * (`"=a.b"`), a listing region (`"@insert.key"`), a view choice (`"{Int}:target"`) or an ordered
- * prop's part (`"fill.hue"`) may hold dots; `inherit`, written `"..."`; and `base`, the top's
- * `"..."`.
+ * prop's part (`"fill.hue"`) may hold dots; `inherit`, written `"..."`; and a base at the top,
+ * `"..."` or `"base"`, which a design no longer has: it is a copy of a template.
  */
 function notNested(prefix: string | undefined, segment: string): string | undefined {
   const under = prefix === undefined ? 'at the top' : `under ${prefix}`;
   if (segment === 'inherit' && prefix !== undefined)
     return `"inherit" ${under} is written "...", as {"${prefix.split('.')[0]}": {"...": "$cell"}}.`;
-  if (segment === 'base' && prefix === undefined)
-    return `"base" at the top is written "...", as {"...": "<starter>"}.`;
+  if ((segment === 'base' || segment === '...') && prefix === undefined)
+    return `"${segment}" at the top named a base the design followed, which is gone: a design is a copy of a template, named in the first version as {"${templateKey}": "$starter"}, and later versions change the copy.`;
   if (/^[:=@{]/u.test(segment) || !segment.includes('.') || segment === '...') return undefined;
   if (/^[a-z]\w*\.(?:from|hue|order|unit)$/u.test(segment)) return undefined;
   const [first, ...rest] = segment.split('.');
@@ -272,9 +270,8 @@ export function flatDesign(design: Readonly<Record<string, unknown>>): Record<st
         problems.push(problem);
         continue;
       }
-      // `"..."` at the top names the design's base (see baseKey); under a kind, what it inherits.
-      const top = segment === '...' ? baseKey : segment;
-      const key = prefix === undefined ? top : joined(prefix, segment);
+      // `"..."` under a kind names what it inherits.
+      const key = prefix === undefined ? segment : joined(prefix, segment);
       if (value && typeof value === 'object' && !Array.isArray(value))
         walk(key, value as Record<string, unknown>);
       else flat[key] = value;

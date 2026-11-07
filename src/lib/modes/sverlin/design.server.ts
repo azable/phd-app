@@ -1,15 +1,13 @@
 /**
  * A source's design space, generated from its markup and the library, and the variants built in it.
  * Every visual attribute is a variable: each kind of node's props, each type's view, and the page
- * frame's settings. A variant gives every one a value; the starter is the first, and the others
- * take the values the assistant gives, the rest drawn at random.
+ * frame's settings. A version's design is a file, a template's copy and the changes made to it
+ * since; the build gives every variable its value from that file (see buildVariant).
  */
 
 import { keyedRandom } from './algorithm/random.server';
 import type { LayoutStructure } from './structure.server';
 import {
-  baseKey,
-  baseName,
   baseOptions,
   colourParts,
   exactColour,
@@ -34,24 +32,20 @@ import {
   placeProps,
   endProps,
   isLinkEnd,
-  kindLookProps,
   kindPropOptions,
   kindProps,
-  kindStyle,
   linkEnd,
   lookProps,
+  neutralListing,
+  neutralValue,
   oldBuiltIn,
-  roleStyleOf,
   roleStyleOptions,
   inheritKey,
-  levelFor,
-  missingRoleLooks,
   propOptions,
   roleProps,
   starterFrame,
-  starterFreeLayout,
-  starterGrid,
   styleOf,
+  templateKey,
   tokenProps,
   type DesignProp,
   type DesignToken,
@@ -66,8 +60,8 @@ import {
   keyProp,
   writtenText
 } from './library/node/design-keys';
-import { starterBase, starterBaseName } from './library/node/starter-base';
 import { designOnlyWarning } from './padding-warnings.server';
+import { templateNames, templateOf, templateValues } from './templates/templates';
 
 /** A value a variable can take. */
 export type DesignValue = string | number | boolean;
@@ -110,53 +104,34 @@ const propsOf = ({ key, role, free, grid }: DesignKind) =>
         : roleProps[role];
 
 /**
- * A kind's starting value for a prop: a free layout runs right, across the wide stage, a tree too,
- * so pages start near 16:9 unless the participant asks for them to run down; and a link end's head
- * is none where every link of its kind is a two-way line, as an undirected graph's edges. A collection's box,
- * where it varies, starts where its first item is, so the items already there stay as it grows; and
- * its items sit in the middle of its room where its length never changes, at its start where it
- * does, so none moves as one comes or goes.
+ * A kind's own starting value for a prop, from what its nodes do, where it has one: a link end's
+ * head is none where every link of its kind is a two-way line, as an undirected graph's edges. A
+ * collection's box, where it varies, starts where its first item is, so the items already there stay
+ * as it grows; and its items sit in the middle of its room where its length never changes, at its
+ * start where it does, so none moves as one comes or goes. It goes over the kind's base, and what
+ * the kind inherits goes over it (see resolvedValue).
  */
-const starterLook = ({ key, role, free, lines, collection }: DesignKind, prop: string) =>
-  prop === 'direction' && free
-    ? 'right'
-    : prop === 'head' && lines
-      ? 'none'
-      : collection && prop === (collection.axis === 'x' ? 'xAnchor' : 'yAnchor')
-        ? 'start'
-        : collection && prop === 'justify'
-          ? collection.steady
-            ? 'center'
-            : 'start'
-          : (starterRoleLook(role, key, prop) ?? starterFreeLayout[prop] ?? starterGrid[prop]);
+const structuralLook = ({ lines, collection }: DesignKind, prop: string) =>
+  prop === 'head' && lines
+    ? 'none'
+    : collection && prop === (collection.axis === 'x' ? 'xAnchor' : 'yAnchor')
+      ? 'start'
+      : collection && prop === 'justify'
+        ? collection.steady
+          ? 'center'
+          : 'start'
+        : undefined;
 
 /**
- * A role's look in the starter base, through its tokens: every kind is shown, and takes each other
- * prop from its style there, as `<Value>.fill` or a link's end `<Pointer>.<To>.fill`, so the
- * engine holds no look of its own.
- */
-function starterRoleLook(role: KindRole, kind: string, prop: string): DesignValue | undefined {
-  if (prop === 'shown') return true;
-  const value = starterBase[`${kindStyle(role, kind)}.${prop}`];
-  return isToken(value) ? starterBase[value] : value;
-}
-
-/**
- * The starter base's listing look, as `<Listing>.lit.fill`, with its first language none: what a
- * view placing a <Listing /> starts with, its places' look aside (see starterListingPlaces).
+ * The listing's starting look, its first language none: neutral, for a design's template to set
+ * (see neutralListing), its places' look aside, a variable only where the listing has tokens.
  */
 export const starterListing = (): Record<string, DesignValue> => ({
   '<Listing>.language': 'none',
   ...Object.fromEntries(
-    Object.entries(starterBase).filter(
-      ([key]) => key.startsWith('<Listing>.') && key !== '<Listing>.places'
-    )
+    Object.entries(neutralListing).filter(([key]) => key !== '<Listing>.places')
   )
 });
-
-/** The starter base's tokens, as `$accent`, each with its value. */
-const starterTokens = (): Record<string, DesignValue> =>
-  Object.fromEntries(Object.keys(tokenProps).map((token) => [token, starterBase[token]]));
 
 /**
  * A source's places (see Place in library/node/design.ts): their kinds, whose props are those a
@@ -207,7 +182,7 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   if (!kinds.length) return {};
   return {
     ...Object.fromEntries(tokens.map((token) => [token, propOptions[tokenProps[token]]])),
-    // Every role's style in the base, the source's roles or not, as a base holds every value.
+    // Every role's style, the source's roles or not, as a template holds every value.
     ...Object.fromEntries(
       (Object.keys(roleProps) as KindRole[]).flatMap((role) =>
         lookProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, roleStyleOptions(prop)])
@@ -224,50 +199,15 @@ function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   };
 }
 
-/** Whether a kind's variable follows a level: a prop of a kind its role's style sets. */
-function follows(roles: Readonly<Record<string, KindRole>>, key: string): boolean {
-  const kind = kindOf(key);
-  const role = Object.hasOwn(roles, kind) ? roles[kind] : undefined;
-  return !!role && kindLookProps(role, kind).includes(key.slice(kind.length + 1) as DesignProp);
-}
-
-/**
- * How many kinds each kind inherits through (see levelFor), so a kind's source settles before it:
- * 0 for one inheriting none or a style. A kind inheriting a kind that inherits it back is an error
- * naming the round.
- */
-function inheritance(
-  values: Readonly<Record<string, DesignValue>>,
-  roles: Readonly<Record<string, KindRole>>
-): Map<string, number> {
-  const depth = new Map<string, number>();
-  const sourceOf = (kind: string) => {
-    const source = values[inheritKey(kind)];
-    return typeof source === 'string' && Object.hasOwn(roles, source) ? source : undefined;
-  };
-  for (const kind of Object.keys(roles)) {
-    const round = [kind];
-    for (let source = sourceOf(kind); source; source = sourceOf(source)) {
-      if (round.includes(source))
-        throw new DesignValueError(
-          `${[...round, source].join(' inherits ')}: a kind cannot inherit what inherits it; leave "..." out of one of them, so it follows its role's look, or have it inherit a $ style.`
-        );
-      round.push(source);
-    }
-    depth.set(kind, round.length - 1);
-  }
-  return depth;
-}
-
 /**
  * The space with the styles the variant names (see isStyle): each style's props, taking the options
  * every kind inheriting it has for the prop, or, where none inherits it yet, any kind's, or, where
- * no kind has the prop, the prop's own; and each
- * kind's inherit taking the styles as options beside its role's kinds.
+ * no kind has the prop, the prop's own; and each kind's inherit taking the styles as options beside
+ * the kinds. `bases` holds every kind, by key.
  */
 function withStyles(
   space: DesignSpace,
-  roles: Readonly<Record<string, KindRole>>,
+  bases: Readonly<Record<string, string>>,
   values: Readonly<Record<string, unknown>>
 ): DesignSpace {
   // A role's style is in the space already, with its role's options (see levelSpace).
@@ -279,18 +219,18 @@ function withStyles(
   if (!styles.length) return space;
   const extended: Record<string, readonly DesignValue[]> = { ...space };
   for (const { style, prop } of named) {
-    const heirs = Object.keys(roles).filter(
+    const heirs = Object.keys(bases).filter(
       (kind) => values[inheritKey(kind)] === style && Object.hasOwn(space, `${kind}.${prop}`)
     );
     const holders = heirs.length
       ? heirs
-      : Object.keys(roles).filter((kind) => Object.hasOwn(space, `${kind}.${prop}`));
+      : Object.keys(bases).filter((kind) => Object.hasOwn(space, `${kind}.${prop}`));
     const [first = [], ...rest] = holders.map((kind) => space[`${kind}.${prop}`]);
     const options = heirs.length
       ? first.filter((option) => rest.every((options) => options.includes(option)))
       : holders.length
         ? [...new Set([first, ...rest].flat())]
-        : // No kind has the prop, as a base's $second where the source draws no box: its own options.
+        : // No kind has the prop, as a template's $second where the source draws no box: its own options.
           ((propOptions as Record<string, readonly DesignValue[]>)[prop] ?? []);
     // A style's prop may name a token of that prop whose every value it can take, as a group's.
     const fitting = tokens.filter(
@@ -300,17 +240,66 @@ function withStyles(
     );
     extended[`${style}.${prop}`] = [...options.filter((option) => !isToken(option)), ...fitting];
   }
-  for (const kind of Object.keys(roles)) {
+  for (const kind of Object.keys(bases)) {
     const key = inheritKey(kind);
     if (Object.hasOwn(space, key)) extended[key] = [...space[key], ...styles];
   }
   return extended;
 }
 
+/** A value and the variable it comes from: the kind's own, a style's, its base's, or a token. */
+type Resolved = { value: DesignValue; from?: string };
+
 /**
- * The space under the base the values set (see baseKey, scaleKey, paletteKey in
- * library/node/design.ts): the base's name, its scales and its palette, each a variable taking the
- * value given where it is valid, and every prop on a scale taking that scale's steps, every colour
+ * Each prop of a kind (but whether it is shown, which stays its own) as the design file gives it: the
+ * kind's own value; else what it inherits, a style's value for the prop or another kind's, as
+ * resolved; else the kind's own starting look, from what its nodes do (see structuralLook), where the
+ * scales allow it; else its
+ * base's value (`bases`, as `<Value>` for a value's kind); else the prop's neutral value. A value
+ * naming a token takes the token's. A kind inheriting a kind that inherits it back is an error
+ * naming the round.
+ */
+function resolvedValue(
+  file: Readonly<Record<string, DesignValue>>,
+  bases: Readonly<Record<string, string>>,
+  starter: Readonly<Record<string, DesignValue>>,
+  space: DesignSpace
+): (key: string) => Resolved | undefined {
+  const token = (value: DesignValue, from: string): Resolved =>
+    isToken(value)
+      ? { value: file[value] ?? neutralValue(tokenProps[value]), from: value }
+      : { value, from };
+  const resolve = (kind: string, prop: string, round: readonly string[]): Resolved => {
+    const key = `${kind}.${prop}`;
+    if (Object.hasOwn(file, key)) return token(file[key], key);
+    const source = file[inheritKey(kind)];
+    if (typeof source === 'string' && Object.hasOwn(bases, source)) {
+      if (round.includes(source))
+        throw new DesignValueError(
+          `${[...round, kind, source].join(' inherits ')}: a kind cannot inherit what inherits it; leave "..." out of one of them, so it follows its base, or have it inherit a $ style.`
+        );
+      if (Object.hasOwn(space, `${source}.${prop}`)) return resolve(source, prop, [...round, kind]);
+    } else if (typeof source === 'string' && Object.hasOwn(file, `${source}.${prop}`))
+      return token(file[`${source}.${prop}`], `${source}.${prop}`);
+    // A kind's own starting look a design's scales leave off gives way to its base.
+    if (Object.hasOwn(starter, key) && space[key]?.includes(starter[key]))
+      return { value: starter[key] };
+    const base = `${bases[kind]}.${prop}`;
+    if (Object.hasOwn(file, base)) return token(file[base], base);
+    return { value: neutralValue(prop as DesignProp, isLinkEnd(kind)) };
+  };
+  return (key) => {
+    const kind = kindOf(key);
+    const prop = key.slice(kind.length + 1);
+    if (!Object.hasOwn(bases, kind) || prop === 'shown' || !Object.hasOwn(propOptions, prop))
+      return undefined;
+    return resolve(kind, prop, []);
+  };
+}
+
+/**
+ * The space under the scales and palette the values set (see scaleKey, paletteKey in
+ * library/node/design.ts): each a variable taking the value given where it is valid, and every prop on a scale taking that scale's steps, every colour
  * prop the palette's colours too. Also why a base's own value is not valid, by key.
  */
 function withBase(
@@ -321,13 +310,7 @@ function withBase(
   const own: Record<string, readonly DesignValue[]> = {};
   for (const [key, value] of Object.entries(values)) {
     const scale = /^scale\.([a-z]+)$/u.exec(key)?.[1];
-    if (key === baseKey) {
-      if (typeof value === 'string' && baseName.test(value)) own[key] = [value];
-      else
-        problems.push(
-          `${key} names its base as "<starter>", or with $ and a short name, as "$textbook", not ${JSON.stringify(value)}.`
-        );
-    } else if (scale !== undefined) {
+    if (scale !== undefined) {
       if (!Object.hasOwn(scaleProps, scale))
         problems.push(
           `The design has no scale ${scale}; its scales are ${Object.keys(scaleProps).join(', ')}.`
@@ -345,8 +328,7 @@ function withBase(
         );
     }
   }
-  const sets = Object.keys(own).some((key) => key !== baseKey);
-  if (!sets) return { space: { ...space, ...own }, problems };
+  if (!Object.keys(own).length) return { space, problems };
   // A layout's frame keeps its own options: the page round a picture is no part of a base.
   const frames = framedKinds(space);
   const framing = (key: string) =>
@@ -371,35 +353,20 @@ const framedKinds = (space: DesignSpace) =>
 /** Each variable's options, by key. */
 export type DesignSpace = Readonly<Record<string, readonly DesignValue[]>>;
 
-/** Where a value came from: chosen for the build, kept from the variant built on, drawn, or the starter's. */
+/** Where a value came from: chosen for the build, kept from the design built on, drawn, or the starter's. */
 export type DesignOrigin = 'chosen' | 'kept' | 'random' | 'starter';
 
 /**
- * What a build starts from. Chosen values must each name a variable and be one of its options. A
- * base variant's values are kept where they still fit; the starter gives the rest. Randomise
- * draws afresh: every variable (true), keeping the base's equalities, or the variables named.
+ * What a build starts from: `base`, the design file of the version built on; `chosen`, the values
+ * this build changes, each naming a variable and one of its options, or naming a template, as
+ * `"template": "$slide"`, whose file replaces the base; and `randomise`, the values drawn afresh:
+ * every one the file writes (true), keeping its equalities, or the variables named.
  */
 export type VariantRequest = {
   chosen?: Readonly<Record<string, unknown>>;
   base?: Readonly<Record<string, unknown>>;
   randomise?: true | readonly string[];
 };
-
-/** Whether values name their base, flat (`base`) or as written at the top (`...`). */
-const namesBase = (values: Readonly<Record<string, unknown>> | undefined) =>
-  !!values && (Object.hasOwn(values, baseKey) || Object.hasOwn(values, '...'));
-
-/**
- * A request as a design enters the app: one naming its base as it is; one naming none and building
- * on no variant, as a demo example's, a new project's or a test's, with the starter base written in
- * under its chosen values, so the variant built records `"...": "<starter>"` and every base value. A
- * request building on a variant that names no base is left to be refused (see buildVariant).
- */
-export function withStarterBase(request: VariantRequest): VariantRequest {
-  if (namesBase(request.chosen) || namesBase(request.base)) return request;
-  if (request.base && Object.keys(request.base).length) return request;
-  return { ...request, chosen: { ...starterBase, ...request.chosen } };
-}
 
 /** A value the design space has no place for, or a variable it does not have. */
 export class DesignValueError extends Error {
@@ -526,7 +493,12 @@ function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[]
     : options;
 }
 
-/** The first variant of a source: each type in its first view, and each kind in its role's look. */
+/**
+ * The values a source starts with before its design file: each type in its first view, the listing
+ * neutral, each layout's frame, and, of a kind's props, only the starting looks its nodes give it
+ * (see structuralLook); every other prop of a kind comes from the file (see resolvedValue), and a
+ * place's from what it falls back to (see buildVariant).
+ */
 export function starterVariant(
   kinds: readonly DesignKind[],
   views: Readonly<Record<string, readonly string[]>>,
@@ -546,22 +518,15 @@ export function starterVariant(
           '<Listing>.language': ownListings[0] ?? 'none'
         }
       : {}),
-    ...(kinds.length ? starterTokens() : {}),
     ...Object.fromEntries(
       kinds.flatMap((kind) =>
-        propsOf(kind).map((prop) => [`${kind.key}.${prop}`, starterLook(kind, prop)])
+        propsOf(kind).flatMap((prop) => {
+          const look = structuralLook(kind, prop);
+          return look === undefined ? [] : [[`${kind.key}.${prop}`, look]];
+        })
       )
     ),
-    // A place starts as its type and kinds do.
     ...Object.fromEntries(places.choices.map(({ key, options }) => [key, options[0]])),
-    ...Object.fromEntries(
-      places.kinds.flatMap((kind) =>
-        placePropsOf(kind).map((prop) => [
-          `${kind.key}.${prop}`,
-          starterRoleLook(kind.role, kind.key, prop)
-        ])
-      )
-    ),
     ...layoutStarter(layouts)
   };
 }
@@ -644,18 +609,19 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
 }
 
 /**
- * The complete variant a build takes, and where each value came from: the starter, then the base's
- * values that still fit, then any randomising, then the chosen values. A chosen value outside its
- * variable's options is an error naming them; one for a variable the design has not is left out,
- * and `dropped` says why, for the build to warn of. A place's variable (`fallbacks`, by key, the variable it
- * falls back to) then takes the value of its own unless it is chosen, drawn by name, or set apart
- * in the base, so a place looks as its type and kinds do until a variant sets it.
+ * A version's design file and the complete variant built from it, with where each value came from.
+ * The file is the template the chosen values name, copied in whole, or else the file of the version
+ * built on (`base`), which a first version lacks, so it must name a template; then any values drawn
+ * (randomise: every value the file writes, keeping its equalities, and the view choices; or the
+ * variables named); then the chosen values. A chosen value outside its variable's options is an
+ * error naming them; one for a variable the design has not is left out, and `dropped` says why, for
+ * the build to warn of; a value of the file built on that no longer fits is left out too, and said.
  *
- * A kind of a role (`roles`, by kind) takes its role level's value, or that level's token's, for
- * each prop it has not set apart: one whose value differs from its level's in the starter or the
- * base, or that is chosen or drawn by name. So a token or a role level chosen changes every kind
- * following it, and a kind's own value overrides both; a level whose value some kind following it
- * cannot take is an error naming that kind.
+ * Every variable then takes its value from the file: a kind's props as resolvedValue gives them
+ * (`bases`, by kind, the style each follows where nothing else sets a prop), every other variable
+ * the file's value or the starter's. A place's variable (`fallbacks`, by key, the variable it falls
+ * back to) takes the value of its own unless the file sets it, so a place looks as its type and
+ * kinds do until a design sets it.
  */
 export function buildVariant(
   offered: DesignSpace,
@@ -663,28 +629,31 @@ export function buildVariant(
   request: VariantRequest,
   seed: number,
   fallbacks: Readonly<Record<string, Fallback>> = {},
-  roles: Readonly<Record<string, KindRole>> = {}
+  bases: Readonly<Record<string, string>> = {}
 ): {
   values: Record<string, DesignValue>;
+  design: Record<string, DesignValue>;
   origins: Record<string, DesignOrigin>;
   dropped: string[];
 } {
   // Keys come written or as kept (see design-keys.ts): `{Int}` and <Listing>.syntax are views.Int
   // and <Listing>.syntax here; every other key is the same in both.
-  const aliased = (entries: Record<string, unknown> | undefined) => keptValues(entries ?? {});
+  const aliased = (entries: Readonly<Record<string, unknown>> | undefined) =>
+    keptValues(entries ?? {});
   const base = aliased(request.base);
   const chosenValues = aliased(request.chosen);
-  // Every design names its base and holds every role's look (see withStarterBase).
-  if (!namesBase({ ...base, ...chosenValues }))
+  const both = { ...base, ...chosenValues };
+  // A design is a copy of a template; it follows no base of its own.
+  if (Object.hasOwn(both, 'base') || Object.hasOwn(both, '...'))
     throw new DesignValueError(
-      'The design names no base: write "...": "<starter>", or another template, at its top.'
+      `"..." at the top named a base the design followed, which is gone: a design is a copy of a template, named in the first version as {"${templateKey}": "$starter"}, and later versions change the copy.`
     );
   const optedOut = Object.entries(chosenValues)
     .filter(([key, value]) => key.endsWith('.inherit') && value === 'none')
     .map(([key]) => key.slice(0, -'.inherit'.length));
   if (optedOut.length)
     throw new DesignValueError(
-      `${optedOut.join(', ')}: "...": "none" is gone, as every kind follows its role's look; leave "..." out, and set the props that differ on the kind itself.`
+      `${optedOut.join(', ')}: "...": "none" is gone, as every kind follows its base; leave "..." out, and set the props that differ on the kind itself.`
     );
   // A built-in name is written in angle brackets, `$` being only for tokens and styles.
   const renamed = [
@@ -717,31 +686,29 @@ export function buildVariant(
     return [`${key} is written ${end}, the paint the link's end gives what it reaches.`];
   });
   if (targets.length) throw new DesignValueError(targets.join(' '));
-  const missing = missingRoleLooks({ ...base, ...chosenValues }, roles);
-  if (missing.length)
+  // The file the build starts from: a template's copy, or the version's built on.
+  const named = chosenValues[templateKey];
+  const template = named === undefined ? undefined : templateOf(named);
+  if (named !== undefined && !template)
     throw new DesignValueError(
-      `The design's base sets no ${missing.join(', ')}: a base sets every role's look its kinds follow; start from a template, as "...": "<starter>", and change what differs.`
+      `"${templateKey}" names ${JSON.stringify(named)}, which is no template; the templates are ${templateNames()}.`
     );
-  // The styles the base and the chosen values name join the space (see withStyles), and the base's
-  // scales and palette set its options (see withBase).
-  const { space, problems: baseProblems } = withBase(
-    withStyles(offered, roles, { ...base, ...chosenValues }),
-    { ...base, ...chosenValues }
-  );
+  if (!template && !Object.keys(base).length)
+    throw new DesignValueError(
+      `The design names no template: a first version copies one, as {"${templateKey}": "$starter"}, and later versions change the copy; the templates are ${templateNames()}.`
+    );
+  const startFile: Record<string, unknown> = template ? templateValues(template) : base;
+  const startOrigin: DesignOrigin = template ? 'starter' : 'kept';
+  const chosen = Object.entries(chosenValues).filter(([key]) => key !== templateKey);
+  // The styles the file and the chosen values name join the space (see withStyles), and the scales
+  // and palette set its options (see withBase).
+  const written = { ...startFile, ...Object.fromEntries(chosen) };
+  const { space, problems: baseProblems } = withBase(withStyles(offered, bases, written), written);
   const has = (key: string) => Object.hasOwn(space, key);
   if (baseProblems.length) throw new DesignValueError(writtenText(baseProblems.join(' ')));
-  const asGiven = Object.entries(chosenValues);
-  // The starter base's own values, written in under a design naming `<starter>` (see
-  // withStarterBase), are the starter's, chosen by no one: the design starts from them, and values
-  // drawn go over them as over the starter's.
-  const fromStarterBase = ([key, value]: [string, unknown]) =>
-    chosenValues[baseKey] === starterBaseName && starterBase[key] === value;
-  const offeredGiven = asGiven.filter(([key]) => has(key));
-  const unchosen = offeredGiven.filter(fromStarterBase);
-  const chosen = offeredGiven.filter((entry) => !fromStarterBase(entry));
   // A style's prop outside what its heirs share names them, as a group's names the kinds it reaches.
   const heirsOf = (style: string) =>
-    Object.keys(roles).filter((kind) => ({ ...base, ...chosenValues })[inheritKey(kind)] === style);
+    Object.keys(bases).filter((kind) => written[inheritKey(kind)] === style);
   const styleUnfit = (key: string, value: unknown) => {
     const style = styleOf(key);
     const heirs = style ? heirsOf(style.style) : [];
@@ -752,118 +719,107 @@ export function buildVariant(
         )
       : undefined;
   };
-  const problems = offeredGiven
-    .filter(([key, value]) => !fits(space, key, value))
+  // A template named is chosen whole: a value of its copy the chosen scales leave off is refused.
+  const copied = template
+    ? Object.entries(startFile).filter(([key]) => !chosen.some(([other]) => other === key))
+    : [];
+  const problems = [...copied, ...chosen]
+    .filter(([key, value]) => has(key) && !fits(space, key, value))
     .map(([key, value]) => styleUnfit(key, value) ?? unfit(space, key, value));
   if (problems.length) throw new DesignValueError(writtenText(problems.join(' ')));
-  const isLevel = (key: string) =>
-    isToken(key) ||
-    roleStyleOf(key) !== undefined ||
-    styleOf(key) !== undefined ||
-    key.endsWith('.inherit');
-  const following = Object.keys(starter).filter((key) => follows(roles, key));
   const asked =
     request.randomise === true ? [] : (request.randomise ?? []).map((key) => keptKey(key));
-  const named = asked.filter((key) => Object.hasOwn(space, key));
+  const drawnNames = asked.filter(has);
   const dropped = [
-    ...asGiven
-      // A base holds values the source may have no use for, as a listing's look (see isBaseKey).
-      .filter(([key]) => !Object.hasOwn(space, key) && !isBaseKey(key))
+    ...chosen
+      // A template holds values the source may have no use for, as a listing's look (see isBaseKey).
+      .filter(([key]) => !has(key) && !isBaseKey(key))
       .map(([key, value]) => unfit(space, key, value)),
-    ...asked.filter((key) => !Object.hasOwn(space, key)).map((key) => unfit(space, key, undefined))
+    ...asked.filter((key) => !has(key)).map((key) => unfit(space, key, undefined))
   ].map((why) => writtenText(`${why} The value is left out.`));
-  const values: Record<string, DesignValue> = { ...starter };
-  const origins: Record<string, DesignOrigin> = Object.fromEntries(
-    Object.keys(starter).map((key) => [key, 'starter' as const])
-  );
-  for (const [key, value] of Object.entries(base)) {
-    if (fits(space, key, value)) {
-      values[key] = value as DesignValue;
-      origins[key] = 'kept';
-    } else if (Object.hasOwn(space, key) && value !== starter[key])
+  const file: Record<string, DesignValue> = {};
+  const fileOrigins: Record<string, DesignOrigin> = {};
+  for (const [key, value] of Object.entries(startFile)) {
+    if (has(key) ? fits(space, key, value) : isBaseKey(key)) {
+      file[key] = value as DesignValue;
+      fileOrigins[key] = startOrigin;
+    } else if (has(key))
       // A variable the design still offers but not with this value, as a minSize between two of
       // its steps, is said, not dropped unseen; a variable the source no longer has goes quietly,
-      // as a base from before an edit holds many, and so does a starter's value a new base's scale
-      // has no step for, which was no one's choice. A look only, never sending a version back.
+      // as a file from before an edit holds many. A look only, never sending a version back.
       dropped.push(
         writtenText(
-          `${unfit(space, key, value)} The value kept from the version built on is left out, and the starter's is drawn. ${designOnlyWarning}`
+          `${unfit(space, key, value)} The value kept from the version built on is left out. ${designOnlyWarning}`
         )
       );
   }
-  for (const [key, value] of unchosen) {
-    values[key] = value as DesignValue;
-    origins[key] = 'starter';
-  }
-  // A kind's prop set apart from its level stays its own; every other follows its level. Before
-  // the chosen values, a level the variant built on does not set is the starter base's, which the
-  // starter's kinds start from, so a kind the starter sets apart (a two-way line's head) stays so.
-  const starting = { ...starterBase, ...values };
-  const own = new Set(
-    following.filter((key) => values[key] !== levelFor(starting, roles, key)!.value)
+  const current = (key: string): DesignValue =>
+    file[key] ?? resolvedValue(file, bases, starter, space)(key)?.value ?? starter[key];
+  // A random variant draws what the file writes and each type's view, never a place's own choice,
+  // which follows its type's until a design sets it apart.
+  const typeViews = Object.keys(starter).filter(
+    (key) => key.startsWith('views.') && has(key) && !Object.hasOwn(fallbacks, key)
   );
-  // Each kind following a level takes the level's value; one that cannot is the level's error
-  // where the level was chosen, and otherwise keeps its own value, as a base kept where it fits.
-  // A kind inheriting a kind follows after it, so it takes the value its source has come to.
-  const follow = (checked: ReadonlySet<string>) => {
-    const unfits: string[] = [];
-    const depth = inheritance(values, roles);
-    const inOrder = following.toSorted(
-      (a, b) => (depth.get(kindOf(a)) ?? 0) - (depth.get(kindOf(b)) ?? 0)
-    );
-    for (const key of inOrder) {
-      if (own.has(key)) continue;
-      const { value, from } = levelFor(values, roles, key)!;
-      if (value === undefined || value === values[key]) continue;
-      if (!fits(space, key, value)) {
-        if (from && checked.has(from))
-          unfits.push(`${from} is ${JSON.stringify(value)}, but ${unfit(space, key, value)}`);
-        continue;
-      }
-      values[key] = value;
-      origins[key] = (from ? origins[from] : undefined) ?? 'starter';
-    }
-    if (unfits.length) throw new DesignValueError(writtenText(unfits.join(' ')));
-  };
   const drawn =
     request.randomise === true
-      ? randomised(space, values, seed)
-      : Object.fromEntries(named.map((key) => [key, drawOne(space, key, values[key], seed)]));
+      ? randomised(
+          space,
+          {
+            ...Object.fromEntries(typeViews.map((key) => [key, starter[key]])),
+            ...Object.fromEntries(Object.entries(file).filter(([key]) => has(key)))
+          },
+          seed
+        )
+      : Object.fromEntries(drawnNames.map((key) => [key, drawOne(space, key, current(key), seed)]));
   for (const [key, value] of Object.entries(drawn)) {
-    if (value === values[key]) continue;
-    values[key] = value;
-    origins[key] = 'random';
-    if (request.randomise !== true && follows(roles, key)) own.add(key);
+    if (value === current(key)) continue;
+    file[key] = value;
+    fileOrigins[key] = 'random';
   }
-  follow(new Set());
-  // Every chosen value, then the kinds following the levels chosen; a kind chosen is its own, and
-  // one inheriting it follows the value chosen.
   for (const [key, value] of chosen) {
-    values[key] = value as DesignValue;
-    origins[key] = 'chosen';
-    if (follows(roles, key)) own.add(key);
+    if (!has(key) && !isBaseKey(key)) continue;
+    file[key] = value as DesignValue;
+    fileOrigins[key] = 'chosen';
   }
-  // A kind chosen to inherit something follows it where only its starter look set it apart, as a
-  // link's label starting unboxed: that look was no one's choice. Values chosen, kept or drawn stay.
-  for (const [key] of chosen.filter(([key]) => key.endsWith('.inherit'))) {
-    const kind = key.slice(0, -'.inherit'.length);
-    for (const prop of following.filter((name) => kindOf(name) === kind))
-      if (origins[prop] === 'starter') own.delete(prop);
+  // Every variable from the file: the file's own values, each kind's props resolved, the rest the
+  // starter's.
+  const resolve = resolvedValue(file, bases, starter, space);
+  const values: Record<string, DesignValue> = {};
+  const origins: Record<string, DesignOrigin> = {};
+  const unfits: string[] = [];
+  for (const key of Object.keys(space)) {
+    const resolved = resolve(key);
+    if (resolved) {
+      if (!fits(space, key, resolved.value)) {
+        unfits.push(
+          `${resolved.from} is ${JSON.stringify(resolved.value)}, but ${unfit(space, key, resolved.value)}`
+        );
+        continue;
+      }
+      values[key] = resolved.value;
+      origins[key] = (resolved.from ? fileOrigins[resolved.from] : undefined) ?? 'starter';
+    } else if (Object.hasOwn(file, key)) {
+      values[key] = file[key];
+      origins[key] = fileOrigins[key];
+    } else if (Object.hasOwn(starter, key)) {
+      values[key] = starter[key];
+      origins[key] = 'starter';
+    } else if (Object.hasOwn(bases, kindOf(key)) && keyProp(key) === 'shown') {
+      values[key] = true;
+      origins[key] = 'starter';
+    }
   }
-  follow(new Set(chosen.map(([key]) => key).filter(isLevel)));
+  if (unfits.length) throw new DesignValueError(writtenText(unfits.join(' ')));
   // In order, so a place falling back to another place, as a listing's region to its label's mark,
   // takes the value that one has come to.
   for (const [key, given] of Object.entries(fallbacks)) {
-    const was = fallbackOf(given, { ...values, ...base });
-    const apart =
-      Object.hasOwn(base, key) && base[key] !== base[was] && fits(space, key, base[key]);
-    if (apart || named.includes(key) || chosen.some(([name]) => name === key)) continue;
+    if (Object.hasOwn(file, key)) continue;
     const fallback = fallbackOf(given, values);
     if (!Object.hasOwn(values, fallback) || !fits(space, key, values[fallback])) continue;
     values[key] = values[fallback];
     origins[key] = origins[fallback];
   }
-  return { values, origins, dropped };
+  return { values, design: file, origins, dropped };
 }
 
 /**
@@ -915,10 +871,10 @@ function randomised(
   const groups = new Map<string, string[]>();
   const frames = framedKinds(space);
   for (const [key, value] of Object.entries(values)) {
-    // A place's label is words the participant chose, never drawn; a base's name, scales and
-    // palette are what the drawn values are chosen from.
+    // A place's label is words the participant chose, never drawn; the scales and palette are
+    // what the drawn values are chosen from.
     if (frames.has(kindOf(key)) || isPlaceLabel(key)) continue;
-    if (key === baseKey || key.startsWith('scale.') || paletteKey.test(key)) continue;
+    if (key.startsWith('scale.') || paletteKey.test(key)) continue;
     if ((gridProps as readonly string[]).includes(propOf(key))) continue;
     const group =
       slotProps.has(propOf(key)) && !isPlacedOrValued(key)

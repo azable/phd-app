@@ -10,11 +10,9 @@ import {
   keptValues,
   kindKeyParts,
   nestedDesign,
-  writtenKey,
   writtenValues
 } from '$lib/modes/sverlin/library/node/design-keys';
-import { levelFor, placeCaption, type KindRole } from '$lib/modes/sverlin/library/node/design';
-import { namedTemplateValues, withoutTemplateValues } from '$lib/modes/sverlin/templates/templates';
+import { placeCaption } from '$lib/modes/sverlin/library/node/design';
 import type { DesignValues } from '$lib/shared/presentations';
 
 /**
@@ -27,11 +25,10 @@ export function variantDocument(variant: DesignValues): string {
 
 /**
  * An edit of a version's choices as their document (see variantDocument): the values it changes or
- * adds, to build with as chosen, and the variables it removes, to stop keeping, so every value left
- * as it was keeps following what it inherits, its role's style or its token; or why the text is not
- * such a document. The document is the whole design, nested (see flatDesign): a key removed, or
- * set to null as a JSON Merge Patch removes one, returns to what it follows. A value is
- * a string, a number or a boolean, as a variant's are.
+ * adds, to write into the design file, and the variables it removes, to take out of the file; or
+ * why the text is not such a document. The document is nested (see flatDesign): a key removed, or
+ * set to null as a JSON Merge Patch removes one, returns to what the kind inherits, its base or the
+ * neutral value. A value is a string, a number or a boolean, as a variant's are.
  */
 export function choiceEdits(
   shown: DesignValues,
@@ -71,49 +68,6 @@ export function choiceEdits(
       )
     ) as DesignValues,
     unset: Object.keys(shown).filter((key) => !Object.hasOwn(kept, key))
-  };
-}
-
-/**
- * A version's choices in short: the base's name and only the values that differ from what the base
- * gives, as the assistant's context tells them. A value still its template's is left out (see
- * withoutTemplateValues), and so is a kind's prop that holds what it follows, its role's style, what
- * it inherits or their token (see levelFor), which needs the kinds' roles. The stored design stays
- * whole; this is only how the panel shows it.
- */
-export function shortValues(
-  variant: DesignValues,
-  roles: Readonly<Record<string, string>> = {}
-): DesignValues {
-  const kindRoles = roles as Readonly<Record<string, KindRole>>;
-  return Object.fromEntries(
-    Object.entries(withoutTemplateValues(variant)).filter(
-      ([key, value]) => levelFor(variant, kindRoles, key)?.value !== value
-    )
-  );
-}
-
-/**
- * An edit of a version's choices in short (see shortValues), as choiceEdits reads one of the whole
- * design: a value changed or added is chosen and one removed returns to what the base gives, the
- * template's value where the template sets it (as the build keeps no template, a base value left
- * out would be missing), else what it follows. A value the short form leaves out is kept.
- */
-export function shortChoiceEdits(
-  variant: DesignValues,
-  roles: Readonly<Record<string, string>> | undefined,
-  text: string
-): ReturnType<typeof choiceEdits> {
-  const edits = choiceEdits(shortValues(variant, roles), text);
-  if ('error' in edits) return edits;
-  const template = namedTemplateValues(variant) ?? {};
-  const restored = edits.unset.filter((key) => Object.hasOwn(template, writtenKey(key)));
-  return {
-    chosen: {
-      ...edits.chosen,
-      ...Object.fromEntries(restored.map((key) => [key, template[writtenKey(key)]]))
-    },
-    unset: edits.unset.filter((key) => !restored.includes(key))
   };
 }
 

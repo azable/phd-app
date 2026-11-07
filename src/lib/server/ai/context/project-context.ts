@@ -103,11 +103,6 @@ export type AiVariable = {
   options: string | readonly DesignValue[];
   value: DesignValue;
   origin?: string;
-  /**
-   * For a kind's prop holding the value of what it follows, that: its role's style, as
-   * <Value>.padding, or the token its role's look names, as $spacing.
-   */
-  follows?: string;
 };
 
 /** A label's runs, and how many of them change what the view draws (compile.server.ts LabelRuns). */
@@ -122,31 +117,28 @@ export type SourceBuildFacts = {
   structures?: Record<string, string>;
 };
 
-/** The base's design space as the viewed variant has it: its variables, and their option sets. */
+/**
+ * The base's design space as the viewed variant has it: its variables, their option sets, and the
+ * design file the variant is built from.
+ */
 export type AiDesign = {
   options: Record<string, readonly DesignValue[]>;
   variables: AiVariable[];
+  file?: Record<string, DesignValue>;
 };
 
 /**
- * The design as the assistant reads it, most variables in brief: in full only those with options of
- * their own (views, pointers, a listing's language, a prop whose option set is not named after it)
- * or a value chosen or drawn for the viewed variant; every other variable, kept from the variant
- * built on or the starter's, by its kind and prop with its value, its options design.options[prop].
- * Each variable written out cost about 90 characters, and a typical design has 700 (project
- * 7464186f: 63,000 of a 149,000-character context).
+ * The design as the assistant reads it: the viewed version's design file as it is stored, nested;
+ * each kind of node with the props it has, kinds alike told once (a typical design has 700
+ * variables, and each written out cost about 90 characters: project 7464186f, 63,000 of a
+ * 149,000-character context); the option sets of those props, design.options[prop]; and in full only
+ * the variables with options of their own (views, a listing's language, a place's label).
  */
 export type AiDesignContext = {
+  file: Record<string, unknown>;
+  kinds: Record<string, string>;
   options: Record<string, readonly DesignValue[] | string>;
   variables: AiVariable[];
-  values: Record<string, Record<string, DesignValue>>;
-  /**
-   * The levels above the kinds: each token by its key, and each group a variant sets by its tag, as
-   * <Node>, with the kinds following it; a kind's prop following its group is told only there, and
-   * one following a token is told as the token. A project's 700 variables were mostly kinds
-   * repeating their role's starter look.
-   */
-  levels?: Record<string, DesignValue | Record<string, DesignValue>>;
 };
 
 /** One version of the source, named as the participant sees it, by the start of its hash. */
@@ -734,7 +726,12 @@ export function projectAiContext(
     headEventId: events.at(-1)?.id ?? projectHead(document).id,
     base,
     versions: sourceVersions(document),
-    design: assistant.design?.context(design) ?? { options: {}, variables: [], values: {} },
+    design: assistant.design?.context(design) ?? {
+      file: {},
+      kinds: {},
+      options: {},
+      variables: []
+    },
     ...(runs
       ? {
           spans: Object.fromEntries(

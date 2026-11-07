@@ -13,7 +13,7 @@ import {
   roleProps,
   roleStyle
 } from './design';
-import { starterBase } from './starter-base';
+import { templateValues } from '../../templates/templates';
 
 const styleProps = ['shadow', 'glow', 'fillStyle', 'decoration', 'case'] as const;
 
@@ -26,13 +26,9 @@ describe('style props', () => {
     expect(propOptions.case).toEqual(['normal', 'uppercase', 'small-caps']);
     for (const role of ['container', 'value', 'text'] as const) {
       for (const prop of styleProps) expect(roleProps[role]).toContain(prop);
-      expect(styleProps.map((prop) => starterBase[`${roleStyle(role)}.${prop}`])).toEqual([
-        'none',
-        'none',
-        'solid',
-        'none',
-        'normal'
-      ]);
+      expect(
+        styleProps.map((prop) => templateValues('starter')[`${roleStyle(role)}.${prop}`])
+      ).toEqual(['none', 'none', 'solid', 'none', 'normal']);
     }
     for (const prop of styleProps) expect(roleProps.link).not.toContain(prop);
   });

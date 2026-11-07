@@ -8,7 +8,6 @@ import {
   type SvelteBundle
 } from './compile.server';
 import type { BuildRequest, DesignKeys, ModeBuildResult } from '../server';
-import { withStarterBase } from './design.server';
 import { isToken, tokenProps } from './library/node/design';
 import {
   flatDesign,
@@ -56,9 +55,8 @@ export async function buildBatch(
     try {
       // Every step laid out here, so the page mounts only the step it shows (see layout.server.ts);
       // the first of a batch, the version a reply shows or a comparison's first side, measured in
-      // its other arrangements too (see arrangements.server.ts). A design naming no base enters with
-      // the starter base written in, so the version records it.
-      const bundle = await bundlePresentation(prepared, seed, withStarterBase(variant ?? {}), {
+      // its other arrangements too (see arrangements.server.ts).
+      const bundle = await bundlePresentation(prepared, seed, variant ?? {}, {
         arrange: index === 0
       });
       logLayout(seed, bundle.layout);
@@ -74,11 +72,11 @@ export async function buildBatch(
           steps: bundle.steps,
           stepSignature: bundle.stepSignature,
           variant: bundle.variant,
+          design: bundle.design,
           origins: bundle.origins,
           views: prepared.design.views,
           listings: prepared.ownListings,
           kinds: prepared.design.tags,
-          roles: prepared.design.roles,
           renders: prepared.design.renders,
           leftOut: bundle.leftOut,
           ...(bundle.warnings

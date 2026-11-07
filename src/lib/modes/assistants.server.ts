@@ -34,10 +34,7 @@ export type DecisionValuesReader = (
 export type DesignForAssistant = {
   variables(
     presentation:
-      | Pick<
-          BrowserBundlePresentation,
-          'variant' | 'origins' | 'views' | 'listings' | 'roles'
-        >
+      | Pick<BrowserBundlePresentation, 'variant' | 'design' | 'origins' | 'views' | 'listings'>
       | undefined,
     structures?: Readonly<Record<string, string>>
   ): AiDesign;

@@ -99,7 +99,9 @@ describe('Svelte-backed project lifecycle', () => {
       if (presentation?.format !== 'browser-bundle-v1') throw new Error('Nothing was built.');
       return { document: result.document, presentation };
     };
-    const first = await save(created, { variant: { 'IntCell.fill': 'sky-100' } });
+    const first = await save(created, {
+      variant: { template: '$starter', 'IntCell.fill': 'sky-100' }
+    });
     expect(first.presentation.variant?.['IntCell.fill']).toBe('sky-100');
     const padding = first.presentation.variant?.['IntCell.padding'];
     expect(padding).toBe(first.presentation.variant?.$spacing);
@@ -111,9 +113,13 @@ describe('Svelte-backed project lifecycle', () => {
       unset: ['IntCell.fill']
     });
     expect(second.presentation.variant?.$spacing).toBe(0.125);
-    // The kind that followed the token still does, and the one removed is the starter's again.
+    // The kind that followed the token still does, and the one removed leaves the design file,
+    // taking its base's fill again.
     expect(second.presentation.variant?.['IntCell.padding']).toBe(0.125);
-    expect(second.presentation.origins?.['IntCell.fill']).toBe('starter');
+    expect(second.presentation.design?.['IntCell.fill']).toBeUndefined();
+    expect(second.presentation.variant?.['IntCell.fill']).toBe(
+      second.presentation.variant?.$surface
+    );
   });
 
   it('builds a version an older app built again, as it was, so its scenes draw', async () => {
@@ -128,7 +134,7 @@ describe('Svelte-backed project lifecycle', () => {
         source: linearSearchSource,
         presentationCount: 1,
         operationId: crypto.randomUUID(),
-        variant: { 'IntCell.fill': 'sky-100' }
+        variant: { template: '$starter', 'IntCell.fill': 'sky-100' }
       },
       dependencies
     );

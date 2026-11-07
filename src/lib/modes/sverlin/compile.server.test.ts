@@ -7,14 +7,15 @@ import {
   InvalidSvelteSourceError,
   prepareSvelteComponent as prepareCurrent
 } from './compile.server';
-import { onStarterBase } from './testing/scenes';
+import { onStarter } from './testing/scenes';
+import { starterValues } from './testing/scenes';
 import { currentForm } from './testing/legacy-sources';
 
 // Sources built from pieces here are written with parts as snippets; each is read in the current
 // form, its parts layouts declaring what they read (see testing/legacy-sources.ts).
 const prepareSvelteComponent = (source: string) => prepareCurrent(currentForm(source));
-const compileSvelteComponent = (...[source, ...rest]: Parameters<typeof compileCurrent>) =>
-  compileCurrent(currentForm(source), ...rest);
+const compileSvelteComponent = (source: string, seed?: number) =>
+  compileCurrent(currentForm(source), onStarter({}), seed);
 import { linearSearchSource } from './contract';
 import bfsReferences from './fixtures/bfs-references.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
@@ -31,7 +32,7 @@ const bundlePresentation = (
   seed: number,
   request: VariantRequest = {},
   options?: Parameters<typeof bundleOnBase>[3]
-) => bundleOnBase(component, seed, onStarterBase(request), options);
+) => bundleOnBase(component, seed, onStarter(request), options);
 const buildVariant = (
   offered: Parameters<typeof buildOnBase>[0],
   start: Parameters<typeof buildOnBase>[1],
@@ -39,7 +40,7 @@ const buildVariant = (
   ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
     ? R
     : never
-) => buildOnBase(offered, start, onStarterBase(request), ...rest);
+) => buildOnBase(offered, start, onStarter(request), ...rest);
 
 /** The kinds of node a prepared source's design space has, from its variables' keys. */
 const kindsOf = (space: Record<string, unknown>) =>
@@ -148,10 +149,11 @@ describe('single-component Svelte compilation', () => {
     expect(bundles[0].layoutCode).not.toContain('values[i] === target');
     const again = await bundlePresentation(prepared, 1, { randomise: true });
     expect(again.variant).toEqual(bundles[0].variant);
-    // With no values, the starter on the starter base, which the variant records.
-    const plain = (await bundlePresentation(prepared, 1)).variant;
-    expect(plain).toMatchObject(prepared.design.starter);
-    expect(plain.base).toBe('<starter>');
+    // With no values, a copy of `$starter`, which the version records as its design file.
+    const plain = await bundlePresentation(prepared, 1);
+    expect(plain.variant).toMatchObject(starterValues(prepared.design));
+    expect(plain.design).not.toHaveProperty('template');
+    expect(plain.design.$text).toBe(plain.variant.$text);
   });
 
   it('rejects a design block, and a source with no algorithm block', async () => {
@@ -328,7 +330,7 @@ describe('single-component Svelte compilation', () => {
     // Each render with an argument is a place: its own choice where its type has several views of
     // the kind it draws, and its own paint for the kinds of each.
     expect(design.space['views.Position:i']).toEqual(['Arrow', 'Mark', 'none']);
-    expect(design.starter['views.Position:i']).toBe('Arrow');
+    expect(starterValues(design)['views.Position:i']).toBe('Arrow');
     expect(design.space['Arrow.<Link>.<To>:i.fill']).toBeDefined();
     expect(design.space['Arrow.Name:i.color']).toBeDefined();
     expect(design.space['Arrow.<Link>:i.padding']).toBeUndefined();
@@ -654,7 +656,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     ].join('\n');
     const prepared = prepareSvelteComponent(source);
     expect(prepared.design.space['<Listing>.language']).toEqual(['code', 'none']);
-    expect(prepared.design.starter['<Listing>.language']).toBe('code');
+    expect(starterValues(prepared.design)['<Listing>.language']).toBe('code');
     expect(prepared.listings?.code.text).toBe('for i = 1 to n step 1');
     // The input as given, lighting nothing, then i set, each test, each pass's move, the loop's
     // end, and the end of all, :after.
@@ -780,23 +782,23 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     ).rejects.toThrow('"Node" names a library component');
   });
 
-  it('takes chosen values, keeps base values that still fit, and gives the rest the starter', async () => {
+  it('takes chosen values, keeps the file’s values that still fit, and gives the rest its base', async () => {
     const prepared = prepareSvelteComponent(
       '<script algorithm></script><Layout name="One"><Node value={1} /></Layout><Layout name="Main"><Node><One /></Node></Layout>'
     );
     const built = await bundlePresentation(prepared, 3, {
       chosen: { 'One.radius': 999 },
-      // Removed and unfit base values are the starter's instead.
+      // Removed and unfit values of the file leave it, so the kind follows its base.
       base: { 'One.fill': 'blue-100', 'One.textSize': 9, 'gone.width': 2 }
     });
     expect(built.variant).toMatchObject({ 'One.radius': 999, 'One.fill': 'blue-100' });
-    expect(built.variant['One.textSize']).toBe(prepared.design.starter['One.textSize']);
+    expect(built.variant['One.textSize']).toBe(starterValues(prepared.design)['One.textSize']);
     expect(built.variant).not.toHaveProperty('gone.width');
     expect(built.origins).toMatchObject({
       'One.radius': 'chosen',
-      'One.fill': 'kept',
-      'One.textSize': 'starter'
+      'One.fill': 'kept'
     });
+    expect(built.design).not.toHaveProperty('One.textSize');
     await expect(
       bundlePresentation(prepared, 3, { chosen: { 'One.radius': 3 } })
     ).rejects.toMatchObject({
@@ -813,7 +815,7 @@ ${markup}\n<Layout name="Main"><Node>{n}</Node></Layout>`;
     const prepared = prepareSvelteComponent(
       '<script algorithm></script><Layout name="A"><Node>a</Node></Layout><Layout name="Main"><Node><A /></Node></Layout>'
     );
-    expect(prepared.design.starter['Main.ratio']).toBe('fit');
+    expect(starterValues(prepared.design)['Main.ratio']).toBe('fit');
     const built = await bundlePresentation(prepared, 1, { chosen: { 'Main.ratio': '4:3' } });
     expect(built.layoutCode).toMatch(/"?ratio"?:"4:3"/u);
     await expect(
@@ -1609,7 +1611,7 @@ describe('pauses at labels', () => {
       expect(Object.keys(design.space).some((key) => key.startsWith('listing.earlier'))).toBe(
         false
       );
-      expect(design.starter['<Listing>.lit.fill']).toBe('amber-200');
+      expect(starterValues(design)['<Listing>.lit.fill']).toBe('amber-200');
       expect(design.fallbacks['<Listing>.lit@insert.compare.left.fill']).toBe('<Listing>.lit.fill');
       expect(design.fallbacks['<Listing>.lit@insert.swap.fill']).toBe('<Listing>.lit.fill');
     });
@@ -2369,7 +2371,7 @@ describe('props bound to a view’s value', () => {
     it('gives each value its own icon, an enumeration unordered, starting on distinct icons', () => {
       const { design } = withState('<View of="State" name="StateMark"><Node icon={this} /></View>');
       expect(design.space['StateMark=open.icon']).toEqual(iconNames);
-      expect(design.starter).toMatchObject({
+      expect(starterValues(design)).toMatchObject({
         'StateMark=open.icon': 'circle',
         'StateMark=done.icon': 'circle-dot'
       });
@@ -2380,7 +2382,7 @@ describe('props bound to a view’s value', () => {
       const { design } = withState(
         '<View of="State" name="StateMark"><Node icon={this} /></View>\n<View of="State" name="StateCell"><Node value={this} /></View>'
       );
-      expect(design.starter).toMatchObject({
+      expect(starterValues(design)).toMatchObject({
         'StateMark.fill': 'none',
         'StateMark.stroke': 'none',
         'StateMark.strokeWidth': 0,
@@ -2397,9 +2399,9 @@ describe('props bound to a view’s value', () => {
         '<View of="State" name="StateMark"><Node layout="row"><Node kind="Mark" icon /><Node value={this} /></Node></View>'
       );
       expect(design.space['StateMark.Mark.icon']).toEqual(iconNames);
-      expect(design.starter['StateMark.Mark.icon']).toBe('circle-dot');
-      expect(design.starter['StateMark.Mark.fill']).toBe('none');
-      expect(design.starter['StateMark.Mark.stroke']).toBe('none');
+      expect(starterValues(design)['StateMark.Mark.icon']).toBe('circle-dot');
+      expect(starterValues(design)['StateMark.Mark.fill']).toBe('none');
+      expect(starterValues(design)['StateMark.Mark.stroke']).toBe('none');
     });
 
     it('refuses an icon written as it is, the design choosing each value’s', () => {
@@ -2422,7 +2424,7 @@ describe('props bound to a view’s value', () => {
       '<View of="Card" name="CardBox"><Node fill={this.seen}>{this.level}</Node></View>'
     );
     expect(design.space['CardBox=true.fill']).toContain('blue-200');
-    expect(design.starter).toMatchObject({
+    expect(starterValues(design)).toMatchObject({
       'CardBox=false.fill': 'neutral-200',
       'CardBox=true.fill': 'blue-200'
     });
@@ -2434,7 +2436,7 @@ describe('props bound to a view’s value', () => {
     );
     expect(design.space['CardBox.textSize.from']).toEqual([12, 14, 16, 18, 20, 24]);
     expect(design.space['CardBox.textSize.order']).toEqual(['up', 'down']);
-    expect(design.starter).toMatchObject({
+    expect(starterValues(design)).toMatchObject({
       'CardBox.textSize.from': 16,
       'CardBox.textSize.order': 'up'
     });
@@ -2447,7 +2449,7 @@ describe('props bound to a view’s value', () => {
       );
     const coloured = states('<View of="State" name="Dot"><Node fill={this}>{this}</Node></View>');
     expect(coloured.design.space['Dot.fill.hue']).toContain('teal');
-    expect(coloured.design.starter).toMatchObject({
+    expect(starterValues(coloured.design)).toMatchObject({
       'Dot.fill.hue': 'blue',
       'Dot.fill.order': 'up'
     });
@@ -2507,11 +2509,11 @@ describe('props bound to a view’s value', () => {
     );
     expect(design.space['Bar.width.unit']).toEqual([1, 2, 3, 4, 6, 8, 12, 16, 24]);
     // The largest unit keeping 99, the largest Wide, within 200 pixels.
-    expect(design.starter['Bar.width.unit']).toBe(2);
+    expect(starterValues(design)['Bar.width.unit']).toBe(2);
     // From the left, as width runs, until the design places it otherwise; the width is the value,
     // so the kind has no width variable, and a variant naming one is told why.
     expect(design.space['Bar.xAnchor']).toEqual(['start', 'center', 'end']);
-    expect(design.starter['Bar.xAnchor']).toBe('start');
+    expect(starterValues(design)['Bar.xAnchor']).toBe('start');
     expect(design.space['Bar.width']).toBeUndefined();
     expect(design.space['Bar.height']).toEqual(['uniform', 'varying']);
   });
@@ -2546,7 +2548,7 @@ describe('props bound to a view’s value', () => {
     const { design } = prepareSvelteComponent(
       `<script domain>const Flag = type('boolean'); const Vertex = record({ seen: Flag }); const Vertices = array(Vertex, { max: 2 }); const Position = index(Vertices); const Graph = record({ vertices: Vertices });</script><script input>const graph = Graph;</script><Case name="main" graph={{ vertices: [{ seen: false }, { seen: true }] }} /><script algorithm>@run[let done = Flag(false);]</script><View of="Flag" name="FlagText"><Node value={this} /></View>\n<View of="Graph" name="Drawing"><Node layout="row">{#each this.vertices as v, j}<Node kind="Dot" fill={v.seen} opacity={j}>x</Node>{/each}</Node></View>\n<Layout name="Main"><Node>{graph}{done}</Node></Layout>`
     );
-    expect(design.starter).toMatchObject({
+    expect(starterValues(design)).toMatchObject({
       'Drawing.Dot=false.fill': 'neutral-200',
       'Drawing.Dot=true.fill': 'blue-200'
     });
@@ -2594,7 +2596,7 @@ describe('slots and boxes', () => {
     );
     expect(design.space['WideText.width']).toEqual(['uniform', 'varying']);
     expect(design.space['WideText.yAnchor']).toEqual(['start', 'center', 'end']);
-    expect(design.starter).toMatchObject({
+    expect(starterValues(design)).toMatchObject({
       'WideText.width': 'uniform',
       'WideText.height': 'uniform',
       'WideText.xAnchor': 'center',
@@ -2607,11 +2609,13 @@ describe('slots and boxes', () => {
 
   it('starts a collection where its first item is, and its items centred only where its length never changes', () => {
     const collections = (algorithm: string) =>
-      prepareSvelteComponent(
-        `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 6 }); const Queue = array(Int, { max: 6 });</script><script input>const values = Values; const queue = Queue;</script><Case name="main" values={[1, 2, 3]} queue={[1]} /><script algorithm>${algorithm}</script><View of="Int" name="Cell"><Node value={this} /></View>
+      starterValues(
+        prepareSvelteComponent(
+          `<script domain>const Int = type('integer', { min: 0, max: 9 }); const Values = array(Int, { max: 6 }); const Queue = array(Int, { max: 6 });</script><script input>const values = Values; const queue = Queue;</script><Case name="main" values={[1, 2, 3]} queue={[1]} /><script algorithm>${algorithm}</script><View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Line"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Main"><Node layout="column"><Node layout="row" kind="Fixed">{#each values as v}{v}{/each}</Node><Node layout="column" kind="Growing">{#each queue as v}{v}{/each}</Node>{values}</Node></Layout>`
-      ).design.starter;
+        ).design
+      );
     // values never changes length; queue grows.
     const starter = collections('@grow[queue.push(Int(2));]');
     expect(starter).toMatchObject({
@@ -2636,7 +2640,7 @@ describe('slots and boxes', () => {
       source('<View of="Wide" name="Bar"><Node height={this} /></View>', '{wide}')
     );
     expect(prepared.design.space['Bar.height']).toBeUndefined();
-    expect(prepared.design.starter['Bar.yAnchor']).toBe('end');
+    expect(starterValues(prepared.design)['Bar.yAnchor']).toBe('end');
     const { warnings } = await bundlePresentation(prepared, 1, {
       chosen: { 'Bar.height': 'varying' }
     });
@@ -2807,7 +2811,7 @@ describe('tokens in captions', () => {
 
   it('draws a token as inline code, a kind of its own in monospace, linked to its place', () => {
     const { design } = prepareSvelteComponent(captioned('Look at :i[A[i]].'));
-    expect(design.starter['Board.Note.Code.font']).toBe('mono');
+    expect(starterValues(design)['Board.Note.Code.font']).toBe('mono');
     expect(design.space).toHaveProperty('<Listing>.places');
   });
 
@@ -2864,21 +2868,21 @@ describe('starter looks of a graph', () => {
 
   it('starts a link label unboxed, the stage white behind it, so the line breaks round it', () => {
     const { design } = prepareSvelteComponent(graph);
-    expect(design.starter['WeightText:edge.weight.fill']).toBe('white');
-    expect(design.starter['WeightText:edge.weight.stroke']).toBe('none');
+    expect(starterValues(design)['WeightText:edge.weight.fill']).toBe('white');
+    expect(starterValues(design)['WeightText:edge.weight.stroke']).toBe('none');
     // Its own paint, not its kind's; here the weight is drawn only on links, so its view starts as
     // plain text too (a weight drawn elsewhere keeps its box: see layout.server.test.ts).
     expect(design.fallbacks['WeightText:edge.weight.fill']).toBeUndefined();
-    expect(design.starter['WeightText.stroke']).toBe('none');
+    expect(starterValues(design)['WeightText.stroke']).toBe('none');
   });
 
   it('starts a view of a record arranging its parts as one boxed card, its fields unboxed', () => {
     const { design } = prepareSvelteComponent(graph);
-    expect(design.starter['VertexCard.fill']).toBe('white');
-    expect(design.starter['VertexCard.stroke']).toBe('neutral-300');
-    expect(design.starter['VertexCard.gap']).toBe(0.25);
-    expect(design.starter['VertexCard.NameText:this.name.fill']).toBe('none');
-    expect(design.starter['VertexCard.StateText:this.state.stroke']).toBe('none');
+    expect(starterValues(design)['VertexCard.fill']).toBe('white');
+    expect(starterValues(design)['VertexCard.stroke']).toBe('neutral-300');
+    expect(starterValues(design)['VertexCard.gap']).toBe(0.25);
+    expect(starterValues(design)['VertexCard.NameText:this.name.fill']).toBe('none');
+    expect(starterValues(design)['VertexCard.StateText:this.state.stroke']).toBe('none');
     expect(design.fallbacks['VertexCard.NameText:this.name.fill']).toBeUndefined();
   });
 
@@ -2887,9 +2891,9 @@ describe('starter looks of a graph', () => {
     const dfa = readFileSync('src/lib/modes/sverlin/fixtures/dfa-loops.sverlin', 'utf8');
     const { design } = prepareSvelteComponent(dfa);
     // <Node kind="StateSlot">{state}</Node> holds a render: text, its value boxed by its own view.
-    expect(design.roles['StateDiagram.StateSlot']).toBe('text');
-    expect(design.starter['StateDiagram.StateSlot.radius']).toBe(0);
-    expect(design.starter['StateDiagram.StateSlot.fill']).toBe('none');
+    expect(design.bases['StateDiagram.StateSlot']).toBe('<Text>');
+    expect(starterValues(design)['StateDiagram.StateSlot.radius']).toBe(0);
+    expect(starterValues(design)['StateDiagram.StateSlot.fill']).toBe('none');
   });
 });
 

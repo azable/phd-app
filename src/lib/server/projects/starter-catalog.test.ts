@@ -14,9 +14,15 @@ describe('starter catalog', () => {
     expect(listProjectTemplates().map(({ id }) => id)).toEqual(['blank', 'linear-search']);
     const blank = resolveProjectTemplate({ templateId: 'blank' });
     // The blank source's one scene reads no state: one frame, named by the scene.
-    expect((await compileSvelteComponent(blank.source)).labels).toEqual(['main']);
     expect(
-      (await compileSvelteComponent(getProjectTemplate('linear-search').source)).labels
+      (await compileSvelteComponent(blank.source, { chosen: { template: '$starter' } })).labels
+    ).toEqual(['main']);
+    expect(
+      (
+        await compileSvelteComponent(getProjectTemplate('linear-search').source, {
+          chosen: { template: '$starter' }
+        })
+      ).labels
     ).toHaveLength(11);
   });
 

@@ -173,7 +173,10 @@ async function ask(
       sourceContent: entry.content.text,
       source: entry.content,
       sourceLabel: entry.path,
-      requests: [left, right].map((chosen, index) => ({ seed: index + 1, variant: { chosen } })),
+      requests: [left, right].map((chosen, index) => ({
+        seed: index + 1,
+        variant: { chosen: { template: '$starter', ...chosen } }
+      })),
       purpose: 'assistant-edit',
       input: 'committed-artifact',
       operationId: crypto.randomUUID()

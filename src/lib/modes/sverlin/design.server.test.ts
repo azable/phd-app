@@ -11,30 +11,36 @@ import { forms } from './library/node/forms';
 import {
   buildVariant as buildOnBase,
   DesignValueError,
-  withStarterBase,
   type VariantRequest
 } from './design.server';
-import { starterBase } from './library/node/starter-base';
-import { onStarterBase } from './testing/scenes';
+import { templateValues } from './templates/templates';
 
-// Each request on the starter base where it names none, as every design in the app names one.
+const starterBase = templateValues('starter');
+import { onStarter } from './testing/scenes';
+
+// The bases of every source's kinds this file builds, which no two sources name alike.
+const allBases: Record<string, string> = {};
+// Each request on `$starter` where it names no template (see onStarter), and every kind on its base.
 const buildVariant = (
   offered: Parameters<typeof buildOnBase>[0],
   start: Parameters<typeof buildOnBase>[1],
   request: VariantRequest,
-  ...rest: Parameters<typeof buildOnBase> extends [unknown, unknown, unknown, ...infer R]
-    ? R
-    : never
-) => buildOnBase(offered, start, onStarterBase(request), ...rest);
+  seed: number,
+  fallbacks: Parameters<typeof buildOnBase>[4] = {},
+  bases: Parameters<typeof buildOnBase>[5] = allBases
+) => buildOnBase(offered, start, onStarter(request), seed, fallbacks, bases);
 const bundlePresentation = (
   component: Parameters<typeof bundleOnBase>[0],
   seed: number,
   request: VariantRequest = {},
   options?: Parameters<typeof bundleOnBase>[3]
-) => bundleOnBase(component, seed, onStarterBase(request), options);
+) => bundleOnBase(component, seed, onStarter(request), options);
 
 const prepared = prepareSvelteComponent(linearSearchSource);
+Object.assign(allBases, prepared.design.bases);
 const { space, starter } = prepared.design;
+// Every variable's value on a copy of `$starter`, as a first version naming it draws.
+const plain = () => buildVariant(space, starter, {}, 1).values;
 
 describe('design space', () => {
   it('has every view of each type rendered by name, the layout’s frame, and every prop of every kind', () => {
@@ -95,14 +101,12 @@ describe('design space', () => {
     expect(prepared.design.tags[position]).toEqual(['Highlight.<Link>']);
   });
 
-  it('starts every variable at the starter, each type in its first view', () => {
-    // What a kind inherits and a role's style in a base, as <Value>.fill, are set only where a
-    // variant sets them.
-    expect(Object.keys(starter).sort()).toEqual(
-      Object.keys(space)
-        .filter((key) => !key.startsWith('<') && !key.endsWith('.inherit'))
-        .sort()
-    );
+  it('starts each type in its first view, and of a kind only the looks its nodes give it', () => {
+    // A kind's props, a token and a role's style, as <Value>.fill, come from the design file.
+    expect(
+      Object.keys(starter).filter((key) => key.startsWith('$') || key.startsWith('<'))
+    ).toEqual([]);
+    expect(starter['IntCell.fill']).toBeUndefined();
     expect(starter['views.Int']).toBe('IntCell');
     for (const [key, value] of Object.entries(starter)) expect(space[key]).toContain(value);
   });
@@ -123,8 +127,9 @@ describe('variants', () => {
     expect(origins['views.Int']).toBe('chosen');
     expect(values['IntCell.radius']).toBe(999);
     expect(origins['IntCell.radius']).toBe('kept');
-    expect(values['IntCell.fill']).toBe(starter['IntCell.fill']);
-    expect(origins['IntCell.fill']).toBe('starter');
+    // A value the file no longer holds follows the kind's base, as the starter template's file.
+    expect(values['IntCell.fill']).toBe('white');
+    expect(origins['IntCell.fill']).toBe('kept');
     expect(values).not.toHaveProperty('gone');
     // A base value outside its variable's options is said; a variable the source lost goes quietly.
     expect(dropped).toHaveLength(1);
@@ -209,13 +214,15 @@ describe('variants', () => {
       { chosen: { 'Highlight.<Link>.<To>:found.fill': second } },
       1,
       fallbacks
-    ).values;
-    expect(apart['Highlight.<Link>.<To>:found.fill']).toBe(second);
-    expect(apart['Highlight.<Link>.<To>:i.fill']).toBe(starter['Highlight.<Link>.<To>.fill']);
+    );
+    expect(apart.values['Highlight.<Link>.<To>:found.fill']).toBe(second);
+    expect(apart.values['Highlight.<Link>.<To>:i.fill']).toBe(
+      apart.values['Highlight.<Link>.<To>.fill']
+    );
     const kept = buildVariant(
       space,
       starter,
-      { base: apart, chosen: { 'Highlight.<Link>.<To>.fill': first } },
+      { base: apart.design, chosen: { 'Highlight.<Link>.<To>.fill': first } },
       1,
       fallbacks
     ).values;
@@ -228,10 +235,11 @@ describe('variants', () => {
       { length: 8 },
       (_, seed) => buildVariant(space, starter, { randomise: true }, seed + 1).values
     );
+    const first = plain();
     for (const values of variants) {
       // Every kind that shared the starter's text colour still shares one.
       const colours = Object.entries(values)
-        .filter(([key]) => key.endsWith('.color') && starter[key] === starter['IntCell.color'])
+        .filter(([key]) => key.endsWith('.color') && first[key] === first['IntCell.color'])
         .map(([, value]) => value);
       expect(new Set(colours).size).toBe(1);
       expect(colours[0]).toBe('black');
@@ -248,7 +256,7 @@ describe('variants', () => {
   it('gives every kind of node the style props, drawn at random but for decoration', () => {
     expect(space['IntCell.shadow']).toEqual(['none', 'soft', 'lifted', 'hard']);
     expect(space['Highlight.Name.case']).toEqual(['normal', 'uppercase', 'small-caps']);
-    expect(starter['Row.fillStyle']).toBe('solid');
+    expect(plain()['Row.fillStyle']).toBe('solid');
     expect(() => buildVariant(space, starter, { chosen: { 'IntCell.glow': 'bright' } }, 1)).toThrow(
       'IntCell.glow cannot be "bright"'
     );
@@ -286,6 +294,7 @@ describe('variants', () => {
 describe('free layouts', () => {
   const tree = prepareSvelteComponent(bst).design;
   const graph = prepareSvelteComponent(bfs).design;
+  Object.assign(allBases, tree.bases, graph.bases);
 
   it('give the kind arranging one its form, direction, curve, and layout seed', () => {
     // A tree takes every form but layered, which only layers take (layered-engine.ts).
@@ -293,7 +302,7 @@ describe('free layouts', () => {
     expect(graph.space['Graph.form']).toEqual(forms);
     expect(tree.space['Tree.curve']).toEqual(['straight', 'curved']);
     expect(tree.space['Tree.layoutSeed']).toContain(1);
-    expect(tree.starter).toMatchObject({
+    expect(buildVariant(tree.space, tree.starter, {}, 1).values).toMatchObject({
       'Tree.form': 'natural',
       'Tree.curve': 'straight',
       'Tree.layoutSeed': 1
@@ -301,7 +310,7 @@ describe('free layouts', () => {
     // Every structure runs right unless a variant says, a tree too.
     expect(tree.space['Tree.direction']).toEqual(['down', 'right']);
     expect(graph.space['Graph.direction']).toEqual(['down', 'right']);
-    expect(graph.starter['Graph.direction']).toBe('right');
+    expect(buildVariant(graph.space, graph.starter, {}, 1).values['Graph.direction']).toBe('right');
     // Rows and columns have no such look.
     expect(Object.keys(space).filter((key) => key.endsWith('.form'))).toEqual([]);
     expect(Object.keys(tree.space).filter((key) => key.endsWith('.form'))).toEqual(['Tree.form']);
@@ -338,13 +347,12 @@ describe('free layouts', () => {
     expect(graph.space['Graph.<Link>.headSize']).toEqual([6, 9, 12, 16]);
     expect(graph.space['Graph.<Link>.curve']).toBeUndefined();
     expect(graph.space['Graph.<Link>.color']).toBeUndefined();
-    expect(graph.starter).toMatchObject({
+    expect(buildVariant(graph.space, graph.starter, {}, 1).values).toMatchObject({
       'Graph.<Link>.route': 'layout',
       'Graph.<Link>.<To>.head': 'arrow',
       'Graph.<Link>.headSize': 9
     });
     const base = {
-      ...graph.starter,
       'Graph.<Link>.route': 'wire',
       'Graph.<Link>.<To>.head': 'vee'
     };
@@ -358,9 +366,11 @@ describe('free layouts', () => {
     expect(prepareSvelteComponent(undirected).design.starter).toMatchObject({
       'Graph.<Link>.<To>.head': 'none'
     });
-    expect(prepareSvelteComponent(bfs).design.starter).toMatchObject({
-      'Graph.<Link>.<To>.head': 'arrow'
-    });
+    // Elsewhere the kind has no head of its own: its base's, an arrow.
+    expect(prepareSvelteComponent(bfs).design.starter['Graph.<Link>.<To>.head']).toBeUndefined();
+    expect(buildVariant(graph.space, graph.starter, {}, 1).values['Graph.<Link>.<To>.head']).toBe(
+      'arrow'
+    );
   });
 });
 
@@ -370,18 +380,18 @@ describe('design tokens and role styles', () => {
   const levelled = prepareSvelteComponent(
     `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main"><Node><Cells />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`
   ).design;
-  const build = (request: Parameters<typeof buildVariant>[2]) =>
-    buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles)
-      .values;
+  const built = (request: Parameters<typeof buildVariant>[2]) =>
+    buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.bases);
+  const build = (request: Parameters<typeof buildVariant>[2]) => built(request).values;
 
   it('starts every kind at its role look, which names the tokens it shares', () => {
-    expect(levelled.starter['$spacing']).toBe(0.375);
+    expect(build({})['$spacing']).toBe(0.375);
     expect(levelled.space['<Value>.padding']).toContain('$spacing');
     expect(levelled.space['<Value>.shown']).toBeUndefined();
     expect(levelled.space['<Pointer>.<To>.fill']).toBeDefined();
     expect(levelled.space['<Value>.<To>.fill']).toBeUndefined();
-    expect(levelled.roles['Arrow.<Link>.<To>']).toBe('pointer');
-    expect(levelled.roles['Arrow.<Link>']).toBe('pointer');
+    expect(levelled.bases['Arrow.<Link>.<To>']).toBe('<Pointer>.<To>');
+    expect(levelled.bases['Arrow.<Link>']).toBe('<Pointer>');
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
   });
@@ -409,7 +419,7 @@ describe('design tokens and role styles', () => {
       /listing is written <Listing>/u
     );
     expect(() => build({ chosen: { base: '$starter' } })).toThrow(
-      /\$starter is written <starter>/u
+      /"\.\.\." at the top named a base the design followed, which is gone/u
     );
     expect(() => build({ chosen: { 'Arrow.Link.stroke': 'red-500' } })).toThrow(
       /Arrow\.Link\.stroke is written Arrow\.<Link>\.stroke/u
@@ -426,8 +436,8 @@ describe('design tokens and role styles', () => {
     expect([placed['IntCell.fill'], placed['IntCell:v.fill']]).toEqual(['sky-100', 'rose-100']);
     // A place not set apart follows its kind, and so the role style.
     expect(build({ chosen: { '<Value>.fill': 'sky-100' } })['IntCell:v.fill']).toBe('sky-100');
-    // A value set apart in the base stays when a token changes later.
-    const base = build({ chosen: { 'IntCell.padding': 0.125 } });
+    // A value the design file writes stays when a token changes later.
+    const base = built({ chosen: { 'IntCell.padding': 0.125 } }).design;
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntCell.padding']).toBe(0.125);
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntDot.padding']).toBe(0.5);
   });
@@ -447,20 +457,21 @@ describe('design tokens and role styles', () => {
     expect(drawn['IntCell.color']).toBe(drawn['$text']);
   });
 
-  it('draws over the starter base a design entering with none has written in', () => {
+  it('draws over the template a first version copies', () => {
     const drawn = [1, 2, 3, 4].map((seed) =>
       buildOnBase(
         levelled.space,
         levelled.starter,
-        withStarterBase({ randomise: true }),
+        { chosen: { template: '$starter' }, randomise: true },
         seed,
         levelled.fallbacks,
-        levelled.roles
+        levelled.bases
       )
     );
     expect(new Set(drawn.map(({ values }) => values['$spacing'])).size).toBeGreaterThan(1);
-    for (const { values, origins } of drawn) {
-      expect(values.base).toBe('<starter>');
+    for (const { values, origins, design } of drawn) {
+      expect(design).not.toHaveProperty('template');
+      expect(design['$spacing']).toBe(values['$spacing']);
       expect(values['IntCell.padding']).toBe(values['$spacing']);
       expect(origins['$spacing']).toBe(
         values['$spacing'] === starterBase.$spacing ? 'starter' : 'random'
@@ -504,8 +515,11 @@ describe('design tokens and role styles', () => {
       chosen: { 'IntDot.inherit': 'IntCell', 'IntCell.fill': 'sky-100', 'IntCell.radius': 999 }
     });
     expect([values['IntDot.fill'], values['IntDot.radius']]).toEqual(['sky-100', 999]);
-    // Kept in the base, a later change to the source reaches it.
-    const later = build({ base: values, chosen: { 'IntCell.fill': 'rose-100' } });
+    // Kept in the design file, a later change to the source reaches it.
+    const file = built({
+      chosen: { 'IntDot.inherit': 'IntCell', 'IntCell.fill': 'sky-100', 'IntCell.radius': 999 }
+    }).design;
+    const later = build({ base: file, chosen: { 'IntCell.fill': 'rose-100' } });
     expect(later['IntDot.fill']).toBe('rose-100');
     // Only a kind of the same role.
     expect(() => build({ chosen: { 'IntDot.inherit': 'Note' } })).toThrow(
@@ -519,10 +533,17 @@ describe('design tokens and role styles', () => {
     expect(design.starter['WeightText.radius']).toBe(0);
     const chosen = { '$cell.radius': 4, 'WeightText.inherit': '$cell' };
     const run = (request: Parameters<typeof buildVariant>[2]) =>
-      buildVariant(design.space, design.starter, request, 1, design.fallbacks, design.roles).values;
+      buildVariant(design.space, design.starter, request, 1, design.fallbacks, design.bases).values;
     expect(run({ chosen })['WeightText.radius']).toBe(4);
     // A value of its own, chosen before, stays.
-    const base = run({ chosen: { 'WeightText.radius': 2 } });
+    const base = buildVariant(
+      design.space,
+      design.starter,
+      { chosen: { 'WeightText.radius': 2 } },
+      1,
+      design.fallbacks,
+      design.bases
+    ).design;
     expect(run({ base, chosen })['WeightText.radius']).toBe(2);
   });
 
@@ -541,7 +562,7 @@ describe('design tokens and role styles', () => {
   });
 
   it('draws a style with the kinds, but never what a kind inherits', () => {
-    const base = build({ chosen: { '$cell.radius': 4, 'IntCell.inherit': '$cell' } });
+    const base = built({ chosen: { '$cell.radius': 4, 'IntCell.inherit': '$cell' } }).design;
     const drawn = build({ base, randomise: true });
     expect(drawn['IntCell.inherit']).toBe('$cell');
     expect(drawn['IntCell.radius']).toBe(drawn['$cell.radius']);
@@ -589,7 +610,7 @@ describe('design tokens and role styles', () => {
     );
     // A random variant draws an exact colour from the palette, never off it.
     const palette = { 'palette.a': '#E69F00', 'palette.b': '#56B4E9', 'palette.c': '#009E73' };
-    const exact = build({ chosen: { ...palette, 'IntCell.fill': '#E69F00' } });
+    const exact = built({ chosen: { ...palette, 'IntCell.fill': '#E69F00' } }).design;
     for (const seed of [1, 2, 3]) {
       const drawn = buildVariant(
         levelled.space,
@@ -597,36 +618,37 @@ describe('design tokens and role styles', () => {
         { base: exact, randomise: true },
         seed,
         levelled.fallbacks,
-        levelled.roles
+        levelled.bases
       ).values;
       expect(Object.values(palette)).toContain(drawn['IntCell.fill']);
     }
   });
 
-  it('records the base’s name, and leaves out a base’s value the source has no use for', () => {
-    const { values, dropped } = buildVariant(
-      levelled.space,
-      levelled.starter,
-      { chosen: { ...starterBase, base: '$mine', '<Listing>.lit.fill': 'neutral-200' } },
-      1,
-      levelled.fallbacks,
-      levelled.roles
-    );
-    expect(values.base).toBe('$mine');
+  it('keeps in the file a template’s value the source has no use for, and draws without it', () => {
+    const { values, design, dropped } = built({
+      chosen: { template: '$starter', '<Listing>.lit.fill': 'neutral-200' }
+    });
+    expect(design['<Listing>.lit.fill']).toBe('neutral-200');
     expect(values['<Listing>.lit.fill']).toBeUndefined();
     expect(dropped).toEqual([]);
-    expect(() => build({ chosen: { ...starterBase, base: 'textbook' } })).toThrow(
-      /names its base as "<starter>", or with \$/u
+    expect(Object.keys(design).length).toBe(Object.keys(starterBase).length);
+    expect(() => build({ chosen: { template: 'textbook' } })).toThrow(
+      /"template" names "textbook", which is no template; the templates are \$starter, \$textbook/u
     );
   });
 
-  it('refuses a design naming no base, or a base missing a role’s look', () => {
-    const plain = (request: Parameters<typeof buildOnBase>[2]) =>
-      buildOnBase(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.roles);
-    expect(() => plain({ chosen: { 'IntCell.radius': 0 } })).toThrow(/names no base/u);
-    expect(() => plain({ chosen: { base: '$textbook' } })).toThrow(
-      /base sets no <Value>\.fill, .*start from a template/u
+  it('refuses a first version naming no template, and copies the one named', () => {
+    const first = (request: Parameters<typeof buildOnBase>[2]) =>
+      buildOnBase(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.bases);
+    expect(() => first({ chosen: { 'IntCell.radius': 0 } })).toThrow(
+      /names no template: a first version copies one, as \{"template": "\$starter"\}/u
     );
-    expect(plain(withStarterBase({})).values.base).toBe('<starter>');
+    const copied = first({ chosen: { template: '$slide', 'IntCell.radius': 0 } });
+    expect(copied.design['IntCell.radius']).toBe(0);
+    expect(copied.design['$text']).toBe(templateValues('slide')['$text']);
+    // Naming a template later copies its file in place of the one built on.
+    const again = first({ base: copied.design, chosen: { template: '$textbook' } });
+    expect(again.design['IntCell.radius']).toBeUndefined();
+    expect(again.design['$font']).toBe('serif');
   });
 });

@@ -166,37 +166,35 @@ own and its message a node shown `when` it happens, as
 unless the participant asks for other steps; a request for more or fewer steps
 changes the source's pauses.
 
-project.design gives the base’s design space (see Design in the guide) as the
-viewed variant has it. Its variables list in full the views, pointers, a
-listing’s language, a prop with an option set of its own, and every value chosen
-or drawn for this variant, each with its options, by name from
-project.design.options or listed, and its value. Its values give every other
-variable by its kind and prop, as values.Cell.fill for Cell.fill, with its
-value; a key naming several kinds, as "Note, Status", gives each of them those
-values; its options are project.design.options of the prop, a set written as a
-rule, as colours, naming every hue in every shade. Its levels give each token's
-value, as `$spacing`, each role's style, as `<Value>`, and each style, as
-`$cell`, with the kinds following it; a value written as a token, as
-`"padding": "$spacing"`, follows that token, a kind's prop following a role
-style or a style is told only there, and `"..."` in a kind's values is what it
-inherits. For a look asked of many kinds at once, as “less padding everywhere”
-or “every pointer teal”, set a token or a role's style, as `<Pointer>`, whose
-end, `<Pointer>.<To>`, paints what it reaches (see Shared values in the guide),
-rather than each kind; for a look several kinds share, as “value cells rounder
-with a darker frame”, set a style's props and have those kinds inherit it
+project.design gives the viewed version's design (see Design in the guide). Its
+file is the version's design file as it is stored, nested: a copy of the
+template its first version named and every change made since. Its kinds list
+each kind of node with the props it has, as "Note, Status" for kinds with the
+same props; each prop's options are project.design.options of the prop, a set
+written as a rule, as colours, naming every hue in every shade. Its variables
+list, with their options and values, only the variables with options of their
+own: views, a listing's language, a place's label. A kind's prop the file does
+not write takes what the kind inherits, else its role's style, else the prop's
+neutral value (see Shared values in the guide). For a look asked of many kinds
+at once, as “less padding everywhere” or “every pointer teal”, set a token or a
+role's style, as `<Pointer>`, whose end, `<Pointer>.<To>`, paints what it
+reaches (see Shared values in the guide), rather than each kind; for a look
+several kinds share, as “value cells rounder with a darker frame”, set a style's
+props and have those kinds inherit it
 (`{"$cell": {"radius": 4}, "IntCell": {"...": "$cell"}}`). Write values nested,
 one level for each part of a key; a key written flat, as `"IntCell.fill"`, goes
 back to be written again.
 
-Templates are whole bases (see Shared values in the guide), named in values as
-`"...": "$textbook"` and patched with only what differs, as
-`{"...": "$slide", "$accent": "#0072B2"}`; the app writes the template out in
-full into the design, and project.design then names the base and lists only what
-differs from it. Every value then takes a step on the base's scales and the
-named colours or the base's palette.
+A first version names the template its design copies, as
+`{"template": "$slide"}` in its values with any changes beside it, as
+`{"template": "$slide", "$accent": "#0072B2"}`; the app copies the template's
+file into the version, and a first version naming none is refused. Later
+versions change that copy with their values; naming another template copies its
+file in place of the version's, so write again beside it every change to keep.
+Every value takes a step on the file's scales and the named colours or its
+palette.
 
-- `<starter>`: framed white values, grey frames, amber pointers; a first version
-  that names no base gets it written in.
+- `$starter`: framed white values, grey frames, amber pointers.
 - `$textbook`: black on white in a serif with no hue, so it prints in greyscale;
   the item of the step a grey fill with a thicker black frame, a second state
   hatched with a dashed frame. For printed notes and handouts.
@@ -213,14 +211,12 @@ colour for one state, the same in the picture and the listing; text at least
 page; and no state told by colour alone (the item of the step also takes the
 thickest line). A second state, as visited, inherits `$second`, as
 `"Visited": {"...": "$second"}`. Offer another template as a comparison
-(“textbook or slide?”) rather than switching unasked. Write a base of your own,
-under a name of your own, as `"...": "$mine"`, only where no template fits what
-the participant asks: set the tokens, role styles (`<Value>`, `<Container>`,
-`<Text>`, `<Code>`, `<Icon>`, `<Link>`), scales and palette it changes, and the
-app writes `<starter>`'s values out under them, so the base holds every role's
-look. A kind's role comes only from what its node writes (see Shared values in
-the guide): a vertex or a bar is a value or text like any other node, so a look
-such as round vertices or grey bars is a kind's values, every prop it needs, as
+(“textbook or slide?”) rather than switching unasked. Where no template fits
+what the participant asks, change the copy's tokens, role styles (`<Value>`,
+`<Container>`, `<Text>`, `<Code>`, `<Icon>`, `<Link>`), scales and palette. A
+kind's role comes only from what its node writes (see Shared values in the
+guide): a vertex or a bar is a value or text like any other node, so a look such
+as round vertices or grey bars is a kind's values, every prop it needs, as
 `"StateSlot": {"radius": 999, "fill": "white", "stroke": "neutral-400", "strokeWidth": 1.5, "padding": 0.5, "minSize": 2.5}`
 for a vertex holding text, or
 `"Bar": {"fill": "neutral-300", "stroke": "neutral-500", "strokeWidth": 1, "radius": 2}`.
@@ -316,8 +312,8 @@ readings, for example "the intermediate lists as a tree" (a tree of the splits,
 of the merged lists, or of both, each call showing its part as split and then
 sorted), compare the readings. When the source already has two views of a type,
 compare them. When you add a view or a kind, give the looks its role needs in
-the decision's values where the starter's would read wrongly, for example no box
-around an icon or a caption.
+the decision's values where its role's look would read wrongly, for example no
+box around an icon or a caption.
 
 Show before you ask: a participant judges a picture more easily than they
 describe one, so ask in words only what a picture cannot answer (who it is for,

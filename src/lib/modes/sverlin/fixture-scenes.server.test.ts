@@ -1,6 +1,7 @@
 /**
- * Every fixture's scenes, built with no variant, as a hash each, so a change to the engine that
- * moves anything in a picture shows here; a change meant to move pictures updates the snapshot.
+ * Every fixture's scenes, built with its design (fixtures/designs.json, by the fixture's path), as a
+ * hash each, so a change to the engine that moves anything in a picture shows here; a change meant
+ * to move pictures updates the snapshot.
  *
  * Deliberate changes, by the step that made them:
  * - grid-marks: a grid placed by positions keeps a track before the first cell, as a position's
@@ -85,6 +86,8 @@
  * - 33 fixtures whose links from variables paint what they reach: a node so painted names the end
  *   whose fill it shows (paintedBy), for the covered-fill warning; with that field left out, each
  *   hashes as before (checked 7 November 2026).
+ * - design files: every fixture is built with its own design, {"template": "$starter"}, a copy of
+ *   the starter base the build once wrote in; no scene changed.
  */
 
 import { createHash } from 'node:crypto';
@@ -93,6 +96,7 @@ import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
 import type { SceneNode, SceneStep } from './library';
 import { drawnSteps, ofKind } from './testing/scenes';
+import designs from './fixtures/designs.json';
 
 const root = join(import.meta.dirname, 'fixtures');
 const fixtures = (directory: string): string[] =>
@@ -104,10 +108,20 @@ const fixtures = (directory: string): string[] =>
         : []
   );
 
+/** A fixture's design, by its path in fixtures without .sverlin, as `replay/ucs-ten`. */
+const fixtureDesign = (file: string): Record<string, unknown> => {
+  const design = (designs as Record<string, Record<string, unknown>>)[
+    relative(root, file).replace(/\.sverlin$/u, '')
+  ];
+  if (!design) throw new Error(`${file} has no design in fixtures/designs.json.`);
+  return design;
+};
+
 // Each fixture is built once for every test.
 const built = new Map<string, ReturnType<typeof drawnSteps>>();
 const drawn = (file: string) => {
-  if (!built.has(file)) built.set(file, drawnSteps(readFileSync(file, 'utf8')));
+  if (!built.has(file))
+    built.set(file, drawnSteps(readFileSync(file, 'utf8'), { chosen: fixtureDesign(file) }));
   return built.get(file)!;
 };
 

@@ -5,7 +5,7 @@ import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import bst from './fixtures/bst.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
 import reversal from './fixtures/list-markers.sverlin?raw';
-import { propOptions } from './library/node/design';
+import { neutralValues, propOptions } from './library/node/design';
 
 const list = `<script domain>
   const Name = type(['A', 'B', 'C']);
@@ -141,7 +141,8 @@ describe('free layout structures', () => {
       .replace('<Link from={k} to={w} />', '<Link from={k} to={w} /><Link from={w} to={k} />');
     const design = designOf(twoTags);
     expect(design.structures).not.toEqual(designOf(undirected).structures);
-    expect(design.starter).toMatchObject({ 'Graph.<Link>.<To>.head': 'arrow' });
+    // A kind's own head only where its links are two-way lines; otherwise its base's arrow.
+    expect(design.starter['Graph.<Link>.<To>.head']).toBeUndefined();
     expect(designOf(undirected).starter).toMatchObject({ 'Graph.<Link>.<To>.head': 'none' });
   });
 
@@ -157,9 +158,10 @@ describe('free layout structures', () => {
         .filter((key) => key.endsWith('.form'))
         .map((key) => key.slice(0, -'.form'.length));
       return {
-        form: starter[`${kind}.form`],
-        direction: starter[`${kind}.direction`],
-        curve: starter[`${kind}.curve`],
+        // No kind starts a layout's look of its own: each is the prop's neutral value.
+        form: starter[`${kind}.form`] ?? neutralValues.form,
+        direction: starter[`${kind}.direction`] ?? neutralValues.direction,
+        curve: starter[`${kind}.curve`] ?? neutralValues.curve,
         forms: space[`${kind}.form`],
         structure: structures[kind],
         directions: space[`${kind}.direction`]

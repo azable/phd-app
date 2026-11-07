@@ -117,7 +117,6 @@ import {
   listingRegionSpace,
   starterVariant,
   viewKey,
-  withStarterBase,
   type DesignKind,
   type DesignOrigin,
   type DesignSpace,
@@ -145,7 +144,8 @@ import {
   linkEnd,
   listingPlacesOptions,
   roleProps,
-  starterListingPlaces,
+  kindStyle,
+  neutralListing,
   type DesignProp,
   type ListingPlacesLook,
   type KindRole
@@ -274,6 +274,8 @@ export type SvelteBundle = {
   stepSignature: string;
   /** The presentation's variant: every variable's value, by key. */
   variant: Record<string, DesignValue>;
+  /** The design file the variant is built from: a template's copy and the changes made to it. */
+  design: Record<string, DesignValue>;
   /** Where each value came from. */
   origins: Record<string, DesignOrigin>;
   /** The <Node> tags it leaves out, by their line:column. */
@@ -378,8 +380,8 @@ export type PreparedComponent = {
     places: Record<string, { key: string; base: string; options: string[] }>;
     /** Each place's variable, by key, and the variable it falls back to until a variant sets it. */
     fallbacks: Record<string, Fallback>;
-    /** Each kind of node's role, by its key, whose role levels its props follow (see buildVariant). */
-    roles: Record<string, KindRole>;
+    /** The style each kind of node follows where nothing else sets a prop, by its key (see buildVariant). */
+    bases: Record<string, string>;
     space: DesignSpace;
     starter: Record<string, DesignValue>;
     /** Each free layout kind's structure, as its data makes it, for the assistant. */
@@ -484,11 +486,15 @@ export class InvalidSvelteSourceError extends Error {
 }
 
 /**
- * Compile one seeded presentation on the starter base; batch builds prepare once and bundle per
- * seed instead.
+ * Compile one seeded presentation with a design (see VariantRequest); batch builds prepare once and
+ * bundle per seed instead.
  */
-export async function compileSvelteComponent(source: string, seed = 1): Promise<SvelteBundle> {
-  return bundlePresentation(prepareSvelteComponent(source), seed, withStarterBase({}));
+export async function compileSvelteComponent(
+  source: string,
+  request: VariantRequest,
+  seed = 1
+): Promise<SvelteBundle> {
+  return bundlePresentation(prepareSvelteComponent(source), seed, request);
 }
 
 /** The steps a page of the source starts with, paced by its view; none where the view does not build. */
@@ -2259,7 +2265,7 @@ function prepareViews(
         }),
         renders: renderVariables,
         places: placeChoices,
-        roles: Object.fromEntries(kinds.map(({ key, role }) => [key, role])),
+        bases: Object.fromEntries(kinds.map(({ key, role }) => [key, kindStyle(role, key)])),
         fallbacks: Object.fromEntries([
           ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
           ...[...placeKinds].flatMap(([key, { base, role, unboxed }]) =>
@@ -2329,7 +2335,7 @@ function prepareViews(
               )
             ),
             ...(Object.keys(placesSpace).length
-              ? { '<Listing>.places': starterListingPlaces }
+              ? { '<Listing>.places': neutralListing['<Listing>.places'] }
               : {}),
             ...boundDesign(bindings).starter
           },
@@ -2414,7 +2420,7 @@ export async function bundlePresentation(
       request,
       seed,
       design.fallbacks,
-      design.roles
+      design.bases
     );
   } catch (cause) {
     if (!(cause instanceof DesignValueError)) throw cause;
@@ -2720,6 +2726,7 @@ export async function bundlePresentation(
     steps: prepared.steps,
     stepSignature: prepared.signature,
     variant: values,
+    design: variant.design,
     origins: variant.origins,
     leftOut: leftOut.nodes,
     ...(warnings.length ? { warnings } : {})
