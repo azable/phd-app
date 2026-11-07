@@ -1,5 +1,5 @@
 /**
- * Inline maths, `\(O(n \log n)\)`, written in LaTeX and drawn as Unicode text: the page, the
+ * Inline maths, `$$O(n \log n)$$`, written in LaTeX and drawn as Unicode text: the page, the
  * server's measure, and the PDF all draw it in the embedded faces, so the server measures what the
  * page draws. Only what Unicode can write on one line converts; the rest is refused, saying what to
  * write instead.
@@ -391,7 +391,7 @@ export function mathsCharacters(): Set<string> {
 export type Converted = { text: string } | { problem: string };
 
 /**
- * The text a LaTeX maths span, its inside as written between `\(` and `\)`, draws as; or why it
+ * The text a LaTeX maths span, its inside as written between `$$` and `$$`, draws as; or why it
  * has no form on one line, saying what to write instead.
  */
 export function mathsText(written: string): Converted {

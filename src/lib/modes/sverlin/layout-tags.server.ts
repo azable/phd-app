@@ -162,7 +162,7 @@ export function layoutTags(source: string): {
    * lacks its storyboard first.
    */
   unshown: Problem[];
-  /** The places caption tokens name, as @i for $i[A[i]], each where it is written. */
+  /** The places caption tokens name, as :i for :i[A[i]], each where it is written. */
   captions: { place: string; start: number }[];
 } {
   // Comments and scripts are not markup: read as spaces, nothing in them counts.
