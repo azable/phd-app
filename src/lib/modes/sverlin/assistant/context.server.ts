@@ -9,11 +9,10 @@ import type { AiDesign, AiDesignContext, AiVariable } from '$lib/server/ai/conte
 import { writtenKey } from '../library/node/design-keys';
 import {
   templateName,
-  templateOf,
   templates,
-  templateValues,
+  withoutTemplateValues,
   type TemplateName
-} from './templates/templates';
+} from '../templates/templates';
 import {
   baseKey,
   baseOptions,
@@ -126,15 +125,12 @@ export function designContext(design: AiDesign): AiDesignContext {
  * differences, not the base's 200-odd values.
  */
 function withoutBase(design: AiDesign): AiDesign {
-  const named = design.variables.find(({ variable }) => variable === '...' || variable === baseKey);
-  const template = templateOf(named?.value);
-  if (!template) return design;
-  const base = templateValues(template);
+  const told = withoutTemplateValues(
+    Object.fromEntries(design.variables.map(({ variable, value }) => [variable, value]))
+  );
   return {
     options: design.options,
-    variables: design.variables.filter(
-      ({ variable, value }) => !Object.hasOwn(base, variable) || base[variable] !== value
-    )
+    variables: design.variables.filter(({ variable }) => Object.hasOwn(told, variable))
   };
 }
 

@@ -90,9 +90,9 @@ of writing:
 [`design-patch.server.ts`](src/lib/modes/sverlin/assistant/design-patch.server.ts);
 values naming a template as their base, as `"...": "$textbook"`, get the
 template written out in full under them, from the JSON files in
-[`assistant/templates/`](src/lib/modes/sverlin/assistant/templates/templates.ts);
-every design names its base, and a build whose design names none, as a first
-version's or a demo example's, gets the starter base written in:
+[`templates/`](src/lib/modes/sverlin/templates/templates.ts); every design names
+its base, and a build whose design names none, as a first version's or a demo
+example's, gets the starter base written in:
 [`withStarterBase`](src/lib/modes/sverlin/design.server.ts)); after a manual
 change the first presentation keeps the viewed variant's values and the second
 is randomised; a manual change can also edit the viewed variant's choices as

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { contrast } from '../../library/colour';
-import { colourCss } from '../../library/node/design';
-import { drawnSteps } from '../../testing/scenes';
-import bfs from '../../fixtures/bfs-visit-order.sverlin?raw';
-import dijkstra from '../../fixtures/dijkstra-fields.sverlin?raw';
-import pseudocode from '../../fixtures/listing-pseudocode.sverlin?raw';
-import bars from '../../fixtures/bars.sverlin?raw';
-import { keptKey } from '../../library/node/design-keys';
-import { designContext, designVariables } from '../context.server';
-import { designPatch, readDesignPatch } from '../design-patch.server';
-import { templateName, templates, templateValues, type TemplateName } from './templates';
+import { contrast } from '../library/colour';
+import { colourCss } from '../library/node/design';
+import { drawnSteps } from '../testing/scenes';
+import bfs from '../fixtures/bfs-visit-order.sverlin?raw';
+import dijkstra from '../fixtures/dijkstra-fields.sverlin?raw';
+import pseudocode from '../fixtures/listing-pseudocode.sverlin?raw';
+import bars from '../fixtures/bars.sverlin?raw';
+import { keptKey } from '../library/node/design-keys';
+import { designContext, designVariables } from './context.server';
+import { designPatch, readDesignPatch } from './design-patch.server';
+import { templateName, templates, templateValues, type TemplateName } from '../templates/templates';
 
 const names = Object.keys(templates) as TemplateName[];
 // As a decision's values become a build's chosen values (designValues in turn.server.ts).

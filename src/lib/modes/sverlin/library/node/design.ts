@@ -658,7 +658,7 @@ export const kindLookProps = (role: KindRole, kind: string): readonly DesignProp
 
 /**
  * The base a design starts from, written `"...": "$textbook"` at its top: the name of the template
- * the assistant wrote out in full into the design (see assistant/templates), or of a base the model
+ * the assistant wrote out in full into the design (see ../../templates), or of a base the model
  * wrote itself, so the base's values are the design's own and the name records where they came from.
  */
 export const baseKey = 'base';

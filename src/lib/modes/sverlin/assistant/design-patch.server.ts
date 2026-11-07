@@ -14,7 +14,7 @@ import {
   templates,
   templateValues,
   type TemplateName
-} from './templates/templates';
+} from '../templates/templates';
 import type { DesignValues } from '$lib/shared/presentations';
 
 type DesignValue = string | number | boolean;
