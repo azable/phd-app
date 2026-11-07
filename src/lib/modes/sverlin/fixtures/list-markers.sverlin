@@ -63,7 +63,7 @@ while @more[:cur[cur] ≠ ∅]
   <Node>Reverse a singly linked list</Node>
 </Layout>
 
-<Layout name="Nodes" of="nodes, prev, cur, next">
+<Layout name="Nodes">
   <Node layout="free">
     {#each nodes as node}
       {node}
@@ -94,7 +94,7 @@ while @more[:cur[cur] ≠ ∅]
   <Node>prev is now the head of the reversed list.</Node>
 </Layout>
 
-<Layout name="StepNote" of="@finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="StepNote">
   <Node>
     <Node layout="stack"><Node when="@rewire.save">
       <SaveNote />
@@ -111,24 +111,24 @@ while @more[:cur[cur] ≠ ∅]
   </Node>
 </Layout>
 
-<Layout name="Diagram" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Diagram">
   <Node layout="column">
-    <Nodes nodes={nodes} prev={prev} cur={cur} next={next} />
+    <Nodes />
     <StepNote />
   </Node>
 </Layout>
 
-<Layout name="Board" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Board">
   <Node layout="row">
     <Listing />
-    <Diagram nodes={nodes} prev={prev} cur={cur} next={next} />
+    <Diagram />
   </Node>
 </Layout>
 
-<Layout name="Main" of="nodes, prev, cur, next, @finish, @rewire.save, @rewire.reverse, @rewire.advance">
+<Layout name="Main">
   <Node>
     <Title />
-    <Board nodes={nodes} prev={prev} cur={cur} next={next} />
+    <Board />
   </Node>
 </Layout>
 
@@ -141,5 +141,5 @@ while @more[:cur[cur] ≠ ∅]
   }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main nodes={nodes} prev={prev} cur={cur} next={next} /></Scene>
+  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main /></Scene>
 </Storyboard>

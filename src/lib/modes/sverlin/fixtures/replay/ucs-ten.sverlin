@@ -116,11 +116,11 @@
   </Node>
 </View>
 
-<Layout name="Title" of="goal">
+<Layout name="Title">
   <Node>Uniform cost search from S to {at(goal).name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, edges, current, goal">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex}
       {vertex}
@@ -137,8 +137,6 @@
 
 <Layout
   name="StatusLine"
-  of="current, settledCost, next, candidate, @setup,
-    @search.take, @search.edges.consider.relax, @search.goal"
 >
   <Node>
     <OneOf>
@@ -167,19 +165,11 @@
 
 <Layout
   name="Stacked"
-  of="vertices, edges, goal, current, settledCost, next,
-    candidate, @setup, @search.take,
-    @search.edges.consider.relax, @search.goal"
 >
   <Node layout="column">
-    <Title goal={goal} />
-    <Graph vertices={vertices} edges={edges} current={current} goal={goal} />
-    <StatusLine
-      current={current}
-      settledCost={settledCost}
-      next={next}
-      candidate={candidate}
-    />
+    <Title />
+    <Graph />
+    <StatusLine />
   </Node>
 </Layout>
 
@@ -221,14 +211,6 @@
     pause="@setup, @search.take,
       @search.edges.consider.relax.update, @search.goal"
   >
-    <Stacked
-      vertices={vertices}
-      edges={edges}
-      goal={goal}
-      current={current}
-      settledCost={settledCost}
-      next={next}
-      candidate={candidate}
-    />
+    <Stacked />
   </Scene>
 </Storyboard>

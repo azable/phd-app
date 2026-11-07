@@ -1,7 +1,7 @@
 /**
- * Layouts with inputs, `<Layout name="Window" of="values, lo, hi">…</Layout>`, and their tags,
- * `<Window values={values} lo={lo} hi={hi} />`. A layout declares what it reads and reads nothing
- * else (checked once the view is parsed, see layoutReads); one rendered by a tag inside another
+ * Layouts, `<Layout name="Window">…</Layout>`, and their tags, `<Window />`. A layout reads the
+ * variables and labels its body names, and those of the layouts it draws (checked once the view is
+ * parsed, see layoutReadProblems); one rendered by a tag inside another
  * layout is a part of it, and becomes the snippet it stands for, its tag a render of it, before
  * Svelte sees the view; one no tag renders is a page, which a scene shows (see storyboard.server.ts).
  * Snippets and renders written by the author are refused, each with the form that replaces it.
@@ -12,8 +12,14 @@
 import { drawingTags } from './drawings.server';
 import { fitted } from './layouts.server';
 import { mathsSvg } from './maths-svg.server';
-import { mathsSpans, tokenInMaths, unclosedMaths } from './maths.server';
-import { placeTokenAt, placeTokenIn } from './listing/mapped.server';
+import {
+  mathsSpans,
+  oldMathsFence,
+  oldMathsMessage,
+  tokenInMaths,
+  unclosedMaths
+} from './maths.server';
+import { oldPlaceTokenAt, placeTokenAt, placeTokenIn } from './listing/mapped.server';
 import { writtenStoryboard, type Scene } from './storyboard.server';
 import type { ColumnShift } from './written-columns';
 
@@ -21,11 +27,10 @@ import type { ColumnShift } from './written-columns';
 export type DeclaredLayout = {
   name: string;
   /**
-   * The state it reads, variables by name and labels as @insert.compare: as its of lists them, or,
-   * with no of, inferred from the names its body uses (inferred), the build keeping those of the
-   * state and naming any other.
+   * The state it reads, variables by name and labels as @insert.compare, from the names its body
+   * and the layouts it draws use, the build keeping those of the state.
    */
-  inputs: { variables: string[]; labels: string[]; inferred?: boolean };
+  inputs: { variables: string[]; labels: string[] };
   /** Whether another layout renders it as a tag, which makes it a part of that layout. */
   part: boolean;
   start: number;
@@ -49,14 +54,15 @@ const reserved = new Set([
 ]);
 
 const name = /^[A-Za-z_$][\w$]*$/u;
-const label = /^@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/u;
 // A label named in a layout's body, as {@insert.compare} or <When of="@scan.found">.
 const labelReference = /(?<![\w$.@])@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/gu;
 // Svelte's own tags, {@render …} and {@html …}, written with an @ that names no label.
 const svelteTags = new Set(['render', 'html', 'const', 'debug', 'attach']);
-// Words in a layout's braces that name no variable: keywords, the markup's own, and globals.
+// Words in a layout's braces that name no variable: keywords, the markup's own, and globals. A
+// block's own word after #, : or /, as {#key …} or {#each …}, is skipped where it is read, so a
+// variable named key is read (insertion sort's key).
 const unnamed = new Set([
-  ...['if', 'else', 'each', 'as', 'key', 'await', 'then', 'catch', 'snippet', 'const', 'let'],
+  ...['if', 'else', 'as', 'await', 'then', 'catch', 'const', 'let'],
   ...['true', 'false', 'null', 'undefined', 'typeof', 'new', 'in', 'of', 'this', 'return'],
   ...['Math', 'Number', 'String', 'Boolean', 'Array', 'Object', 'JSON', 'Infinity', 'NaN'],
   ...['count', 'spans', 'at', ...svelteTags]
@@ -90,11 +96,10 @@ function namesUsed(body: string): string[] {
 }
 const layoutOpening = /<Layout\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>/gu;
 const layoutProp = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
-const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
 
 /** How a layout is written, for messages. */
 const layoutAdvice =
-  'a layout is written <Layout name="Window" of="values, lo, hi">…</Layout>, named, with the state it reads, and rendered by another as <Window values={values} lo={lo} hi={hi} />';
+  'a layout is written <Layout name="Window">…</Layout>, named, reading the state its body names, and drawn by another by its bare tag, <Window />';
 
 /** Blank text, keeping its lines. */
 const blank = (text: string) => text.replace(/[^\n]/gu, ' ');
@@ -116,7 +121,7 @@ function writtenSnippets(scanned: string): Problem[] {
         ? `${snippet} takes a value, as only a view does: write it as a view, <View of="${type ?? 'Int'}" name="${snippet}">…</View>, its value this.`
         : inView(start)
           ? `{#snippet ${snippet}()} gives the nodes inside it a kind of their own: write kind="${snippet}" on the node instead, as <Node kind="${snippet}">…</Node>, where it is drawn.`
-          : `{#snippet ${snippet}()} is written as a layout: <Layout name="${snippet}" of="…">…</Layout>, declaring the state it reads, rendered where it is drawn as <${snippet} … />.`,
+          : `{#snippet ${snippet}()} is written as a layout: <Layout name="${snippet}">…</Layout>, drawn where it is wanted by its bare tag, <${snippet} />.`,
       start
     });
   }
@@ -125,7 +130,7 @@ function writtenSnippets(scanned: string): Problem[] {
     problems.push({
       message: argument.trim()
         ? `{@render ${rendered}(${argument.trim()})} is written {${argument.trim()}}: a value in braces draws its type's view.`
-        : `{@render ${rendered}()} is written as the layout's tag, <${rendered} … />, passing the state it declares.`,
+        : `{@render ${rendered}()} is written as the layout's bare tag, <${rendered} />.`,
       start: match.index ?? 0
     });
   }
@@ -167,6 +172,12 @@ export function layoutTags(source: string): {
   // and $ are no Svelte expression or token.
   const mathsProblems: Problem[] = [];
   const mathsEdits: { start: number; length: number; text: string }[] = [];
+  for (
+    let at = scanned.indexOf(oldMathsFence);
+    at >= 0;
+    at = scanned.indexOf(oldMathsFence, at + 1)
+  )
+    mathsProblems.push({ message: oldMathsMessage, start: at });
   for (const { start, end, inside } of mathsSpans(scanned)) {
     if (end < 0) {
       mathsProblems.push({ message: unclosedMaths, start });
@@ -199,10 +210,12 @@ export function layoutTags(source: string): {
     while (rest.trim() && !problem) {
       const prop = layoutProp.exec(rest);
       if (!prop) problem = `${whole} is no layout: ${layoutAdvice}.`;
-      else if (prop[1] !== 'name' && prop[1] !== 'of')
-        problem = `A <Layout> takes only name and of, the state it reads: ${prop[1]} is no prop of a layout.`;
+      else if (prop[1] === 'of')
+        problem = `A <Layout> takes no of: it reads the variables and labels its body names, so write <Layout name="${given.get('name') ?? 'Window'}">.`;
+      else if (prop[1] !== 'name')
+        problem = `A <Layout> takes only name: ${prop[1]} is no prop of a layout.`;
       else if (prop[4] !== undefined)
-        problem = `A <Layout>'s ${prop[1]} is written as it is, not computed, as of="values, lo": every layout's inputs are known before the algorithm runs.`;
+        problem = `A <Layout>'s name is written as it is, not computed, as name="Board": every layout is known before the algorithm runs.`;
       else {
         given.set(prop[1], (prop[2] ?? prop[3]).trim());
         rest = rest.slice(prop[0].length);
@@ -221,23 +234,7 @@ export function layoutTags(source: string): {
       });
       continue;
     }
-    const inputs: DeclaredLayout['inputs'] = {
-      variables: [],
-      labels: [],
-      ...(given.has('of') ? {} : { inferred: true })
-    };
-    for (const input of (given.get('of') ?? '')
-      .split(',')
-      .map((each) => each.trim())
-      .filter(Boolean)) {
-      if (label.test(input)) inputs.labels.push(input.slice(1));
-      else if (name.test(input)) inputs.variables.push(input);
-      else
-        problems.push({
-          message: `of="${given.get('of')}" names ${input}, no variable or label: a layout's inputs are variables, as values, and labels, as @insert.compare, separated by commas.`,
-          start
-        });
-    }
+    const inputs: DeclaredLayout['inputs'] = { variables: [], labels: [] };
     const closing = scanned.indexOf('</Layout', start + whole.length);
     const end = closing < 0 ? scanned.length : closing;
     declared.push({
@@ -258,7 +255,7 @@ export function layoutTags(source: string): {
       });
     else byName.set(layout.name, layout);
   // Labels are global, so a layout reads every label its body names, and those of the layouts it
-  // draws, whether or not its of lists them.
+  // draws.
   const named = new Map(
     declared.map((layout) => {
       const body = scanned.slice(layout.body.start, layout.body.end);
@@ -277,7 +274,7 @@ export function layoutTags(source: string): {
     const own = named.get(layoutName);
     return own ? [...own.labels, ...own.drawn.flatMap((other) => readLabels(other, seen))] : [];
   };
-  // With no of, a layout reads the names its body uses, and those of the layouts it draws.
+  // A layout reads the names its body uses, and those of the layouts it draws.
   const readNames = (layoutName: string, seen = new Set<string>()): string[] => {
     if (seen.has(layoutName)) return [];
     seen.add(layoutName);
@@ -289,11 +286,10 @@ export function layoutTags(source: string): {
     ];
   };
   for (const layout of declared) {
-    layout.inputs.labels = [...new Set([...layout.inputs.labels, ...readLabels(layout.name)])];
-    if (layout.inputs.inferred)
-      layout.inputs.variables = [...new Set(readNames(layout.name))].filter(
-        (each) => !byName.has(each)
-      );
+    layout.inputs.labels = [...new Set(readLabels(layout.name))];
+    layout.inputs.variables = [...new Set(readNames(layout.name))].filter(
+      (each) => !byName.has(each)
+    );
   }
   const views = [...scanned.matchAll(/<View\b[\s\S]*?<\/View\s*>/gu)].map((match) => ({
     start: match.index ?? 0,
@@ -331,35 +327,16 @@ export function layoutTags(source: string): {
     }
     if (!props.trimEnd().endsWith('/')) {
       problems.push({
-        message: `<${tagged}> holds nothing: a layout's tag passes its inputs and draws the layout, so close it at once, as <${tagged} ${layout.inputs.variables.map((input) => `${input}={${input}}`).join(' ')} />.`,
+        message: `<${tagged}> holds nothing: a layout's tag draws the layout, so close it at once, as <${tagged} />.`,
         start
       });
       continue;
     }
-    const passed = new Map<string, string>();
-    let rest = props.trimEnd().slice(0, -1);
-    let problem: string | undefined;
-    while (rest.trim() && !problem) {
-      const prop = tagProp.exec(rest);
-      if (!prop)
-        problem = `${whole} passes its inputs as name={value}, as <${tagged} ${layout.inputs.variables.map((input) => `${input}={${input}}`).join(' ')} />.`;
-      else if (passed.has(prop[1])) problem = `${whole} passes ${prop[1]} twice.`;
-      else {
-        passed.set(prop[1], prop[2].trim());
-        rest = rest.slice(prop[0].length);
-      }
-    }
-    for (const [input, value] of passed) {
-      if (problem) break;
-      if (!layout.inputs.variables.includes(input))
-        problem = `${tagged} has no input ${input}: it reads ${[...layout.inputs.variables, ...layout.inputs.labels.map((each) => `@${each}`)].join(', ') || 'nothing of the state'}.`;
-      else if (value !== input)
-        problem = `${input}={${value}} passes ${input} another value: an input is passed as the state of its own name, as ${input}={${input}}, so it keeps its places and pointers.`;
-      else if (!around.inputs.inferred && !around.inputs.variables.includes(input))
-        problem = `${around.name} passes ${input} to ${tagged} without reading it: add ${input} to ${around.name}'s inputs, of="${[...around.inputs.variables, input].join(', ')}".`;
-    }
-    if (problem) {
-      problems.push({ message: problem, start });
+    if (props.trimEnd().slice(0, -1).trim()) {
+      problems.push({
+        message: `${whole} passes props, and a layout's tag takes none: the layout reads the state its body names, so draw it by its bare tag, <${tagged} />.`,
+        start
+      });
       continue;
     }
     layout.part = true;
@@ -398,26 +375,18 @@ export function layoutTags(source: string): {
       length: storyboard.range.end - storyboard.range.start,
       text: blank(scanned.slice(storyboard.range.start, storyboard.range.end))
     });
+  // A part becomes its snippet; a page keeps its opening as pageLayouts reads it.
   for (const layout of declared) {
+    if (!layout.part) continue;
     const { opening } = layout;
-    if (layout.part) {
-      edits.push({
-        start: opening.start,
-        length: opening.end - opening.start,
-        text: `{#snippet ${layout.name}()}`
-      });
-      const closing = /^<\/Layout\s*>/u.exec(scanned.slice(layout.body.end));
-      if (closing)
-        edits.push({ start: layout.body.end, length: closing[0].length, text: '{/snippet}' });
-    } else {
-      // A page keeps its opening as pageLayouts reads it, its inputs blanked.
-      const written = source.slice(opening.start, opening.end);
-      edits.push({
-        start: opening.start,
-        length: written.length,
-        text: written.replace(/\s+of\s*=\s*("[^"]*"|'[^']*')/u, (of) => blank(of))
-      });
-    }
+    edits.push({
+      start: opening.start,
+      length: opening.end - opening.start,
+      text: `{#snippet ${layout.name}()}`
+    });
+    const closing = /^<\/Layout\s*>/u.exec(scanned.slice(layout.body.end));
+    if (closing)
+      edits.push({ start: layout.body.end, length: closing[0].length, text: '{/snippet}' });
   }
   // A node or link shown only at a label's steps, <Node when="@scan.found">, is <When> around
   // it, and a node keeps its room elsewhere; a stack of such nodes takes turns in one place.
@@ -467,9 +436,9 @@ export function layoutTags(source: string): {
     edits.push(around, unwhen);
     edits.push({ start: closing.index, length: closing[0].length, text: `${closing[0]}</When>` });
   }
-  // A token in a caption's text, $name[text], refers to the place @name as a listing's token does
+  // A token in a caption's text, :name[text], refers to the place :name as a listing's token does
   // (see listing/places.ts), and is drawn as inline code: a node of kind Code linked to that place.
-  const captions = captionTokens(scanned);
+  const captions = captionTokens(scanned, problems);
   for (const token of captions) {
     edits.push({
       start: token.start,
@@ -536,62 +505,27 @@ export function layoutTags(source: string): {
   };
 }
 
-type Markup = { type?: string; start?: number; end?: number; children?: unknown[] } & Record<
-  string,
-  unknown
->;
-
 /**
- * What each layout reads that it does not declare, or declares that is no variable, once the view
- * is parsed: a part as its snippet, a page as its block. Variables are read by name. Labels are
- * global, so a layout reads those its body names without declaring them (see layoutTags).
+ * Each layout's variables kept to those of the state, once the state's names are known: any other
+ * name its body uses the view's own check names where it is written.
  */
-export function layoutReadProblems(
-  top: readonly unknown[],
+export function keepStateReads(
   layouts: readonly DeclaredLayout[],
-  stateNames: readonly string[],
-  readsOf: (node: { children?: unknown[] }) => Set<string>,
-  pageNameOf: (block: unknown) => string | undefined
-): Problem[] {
-  const problems: Problem[] = [];
+  stateNames: readonly string[]
+): void {
   const variables = new Set(stateNames);
-  const byName = new Map(layouts.map((layout) => [layout.name, layout]));
-  for (const node of top as Markup[]) {
-    const layoutName =
-      node.type === 'SnippetBlock'
-        ? (node.expression as { name?: string } | undefined)?.name
-        : pageNameOf(node);
-    const layout = layoutName === undefined ? undefined : byName.get(layoutName);
-    if (!layout) continue;
-    const start = node.start ?? 0;
-    if (layout.inputs.inferred) {
-      // With no of, it reads the names its body uses that are the state's; any other the view's
-      // own check names where it is written.
-      layout.inputs.variables = layout.inputs.variables.filter((each) => variables.has(each));
-      continue;
-    }
-    for (const input of layout.inputs.variables)
-      if (!variables.has(input))
-        problems.push({
-          message: `${layout.name} declares ${input}, which is no variable of the input or algorithm: a layout's inputs are the state it reads.`,
-          start
-        });
-    for (const read of readsOf({ children: node.children }))
-      if (variables.has(read) && !layout.inputs.variables.includes(read))
-        problems.push({
-          message: `${layout.name} reads ${read} without declaring it: a layout reads only its inputs, so add it, of="${[...layout.inputs.variables, read].join(', ')}".`,
-          start
-        });
-  }
-  return problems;
+  for (const layout of layouts)
+    layout.inputs.variables = layout.inputs.variables.filter((each) => variables.has(each));
 }
 
 /**
- * Each token in the markup's text, `$name[text]`, outside tags and braces: where it starts, how long
+ * Each token in the markup's text, `:name[text]`, outside tags and braces: where it starts, how long
  * its opening is, where its closing `]` is, and the place it names; its text keeps any `[…]` in it.
+ * An old token, `$name[`, is a problem naming the new form.
  */
 function captionTokens(
-  scanned: string
+  scanned: string,
+  problems: Problem[]
 ): { start: number; open: number; end: number; place: string }[] {
   const tokens: { start: number; open: number; end: number; place: string }[] = [];
   let tag = false;
@@ -615,6 +549,8 @@ function captionTokens(
       tag = true;
       continue;
     }
+    const old = oldPlaceTokenAt(scanned, at);
+    if (old) problems.push({ message: old, start: at });
     const opening = placeTokenAt(scanned, at);
     if (!opening) continue;
     let depth = 0;

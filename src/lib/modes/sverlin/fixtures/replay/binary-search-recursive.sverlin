@@ -81,10 +81,10 @@
   </Node>
 </View>
 
-<Layout name="Title" of="target">
+<Layout name="Title">
   <Node>Binary search for {target}</Node>
 </Layout>
-<Layout name="Cells" of="values, lo, mid, hi">
+<Layout name="Cells">
   <Node layout="grid">
     <Node kind="Lane" row={-1} col={mid}>{mid}</Node>
     {#each values as value, k}
@@ -94,7 +94,7 @@
     <Node kind="Lane" row={2} col={hi}>{hi}</Node>
   </Node>
 </Layout>
-<Layout name="Range" of="lo, hi">
+<Layout name="Range">
   <Node layout="row">
     <Node>Remaining range: index</Node>
     <Node kind="Bound" value={lo} />
@@ -102,8 +102,7 @@
     <Node kind="Bound" value={hi} />
   </Node>
 </Layout>
-<Layout name="Status" of="target, mid, @probe.equal, @probe.right,
-    @probe.left, @probe.found, @missing">
+<Layout name="Status">
   <Node>
     <OneOf>
       <When of="@probe.equal">
@@ -128,16 +127,15 @@
   </Node>
 </Layout>
 
-<Layout name="Stacked" of="values, target, lo, mid, hi,
-    @probe.equal, @probe.right, @probe.left, @probe.found, @missing">
+<Layout name="Stacked">
   <Node layout="column">
-    <Title target={target} />
+    <Title />
     <Node layout="row">
       <Listing />
       <Node layout="column">
-        <Cells values={values} lo={lo} mid={mid} hi={hi} />
-        <Range lo={lo} hi={hi} />
-        <Status target={target} mid={mid} />
+        <Cells />
+        <Range />
+        <Status />
       </Node>
     </Node>
   </Node>
@@ -156,12 +154,6 @@
     pause="@range, @probe.equal, @probe.right, @probe.left,
       @probe.found, @missing"
   >
-    <Stacked
-      values={values}
-      target={target}
-      lo={lo}
-      mid={mid}
-      hi={hi}
-    />
+    <Stacked />
   </Scene>
 </Storyboard>

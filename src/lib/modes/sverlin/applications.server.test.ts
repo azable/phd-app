@@ -39,22 +39,22 @@ const source = `<script domain>
   <Node>is {this.left} > {this.right}? {this.value}</Node>
 </View>
 <Layout name="Title"><Node>Bubble sort</Node></Layout>
-<Layout name="Board" of="values, @sweep.pair.test">
+<Layout name="Board">
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
     {@sweep.pair.test}
   </Node>
 </Layout>
 
-<Layout name="Main" of="values, @sweep.pair.test">
+<Layout name="Main">
   <Node>
     <Title />
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 /** The caption Ask draws at a step; none where it is hidden or not drawn at all. */

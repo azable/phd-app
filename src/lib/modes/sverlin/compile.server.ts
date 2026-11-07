@@ -180,7 +180,7 @@ import { drawingText } from './library/drawing';
 import type { Arrangement, Readability } from '$lib/shared/readability';
 import { layoutNameOf, layoutProp, noLayoutMessage, pageLayouts } from './layouts.server';
 import { drawingMarker, drawingProblems } from './drawings.server';
-import { layoutReadProblems, layoutTags, type DeclaredLayout } from './layout-tags.server';
+import { keepStateReads, layoutTags, type DeclaredLayout } from './layout-tags.server';
 import { kindChoice, kindResults } from './kind-expressions.server';
 import {
   inputDeclarations,
@@ -992,7 +992,7 @@ function prepareViews(
         allReads.map(
           ({ record, start }) =>
             new InvalidSvelteSourceError(
-              `all(${record}) is no more: keep the ${record}s in a pool, as const ${record}s = pool(${record}, { max: 8 }); in the domain and const nodes = ${record}s; in the input, add each with nodes.add(${record}({ … })), and give the pool to a layout as any input, as <Layout name="Nodes" of="nodes">{#each nodes as n}{n}{/each}</Layout>.`,
+              `all(${record}) is no more: keep the ${record}s in a pool, as const ${record}s = pool(${record}, { max: 8 }); in the domain and const nodes = ${record}s; in the input, add each with nodes.add(${record}({ … })), and draw the pool in a layout, as <Layout name="Nodes"><Node layout="free">{#each nodes as n}{n}{/each}</Node></Layout>.`,
               { code: 'view_component', start: sourcePosition(source, start) }
             )
         )
@@ -1326,27 +1326,8 @@ function prepareViews(
         `"${library}" names a library component; choose another variable name.`,
         at(library, blocks.input, blocks.algorithm)
       );
-    // Each layout reads only the state it declares (see layout-tags.server.ts).
-    const undeclared = layoutReadProblems(
-      (ast.html as { children?: unknown[] }).children ?? [],
-      declaredLayouts,
-      stateNames,
-      (node) => readsOf(node as Parameters<typeof readsOf>[0]),
-      layoutNameOf
-    );
-    // A layout naming what is no variable often names one the algorithm uses and never declares:
-    // where the algorithm failed to run, its own problem is told first, at its line.
-    if (undeclared.length && typed && 'failure' in typed) throw typed.failure;
-    if (undeclared.length)
-      throw InvalidSvelteSourceError.combine(
-        undeclared.map(
-          ({ message, start }) =>
-            new InvalidSvelteSourceError(message, {
-              code: 'view_layout',
-              start: sourcePosition(source, start)
-            })
-        )
-      );
+    // Each layout reads the state its body names (see layout-tags.server.ts).
+    keepStateReads(declaredLayouts, stateNames);
     const components = checkComponents(
       found.components,
       viewing,
@@ -1413,7 +1394,7 @@ function prepareViews(
     if (wrongRender)
       throw new InvalidSvelteSourceError(
         wrongRender.argued
-          ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each runs(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
+          ? `{@${labelOfOperator(wrongRender.name)}} draws what the code labelled @${labelOfOperator(wrongRender.name)} gave at a step, written {@${labelOfOperator(wrongRender.name)}} with nothing between the braces; every value it has given so far is {#each spans(@${labelOfOperator(wrongRender.name)}) as r}{r}{/each}.`
           : `{@${labelOfOperator(wrongRender.name)}} draws what a step's code labelled @${labelOfOperator(wrongRender.name)} gave, which only layouts know: write it in a layout, outside any view.`,
         { code: 'view_component', start: sourcePosition(source, wrongRender.start) }
       );
@@ -1652,7 +1633,7 @@ function prepareViews(
         }
         if (reference.kind === 'applied') {
           problem(
-            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; runs(@check.equal) lists its values so far.`
+            `${asWritten(reference.key)} is not written: label the expression whose results it lists, as @check.equal[a === b], and draw what it computed at each step with a view typed by the label, as <View of="@check.equal" name="Ask">…</View> drawn by {@check.equal}; spans(@check.equal) lists its values so far.`
           );
           continue;
         }

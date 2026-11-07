@@ -31,7 +31,7 @@
 
 <View of="Index" name="IndexNumber"><Node value={this} /></View>
 
-<Layout name="Cells" of="values, lo, hi">
+<Layout name="Cells">
   <Node layout="grid">
     {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
     <Node kind="Lane" row={1} col={lo}>{lo}</Node>
@@ -39,14 +39,14 @@
   </Node>
 </Layout>
 
-<Layout name="Main" of="target, lo, hi, values">
+<Layout name="Main">
   <Node>
-    <Node layout="row"><Node>Searching for {target}</Node><Cells values={values} lo={lo} hi={hi} /></Node>
+    <Node layout="row"><Node>Searching for {target}</Node><Cells /></Node>
   </Node>
 </Layout>
 
 <Case name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@range, @probe.right, @probe.left"><Main target={target} lo={lo} hi={hi} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@range, @probe.right, @probe.left"><Main /></Scene>
 </Storyboard>

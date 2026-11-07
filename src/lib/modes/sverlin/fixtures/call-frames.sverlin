@@ -48,7 +48,7 @@
 <Select name="stack" from="SortCall" where="started <= now and now < ended"
         order="depth" />
 
-<Layout name="Stack" of="values, stack">
+<Layout name="Stack">
   <Node layout="column">
     {values}
     <Node kind="StackLabel">call stack</Node>
@@ -61,6 +61,6 @@
 
 <Storyboard>
   <Scene name="calls" case="eight" pause="@sort.split, @sort.merge">
-    <Stack values={values} stack={stack} />
+    <Stack />
   </Scene>
 </Storyboard>

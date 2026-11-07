@@ -27,21 +27,21 @@ const insertion = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <Layout name="Caption"><Node>Swap</Node></Layout>
-<Layout name="Board" of="values, @insert.swap">
+<Layout name="Board">
   <Node layout="column">
     <Node>{#each values as v}{v}{/each}</Node>
     <When of="@insert.swap"><Caption /></When>
   </Node>
 </Layout>
 
-<Layout name="Main" of="values, @insert.swap">
+<Layout name="Main">
   <Node>
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 /**

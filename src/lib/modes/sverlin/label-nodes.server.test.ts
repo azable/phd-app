@@ -9,7 +9,7 @@ const neverDrawn = (warnings: readonly BuildWarning[] = []) =>
 
 describe('a node reading labels', () => {
   it('is drawn at its label’s steps, whether its layout lists its variables or not', async () => {
-    const listed = fixture.replace('<Layout name="Board">', '<Layout name="Board" of="values, i">');
+    const listed = fixture.replace('<Layout name="Board">', '<Layout name="Board">');
     for (const source of [fixture, listed]) {
       const { steps, built } = await drawnSteps(source);
       const labels = (built as { steps: string[] }).steps;

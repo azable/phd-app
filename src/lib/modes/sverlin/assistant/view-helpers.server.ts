@@ -170,14 +170,6 @@ export function pageLayoutName(source: string): string | undefined {
   return freeLayoutName(source) ?? /<Scene\b[^>]*>\s*<(\w+)\b/u.exec(source)?.[1];
 }
 
-/** A layout's declared inputs, sorted, where it lists them. */
-const declaredInputs = (block: string) =>
-  (/\bof="([^"]*)"/u.exec(block)?.[1] ?? '')
-    .split(',')
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .sort()
-    .join(',');
 
 /**
  * The type the source draws most as values: the type of its first value view, that is a view
@@ -350,14 +342,6 @@ export async function checkFills(
     ...fills
   });
   if ('problems' in filled) return left(filled.problems.join(' '));
-  for (const hole of own)
-    if (hole.kind === 'layout' && others[hole.name] !== undefined) {
-      const old = others[hole.name];
-      if (declaredInputs(fills[hole.name]) !== declaredInputs(old))
-        return left(
-          `changes the inputs of ${hole.of ?? hole.name}: keep of="${/\bof="([^"]*)"/u.exec(old)?.[1] ?? ''}"`
-        );
-    }
   const chosen = Object.fromEntries(
     own.flatMap((hole) => {
       const name = /^\s*<View\b[^>]*\bname="(\w+)"/u.exec(fills[hole.name])?.[1];

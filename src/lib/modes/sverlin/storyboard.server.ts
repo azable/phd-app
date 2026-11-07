@@ -41,22 +41,17 @@ export type Scene = {
 };
 
 type Problem = { message: string; start: number };
-/** What a layout reads: the variables and labels it declares. */
-type Inputs = { variables: readonly string[]; labels: readonly string[]; inferred?: boolean };
+/** What a layout reads: the variables and labels its body names. */
+type Inputs = { variables: readonly string[]; labels: readonly string[] };
 
 const sceneName = /^[A-Za-z][\w-]*$/u;
 const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
-const tagProp = /^\s*([A-Za-z_$][\w$]*)\s*=\s*\{([^}]*)\}/u;
 const sceneProps = new Set(['name', 'case', 'pause', 'within', 'at', 'title', 'over', 'as']);
 
 /** How a storyboard is written, for messages. */
 const storyboardAdvice =
-  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search" case="main"><Main values={values} lo={lo} /></Scene></Storyboard>';
-
-/** The tag a scene would write for a layout, passing every input it declares. */
-const tagOf = (layout: string, inputs: Inputs) =>
-  `<${layout}${inputs.variables.map((input) => ` ${input}={${input}}`).join('')} />`;
+  'every source ends with a <Storyboard> of the scenes it plays, in order, each nesting the layout it shows, as <Storyboard><Scene name="search" case="main"><Main /></Scene></Storyboard>';
 
 /**
  * The scenes written in the source, the problems in how they are written, and where the storyboard
@@ -77,7 +72,7 @@ export function writtenStoryboard(
   if (!openings.length) {
     const first = [...layouts.keys()][0];
     const missing = {
-      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main" case="main">${tagOf(first, layouts.get(first)!)}</Scene></Storyboard>` : ''}.`,
+      message: `The view has no storyboard: ${storyboardAdvice}${first ? `; a single scene is <Storyboard><Scene name="main" case="main"><${first} /></Scene></Storyboard>` : ''}.`,
       start: scanned.trimEnd().length
     };
     return { scenes: [], problems, missing };
@@ -146,7 +141,7 @@ export function writtenStoryboard(
     const props = match[1];
     if (props.trimEnd().endsWith('/')) {
       problems.push({
-        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search" case="main"><Main values={values} /></Scene>.`,
+        message: `<Scene${props}> shows nothing: nest the layout it shows, as <Scene name="search" case="main"><Main /></Scene>.`,
         start: bodyStart + at
       });
       rest = at + match[0].length;
@@ -272,43 +267,23 @@ function sceneOf(
   const tag = /^\s*<([A-Za-z_$][\w$]*)\b((?:[^>{"']|"[^"]*"|'[^']*'|\{[^}]*\})*)>\s*$/u.exec(inner);
   if (!inner.trim())
     return fail(
-      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}" case="main"><Main values={values} /></Scene>.`
+      `The scene ${name} shows nothing: nest the layout it shows, as <Scene name="${name}" case="main"><Main /></Scene>.`
     );
   if (!tag || !tag[2].trimEnd().endsWith('/'))
     return fail(
-      `A scene nests exactly one layout, as its tag, closed at once, as <Scene name="${name}" case="main"><Main values={values} /></Scene>: what it shows is arranged in that layout.`
+      `A scene nests exactly one layout, as its bare tag, closed at once, as <Scene name="${name}" case="main"><Main /></Scene>: what it shows is arranged in that layout.`
     );
   const [, layout, tagProps] = tag;
   const inputs = layouts.get(layout);
   if (!inputs)
     return fail(
-      `The scene ${name} shows <${layout} />, and no layout is named ${layout}: declare it, <Layout name="${layout}" of="…">…</Layout>, or show one that exists${layouts.size ? `, as ${[...layouts.keys()].join(', ')}` : ''}.`
+      `The scene ${name} shows <${layout} />, and no layout is named ${layout}: declare it, <Layout name="${layout}">…</Layout>, or show one that exists${layouts.size ? `, as ${[...layouts.keys()].join(', ')}` : ''}.`
     );
-  const passed = new Map<string, string>();
-  let remaining = tagProps.trimEnd().slice(0, -1);
-  while (remaining.trim()) {
-    const found = tagProp.exec(remaining);
-    if (!found)
-      return fail(
-        `The scene ${name} passes ${layout} its inputs as name={value}, as ${tagOf(layout, inputs)}.`
-      );
-    passed.set(found[1], found[2].trim());
-    remaining = remaining.slice(found[0].length);
-  }
-  for (const [input, value] of passed) {
-    if (!inputs.variables.includes(input))
-      return fail(
-        inputs.variables.length || inputs.labels.length
-          ? `${layout} has no input ${input}: it reads ${[...inputs.variables, ...inputs.labels.map((each) => `@${each}`)].join(', ')}.`
-          : `The scene ${name} passes ${input} to ${layout}, which reads no state: a layout reading none is one frame, as a title card; declare ${input} in its of to show it.`
-      );
-    if (value !== input)
-      return fail(
-        `${input}={${value}} passes ${input} another value: a scene passes the state of the input's own name, as ${input}={${input}}.`
-      );
-  }
-  const live =
-    over && [...passed.keys()].find((input) => input !== over.list && input !== over.item);
+  if (tagProps.trimEnd().slice(0, -1).trim())
+    return fail(
+      `The scene ${name} passes ${layout} props, and a layout's tag takes none: the layout reads the state its body names, so nest its bare tag, <${layout} />.`
+    );
+  const live = over && inputs.variables.find((input) => input !== over.list && input !== over.item);
   if (over && (live !== undefined || inputs.labels.length))
     return fail(
       `The scene ${name} steps over ${over.list}, whose steps are no moments of the case, so ${layout} reads only ${over.list} and ${over.item}: ${live ?? `@${inputs.labels[0]}`} has no value at such a step.`

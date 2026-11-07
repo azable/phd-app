@@ -51,23 +51,23 @@ export const linearSearchSource = `<script domain>
   </Node>
 </View>
 <Layout name="Title"><Node>Linear search</Node></Layout>
-<Layout name="Caption" of="target"><Node>Find {target} by checking each cell in order.</Node></Layout>
+<Layout name="Caption"><Node>Find {target} by checking each cell in order.</Node></Layout>
 <View of="@check.equal" name="Ask"><Node>is {this.left} equal to {this.right}?</Node></View>
-<Layout name="Checking" of="i, @check.equal">
+<Layout name="Checking">
   <Node layout="row"><Node>Checking index</Node><Node kind="Number" value={i} />{@check.equal}</Node>
 </Layout>
-<Layout name="Result" of="target, found">
+<Layout name="Result">
   <Node layout="row"><Node>Found {target} at index</Node><Node kind="Number" value={found} /></Node>
 </Layout>
 
-<Layout name="Main" of="values, i, found, target, @check.equal, @run">
+<Layout name="Main">
   <Node>
     <Title />
-    <Caption target={target} />
+    <Caption />
     {values}
     <Node kind="Marks" layout="row"><Node>{i}</Node><Node>{found}</Node></Node>
-    <Checking i={i} />
-    <Node when="@run" layout="column"><Result target={target} found={found} /></Node>
+    <Checking />
+    <Node when="@run" layout="column"><Result /></Node>
   </Node>
 </Layout>
 
@@ -75,6 +75,6 @@ export const linearSearchSource = `<script domain>
 
 <Storyboard>
   <Scene name="search" case="main" pause="@first, @check.equal, @next, @run">
-    <Main values={values} i={i} found={found} target={target} />
+    <Main />
   </Scene>
 </Storyboard>`;

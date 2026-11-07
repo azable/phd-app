@@ -29,7 +29,7 @@ const sort = (cells: string, extraViews = '') => `<script domain>
   <Node layout="column"><Node kind="Tip" icon /><Node kind="Caption">mark</Node></Node>
 </View>
 ${extraViews}
-<Layout name="Main" of="values, i, j">
+<Layout name="Main">
   <Node layout="grid">
 ${cells}
   </Node>

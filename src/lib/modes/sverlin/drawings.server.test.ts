@@ -19,9 +19,9 @@ const blocks = `<script domain>
 <View of="Rank" name="RankText"><Node value={this} /></View>
 <View of="Card" name="CardFace"><Node layout="column">{this.rank}{this.suit}</Node></View>
 <View of="Hand" name="Row"><Node layout="row">{#each this as card}{card}{/each}</Node></View>
-<Layout name="Main" of="hand"><Node layout="column">{hand}</Node></Layout>
+<Layout name="Main"><Node layout="column">{hand}</Node></Layout>
 <Case name="main" hand={[{ rank: 3, suit: 'hearts' }, { rank: 10, suit: 'spades' }]} />
-<Storyboard><Scene name="main" case="main"><Main hand={hand} /></Scene></Storyboard>
+<Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>
 `;
 
 /** A view of the suit drawing the shapes given, in a drawing of the props given. */

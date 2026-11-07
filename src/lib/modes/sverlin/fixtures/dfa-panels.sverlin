@@ -97,7 +97,7 @@
   <Node>DFA for binary strings ending in 01</Node>
 </Layout>
 
-<Layout name="WordLine" of="word, pos">
+<Layout name="WordLine">
   <Node layout="column">
     <Node kind="WordLabel">input word</Node>
     <Node layout="grid">
@@ -107,7 +107,7 @@
   </Node>
 </Layout>
 
-<Layout name="Graph" of="states, delta, current">
+<Layout name="Graph">
   <Node layout="free">
     {#each states as state, k}
       <Node layout="column">
@@ -121,7 +121,7 @@
   </Node>
 </Layout>
 
-<Layout name="Table" of="states, delta">
+<Layout name="Table">
   <Node layout="grid">
     <Node kind="TableHeader" row={0} col={0}>state</Node>
     <Node kind="TableHeader" row={0} col={1}>0</Node>
@@ -140,7 +140,6 @@
 
 <Layout
   name="Status"
-  of="states, current, symbol, @run.zero, @run.one, @accepted, @rejected"
 >
   <Node>
     <Node layout="stack">
@@ -154,22 +153,16 @@
 
 <Layout
   name="Page"
-  of="states, delta, word, current, pos, symbol, @run.zero, @run.one,
-      @accepted, @rejected"
 >
   <Node layout="column">
     <Title />
-    <WordLine word={word} pos={pos} />
+    <WordLine />
     <Node layout="row">
-      <Graph states={states} delta={delta} current={current} />
-      <Table states={states} delta={delta} />
+      <Graph />
+      <Table />
       <Node layout="column">
         <Listing />
-        <Status
-          states={states}
-          current={current}
-          symbol={symbol}
-        />
+        <Status />
       </Node>
     </Node>
   </Node>
@@ -197,14 +190,7 @@
     case="ending-01"
     pause="@begin, @run.zero, @run.one, @accepted, @rejected"
   >
-    <Page
-      states={states}
-      delta={delta}
-      word={word}
-      current={current}
-      pos={pos}
-      symbol={symbol}
-    />
+    <Page />
   </Scene>
 </Storyboard>
 

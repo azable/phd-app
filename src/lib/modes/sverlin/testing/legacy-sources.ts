@@ -187,7 +187,10 @@ function convert(text: string, extraState: string[] = []): string {
   for (let changed = true, guard = 0; changed && guard < 20; guard++) {
     changed = false;
     for (const [n, { body: b }] of bodies)
-      for (const r of b.matchAll(/\{@render\s+([A-Za-z_$][\w$]*)\(\)\}/gu)) {
+      for (const r of b.matchAll(
+        /\{@render\s+([A-Za-z_$][\w$]*)\(\)\}|<([A-Za-z_$][\w$]*)\s*\/>/gu
+      )) {
+        r[1] ??= r[2];
         const child = inputs.get(r[1]);
         if (!child) continue;
         const own = inputs.get(n)!;
@@ -206,10 +209,7 @@ function convert(text: string, extraState: string[] = []): string {
   }
   // 3. Renders of parts become tags.
   text = text.replace(/\{@render\s+([A-Za-z_$][\w$]*)\(\)\}/gu, (whole, name: string) => {
-    const i = inputs.get(name);
-    if (!i) return whole;
-    const attrs = i.vars.map((v) => ` ${v}={${v}}`).join('');
-    return `<${name}${attrs} />`;
+    return inputs.has(name) ? `<${name} />` : whole;
   });
   // 4. Declare every layout's inputs.
   text = text.replace(
@@ -219,7 +219,8 @@ function convert(text: string, extraState: string[] = []): string {
       return `<Layout name="${name}"${declared && !declared.declared ? ofText(declared) : ''}${space}>`;
     }
   );
-  return withStoryboard(text);
+  // The inputs found choose the storyboard's case and pauses; a layout then reads them unwritten.
+  return withStoryboard(text).replace(/(<Layout\s+name="[A-Za-z_$][\w$]*")\s+of="[^"]*"/gu, '$1');
 }
 
 /** Every label of the algorithm, by full name, as @insert.swap, each inside the labels around it. */
@@ -252,19 +253,13 @@ function withStoryboard(text: string): string {
     ...text.matchAll(/<Layout\s+name="([A-Za-z_$][\w$]*)"(?:\s+of="([^"]*)")?\s*>/gu)
   ].find(([, name]) => !new RegExp(`<${name.replace('$', '\\$')}\\b`, 'u').test(text));
   if (!page) return text;
-  const passed = (page[2] ?? '')
-    .split(',')
-    .map((input) => input.trim())
-    .filter((input) => input && !input.startsWith('@'))
-    .map((input) => ` ${input}={${input}}`)
-    .join('');
   // A layout reading no state is one frame, which pauses nowhere.
   const labels = page[2] ? labelNames(text) : [];
   const pause = labels.length ? ` pause="${labels.join(', ')}"` : '';
   // A layout reading state, variables or labels, shows a case.
   const shown = page[2] ? ' case="main"' : '';
   const cases = page[2] && !/<Case\b/u.test(text) ? '\n<Case name="main" />' : '';
-  return `${text}${cases}\n<Storyboard><Scene name="main"${shown}${pause}><${page[1]}${passed} /></Scene></Storyboard>`;
+  return `${text}${cases}\n<Storyboard><Scene name="main"${shown}${pause}><${page[1]} /></Scene></Storyboard>`;
 }
 
 export { convert as currentForm, stateNamesOf };

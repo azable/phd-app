@@ -31,29 +31,29 @@
 <View of="Index" name="IndexNumber"><Node value={this} /></View>
 <View of="Index" name="IndexValue">{at(this)}</View>
 
-<Layout name="Cells" of="values, lo, hi">
+<Layout name="Cells">
   <Node layout="grid">
     {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
     <Node kind="Lane" row={1} col={lo}>{lo}</Node>
     <Node kind="Lane" row={2} col={hi}>{hi}</Node>
   </Node>
 </Layout>
-<Layout name="Bounds" of="lo, hi">
+<Layout name="Bounds">
   <Node layout="row">
     <Node>lo</Node><Node kind="Bound" value={lo} />
     <Node>hi</Node><Node kind="Bound" value={hi} />
   </Node>
 </Layout>
 
-<Layout name="Main" of="lo, hi, values">
+<Layout name="Main">
   <Node>
-    <Cells values={values} lo={lo} hi={hi} />
-    <Bounds lo={lo} hi={hi} />
+    <Cells />
+    <Bounds />
   </Node>
 </Layout>
 
 <Case name="main" values={[3, 8, 15, 23, 42, 57, 71]} target={42} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@range, @probe.right, @probe.left"><Main lo={lo} hi={hi} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@range, @probe.right, @probe.left"><Main /></Scene>
 </Storyboard>

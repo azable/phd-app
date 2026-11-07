@@ -23,7 +23,7 @@
 
 <Select name="calls" from="FibCall" where="started <= now" order="started" />
 
-<Layout name="Calls" of="calls">
+<Layout name="Calls">
   <Node layout="column">{#each calls as call}{call}{/each}</Node>
 </Layout>
 
@@ -31,6 +31,6 @@
 
 <Storyboard>
   <Scene name="calls" case="five" pause="@fib:before, @fib">
-    <Calls calls={calls} />
+    <Calls />
   </Scene>
 </Storyboard>

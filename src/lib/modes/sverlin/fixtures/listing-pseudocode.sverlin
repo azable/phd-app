@@ -36,7 +36,7 @@ LINEAR-SEARCH(A, x)
   </Node>
 </View>
 
-<Layout name="Search" of="values, i">
+<Layout name="Search">
   <Node layout="row">
     <Listing />
     <Node layout="grid">
@@ -49,5 +49,5 @@ LINEAR-SEARCH(A, x)
 <Case name="main" values={[4, 9, 2, 7, 5]} target={7} />
 
 <Storyboard>
-  <Scene name="search" case="main" pause="@more, @scan.hit, @scan.next"><Search values={values} i={i} /></Scene>
+  <Scene name="search" case="main" pause="@more, @scan.hit, @scan.next"><Search /></Scene>
 </Storyboard>

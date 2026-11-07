@@ -29,7 +29,7 @@ const search = (mark: string, array: string, page: string) =>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 ${array}
 <View of="Index" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Tip" icon /><Node kind="Caption">${mark}</Node></Node></View>
-<Layout name="Main" of="lo, hi, mid, values">
+<Layout name="Main">
   <Node layout="row">
     ${page}
     {lo}
@@ -43,7 +43,7 @@ ${array}
 const asView =
   '<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>';
 const asLayout =
-  '<Layout name="Cells" of="values"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>';
+  '<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout>';
 const captions = (step: Parameters<typeof ofKind>[0]) =>
   ofKind(step, 'Arrow.Caption').map(({ text }) => text);
 

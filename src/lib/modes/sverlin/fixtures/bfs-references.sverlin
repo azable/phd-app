@@ -41,7 +41,7 @@
   <Node layout="column">{this.name}{this.seen}<Node kind="OutField">{#each this.out as w}<Link to={w} />{/each}</Node></Node>
 </View>
 <View of="VertexRef" name="Marked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Graph" of="vertices, current, @visit.look.check.next">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as v}{v}{/each}
     <Node kind="Var">{current}</Node>
@@ -49,17 +49,17 @@
   </Node>
 </Layout>
 
-<Layout name="Line" of="queue"><Node>queue: {#each queue as q}{q.name}{/each}</Node></Layout>
+<Layout name="Line"><Node>queue: {#each queue as q}{q.name}{/each}</Node></Layout>
 
-<Layout name="Main" of="vertices, current, queue, @visit.look.check.next">
+<Layout name="Main">
   <Node>
-    <Graph vertices={vertices} current={current} />
-    <Line queue={queue} />
+    <Graph />
+    <Line />
   </Node>
 </Layout>
 
 <Case name="main" e={vertices.add(Vertex({ name: 'E', seen: false, out: [] }))} d={vertices.add(Vertex({ name: 'D', seen: false, out: [e] }))} b={vertices.add(Vertex({ name: 'B', seen: false, out: [d] }))} c={vertices.add(Vertex({ name: 'C', seen: false, out: [d] }))} a={vertices.add(Vertex({ name: 'A', seen: true, out: [b, c] }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main vertices={vertices} current={current} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main /></Scene>
 </Storyboard>

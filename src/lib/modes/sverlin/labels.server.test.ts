@@ -41,18 +41,18 @@ it(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Inserting" of="@insert.key"><Node>inserting {@insert.key}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Inserting"><Node>inserting {@insert.key}</Node></Layout>
 
-<Layout name="Main" of="values, @insert.key">
+<Layout name="Main">
   <Node>
-    <Cells values={values} />
+    <Cells />
     <Inserting />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@insert"><Main /></Scene>
 </Storyboard>`;
     const keys = (await stepsOf(source, 4)).map((nodes) =>
       nodes.find((node) => node.startsWith('Inserting'))
@@ -87,20 +87,20 @@ it(
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
-<Layout name="Swapped" of="@sweep.pair.swap.a, @sweep.pair.swap.b"><Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Swapped"><Node>swap {@sweep.pair.swap.a} and {@sweep.pair.swap.b}</Node></Layout>
 <View of="@sweep.pair.test" name="Ask"><Node>is {this.left} > {this.right}?</Node></View>
 
-<Layout name="Main" of="values, @sweep.pair.test, @sweep.pair.swap.a, @sweep.pair.swap.b">
+<Layout name="Main">
   <Node>
-    <Cells values={values} />
+    <Cells />
     {@sweep.pair.test}
     <Swapped />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Main /></Scene>
 </Storyboard>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
@@ -129,17 +129,17 @@ it(
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Index" name="Checked"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>
 
-<Layout name="Main" of="values, @check.hit.at">
+<Layout name="Main">
   <Node>
-    <Cells values={values} />
+    <Cells />
     {#each spans(@check.hit.at) as p}{p}{/each}
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@check"><Main values={values} /></Scene>
+  <Scene name="main" case="main" pause="@check"><Main /></Scene>
 </Storyboard>`;
     const checked = (await stepsOf(search, 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
@@ -165,19 +165,19 @@ it(
 <View of="Digit" name="DigitCell"><Node value={this} /></View>
 <View of="Count" name="CountCell"><Node value={this} /></View>
 <View of="At" name="Reading"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>
-<Layout name="DigitRow" of="digits"><Node>{#each digits as d}{d}{/each}</Node></Layout>
-<Layout name="CountRow" of="counts"><Node>{#each counts as c}{c}{/each}</Node></Layout>
+<Layout name="DigitRow"><Node>{#each digits as d}{d}{/each}</Node></Layout>
+<Layout name="CountRow"><Node>{#each counts as c}{c}{/each}</Node></Layout>
 
-<Layout name="Main" of="v, digits, counts">
+<Layout name="Main">
   <Node>
-    <DigitRow digits={digits} />
-    <CountRow counts={counts} />
+    <DigitRow />
+    <CountRow />
     {v}
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@count"><Main v={v} digits={digits} counts={counts} /></Scene>
+  <Scene name="main" case="main" pause="@count"><Main /></Scene>
 </Storyboard>`;
     const reading = (await stepsOf(counting, 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]

@@ -74,7 +74,7 @@
   <Node>candidate {this.left} &lt; current distance {this.right}: {this.value}</Node>
 </View>
 
-<Layout name="Graph" of="vertices, edges, current">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex}
       {vertex}
@@ -87,18 +87,18 @@
 </Layout>
 
 <Layout name="Title"><Node>Dijkstra's shortest paths</Node></Layout>
-<Layout name="Status" of="current, @round.visit.edge.relax.check">
+<Layout name="Status">
   <Node layout="column">
     <Node>Nearest chosen: {at(current).name}</Node>
     {@round.visit.edge.relax.check}
   </Node>
 </Layout>
 
-<Layout name="Main" of="current, vertices, edges, @round.visit.edge.relax.check">
+<Layout name="Main">
   <Node>
     <Title />
-    <Graph vertices={vertices} edges={edges} current={current} />
-    <Status current={current} />
+    <Graph />
+    <Status />
   </Node>
 </Layout>
 
@@ -119,5 +119,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main current={current} vertices={vertices} edges={edges} /></Scene>
+  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main /></Scene>
 </Storyboard>

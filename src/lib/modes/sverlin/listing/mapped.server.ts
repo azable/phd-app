@@ -15,7 +15,14 @@ import { spanKey } from '../algorithm/interpret.server';
 import type { Label } from '../algorithm/labels.server';
 import { spanOf } from '../algorithm/parse.server';
 import type { Listing, Mark } from './listing';
-import { mathsFenceAt, mathsText, tokenInMaths, unclosedMaths } from '../maths.server';
+import {
+  mathsFenceAt,
+  mathsText,
+  oldMathsFence,
+  oldMathsMessage,
+  tokenInMaths,
+  unclosedMaths
+} from '../maths.server';
 import { closesOnly, keptLines, opensOnly } from './source-lines';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
@@ -35,20 +42,28 @@ export type RegionMap = { label: string; text: string; sources: { text: string; 
 
 const regionOpen = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\[/u;
 /**
- * A place token opening at `index`, `:mid[`, `:@front[` for a label's place, or, as older sources
- * write it, `$mid[`. A `:` opens one only where no name, closing bracket or `:` comes just before
- * it, so `x := y`, `a : b` and `{key:values[0]}` hold none.
+ * A place token opening at `index`, `:mid[`, or `:@front[` for a label's place. A `:` opens one
+ * only where no name, closing bracket or `:` comes just before it, so `x := y`, `a : b` and
+ * `{key:values[0]}` hold none.
  */
 export function placeTokenAt(text: string, index: number): RegExpExecArray | null {
-  const mark = text[index];
-  if (mark !== '$' && mark !== ':') return null;
-  if (mark === ':' && index > 0 && /[\w$)\]}:]/u.test(text[index - 1])) return null;
-  const token = /^[$:](@?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
-  return token && (mark === ':' || !token[1].startsWith('@')) ? token : null;
+  if (text[index] !== ':') return null;
+  if (index > 0 && /[\w$)\]}:]/u.test(text[index - 1])) return null;
+  return /^:(@?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
 }
 
 /** A place token anywhere in a text, as maths must hold none. */
-export const placeTokenIn = /(?:\$|(?<![\w$)\]}:]):@?)[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u;
+export const placeTokenIn = /(?<![\w$)\]}:]):@?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\[/u;
+
+/**
+ * The old place token, `$mid[`, at `index`, which the build refuses, naming `:mid[`: a `$` after no
+ * name, as `$5` or `$$` are no tokens.
+ */
+export function oldPlaceTokenAt(text: string, index: number): string | undefined {
+  if (text[index] !== '$' || (index > 0 && /[\w$]/u.test(text[index - 1]))) return undefined;
+  const token = /^\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\[/u.exec(text.slice(index));
+  return token ? `$${token[1]}[ is no token: a place token is written :${token[1]}[…].` : undefined;
+}
 
 /** Whether a place is a label's, as :@front, a moment of the run rather than a variable. */
 export const isLabelPlace = (place: string): boolean => place.startsWith(':@');
@@ -155,6 +170,8 @@ export function readRegions(body: string): {
   for (let index = 0; index < source.length; index++) {
     // Inline maths, $$…$$, is its Unicode text in a listing, holding no region or token: a listing
     // is lines of text, so it draws no SVG.
+    if (source.startsWith(oldMathsFence, index))
+      problems.push({ message: oldMathsMessage, block: 'listing', at: characters[index].at });
     const fence = mathsFenceAt(source, index);
     if (fence) {
       const [open, closing] = fence;
@@ -173,6 +190,8 @@ export function readRegions(body: string): {
       index = close + closing.length - 1;
       continue;
     }
+    const old = oldPlaceTokenAt(source, index);
+    if (old) problems.push({ message: old, block: 'listing', at: characters[index].at });
     const token = placeTokenAt(source, index);
     if (token) {
       const outer = open.find(

@@ -52,10 +52,7 @@ describe('layouts of the page', () => {
 
   it('keeps every line under a layout opening written over several lines, so tags name their lines', () => {
     const opening = layouts.match(/<Layout name="Side"[^>]*>/u)![0];
-    const spread = layouts.replace(
-      opening,
-      opening.replace('<Layout name=', '<Layout\n  name=').replace(' of=', '\n  of=')
-    );
+    const spread = layouts.replace(opening, opening.replace('<Layout name=', '<Layout\n  name='));
     const line = spread.split('\n').findIndex((text) => text.includes('<Node layout="row">'));
     expect(prepareSvelteComponent(spread).design.tags[`${line + 1}:3`]).toEqual(['Side']);
   });
@@ -97,72 +94,60 @@ describe('layouts of the page', () => {
   it.each([
     [
       'something beside the layouts',
-      '<Title />\n<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout>',
+      '<Title />\n<Layout name="A"><Node><Board /></Node></Layout>',
       'The top level holds only views and layouts'
     ],
     [
       'two roots',
-      '<Layout name="A" of="values, @pass"><Node><Title /></Node><Node><Board values={values} /></Node></Layout>',
+      '<Layout name="A"><Node><Title /></Node><Node><Board /></Node></Layout>',
       'body is one root <Node>'
     ],
     [
       'a free root',
-      '<Layout name="A" of="values, @pass"><Node layout="free"><Board values={values} /></Node></Layout>',
+      '<Layout name="A"><Node layout="free"><Board /></Node></Layout>',
       'its only prop is layout, "row" or "column"'
     ],
     [
       'a nested layout',
-      '<Layout name="A" of="values, @pass"><Node>{#if true}<Layout name="B" of="values, @pass"><Node><Board values={values} /></Node></Layout>{/if}</Node></Layout>',
+      '<Layout name="A"><Node>{#if true}<Layout name="B"><Node><Board /></Node></Layout>{/if}</Node></Layout>',
       'declared at the top level'
     ],
     [
       'two layouts of one name',
-      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout>\n<Layout name="A" of="values, @pass"><Node><Title /></Node></Layout>',
+      '<Layout name="A"><Node><Board /></Node></Layout>\n<Layout name="A"><Node><Title /></Node></Layout>',
       'Two layouts are named A'
     ],
-    [
-      "a view's name",
-      '<Layout name="Cells" of="values, @pass"><Node><Board values={values} /></Node></Layout>',
-      "has a view's name"
-    ],
-    [
-      'a nameless layout',
-      '<Layout><Node><Board values={values} /></Node></Layout>',
-      'is no layout'
-    ],
+    ["a view's name", '<Layout name="Cells"><Node><Board /></Node></Layout>', "has a view's name"],
+    ['a nameless layout', '<Layout><Node><Board /></Node></Layout>', 'is no layout'],
     [
       'a layout closed on itself',
-      '<Layout name="A" /><Node><Board values={values} /></Node>',
+      '<Layout name="A" /><Node><Board /></Node>',
       '<Layout name="A" /> holds nothing'
     ],
     [
       'a closing without its >',
-      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout\n',
+      '<Layout name="A"><Node><Board /></Node></Layout\n',
       '</Layout does not close the layout: close the layout with </Layout>.'
     ],
     [
       'a layout never closed',
-      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node>\n<Layout name="B" of="values, @pass"><Node><Title /></Node></Layout>',
+      '<Layout name="A"><Node><Board /></Node>\n<Layout name="B"><Node><Title /></Node></Layout>',
       'The layout A is never closed: close the layout with </Layout>'
     ],
     [
       'a closing without an opening',
-      '<Layout name="A" of="values, @pass"><Node><Board values={values} /></Node></Layout></Layout>',
+      '<Layout name="A"><Node><Board /></Node></Layout></Layout>',
       'This </Layout> closes no layout'
     ],
-    [
-      'only a closing',
-      '<Node><Board values={values} /></Node></Layout>',
-      'This </Layout> closes no layout'
-    ],
+    ['only a closing', '<Node><Board /></Node></Layout>', 'This </Layout> closes no layout'],
     [
       'a view written as a tag',
-      '<Layout name="A" of="values, @pass"><Node><Cells values={values} /></Node></Layout>',
+      '<Layout name="A"><Node><Cells values={values} /></Node></Layout>',
       '<Cells> is a view of Values, which is drawn by writing a value of Values in braces, not by its tag: write the value, as {values}'
     ],
     [
       'text in the root',
-      '<Layout name="A" of="values, @pass"><Node>Bubble sort <Board values={values} /></Node></Layout>',
+      '<Layout name="A"><Node>Bubble sort <Board /></Node></Layout>',
       'Text outside a <Node>'
     ]
   ])('refuses %s', (_, view, message) => {
@@ -170,12 +155,12 @@ describe('layouts of the page', () => {
   });
 
   it.each([
-    ['on one line', '<Layout name="A" of="values, @pass">'],
-    ['over several lines', '<Layout\n  name="A"\n  of="values,\n      @pass">']
+    ['on one line', '<Layout name="A">'],
+    ['over several lines', '<Layout\n  name="A"\n>']
   ])(
     'keeps every offset, an opening written %s, so problems point where they are written',
     (_, opening) => {
-      const view = `${opening}\n  <Node><Title /><Board values={values} /><Missing /></Node>\n</Layout>`;
+      const view = `${opening}\n  <Node><Title /><Board /><Missing /></Node>\n</Layout>`;
       const source = withView(view);
       try {
         prepareSvelteComponent(source);
@@ -189,9 +174,7 @@ describe('layouts of the page', () => {
   );
 
   it('points at a malformed closing', () => {
-    const source = withView(
-      '<Layout name="A" of="values, @pass">\n  <Node><Board values={values} /></Node>\n</Layout'
-    );
+    const source = withView('<Layout name="A">\n  <Node><Board /></Node>\n</Layout');
     try {
       prepareSvelteComponent(source);
       expect.unreachable();

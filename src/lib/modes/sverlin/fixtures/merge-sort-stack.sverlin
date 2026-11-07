@@ -44,7 +44,7 @@
 <Select name="stack" from="@sort" where="started <= now and now < ended"
         order="depth" max="4" />
 
-<Layout name="Stack" of="values, stack">
+<Layout name="Stack">
   <Node layout="column">
     {values}
     <Node layout="column">{#each stack as call}{call}{/each}</Node>
@@ -56,6 +56,6 @@
 
 <Storyboard>
   <Scene name="calls" case="eight" pause="@sort.split, @sort.merge">
-    <Stack values={values} stack={stack} />
+    <Stack />
   </Scene>
 </Storyboard>

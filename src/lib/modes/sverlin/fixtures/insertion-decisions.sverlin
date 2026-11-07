@@ -57,7 +57,7 @@
   <Node>{this.value ? 'j > 0, so compare' : 'j is at the front, so the round stops'}</Node>
 </View>
 
-<Layout name="Cells" of="values, i, j">
+<Layout name="Cells">
   <Node kind="Track" layout="grid">
     <Node kind="Lane" row={-1} col={i}>{i}</Node>
     {#each values as v, k}
@@ -80,7 +80,7 @@
     </Node>
   </Node>
 </Layout>
-<Layout name="Main" of="values, i, j">
+<Layout name="Main">
   <Node>
     <Board />
   </Node>

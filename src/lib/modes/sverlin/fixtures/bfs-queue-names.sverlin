@@ -57,7 +57,7 @@
 </View>
 
 <Layout name="Title"><Node>Breadth-first search from A</Node></Layout>
-<Layout name="Graph" of="vertices, neighbours, current">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -68,23 +68,23 @@
     <Node kind="Var">{current}</Node>
   </Node>
 </Layout>
-<Layout name="QueueLine" of="queue">
+<Layout name="QueueLine">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
 </Layout>
-<Layout name="Board" of="vertices, neighbours, queue, current">
+<Layout name="Board">
   <Node layout="column">
-    <Graph vertices={vertices} neighbours={neighbours} current={current} />
-    <QueueLine queue={queue} />
+    <Graph />
+    <QueueLine />
   </Node>
 </Layout>
 
-<Layout name="Main" of="current, vertices, neighbours, queue">
+<Layout name="Main">
   <Node>
     <Title />
-    <Board vertices={vertices} neighbours={neighbours} queue={queue} current={current} />
+    <Board />
   </Node>
 </Layout>
 
@@ -97,5 +97,5 @@
   ]} neighbours={[[1, 2], [3], [3], [4], []]} start={0} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main current={current} vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.add"><Main /></Scene>
 </Storyboard>

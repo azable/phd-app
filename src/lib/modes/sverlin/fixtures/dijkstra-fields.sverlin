@@ -99,11 +99,11 @@ while @moreRounds[round ≤ number of vertices]
   </Node>
 </View>
 
-<Layout name="Title" of="vertices, source">
+<Layout name="Title">
   <Node>Dijkstra’s shortest paths from {vertices[source].name}</Node>
 </Layout>
 
-<Layout name="Graph" of="vertices, distances, previous, visited, adjacency, v">
+<Layout name="Graph">
   <Node layout="free">
     <Node kind="Var">{v}</Node>
     {#each vertices as vertex, k}
@@ -126,20 +126,20 @@ while @moreRounds[round ≤ number of vertices]
   <Node>Each edge label is its weight. “Via” records the predecessor on the best route found so far.</Node>
 </Layout>
 
-<Layout name="Board" of="vertices, distances, previous, visited, adjacency, v">
+<Layout name="Board">
   <Node layout="row">
     <Listing />
     <Node layout="column">
-      <Graph vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} v={v} />
+      <Graph />
       <Key />
     </Node>
   </Node>
 </Layout>
 
-<Layout name="Main" of="v, vertices, source, distances, previous, visited, adjacency">
+<Layout name="Main">
   <Node>
-    <Title vertices={vertices} source={source} />
-    <Board vertices={vertices} distances={distances} previous={previous} visited={visited} adjacency={adjacency} v={v} />
+    <Title />
+    <Board />
   </Node>
 </Layout>
 
@@ -158,5 +158,5 @@ while @moreRounds[round ≤ number of vertices]
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@unknown, @initial, @round.firstVertex, @round.nextVertex, @round.settle.mark, @round.settle.edge.relax"><Main v={v} vertices={vertices} source={source} distances={distances} previous={previous} visited={visited} adjacency={adjacency} /></Scene>
+  <Scene name="main" case="main" pause="@unknown, @initial, @round.firstVertex, @round.nextVertex, @round.settle.mark, @round.settle.edge.relax"><Main /></Scene>
 </Storyboard>

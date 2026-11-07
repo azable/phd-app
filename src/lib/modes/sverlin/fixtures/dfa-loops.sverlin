@@ -122,7 +122,7 @@
   </Node>
 </Layout>
 
-<Layout name="TextRow" of="text">
+<Layout name="TextRow">
   <Node layout="column">
     <Node kind="SectionLabel">input text</Node>
     <Node kind="Characters">
@@ -133,14 +133,14 @@
   </Node>
 </Layout>
 
-<Layout name="Machine" of="states">
+<Layout name="Machine">
   <Node layout="column">
     <Node kind="SectionLabel">states and transitions</Node>
     {states}
   </Node>
 </Layout>
 
-<Layout name="Status" of="@accept, @reject">
+<Layout name="Status">
   <Node kind="StatusArea">
     <Node layout="stack">
       <Node when="@accept" kind="Accepted">Accepted: the DFA reached q2.</Node>
@@ -151,14 +151,13 @@
 
 <Layout
   name="Stacked"
-  of="text, states, current, i, @accept, @reject"
 >
   <Node layout="column">
     <Title />
     <Node layout="row">
       <Node layout="column">
-        <TextRow text={text} />
-        <Machine states={states} />
+        <TextRow />
+        <Machine />
         <Node kind="TraceStatus" layout="row">
           <Node>position</Node>{i}<Node>current state</Node>{states[current]}
         </Node>
@@ -178,12 +177,7 @@
     case="main"
     pause="@setup, @scan.transition, @accept, @reject"
   >
-    <Stacked
-      text={text}
-      states={states}
-      current={current}
-      i={i}
-    />
+    <Stacked />
   </Scene>
 </Storyboard>
 

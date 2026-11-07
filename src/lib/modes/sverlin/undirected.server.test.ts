@@ -98,20 +98,20 @@ it(
   @next[i = Position(1);]
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Cells" of="values, partner">
+<Layout name="Cells">
   <Node layout="row">
     {#each values as v, k}{v}<Link from={k} to={partner[k]} />{/each}
   </Node>
 </Layout>
 
-<Layout name="Main" of="values, partner">
+<Layout name="Main">
   <Node>
-    <Cells values={values} partner={partner} />
+    <Cells />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} partner={partner} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
     const { steps, errors } = await linksAtEachStep(pairs);
     for (const step of steps)

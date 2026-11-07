@@ -47,7 +47,7 @@
 </View>
 
 <Layout name="Title"><Node>Breadth-first search from A, on an undirected graph</Node></Layout>
-<Layout name="Graph" of="vertices, neighbours">
+<Layout name="Graph">
   <Node layout="free">
     {#each vertices as vertex, k}
       {vertex}
@@ -57,18 +57,18 @@
     {/each}
   </Node>
 </Layout>
-<Layout name="QueueLine" of="queue">
+<Layout name="QueueLine">
   <Node layout="row">
     <Node>queue</Node>
     {queue}
   </Node>
 </Layout>
 
-<Layout name="Main" of="vertices, neighbours, queue">
+<Layout name="Main">
   <Node>
     <Title />
-    <Graph vertices={vertices} neighbours={neighbours} />
-    <QueueLine queue={queue} />
+    <Graph />
+    <QueueLine />
   </Node>
 </Layout>
 
@@ -81,5 +81,5 @@
   ]} neighbours={[[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit.take, @visit.look.add"><Main vertices={vertices} neighbours={neighbours} queue={queue} /></Scene>
+  <Scene name="main" case="main" pause="@init, @visit.take, @visit.look.add"><Main /></Scene>
 </Storyboard>

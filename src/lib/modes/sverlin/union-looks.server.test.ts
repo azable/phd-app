@@ -24,7 +24,7 @@ const costs = `<script domain>
 <View of="Unknown" name="Infinity"><Node>∞</Node></View>
 <View of="Costs" name="CostRow"><Node layout="row">{#each this as c}{c}{/each}</Node></View>
 
-<Layout name="Main" of="costs">
+<Layout name="Main">
   <Node layout="column">
     {costs}
   </Node>

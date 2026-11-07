@@ -28,19 +28,19 @@
   </Node>
 </View>
 
-<Layout name="Bars" of="values, j">
+<Layout name="Bars">
   <Node layout="grid">
     {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}
     <Node kind="Lane" row={1} col={j}>{j}</Node>
   </Node>
 </Layout>
 
-<Layout name="Main" of="j, values">
-  <Node><Bars values={values} j={j} /></Node>
+<Layout name="Main">
+  <Node><Bars /></Node>
 </Layout>
 
 <Case name="main" values={[6, 2, 9, 4, 0, 7]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main j={j} values={values} /></Scene>
+  <Scene name="main" case="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main /></Scene>
 </Storyboard>

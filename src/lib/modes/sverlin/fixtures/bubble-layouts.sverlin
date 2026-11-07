@@ -42,7 +42,7 @@
 <View of="Values" name="Cells">
   <Node>{#each this as v}{v}{/each}</Node>
 </View>
-<Layout name="Board" of="values, @pass.pair.swap, @pass.pair.compare">
+<Layout name="Board">
   <Node layout="column">
     {values}
     <Node kind="Marks" layout="row">
@@ -57,23 +57,23 @@
   </Node>
 </Layout>
 
-<Layout name="Stacked" of="values, @pass.pair.swap, @pass.pair.compare">
+<Layout name="Stacked">
   <Node>
     <Title />
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
-<Layout name="Side" of="values, @pass.pair.swap, @pass.pair.compare">
+<Layout name="Side">
   <Node layout="row">
     <Node><Title /></Node>
-    <Board values={values} />
+    <Board />
   </Node>
 </Layout>
 
 <Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="stacked" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Stacked values={values} /></Scene>
-  <Scene name="side" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Side values={values} /></Scene>
+  <Scene name="stacked" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Stacked /></Scene>
+  <Scene name="side" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Side /></Scene>
 </Storyboard>

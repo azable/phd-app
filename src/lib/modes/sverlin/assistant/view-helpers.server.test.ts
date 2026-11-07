@@ -56,7 +56,8 @@ describe('view helpers', () => {
     const other = await checkCandidate(bars, 'Int', {
       name: 'Elsewhere',
       description: 'a view of another type',
-      markup: '<View of="Position" name="Elsewhere"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>'
+      markup:
+        '<View of="Position" name="Elsewhere"><Node layout="column"><Link to={this} /><Node kind="Caption">{place()}</Node></Node></View>'
     });
     expect(other).toMatchObject({ kept: false });
   });
@@ -137,10 +138,9 @@ describe('view helpers', () => {
 });
 
 describe('layout helpers', () => {
-  const main = (body: string) =>
-    `<Layout name="Main" of="vertices, neighbours, queue">\n  ${body}\n</Layout>`;
+  const main = (body: string) => `<Layout name="Main">\n  ${body}\n</Layout>`;
   const beside = main(
-    '<Node>\n    <Title />\n    <Node layout="row"><Graph vertices={vertices} neighbours={neighbours} /><QueueLine queue={queue} /></Node>\n  </Node>'
+    '<Node>\n    <Title />\n    <Node layout="row"><Graph /><QueueLine /></Node>\n  </Node>'
   );
 
   it('arrange the page that draws a graph, not the graph alone', () => {
@@ -161,14 +161,7 @@ describe('layout helpers', () => {
     });
   });
 
-  it('leave out an arrangement that reads other inputs, or is no layout of that name', async () => {
-    const narrowed = beside.replace(
-      'of="vertices, neighbours, queue"',
-      'of="vertices, neighbours"'
-    );
-    expect(
-      await checkLayoutCandidate(bfs, 'Main', { name: 'Main', description: '', markup: narrowed })
-    ).toMatchObject({ kept: false, reason: expect.stringContaining('changes the inputs of Main') });
+  it('leave out an arrangement that is no layout of that name', async () => {
     expect(
       await checkLayoutCandidate(bfs, 'Main', {
         name: 'Main',

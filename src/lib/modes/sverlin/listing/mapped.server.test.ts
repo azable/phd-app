@@ -18,16 +18,16 @@ ${algorithm}
 <script listing="textbook">
 ${listing}
 </script>
-<Layout name="Cells" of="values"><Node>{#each values as v}<Node value={v} />{/each}</Node></Layout>
-<Layout name="Main" of="values">
+<Layout name="Cells"><Node>{#each values as v}<Node value={v} />{/each}</Node></Layout>
+<Layout name="Main">
   <Node>
     <Listing />
-    <Cells values={values} />
+    <Cells />
   </Node>
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main"><Main values={values} /></Scene>
+  <Scene name="main" case="main"><Main /></Scene>
 </Storyboard>`;
 
 const insertion = blocks(

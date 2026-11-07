@@ -27,12 +27,12 @@ const insertion = `
   }
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
-<Layout name="Cells" of="values"><Node>{#each values as v}{v}{/each}</Node></Layout>`;
+<Layout name="Cells"><Node>{#each values as v}{v}{/each}</Node></Layout>`;
 
 /** The view in a layout reading what it names, values and labels, or `of`, its one scene. */
 const prepare = (view: string, algorithm = insertion, parts = '', of = readIn(view)) =>
   prepareSvelteComponent(
-    `${domain}${algorithm}\n${parts}\n<Layout name="Main" of="${of}"><Node>${view}</Node></Layout>\n${scene(of)}`
+    `${domain}${algorithm}\n${parts}\n<Layout name="Main"><Node>${view}</Node></Layout>\n${scene(of)}`
   );
 const scene = (of: string) =>
   `<Storyboard><Scene name="main" case="main"><Main${/\bvalues\b/u.test(of) ? ' values={values}' : ''} /></Scene></Storyboard>`;
@@ -61,7 +61,7 @@ describe('labels read in the view', () => {
     expect(markLabels(link).references.map(({ key }) => key)).toEqual(['ℓswapˑa', 'ℓswapˑb']);
     await expect(
       compileSvelteComponent(
-        `${domain}${insertion}\n<Layout name="Inserting" of="@insert.key"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main" of="@insert.key"><Node><Inserting /></Node></Layout>\n${scene('')}`
+        `${domain}${insertion}\n<Layout name="Inserting"><Node>current key = {@insert.key}</Node></Layout>\n<Layout name="Main"><Node><Inserting /></Node></Layout>\n${scene('')}`
       )
     ).resolves.toBeDefined();
   });
@@ -70,7 +70,7 @@ describe('labels read in the view', () => {
     const prepared = prepare(
       '<Inserting />',
       insertion,
-      '<Layout name="Inserting" of="@insert.key"><Node>inserting {@insert.key}</Node></Layout>',
+      '<Layout name="Inserting"><Node>inserting {@insert.key}</Node></Layout>',
       '@insert.key'
     );
     expect(prepared.labelled).toEqual({
@@ -121,7 +121,7 @@ describe('labels read in the view', () => {
     );
     expect(() =>
       prepare(
-        '<Cells values={values} />',
+        '<Cells />',
         insertion,
         '<View of="Values" name="Shown"><Node>{@insert.key}</Node></View>'
       )
@@ -147,7 +147,7 @@ describe('labels read in the view', () => {
     expect(() =>
       prepare(
         '<Asked />',
-        `${search}\n<Layout name="Asked" of="@check"><Node>{#each applied(Equal, @check) as e}{e}{/each}</Node></Layout>`,
+        `${search}\n<Layout name="Asked"><Node>{#each applied(Equal, @check) as e}{e}{/each}</Node></Layout>`,
         '',
         '@check'
       )

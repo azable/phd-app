@@ -68,8 +68,8 @@ describe('records of spans', () => {
       prepareSvelteComponent(
         mergeSort(
           '<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}</Node></View>',
-          '<Layout name="Arrays" of="values, @sort"><Node layout="column">{values}{@sort}</Node></Layout>',
-          '<Scene name="sort" case="eight" pause="@sort"><Arrays values={values} /></Scene>'
+          '<Layout name="Arrays"><Node layout="column">{values}{@sort}</Node></Layout>',
+          '<Scene name="sort" case="eight" pause="@sort"><Arrays /></Scene>'
         )
       ),
       1
@@ -82,8 +82,8 @@ describe('records of spans', () => {
       problemOf(
         mergeSort(
           '<View of="@sort" name="CallFrame"><Node>{this.missing}</Node></View>',
-          '<Layout name="Arrays" of="values, @sort"><Node layout="column">{values}{@sort}</Node></Layout>',
-          '<Scene name="sort" case="eight" pause="@sort"><Arrays values={values} /></Scene>'
+          '<Layout name="Arrays"><Node layout="column">{values}{@sort}</Node></Layout>',
+          '<Scene name="sort" case="eight" pause="@sort"><Arrays /></Scene>'
         )
       )
     ).toMatch(/missing/u);
@@ -96,8 +96,8 @@ describe('queries', () => {
   it('gives the open calls, the call stack, as a list at every step', async () => {
     const source = mergeSort(
       frame,
-      '<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />\n<Layout name="Stack" of="stack"><Node layout="column">{#each stack as call}{call}{/each}</Node></Layout>',
-      '<Scene name="calls" case="eight" pause="@sort.split"><Stack stack={stack} /></Scene>'
+      '<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />\n<Layout name="Stack"><Node layout="column">{#each stack as call}{call}{/each}</Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort.split"><Stack /></Scene>'
     );
     const prepared = prepareSvelteComponent(source);
     const { labels } = await bundlePresentation(prepared, 1);
@@ -116,8 +116,8 @@ describe('queries', () => {
   it("names each listed call's caller as parent, its position in the list, for a tree of calls", () => {
     const source = mergeSort(
       frame,
-      '<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />\n<Layout name="Tree" of="calls"><Node><Node kind="Calls" layout="free">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
-      '<Scene name="calls" case="eight" pause="@sort:before, @sort"><Tree calls={calls} /></Scene>'
+      '<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />\n<Layout name="Tree"><Node><Node kind="Calls" layout="free">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort:before, @sort"><Tree /></Scene>'
     );
     const prepared = prepareSvelteComponent(source);
     const calls = prepared.master.at(-1)!.state.calls as { lo: number; parent?: number }[];
@@ -164,12 +164,12 @@ describe('queries', () => {
     expect(
       problemOf(
         levelsFixture
-          .replace('<Layout name="Level" of="level">', '<Layout name="Level" of="level, values">')
+          .replace('<Layout name="Level">', '<Layout name="Level">')
           .replace(
             '{#each level as call}{call}{/each}',
             '{#each level as call}{call}{/each}{values}'
           )
-          .replace('<Level level={level} />', '<Level level={level} values={values} />')
+          .replace('<Level />', '<Level />')
       )
     ).toContain('reads only levels and level');
   });

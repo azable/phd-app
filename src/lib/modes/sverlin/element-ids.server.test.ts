@@ -36,7 +36,7 @@ const shown = `<script domain>
 </script>
 <View of="Int" name="IntCell"><Node value={this} /></View>
 <View of="Position" name="PositionText"><Node value={this} /></View>
-<Layout name="Main" of="values, i">
+<Layout name="Main">
   <Node layout="column">
     <Node when="@visit.look">Inspect :i[values[i]], $$x^2$$, at {i}.</Node>
     <Node>Then <Node kind="Note" when="@visit.look">look again</Node> and <Node kind="Dot" when="@visit" /></Node>

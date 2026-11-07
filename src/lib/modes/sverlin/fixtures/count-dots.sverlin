@@ -22,7 +22,7 @@
     <Node kind="Caption">{place()}</Node>
   </Node>
 </View>
-<Layout name="Board" of="counts, i">
+<Layout name="Board">
   <Node layout="grid">
     {#each counts as c, k}<Node row={0} col={k}>{c}</Node>{/each}
     <Node kind="Lane" row={1} col={i}>{i}</Node>
@@ -30,5 +30,5 @@
 </Layout>
 <Case name="main" counts={[1, 4, 6, 9]} />
 <Storyboard>
-  <Scene name="grow" case="main" pause="@add.grow"><Board counts={counts} i={i} /></Scene>
+  <Scene name="grow" case="main" pause="@add.grow"><Board /></Scene>
 </Storyboard>

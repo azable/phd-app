@@ -25,7 +25,7 @@
   <Node layout="column"><Node kind="Tip" icon /><Node kind="Caption">mark</Node></Node>
 </View>
 
-<Layout name="Main" of="values, i, j">
+<Layout name="Main">
   <Node layout="column"><Node kind="Board" layout="grid">
     {#each values as v, k}
       <Node row={0} col={k}>{v}</Node>
