@@ -180,22 +180,26 @@ function sizer(options: ReserveOptions) {
   const leastOf = (at: Read, element: ModelElement): Size | undefined => {
     if (classesOf(element).includes('sv-room')) return roomLeast(at, element);
     const size = keptSize(at, element);
-    return size && alongOwnAxes(element, alongTracks(element, size), false);
+    const own = axesOf(element, 'data-sv-own');
+    const kept = size && alongAxes(size, (axis) => !own.has(axis));
+    return kept && alongTracks(element, kept);
   };
   /**
-   * A node takes its own size along some axes, as a bar its height (data-sv-own, keepsSlot in
-   * Node.svelte), and the room round it keeps the node's size there, as the room's least size in
-   * Node.svelte does: the node keeps its size along the other axes, the room along these.
+   * As Node.svelte keeps a node's size (keepsSlot, slotWidth and slotHeight there): on the node
+   * along the axes it keeps a slot on, and on the room round it along those its kind varies or its
+   * value sizes (data-sv-keeps), as a bar's height; along an axis its parent packs, on neither.
    */
-  const alongOwnAxes = (node: ModelElement, size: Size, inRoom: boolean): Size => {
-    const own = node.attributes['data-sv-own']?.split(' ') ?? [];
-    const keeps = (axis: keyof Size) => own.includes(axis) === inRoom;
-    return { width: keeps('width') ? size.width : 0, height: keeps('height') ? size.height : 0 };
-  };
+  const axesOf = (element: ModelElement, name: string) =>
+    new Set(element.attributes[name]?.split(' ') ?? []);
+  const alongAxes = (size: Size, keeps: (axis: keyof Size) => boolean): Size => ({
+    width: keeps('width') ? size.width : 0,
+    height: keeps('height') ? size.height : 0
+  });
   const roomLeast = (at: Read, room: ModelElement): Size | undefined => {
+    const keeps = axesOf(room, 'data-sv-keeps');
     const node = elementsOf(room).find((child) => classesOf(child).includes('sv-node'));
-    const size = node && keptSize(at, node);
-    return size && node.attributes['data-sv-own'] ? alongOwnAxes(node, size, true) : undefined;
+    const size = keeps.size && node ? keptSize(at, node) : undefined;
+    return size && alongAxes(size, (axis) => keeps.has(axis));
   };
   /**
    * A size with nothing kept along a subgrid's axis: there its size is its tracks', which the grid

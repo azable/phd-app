@@ -205,11 +205,12 @@
   const slotHeight = $derived(varyingHeight && packedAlong !== 'height');
   const keepsSlot = (axis: 'width' | 'height') =>
     !(axis === 'width' ? varyingWidth : varyingHeight) && packedAlong !== axis;
-  // The axes it takes its own size along, for the layout model, which keeps its size along the
-  // others only (see leastOf in model/reserve.ts).
-  const ownAxes = $derived(
-    (['width', 'height'] as const).filter((axis) => !keepsSlot(axis)).join(' ') || undefined
-  );
+  // The axes it takes its own size along, and those its room keeps its slot along, for the layout
+  // model, which keeps sizes as these do (see leastOf in model/reserve.ts).
+  const axesWhere = (holds: (axis: 'width' | 'height') => boolean) =>
+    (['width', 'height'] as const).filter(holds).join(' ') || undefined;
+  const ownAxes = $derived(axesWhere((axis) => !keepsSlot(axis)));
+  const roomAxes = $derived(axesWhere((axis) => (axis === 'width' ? slotWidth : slotHeight)));
   const xAnchor = $derived(slotAnchor(look('xAnchor'), 'x', __domains));
   const yAnchor = $derived(slotAnchor(look('yAnchor'), 'y', __domains));
   // A packed child tells its row where its kind places a box along the row, so an expansion grows
@@ -843,6 +844,7 @@
       round it for the paint it reaches past it with (see reach). -->
     <div
       class="sv-room"
+      data-sv-keeps={roomAxes}
       style:padding={reachPadding}
       style:justify-content={xAnchor}
       style:align-items={yAnchor}
