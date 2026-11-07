@@ -436,6 +436,8 @@ export function traceAlgorithm(
   code: string;
   /** The spans of the labels kept as records, and of every call, in the order they ended. */
   records: SpanRecord[];
+  /** The variables outside every function and block, which every step holds (see topLevel). */
+  topLevel: readonly string[];
 } {
   const parsed = parseBlock(body, 'algorithm', domain);
   const { root, offset, code } = parsed;
@@ -494,7 +496,8 @@ export function traceAlgorithm(
     root,
     labels: labelled.labels,
     code,
-    records: interpreter.records
+    records: interpreter.records,
+    topLevel: interpreter.topLevel
   };
 }
 
@@ -638,6 +641,11 @@ class Interpreter {
   readonly #functionBodies = new WeakSet<object>();
   /** The records kept, in the order their spans ended (see SpanRecord). */
   readonly records: SpanRecord[] = [];
+
+  /** The input's variables and those the algorithm declares outside every function and block. */
+  get topLevel(): readonly string[] {
+    return this.#topLevelNames;
+  }
   /** How many starts and ends of spans the algorithm has reached (see MasterStep.stop). */
   #stops = 0;
   /**
@@ -1783,6 +1791,9 @@ class Interpreter {
         targets,
         placed: []
       });
+      // Pointing where the call's own variables point, as #state names them.
+      for (const [path, name] of Object.entries(targets))
+        if (/^result(?:$|[.[])/u.test(path)) targets[path] = this.#shown(name, scope);
     }
     this.records.push({
       label,

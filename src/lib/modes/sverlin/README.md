@@ -1086,6 +1086,10 @@ beside the layouts:
 - In a query of a function's calls, not in groups, a row whose caller is listed
   too has `parent`, its caller's position in the list, so a link can join each
   call to the calls it makes (see Calls).
+- A position in a row points where the span's variable pointed, so in a free
+  layout holding the calls and `values`, `<Link to={this.lo} />` in a view of
+  `@sort` joins each call to `values[lo]`, also through a recursive call's
+  parameter `a`.
 - `max` is the most rows any input can give, required, so the layout keeps room
   for all of them and nothing moves as rows come and go.
 - The result is state, which a layout reads by name, as `{#each stack as call}`.
@@ -2288,10 +2292,13 @@ heads, is its kind's (see Design), never a prop, as `Arrow.<Link>` for a link in
   such index and numbers, as `to={2 * k + 1}` for a heap's child, which draws no
   link at a step where it runs past the array's ends; labels giving positions,
   as `@insert.swap.from`. An end naming no element, as a number or text written
-  in the view or arithmetic of two indices, fails the build. In a view of an
-  element, a link with no `from` starts at the node drawing that element, as a
-  node's `next`. An arrow meets what is seen of its end: a node with no stroke
-  or fill of its own is met at the bordered or filled boxes inside it, as a
+  in the view or arithmetic of two indices, fails the build; a number from the
+  state pointing into no collection, as a value of the array, names none, and
+  the build warns. In a view of an element, a link with no `from` starts at the
+  node drawing that element, as a node's `next`, and only a free layout holding
+  both ends lays it out: outside every free layout it is drawn nowhere, and the
+  build warns. An arrow meets what is seen of its end: a node with no stroke or
+  fill of its own is met at the bordered or filled boxes inside it, as a
   vertex's name cell rather than the column holding it and its caption, unless
   reaching them would cross that other content: an arrow down from a vertex with
   captions under it leaves just below what is drawn under it at that step, its

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { prepareSvelteComponent } from './compile.server';
-import { bundlePresentation } from './testing/scenes';
+import { bundlePresentation, drawnSteps } from './testing/scenes';
 import levelsFixture from './fixtures/merge-sort-levels.sverlin?raw';
 import stackFixture from './fixtures/merge-sort-stack.sverlin?raw';
 
@@ -51,6 +51,9 @@ ${layout}
 <Storyboard>
 ${storyboard}
 </Storyboard>`;
+
+const linkWarnings = (warnings: readonly { message: string }[] = []) =>
+  warnings.map(({ message }) => message).filter((message) => message.startsWith('The Link at'));
 
 const problemOf = (source: string) => {
   try {
@@ -125,6 +128,130 @@ describe('queries', () => {
     // The whole has no caller; each half's caller is the whole; a quarter's, its half.
     expect(calls.map(({ parent }) => parent ?? '-').slice(0, 4)).toEqual(['-', 0, 1, 2]);
     expect(calls.filter(({ parent }) => parent === 0).map(({ lo }) => lo)).toEqual([0, 4]);
+  });
+
+  it("links a row's position to the element it points at, through a recursive call's parameter", async () => {
+    const source = mergeSort(
+      '<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}<Link to={this.lo} /></Node></View>',
+      '<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />\n<Layout name="Stack"><Node><Node kind="Calls" layout="free">{#each values as v}{v}{/each}{#each stack as call}{call}{/each}</Node></Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort.split.end"><Stack /></Scene>'
+    );
+    const { steps, built } = await drawnSteps(source);
+    const prepared = prepareSvelteComponent(source);
+    // Each open call, its a the caller's values or a parameter passed down, reaches values[lo].
+    const reached = steps.map(({ links }) => links.map(({ to }) => to).toSorted());
+    const expected = built.labels.map((name) => {
+      const step = prepared.master.find((each) => each.name === name)!;
+      const stack = (step.state.stack ?? []) as { lo: number }[];
+      return stack.map(({ lo }) => `values[${lo}]`).toSorted();
+    });
+    expect(expected.slice(0, 4)).toEqual([
+      [],
+      ['values[0]'],
+      ['values[0]', 'values[0]'],
+      ['values[0]', 'values[0]', 'values[0]']
+    ]);
+    expect(reached).toEqual(expected);
+    expect(expected.flat()).toContain('values[4]');
+    expect(linkWarnings(built.warnings)).toEqual([]);
+  });
+
+  it('warns of a link drawn nowhere: from no free layout, or to a number pointing nowhere', async () => {
+    const calls = (link: string, layout: string) =>
+      mergeSort(
+        `<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}${link}</Node></View>`,
+        `<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />\n<Layout name="Stack">${layout}</Layout>`,
+        '<Scene name="calls" case="eight" pause="@sort.split.end"><Stack /></Scene>'
+      );
+    const column = '<Node layout="column">{values}{#each stack as call}{call}{/each}</Node>';
+    const free =
+      '<Node><Node kind="Calls" layout="free">{#each values as v}{v}{/each}{#each stack as call}{call}{/each}</Node></Node>';
+    // The rows in a column, values beside them: no layout lays out a link from a row.
+    const outside = await drawnSteps(calls('<Link to={this.lo} />', column));
+    expect(outside.steps.flatMap(({ links }) => links)).toEqual([]);
+    expect(linkWarnings(outside.built.warnings)).toEqual([
+      'The Link at 36:68 in CallFrame has no from, so it starts at the element its view draws, and only a free layout holding that element and what it reaches lays such a link out: it is in none, so it is drawn nowhere. Put both in a node with layout free.'
+    ]);
+    // A from written, as a call's parent, is none only where the value is none, as the first call's.
+    const tree = await drawnSteps(
+      mergeSort(
+        frame,
+        '<Select name="calls" from="@sort" where="start <= now" order="start" max="15" />\n<Layout name="Tree"><Node><Node kind="Calls" layout="column">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
+        '<Scene name="calls" case="eight" pause="@sort.start, @sort.end"><Tree /></Scene>'
+      )
+    );
+    expect(tree.steps.flatMap(({ links }) => links).length).toBeGreaterThan(0);
+    expect(linkWarnings(tree.built.warnings)).toEqual([]);
+    // A value of the array is no position.
+    const value = await drawnSteps(calls('<Link to={this.a[0]} />', free));
+    expect(value.steps.flatMap(({ links }) => links)).toEqual([]);
+    expect(linkWarnings(value.built.warnings)).toEqual([
+      "The Link at 36:68 in CallFrame has to = Int, a number pointing into no collection, so it names no element and is drawn nowhere: a link's end is a position, as Index(values, i), or a reference."
+    ]);
+  });
+
+  it("points a call's result where the call's variables point, as the caller's values for a", () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 8 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  function half(a, lo, hi) @half{
+    if (@base[hi - lo < 2]) @single[return Index(a, lo);]
+    @rest[return half(a, lo, Index(a, Math.floor((lo + hi) / 2)));]
+  }
+  @run[const found = half(values, Index(values, 0), values.length);]
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="@half" name="Call"><Node>half<Link to={this.lo} /></Node></View>
+<Select name="calls" from="@half" where="end <= now" order="start" max="4" />
+<Layout name="Main"><Node><Node kind="Calls" layout="free">{#each values as v}{v}{/each}{#each calls as call}{call}{/each}</Node></Node></Layout>
+<Case name="main" values={[4, 8, 2, 6]} />
+<Storyboard>
+  <Scene name="calls" case="main" pause="@half.end"><Main /></Scene>
+</Storyboard>`;
+    const last = prepareSvelteComponent(source).master.at(-1)!;
+    const results = Object.entries(last.targets ?? {}).filter(([path]) => path.endsWith('.result'));
+    expect(results).toEqual([
+      ['calls[0].result', 'values'],
+      ['calls[1].result', 'values'],
+      ['calls[2].result', 'values']
+    ]);
+  });
+
+  it("links a row's position to the element it points at, in a loop outside any call", async () => {
+    const source = `<script domain>
+  const Int = type('integer', { min: 0, max: 9 });
+  const Values = array(Int, { max: 5 });
+  const Index = index(Values);
+</script>
+<script input>
+  const values = Values;
+</script>
+<script algorithm>
+  for (@start[let i = Index(values, 0)]; @more[i < values.length]; @next[i++]) @visit{
+    values[i] = values[i] + 1;
+  }
+</script>
+<View of="Int" name="Cell"><Node value={this} /></View>
+<View of="@visit" name="Visit"><Node>visit<Link to={this.i} /></Node></View>
+<Select name="visited" from="@visit" where="end <= now" order="start" max="5" />
+<Layout name="Main"><Node><Node kind="Visits" layout="free">{#each values as v}{v}{/each}{#each visited as each}{each}{/each}</Node></Node></Layout>
+<Case name="main" values={[4, 8, 2]} />
+<Storyboard>
+  <Scene name="scan" case="main" pause="@visit.end"><Main /></Scene>
+</Storyboard>`;
+    const { steps } = await drawnSteps(source);
+    expect(steps.map(({ links }) => links.map(({ to }) => to))).toEqual([
+      [],
+      ['values[0]'],
+      ['values[0]', 'values[1]'],
+      ['values[0]', 'values[1]', 'values[2]']
+    ]);
   });
 
   it('builds the merge sort call stack fixture, the stack growing and shrinking', async () => {

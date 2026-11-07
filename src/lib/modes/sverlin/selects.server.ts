@@ -7,6 +7,7 @@
  * the text before Svelte sees the view, and then blanked.
  */
 
+import type { StepIdentities } from './algorithm/identities.server';
 import type { MasterStep, SpanRecord } from './algorithm/interpret.server';
 import type { DomainRegistry } from './algorithm/structures.server';
 
@@ -239,8 +240,17 @@ export function parseCondition(text: string): { condition: Condition } | { probl
 // ---------------------------------------------------------------------------------------------
 // Rows at each step.
 
-/** A row of a query at a step: the record's fields as of its latest stop, with their types. */
-type Row = { record: SpanRecord; state: Record<string, unknown>; types: Record<string, string> };
+/**
+ * A row of a query at a step: the record's fields as of its latest stop, with their types and the
+ * collection each position among them points into.
+ */
+type Row = {
+  record: SpanRecord;
+  state: Record<string, unknown>;
+  types: Record<string, string>;
+  targets: Record<string, string>;
+  identities?: StepIdentities;
+};
 
 /** The rows of a query at a step whose stop is `now`, in its order, before any grouping. */
 export function rowsAt(select: WrittenSelect, records: readonly SpanRecord[], now: number): Row[] {
@@ -249,7 +259,13 @@ export function rowsAt(select: WrittenSelect, records: readonly SpanRecord[], no
     .filter((record) => record.label === select.from && record.started <= now)
     .map((record): Row => {
       const stop = record.ended <= now ? (record.after ?? record.before) : record.before;
-      return { record, state: { ...(stop?.state ?? {}) }, types: { ...(stop?.types ?? {}) } };
+      return {
+        record,
+        state: { ...(stop?.state ?? {}) },
+        types: { ...(stop?.types ?? {}) },
+        targets: { ...(stop?.targets ?? {}) },
+        ...(stop?.identities ? { identities: stop.identities } : {})
+      };
     });
   const valueOf = (row: Row, operand: Operand): unknown => {
     if (operand.kind !== 'name') return operand.value;
@@ -362,11 +378,18 @@ export function withSelectTypes(
   return { ...domain, atoms, structures };
 }
 
-/** Each step with each query's rows at it, as a variable of its name. */
+/**
+ * Each step with each query's rows at it, as a variable of its name. A position in a row points
+ * where it pointed in the record: into a top-level variable's collection, which every step holds
+ * under that name, as a recursive call's `a` is recorded as the caller's `values`; or into a
+ * collection only the call held, the row's own copy of it. Its values keep the identities they had
+ * in the record, so each moves as the value it is (see identities.server.ts).
+ */
 export function withSelectRows(
   steps: readonly MasterStep[],
   records: readonly SpanRecord[],
-  selects: readonly WrittenSelect[]
+  selects: readonly WrittenSelect[],
+  topLevel: ReadonlySet<string>
 ): MasterStep[] {
   if (!selects.length) return [...steps];
   return steps.map((step) => {
@@ -374,6 +397,8 @@ export function withSelectRows(
     const state = { ...step.state } as Record<string, unknown>;
     const types = { ...step.types } as Record<string, string>;
     const targets = { ...step.targets };
+    const ids = { ...step.identities?.ids };
+    const refs = { ...step.identities?.refs };
     for (const select of selects) {
       // The bound holds for the list: its rows, or its groups and each group's rows.
       const all = rowsAt(select, records, now);
@@ -381,6 +406,12 @@ export function withSelectRows(
       const element = (row: Row, path: string) => {
         types[path] = recordType(select.from);
         for (const [field, type] of Object.entries(row.types)) types[`${path}.${field}`] = type;
+        for (const [field, target] of Object.entries(row.targets))
+          targets[`${path}.${field}`] = topLevel.has(target) ? target : `${path}.${target}`;
+        for (const [field, id] of Object.entries(row.identities?.ids ?? {}))
+          ids[`${path}.${field}`] = id;
+        for (const [field, id] of Object.entries(row.identities?.refs ?? {}))
+          refs[`${path}.${field}`] = id;
         return row.state;
       };
       types[select.name] = selectType(select.name);
@@ -420,7 +451,8 @@ export function withSelectRows(
       ...step,
       state: state as MasterStep['state'],
       types: types as MasterStep['types'],
-      ...(Object.keys(targets).length ? { targets } : {})
+      ...(Object.keys(targets).length ? { targets } : {}),
+      ...(step.identities ? { identities: { ...step.identities, ids, refs } } : {})
     };
   });
 }
@@ -446,13 +478,19 @@ function withItem(step: MasterStep, list: string, item: string, k: number): Mast
   const rows = grouped ? listed?.map((group) => (group as { rows: unknown[] }).rows) : listed;
   const types = { ...step.types } as Record<string, string>;
   const from = grouped ? `${list}[${k}].rows` : `${list}[${k}]`;
+  const under = (path: string) =>
+    path === from || path.startsWith(`${from}.`) || path.startsWith(`${from}[`);
+  const asItem = (path: string) => (under(path) ? item + path.slice(from.length) : path);
   for (const [path, type] of Object.entries(step.types))
-    if (path === from || path.startsWith(`${from}.`) || path.startsWith(`${from}[`))
-      types[item + path.slice(from.length)] = type;
+    if (under(path)) types[asItem(path)] = type;
+  const targets = { ...step.targets };
+  for (const [path, target] of Object.entries(step.targets ?? {}))
+    if (under(path)) targets[asItem(path)] = asItem(target);
   return {
     ...step,
     state: { ...step.state, [item]: rows?.[k] ?? null } as MasterStep['state'],
-    types: types as MasterStep['types']
+    types: types as MasterStep['types'],
+    ...(Object.keys(targets).length ? { targets } : {})
   };
 }
 
