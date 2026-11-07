@@ -76,13 +76,16 @@ it(
     // Coarse: each comparison, then each swap. "Swap" shows at the swaps alone. The first
     // comparison draws what the input as given drew, as the board draws no comparison, so it is
     // left out and the steps open on the first swap.
-    const coarse = await stepsOf('@insert.test.compare, @insert.swap', 4);
+    const coarse = await stepsOf('@insert.test.compare.end, @insert.swap.end', 4);
     expect(coarse.map(({ swap }) => swap)).toEqual([true, false, true, false]);
     // The caption keeps its room where hidden, so the board and its cells stay put.
     expect(new Set(coarse.map(({ board }) => board)).size).toBe(1);
     expect(new Set(coarse.map(({ cells }) => cells.join())).size).toBe(1);
     // Fine, pausing at the swap's read of A[j] too: inside the swap's run, so "Swap" shows there.
-    const fine = await stepsOf('@insert.test.compare, @insert.swap.to, @insert.swap', 4);
+    const fine = await stepsOf(
+      '@insert.test.compare.end, @insert.swap.to.end, @insert.swap.end',
+      4
+    );
     expect(fine.map(({ swap }) => swap)).toEqual([true, true, false, true]);
   }
 );
@@ -101,7 +104,7 @@ it(
         '<Node layout="stack"><Node when="@insert.test.compare">{@insert.test.compare}</Node><Node when="@insert.swap"><Caption /></Node></Node>'
       )
       .replaceAll('of="values, @insert.swap"', 'of="values, @insert"');
-    const steps = await stepsOf('@insert.test.compare, @insert.swap', 4, chained);
+    const steps = await stepsOf('@insert.test.compare.end, @insert.swap.end', 4, chained);
     // The question at each comparison, "Swap" at each swap, never both.
     expect(steps.map(({ asked, swap }) => [asked, swap])).toEqual([
       [true, false],

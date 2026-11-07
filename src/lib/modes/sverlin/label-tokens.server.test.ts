@@ -3,7 +3,10 @@ import type { SceneNode, SceneStep } from './library';
 import { drawnSteps } from './testing/scenes';
 
 /** A shifting insertion sort whose listing marks its regions, and a note with tokens in its text. */
-const sort = (note: string, listing = 'while @front[j ≥ 0 and A[j] > key]') => `<script domain>
+const sort = (
+  note: string,
+  listing = 'while @insert.front[j ≥ 0 and A[j] > key]'
+) => `<script domain>
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 4 });
   const Position = index(Values);
@@ -27,12 +30,12 @@ const sort = (note: string, listing = 'while @front[j ≥ 0 and A[j] > key]') =>
 
 <script listing="textbook">
 for i = 1 to n − 1
-    @take[:key[key] = A[i]
+    @insert.take[:key[key] = A[i]
     j = i − 1]
     ${listing}
-        @move[A[j + 1] = A[j]
+        @insert.shift.move[A[j + 1] = A[j]
         j = j − 1]
-    @drop[A[j + 1] = :key[key]]
+    @insert.drop[A[j + 1] = :key[key]]
 </script>
 
 <View of="Int" name="IntCell"><Node value={this} /></View>
@@ -50,10 +53,10 @@ for i = 1 to n − 1
 
 <Case name="main" values={[3, 1, 2]} />
 <Storyboard>
-  <Scene name="sort" case="main" pause="@insert.take, @insert.front, @insert.shift.move, @insert.drop"><Main /></Scene>
+  <Scene name="sort" case="main" pause="@insert.take.end, @insert.front.end, @insert.shift.move.end, @insert.drop.end"><Main /></Scene>
 </Storyboard>`;
 
-const note = 'The loop stops when :@front[A[j] > key] is false, and :key[key] waits.';
+const note = 'The loop stops when :@insert.front[A[j] > key] is false, and :key[key] waits.';
 const lit = { chosen: { 'listing.places': 'fill' } };
 
 /** The steps at which a node with that text and kind shows its place's light. */
@@ -74,7 +77,7 @@ describe('a token naming a label', () => {
     const { steps } = await drawnSteps(sort(note), lit);
     expect(litAt(steps, 'A[j] > key')).toEqual(tests);
     const code = steps[0].nodes.find((node) => node.text === 'A[j] > key');
-    // Written :@front, it is the label's full place, as the listing's region is.
+    // Written :@insert.front, it is the label's full place, as the listing's region is.
     expect(code?.places).toEqual([':@insert.front']);
     const region = steps[0].nodes
       .flatMap((node) => node.runs ?? [])
@@ -86,15 +89,17 @@ describe('a token naming a label', () => {
 
   it('in a listing too, by the regions around it', async () => {
     const { steps } = await drawnSteps(
-      sort(note, 'while @front[j ≥ 0 and :@front[A[j] > key]]'),
+      sort(note, 'while @insert.front[j ≥ 0 and :@insert.front[A[j] > key]]'),
       lit
     );
     expect(litAt(steps, 'A[j] > key')).toEqual(tests);
   });
 
   it('is refused where no label has its name, naming the nearest', async () => {
-    await expect(drawnSteps(sort(note.replace(':@front[', ':@frnt[')), lit)).rejects.toThrow(
-      /The token :@frnt\[…\] names a label, .* the nearest is @insert\.front/u
+    await expect(
+      drawnSteps(sort(note.replace(':@insert.front[', ':@insert.frnt[')), lit)
+    ).rejects.toThrow(
+      /The token :@insert\.frnt\[…\] names a label, .* the nearest is @insert\.front/u
     );
   });
 

@@ -170,7 +170,6 @@ export function pageLayoutName(source: string): string | undefined {
   return freeLayoutName(source) ?? /<Scene\b[^>]*>\s*<(\w+)\b/u.exec(source)?.[1];
 }
 
-
 /**
  * The type the source draws most as values: the type of its first value view, that is a view
  * drawing no link from a variable. None where the source has no such view.

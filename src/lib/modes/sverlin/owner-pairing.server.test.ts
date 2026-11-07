@@ -32,7 +32,7 @@ const items = (algorithm: string, caption = 'cost') => `<script domain>
 </Layout>
 <Case name="main" items={[{ name: 'A', cost: 1 }, { name: 'B', cost: 5 }, { name: 'C', cost: 9 }]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@move"><Main /></Scene>
+  <Scene name="main" case="main" pause="@move.end"><Main /></Scene>
 </Storyboard>`;
 
 /** Where each value's caption is, across from the value, halfway through the move to `to`. */

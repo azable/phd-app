@@ -413,7 +413,7 @@ picture at every step, a value that changes nothing seen (a cell’s least size
 under what its content takes anyway): compare a choice that shows. Where a pair
 differs only at some steps, the note before the participant’s message, the
 interaction and project.waitingComparisons say which (“the two draw differently
-only at steps 3–9 (@scan.check#2 to @missing#3)”), from the pictures as drawn,
+only at steps 3–9 (@scan.check#2.end to @missing#3.end)”), from the pictures as drawn,
 and the pair opens at the first; when asked whether or where two versions
 differ, point the participant to those steps by their names, alike at every
 other step, and never guess it from the source.
@@ -636,10 +636,10 @@ The context’s recordedSteps gives the steps the algorithm records, each by its
 name with the variables in scope (for a repair, those of the failed candidate),
 or the problem that stops it, with omittedSteps when not all fit. They pause at
 the end of every label's spans, so they hold every step a scene can show by the
-same name, except a span's start, @insert.swap#1:before, the state of the step
+same name, except a span's start, @insert.swap#1.start, the state of the step
 before it. Check it against what the algorithm should do before revising the
 view, and use it to say what a step shows; name a step by its name, as
-@insert.swap#1, as a number is only where it falls in one presentation.
+@insert.swap#1.end, as a number is only where it falls in one presentation.
 
 The algorithm and domain may be shaped for what the visualization teaches, as a
 result type (a search returning a `union(Index, NotFound)`, rather than -1 or a

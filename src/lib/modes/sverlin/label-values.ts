@@ -5,8 +5,8 @@
  * `{@render Greater(@inner)}` the application a step's own code made inside `@inner`; and
  * `<When of="@swap">…</When>` draws its contents at the steps inside a run of `@swap`, and
  * `<OneOf><When of="@compare">…</When><When of="@swap">…</When></OneOf>` each branch at its label's
- * steps, taking turns in one place; `of=":before"` and `of=":after"` name the stops of the case
- * shown, the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is
+ * steps, taking turns in one place; `of="@case.start"` and `of="@case.end"` name the moments of the
+ * case shown, the first step, the input as given, and the last. `all(Node)`, which a pool replaced, is
  * found, to be refused.
  *
  * Before Svelte parses the markup, each is rewritten no longer than it is, so every offset holds: a
@@ -72,8 +72,9 @@ const whenCall = /^when\(\s*(?:@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)|(befor
 /** Each <When>, <OneOf>, and their closings, and any when( written, which only the tags make. */
 const whenTag = /<(\/?)(When|OneOf)\b([^>]*)>|\bwhen\(/gu;
 const whenOf = /^\s+of="(@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|:before|:after|start|end)"\s*$/u;
+const caseMoments: Record<string, string> = { '@case.start': 'before', '@case.end': 'after' };
 const tagsAdvice =
-  'write when on the node, as <Node when="@insert.swap">…</Node>, shown at each step inside a span of the label, or when=":before" or when=":after", the case\'s first and last steps, and nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>';
+  'write when on the node, as <Node when="@insert.swap">…</Node>, shown at each step inside a span of the label, or when="@case.start" or when="@case.end", the case\'s first and last steps, and nodes taking turns in one place in a stack, as <Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>';
 
 /**
  * The old forms a node's `when` and a stack replaced, <When> and <OneOf>, where the markup writes
@@ -132,16 +133,21 @@ export function whenTags(source: string): {
     }
     if (kind === 'When' && !closing) {
       const written = whenOf.exec(props)?.[1];
-      if (written === 'start' || written === 'end') {
-        const stop = written === 'start' ? ':before' : ':after';
+      if (
+        written === 'start' ||
+        written === 'end' ||
+        written === ':before' ||
+        written === ':after'
+      ) {
+        const moment = written === 'start' || written === ':before' ? 'start' : 'end';
         problems.push({
-          message: `when="${written}" names no stop: the case's ${written === 'start' ? 'first step, the input as given' : 'last step'} is its ${stop}, as when="${stop}".`,
+          message: `when="${written}" is not written: the case's ${moment === 'start' ? 'first step, the input as given' : 'last step'} is @case.${moment}, as when="@case.${moment}".`,
           start
         });
         continue;
       }
-      // A stop is rewritten without its colon, as when(before).
-      const of = written?.replace(/^:/u, '');
+      // The case's moments are rewritten as when(before) and when(after).
+      const of = written === undefined ? undefined : (caseMoments[written] ?? written);
       if (!of || props.trimEnd().endsWith('/')) {
         problems.push({
           message: `when="${/of="([^"]*)"/u.exec(props)?.[1] ?? ''}" names no label by its full name, as @insert.swap, or stop of the case: ${tagsAdvice}.`,

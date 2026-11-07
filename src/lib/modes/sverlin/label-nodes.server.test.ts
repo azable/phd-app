@@ -13,7 +13,7 @@ describe('a node reading labels', () => {
     for (const source of [fixture, listed]) {
       const { steps, built } = await drawnSteps(source);
       const labels = (built as { steps: string[] }).steps;
-      const at = labels.indexOf('@insert.scan.cmp#1');
+      const at = labels.indexOf('@insert.scan.cmp#1.end');
       const ask = steps[at].nodes.find((node) => node.kind === 'Ask');
       expect(textOf(steps[at], ask)).toContain('yes, so swap');
       expect(neverDrawn(built.warnings)).toEqual([]);

@@ -30,5 +30,5 @@
 </Layout>
 <Case name="main" counts={[1, 4, 6, 9]} />
 <Storyboard>
-  <Scene name="grow" case="main" pause="@add.grow"><Board /></Scene>
+  <Scene name="grow" case="main" pause="@add.grow.end"><Board /></Scene>
 </Storyboard>

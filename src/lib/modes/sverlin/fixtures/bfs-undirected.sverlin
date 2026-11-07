@@ -81,5 +81,5 @@
   ]} neighbours={[[1, 2], [0, 3], [0, 3], [1, 2, 4], [3]]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit.take, @visit.look.add"><Main /></Scene>
+  <Scene name="main" case="main" pause="@init.end, @visit.take.end, @visit.look.add.end"><Main /></Scene>
 </Storyboard>

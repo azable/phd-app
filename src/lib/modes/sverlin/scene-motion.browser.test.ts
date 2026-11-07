@@ -260,7 +260,7 @@ describe('SceneView’s motion', () => {
 </Layout>
 <Case name="main" values={[3, 8, 5]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@copy"><Main /></Scene>
+  <Scene name="main" case="main" pause="@copy.end"><Main /></Scene>
 </Storyboard>`;
       const built = await bundlePresentation(prepareSvelteComponent(copying), 1);
       const page = await openPresentation(built);

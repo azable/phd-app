@@ -105,7 +105,7 @@ while @more[:cur[cur] ≠ ∅]
     </Node><Node when="@finish">
       <FinishNote />
     </Node></Node>
-    <Node when=":before">
+    <Node when="@case.start">
       <StartNote />
     </Node>
   </Node>
@@ -141,5 +141,5 @@ while @more[:cur[cur] ≠ ∅]
   }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin, @rewire, @rewire.save, @rewire.reverse, @rewire.advance, @finish"><Main /></Scene>
+  <Scene name="main" case="main" pause="@begin.end, @rewire.end, @rewire.save.end, @rewire.reverse.end, @rewire.advance.end, @finish.end"><Main /></Scene>
 </Storyboard>

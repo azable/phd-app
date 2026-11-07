@@ -33,7 +33,7 @@ describe('Svelte-backed project lifecycle', () => {
     const artifact = projectSnapshotAt(created).artifacts.main;
     expect(artifact.path).toBe('Main.svelte');
     const source =
-      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Shown"><Node>n</Node></Layout><Layout name="Main"><Node><Shown />{n}</Node></Layout>\n<Case name="main" />\n<Storyboard>\n  <Scene name="main" case="main" pause="@start, @set"><Main /></Scene>\n</Storyboard>';
+      '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@start[let n = Int(0);] @set[n = Int(1);] @set[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="Shown"><Node>n</Node></Layout><Layout name="Main"><Node><Shown />{n}</Node></Layout>\n<Case name="main" />\n<Storyboard>\n  <Scene name="main" case="main" pause="@start.end, @set.end"><Main /></Scene>\n</Storyboard>';
     const result = await updateProjectArtifact(
       {
         projectId: created.projectId,
@@ -54,7 +54,7 @@ describe('Svelte-backed project lifecycle', () => {
     );
     expect(presentations[0]).toMatchObject({
       mode: 'sverlin',
-      labels: [':before', '@start#1', '@set#1', '@set#2']
+      labels: ['@case.start', '@start#1.end', '@set#1.end', '@set#2.end']
     });
 
     const rebuilt = await buildProjectPresentations(

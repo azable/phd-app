@@ -158,7 +158,7 @@
       <Node when="@missing">
         <Node>{target} is not in the array.</Node>
       </Node>
-      <Node when=":after">
+      <Node when="@case.end">
         <Node>Search result: {result}</Node>
       </Node>
     </Node>
@@ -191,8 +191,8 @@
   <Scene
     name="search"
     case="main"
-    pause="@range, @probe.equal, @probe.right, @probe.left,
-      @probe.found, @missing"
+    pause="@range.end, @probe.equal.end, @probe.right.end, @probe.left.end,
+      @probe.found.end, @missing.end"
   >
     <SideBySide />
   </Scene>

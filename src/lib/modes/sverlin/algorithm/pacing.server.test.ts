@@ -33,7 +33,7 @@ describe('pauses at labels', () => {
     const trace = steps(search, { pauses: pausedAt('start', 'pass.count') });
     expect(checked(trace)).toEqual([0, 1, 2, 3, 3]);
     expect(trace.at(-2)?.state.i).toBe(2);
-    expect(trace.at(-1)?.name).toBe(':after');
+    expect(trace.at(-1)?.name).toBe('@case.end');
     expect(trace.at(-1)?.state).not.toHaveProperty('i');
     expect(
       trace.slice(1, 4).map(({ before, state }) => [before?.state.checked, state.checked])
@@ -191,11 +191,11 @@ describe('pauses at labels', () => {
 `;
     const all = steps(merged);
     expect(all.map(({ name, state }) => [name, state.n])).toEqual([
-      ['@outer.first#1', 2],
-      ['@outer.take#1', 3],
-      ['@outer.take#2', 4],
-      ['@outer#1', 4],
-      [':after', 4]
+      ['@outer.first#1.end', 2],
+      ['@outer.take#1.end', 3],
+      ['@outer.take#2.end', 4],
+      ['@outer#1.end', 4],
+      ['@case.end', 4]
     ]);
     // Every take is inside the outer label's run.
     expect(all.slice(1, 3).every(({ inside }) => inside?.includes('outer'))).toBe(true);
@@ -203,8 +203,8 @@ describe('pauses at labels', () => {
     expect(
       steps(merged, { pauses: new Set(['outer']) }).map(({ name, state }) => [name, state.n])
     ).toEqual([
-      ['@outer#1', 4],
-      [':after', 4]
+      ['@outer#1.end', 4],
+      ['@case.end', 4]
     ]);
     // Labelled statements in a row each count once, the outer label's end named after it.
     const rows = `
@@ -212,10 +212,10 @@ describe('pauses at labels', () => {
   @outer[@first[n++;] @second[n++;]]
 `;
     expect(steps(rows).map(({ name, state }) => [name, state.n])).toEqual([
-      ['@outer.first#1', 1],
-      ['@outer.second#1', 2],
-      ['@outer#1', 2],
-      [':after', 2]
+      ['@outer.first#1.end', 1],
+      ['@outer.second#1.end', 2],
+      ['@outer#1.end', 2],
+      ['@case.end', 2]
     ]);
   });
 
@@ -226,15 +226,15 @@ describe('pauses at labels', () => {
   }
   @go[count(Int(0));]
 `;
-    // The first call made is @call#1, though it ends last, after the calls inside it.
+    // The first call made is @call#1.end, though it ends last, after the calls inside it.
     expect(steps(recursive).map(({ name, state }) => [name, state.n])).toEqual([
-      ['@call#3', 2],
-      ['@call.deeper#2', 1],
-      ['@call#2', 1],
-      ['@call.deeper#1', 0],
-      ['@call#1', 0],
-      ['@go#1', undefined],
-      [':after', undefined]
+      ['@call#3.end', 2],
+      ['@call.deeper#2.end', 1],
+      ['@call#2.end', 1],
+      ['@call.deeper#1.end', 0],
+      ['@call#1.end', 0],
+      ['@go#1.end', undefined],
+      ['@case.end', undefined]
     ]);
   });
 
@@ -303,26 +303,26 @@ describe('no code outside a label, in an authored source', () => {
     // [3, 8, 5, 2], looking for 5: the third pass breaks, so no move or test follows it, only the
     // end.
     expect(names(labelled)).toEqual([
-      '@start#1',
-      '@first#1',
-      '@more#1',
-      '@pass.count#1',
-      '@pass.check.found#1',
-      '@pass.check#1',
-      '@pass#1',
-      '@next#1',
-      '@more#2',
-      '@pass.count#2',
-      '@pass.check.found#2',
-      '@pass.check#2',
-      '@pass#2',
-      '@next#2',
-      '@more#3',
-      '@pass.count#3',
-      '@pass.check.found#3',
-      '@pass.check#3',
-      '@pass#3',
-      ':after'
+      '@start#1.end',
+      '@first#1.end',
+      '@more#1.end',
+      '@pass.count#1.end',
+      '@pass.check.found#1.end',
+      '@pass.check#1.end',
+      '@pass#1.end',
+      '@next#1.end',
+      '@more#2.end',
+      '@pass.count#2.end',
+      '@pass.check.found#2.end',
+      '@pass.check#2.end',
+      '@pass#2.end',
+      '@next#2.end',
+      '@more#3.end',
+      '@pass.count#3.end',
+      '@pass.check.found#3.end',
+      '@pass.check#3.end',
+      '@pass#3.end',
+      '@case.end'
     ]);
   });
 
@@ -342,8 +342,8 @@ describe('no code outside a label, in an authored source', () => {
       true,
       false
     ]);
-    expect(trace.steps.at(-2)?.name).toBe('@more#5');
-    expect(trace.steps.at(-1)?.name).toBe(':after');
+    expect(trace.steps.at(-2)?.name).toBe('@more#5.end');
+    expect(trace.steps.at(-1)?.name).toBe('@case.end');
   });
 
   it('refuses a statement outside every label, at the top level and in a function', () => {

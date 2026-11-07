@@ -21,7 +21,7 @@ describe('a scene pausing at decisions as well as actions', () => {
       );
     }
     // A round ends where j reaches the front, and says so.
-    const front = labels.findIndex((label) => label === '@insert.front#2');
+    const front = labels.findIndex((label) => label === '@insert.front#2.end');
     expect(textOf(steps[front], ofKind(steps[front], 'Front')[0])).toBe(
       'j is at the front, so the round stops'
     );

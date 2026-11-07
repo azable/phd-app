@@ -134,12 +134,6 @@ describe('listings of the source’s own', () => {
       "The listing's region @look is not a full name: write @pass.look[…], or write it inside the region of @pass"
     ],
     [
-      "a for header's parts marked inside its body's label",
-      '  for (@first[let i = Position(0)]; @more[i < values.length]; @next[i++]) @pass{\n    @look[const v = values[i];]\n  }',
-      '@pass[for @first[i] @more[n] @next[i] @look[v = A[i]]]',
-      "The listing's region @pass.first names no label: the code's @first is @first, as a for header's parts sit beside its body's label"
-    ],
-    [
       'a listing named none',
       '  @size[const n = Int(1);]',
       '@size[n]',
@@ -157,6 +151,10 @@ describe('listings of the source’s own', () => {
     [
       'nested in the regions of the labels around it',
       '@first[i] @more[n] @next[i] @pass[@look[v = A[i]]]'
+    ],
+    [
+      "by its full name inside another label's region, as a for header's parts inside its body's",
+      '@pass[for @first[i] @more[n] @next[i] @look[v = A[i]]]'
     ]
   ])('name a label %s', (_, listing) => {
     const algorithm =
@@ -184,7 +182,7 @@ describe('listings of the source’s own', () => {
   it('warn of a label a scene pauses at with no region, which would light nothing, and of no other', async () => {
     const source = blocks('  @size[const n = Int(@more[1]);]', '@size[n]');
     const warned = await bundlePresentation(
-      prepareSvelteComponent(source.replace('case="main">', 'case="main" pause="@size.more">')),
+      prepareSvelteComponent(source.replace('case="main">', 'case="main" pause="@size.more.end">')),
       1,
       {}
     );

@@ -147,7 +147,7 @@ it.skipIf(!enabled)(
   'outlines every reference to a place hovered, as the mounted page did',
   { timeout: 300_000 },
   async () => {
-    const { page, frame } = await hostedAt(pausingAt(search, '@probe.low'), 1, {
+    const { page, frame } = await hostedAt(pausingAt(search, '@probe.low.end'), 1, {
       'IntCell@target.stroke': 'violet-500',
       'listing.places': 'fill',
       'Arrow.Pointed.fill': 'amber-100',
@@ -190,7 +190,7 @@ it.skipIf(!enabled)(
       '<View of="Index" name="Arrow"><Node layout="column"><Pointed /><Node kind="Caption">at</Node></Node></View>'
     );
     expect(labelled).not.toBe(search);
-    const { page, frame } = await hostedAt(pausingAt(labelled, '@probe.low'), 1, {
+    const { page, frame } = await hostedAt(pausingAt(labelled, '@probe.low.end'), 1, {
       'listing.places': 'fill'
     });
     const label = await frame.evaluate(() => {

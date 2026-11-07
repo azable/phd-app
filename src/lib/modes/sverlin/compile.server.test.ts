@@ -67,7 +67,7 @@ describe('single-component Svelte compilation', () => {
       '<script domain>const Int = type("integer", { min: 0, max: 9 });</script><script algorithm>@run[let n = Int(0);] @a[n = Int(1);] @b[n = Int(2);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<Layout name="S"><Node>n</Node></Layout><Layout name="Main"><Node><S />{n}</Node></Layout>'
     );
     // The input as given, then a step at each label, each named by its label and run.
-    expect(result.labels).toEqual([':before', '@run#1', '@a#1', '@b#1']);
+    expect(result.labels).toEqual(['@case.start', '@run#1.end', '@a#1.end', '@b#1.end']);
     expect(result.javascript).toContain('__sverlinStep');
     expect(result.javascript).not.toContain('import "svelte');
   });
@@ -125,17 +125,17 @@ describe('single-component Svelte compilation', () => {
       // The scene pauses where i is set and moved, as the caption draws it, and at each
       // comparison.
       expect(bundle.labels).toEqual([
-        ':before',
-        '@first#1',
-        '@check.equal#1',
-        '@next#1',
-        '@check.equal#2',
-        '@next#2',
-        '@check.equal#3',
-        '@next#3',
-        '@check.equal#4',
-        '@run#1',
-        ':after'
+        '@case.start',
+        '@first#1.end',
+        '@check.equal#1.end',
+        '@next#1.end',
+        '@check.equal#2.end',
+        '@next#2.end',
+        '@check.equal#3.end',
+        '@next#3.end',
+        '@check.equal#4.end',
+        '@run#1.end',
+        '@case.end'
       ]);
       // Every variant shows the source's steps.
       expect(bundle.steps).toEqual(bundle.labels);
@@ -290,12 +290,12 @@ describe('single-component Svelte compilation', () => {
 
   it('puts every recorded value in scope for a script-free view', async () => {
     const result = await compileSvelteComponent(
-      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values;</script><Case name="main" values={[4, 9]} />\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main"><Node><Sum /></Node></Layout><Storyboard><Scene name="main" case="main" pause="@start, @add"><Main /></Scene></Storyboard>',
+      '<script domain>const Int = type("integer", { min: -100, max: 1000 }); const Values = array(Int, { max: 8 }); const Index = index(Values); const Flag = type("boolean");</script><script input>const values = Values;</script><Case name="main" values={[4, 9]} />\n<script algorithm>@start[let total = Int(0);]\nfor (@first[let i = Index(0)]; @more[i < values.length]; @next[i++]) {\n  @add[total = total + values[i];]\n}</script>\n<Layout name="Sum"><Node layout="column">{@const doubled = total * 2}<Node>{values.join("+")} = <Node value={total} />; doubled {doubled}</Node></Node></Layout><Layout name="Main"><Node><Sum /></Node></Layout><Storyboard><Scene name="main" case="main" pause="@start.end, @add.end"><Main /></Scene></Storyboard>',
       5
     );
     // The input as given, the start, and a step per addition; the loop's end only drops v, so it
     // is no step.
-    expect(result.labels).toEqual([':before', '@start#1', '@add#1', '@add#2']);
+    expect(result.labels).toEqual(['@case.start', '@start#1.end', '@add#1.end', '@add#2.end']);
     expect(result.variant['Sum.fill']).toBeDefined();
   });
 
@@ -1153,7 +1153,7 @@ describe('scope', () => {
   it('stands a variable out of scope in hidden, with its value from the nearest step', async () => {
     const prepared = prepareSvelteComponent(
       source(
-        '<Layout name="Main"><Node>{key}</Node></Layout><Storyboard><Scene name="main" case="main" pause="@key, @done"><Main /></Scene></Storyboard>'
+        '<Layout name="Main"><Node>{key}</Node></Layout><Storyboard><Scene name="main" case="main" pause="@key.end, @done.end"><Main /></Scene></Storyboard>'
       )
     );
     const { layoutCode: javascript } = await bundlePresentation(prepared, 1);
@@ -1716,20 +1716,20 @@ describe('pauses inside a run', () => {
     const coarse = insertion.paced(new Set(['insert.compare', 'insert.swap'])).steps;
     const fine = insertion.paced(new Set(insertion.pauses.labels)).steps;
     expect(coarse.map(({ name }) => name).slice(0, 4)).toEqual([
-      ':before',
-      '@insert.compare#1',
-      '@insert.swap#1',
-      '@insert.compare#2'
+      '@case.start',
+      '@insert.compare#1.end',
+      '@insert.swap#1.end',
+      '@insert.compare#2.end'
     ]);
     // Pausing everywhere, the loop's i is set and tested, then j's bound is tested, first.
     expect(fine.map(({ name }) => name).slice(0, 7)).toEqual([
-      ':before',
-      '@setup#1',
-      '@guard#1',
-      '@insert.guard#1',
-      '@insert.compare.left#1',
-      '@insert.compare.right#1',
-      '@insert.compare#1'
+      '@case.start',
+      '@setup#1.end',
+      '@guard#1.end',
+      '@insert.guard#1.end',
+      '@insert.compare.left#1.end',
+      '@insert.compare.right#1.end',
+      '@insert.compare#1.end'
     ]);
     // Each coarse step is the fine step of its name, holding the same state.
     const byName = new Map(fine.map((step) => [step.name, step.state]));
@@ -1997,7 +1997,7 @@ describe('<Node when="@label">', () => {
   it('takes :before and :after for the first and the last step, :before chained with a label', () => {
     const prepared = prepareSvelteComponent(
       caption(
-        '<Node layout="stack"><Node when=":before">{@render Caption()}</Node><Node when="@pass">{@render Caption()}</Node></Node><Node when=":after">{@render Caption()}</Node>'
+        '<Node layout="stack"><Node when="@case.start">{@render Caption()}</Node><Node when="@pass">{@render Caption()}</Node></Node><Node when="@case.end">{@render Caption()}</Node>'
       )
     );
     expect(Object.values(prepared.during ?? {})).toEqual(['#before', 'pass', '#after']);
@@ -2005,7 +2005,7 @@ describe('<Node when="@label">', () => {
     expect(() =>
       prepareSvelteComponent(
         caption(
-          '<Node layout="stack"><Node when="@finish">{@render Caption()}</Node><Node when=":after">{@render Caption()}</Node></Node>'
+          '<Node layout="stack"><Node when="@finish">{@render Caption()}</Node><Node when="@case.end">{@render Caption()}</Node></Node>'
         )
       )
     ).not.toThrow();
@@ -2160,7 +2160,7 @@ describe('the bundle', () => {
       /(first|more|next)(Round|Rounds|Vertex|Vertices|Edge|Edges)$|\.(closer|outgoing)$/u;
     const pause = prepareSvelteComponent(dijkstra)
       .pauses.labels.filter((label) => !quiet.test(label))
-      .map((label) => `@${label}`)
+      .map((label) => `@${label}.end`)
       .join(', ');
     const prepared = prepareSvelteComponent(dijkstra.replace(/pause="[^"]*"/u, `pause="${pause}"`));
     const { javascript, labels } = await bundlePresentation(prepared, 1);
@@ -2285,10 +2285,13 @@ describe('step limits', () => {
   it('builds a scene pausing at fewer labels, and says where to pause less over the limit', async () => {
     const pausing = (pause: string) =>
       `${long}\n<Case name="main" />\n<Storyboard><Scene name="main" case="main" pause="${pause}"><Main /></Scene></Storyboard>`;
-    expect(prepareSvelteComponent(pausing('@run')).master.length).toBeGreaterThan(300);
-    const passes = await bundlePresentation(prepareSvelteComponent(pausing('@run, @pass')), 1);
+    expect(prepareSvelteComponent(pausing('@run.end')).master.length).toBeGreaterThan(300);
+    const passes = await bundlePresentation(
+      prepareSvelteComponent(pausing('@run.end, @pass.end')),
+      1
+    );
     expect(passes.labels.length).toBeLessThanOrEqual(6);
-    expect(() => prepareSvelteComponent(pausing('@pass.step'))).toThrow(
+    expect(() => prepareSvelteComponent(pausing('@pass.step.end'))).toThrow(
       /scene shows more than 200 steps, most at the end of @pass\.step/
     );
   });
@@ -2796,7 +2799,7 @@ describe('tokens in captions', () => {
 </Layout>
 <Case name="main" values={[3, 1]} />
 <Storyboard>
-  <Scene name="scan" case="main" pause="@next"><Board /></Scene>
+  <Scene name="scan" case="main" pause="@next.end"><Board /></Scene>
 </Storyboard>`;
 
   it('draws a token as inline code, a kind of its own in monospace, linked to its place', () => {
@@ -2853,7 +2856,7 @@ describe('starter looks of a graph', () => {
 <Case name="main" vertices={[{ name: 'A', state: 'unseen' }, { name: 'B', state: 'unseen' }, { name: 'C', state: 'unseen' }]}
   edges={[{ from: 0, to: 1, weight: 2 }, { from: 1, to: 2, weight: 5 }]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@mark"><Graph /></Scene>
+  <Scene name="main" case="main" pause="@mark.end"><Graph /></Scene>
 </Storyboard>`;
 
   it('starts a link label unboxed, the stage white behind it, so the line breaks round it', () => {
@@ -2911,7 +2914,7 @@ describe('views of a union', () => {
 <View of="Row" name="Cells"><Node layout="row">{#each this as d}<Node kind="Cell">{d}</Node>{/each}</Node></View>
 <Layout name="Main"><Node>{row}</Node></Layout>
 <Case name="main" row={[5, '∞', 12]} />
-<Storyboard><Scene name="main" case="main" pause="@look"><Main /></Scene></Storyboard>`;
+<Storyboard><Scene name="main" case="main" pause="@look.end"><Main /></Scene></Storyboard>`;
     const prepared = prepareSvelteComponent(source);
     const probe = (name: string) =>
       prepared.components.find((component) => component.name === name);
@@ -2944,7 +2947,7 @@ describe('views of a union', () => {
 <View of="Status" name="StatusWord"><Node value={this} /></View>
 <Layout name="Main"><Node layout="row">{lo}{result}</Node></Layout>
 <Case name="main" values={[1, 2, 3]} />
-<Storyboard><Scene name="main" case="main" pause="@look"><Main /></Scene></Storyboard>`;
+<Storyboard><Scene name="main" case="main" pause="@look.end"><Main /></Scene></Storyboard>`;
     const built = await bundlePresentation(prepareSvelteComponent(source), 1, {});
     const boxes = new Map(unionGeometry(built).components);
     expect(boxes.get('IndexNumber|Result')?.width).toBe(boxes.get('StatusWord|Result')?.width);
@@ -2985,8 +2988,8 @@ describe('cases', () => {
 <Case name="one" values={[4]} />
 <Case name="many" values={[3, 1, 2]} />
 <Storyboard>
-  <Scene name="one" case="one" pause="@pass.shift"><Board /></Scene>
-  <Scene name="many" case="many" pause="@pass.shift"><Board /></Scene>
+  <Scene name="one" case="one" pause="@pass.shift.end"><Board /></Scene>
+  <Scene name="many" case="many" pause="@pass.shift.end"><Board /></Scene>
 </Storyboard>`;
     expect(() => prepareCurrent(source)).not.toThrow();
   });
@@ -3016,7 +3019,7 @@ describe('cases', () => {
 </Layout>
 <Case name="main" values={[3, 1, 7]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@scan"><Board /></Scene>
+  <Scene name="main" case="main" pause="@scan.end"><Board /></Scene>
 </Storyboard>`;
     let messages = '';
     try {
@@ -3054,7 +3057,7 @@ describe('cases', () => {
 <View of="Vertices" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <Layout name="Main"><Node>{vertices}</Node></Layout>
 <Case name="main" vertices={[{ name: 'A', state: 'unseen' }, { name: 'B', state: 'unseen' }]} />
-<Storyboard><Scene name="s" case="main" pause="@visit.mark"><Main /></Scene></Storyboard>`;
+<Storyboard><Scene name="s" case="main" pause="@visit.mark.end"><Main /></Scene></Storyboard>`;
     let messages = '';
     try {
       prepareCurrent(source);
@@ -3084,7 +3087,7 @@ describe('case inputs', () => {
 <Layout name="Main"><Node><Node>{shown}</Node></Node></Layout>
 <Case name="main" suit="hearts" />
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin"><Main /></Scene>
+  <Scene name="main" case="main" pause="@begin.end"><Main /></Scene>
 </Storyboard>`;
     expect(() => prepareCurrent(source)).toThrow(/suit=\{'hearts'\}/u);
   });

@@ -151,10 +151,7 @@ function writtenDesign({ options, variables }: AiDesign): AiDesign {
 /** A presentation's design space and variant, each prop's options named once. */
 export function designVariables(
   presentation:
-    | Pick<
-        BrowserBundlePresentation,
-        'variant' | 'origins' | 'views' | 'listings' | 'roles'
-      >
+    | Pick<BrowserBundlePresentation, 'variant' | 'origins' | 'views' | 'listings' | 'roles'>
     | undefined,
   /** Each free layout's structure, by its kind (see SourceBuildFacts): only layers take layered. */
   structures?: Readonly<Record<string, string>>
@@ -232,8 +229,7 @@ export function designVariables(
       // The forms of a layout whose links make no layers, which do not take layered.
       'form.unlayered': propOptions.form.filter((form) => form !== 'layered')
     };
-    if (!view && Object.hasOwn(known, set))
-      options[set] = baseOptions(set, known[set], variant);
+    if (!view && Object.hasOwn(known, set)) options[set] = baseOptions(set, known[set], variant);
     // A base's name, scales and palette are free within their form (see withBase).
     const ofBase =
       key === baseKey

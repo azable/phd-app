@@ -175,7 +175,7 @@
     name="trace"
     title="Read the text"
     case="main"
-    pause="@setup, @scan.transition, @accept, @reject"
+    pause="@setup.end, @scan.transition.end, @accept.end, @reject.end"
   >
     <Stacked />
   </Scene>

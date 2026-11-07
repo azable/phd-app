@@ -110,7 +110,8 @@ const labelReference = /@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/gu;
 
 /**
  * The full name of the label at a position: an opening's, or a name written after `@` elsewhere
- * (`when="@insert.key"`, `pause="@insert.key"`) that some opening has; none at any other text.
+ * (`when="@insert.key"`, `pause="@insert.key.end"`, its moment's .start or .end left out) that some
+ * opening has; none at any other text.
  */
 export function labelAt(
   source: string,
@@ -125,7 +126,7 @@ export function labelAt(
   for (const match of line.matchAll(labelReference)) {
     const from = lineStart + (match.index ?? 0);
     if (at < from || at > from + match[0].length) continue;
-    const full = match[0].slice(1);
+    const full = match[0].slice(1).replace(/\.(?:start|end)$/u, '');
     return regions.some((region) => region.full === full) ? full : undefined;
   }
   return undefined;

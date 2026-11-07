@@ -44,7 +44,7 @@ const shown = `<script domain>
   </Node>
 </Layout>
 <Storyboard>
-  <Scene name="main" case="main" pause="@visit.look"><Main /></Scene>
+  <Scene name="main" case="main" pause="@visit.look.end"><Main /></Scene>
 </Storyboard>`;
 
 it('names a node shown only at a label, at the start of a line and inline, where it is written', async () => {

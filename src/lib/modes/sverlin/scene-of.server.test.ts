@@ -68,7 +68,7 @@ it(
     );
 
     const lit = await bundlePresentation(
-      prepareSvelteComponent(pausingAt(search, '@probe.low')),
+      prepareSvelteComponent(pausingAt(search, '@probe.low.end')),
       1,
       {
         chosen: {

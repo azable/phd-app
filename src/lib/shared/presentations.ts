@@ -195,17 +195,16 @@ export function presentationStepLabels(presentation: RenderablePresentation): st
 }
 
 /**
- * A Sverlin step's name, the same however its steps pause: the stop of a run it is at, a label's
- * full name and which run of it, the nth of that label's runs to begin, as @insert.swap#1 for the
- * run's end and @insert.swap#1:before for just before it begins, or the whole run's, :before or
- * :after; in a storyboard of several scenes, after its scene (see sceneOfLabel), as one-merge:
- * @sort.merge#1. Events saved earlier name the whole run's start and end.
+ * A Sverlin step's name, the same however its steps pause: the moment of a span it is at, a
+ * label's full name, which span of it, the nth to begin, and .end or .start, as @insert.swap#1.end,
+ * or the whole case's, @case.start or @case.end; in a storyboard of several scenes, after its scene
+ * (see sceneOfLabel), as one-merge: @sort.merge#1.end.
  */
 export const stepNameSchema = v.pipe(
   v.string(),
   v.maxLength(200),
   v.regex(
-    /^(?:[A-Za-z][\w-]*(?: \([^():]*\))?: )?(?::before|:after|start|end|@[\w.]+#\d+(?::before)?)$/u
+    /^(?:[A-Za-z][\w-]*(?: \([^():]*\))?: )?(?:@case\.start|@case\.end|@[\w.]+#\d+\.(?:start|end))$/u
   )
 );
 

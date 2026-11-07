@@ -36,13 +36,13 @@ it('shows a step forward straight at the state after its code', { timeout: 60_00
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@write"><Main /></Scene>
+  <Scene name="main" case="main" pause="@write.end"><Main /></Scene>
 </Storyboard>`;
   const prepared = prepareSvelteComponent(pausingEveryLabel(source));
   // Step 0 is the input as given, before any of the algorithm runs.
   expect(prepared.master[0].state.values).toEqual([1, 1, 1]);
   // The loop header is labelled part by part; the write is the step, the header leading up to it.
-  const second = prepared.master.find(({ name }) => name === '@write#2')!;
+  const second = prepared.master.find(({ name }) => name === '@write#2.end')!;
   expect(second.before?.state).toMatchObject({ values: [7, 1, 1], i: 1 });
   expect(second.state.values).toEqual([7, 7, 1]);
   const { steps } = (await bundlePresentation(prepared, 1, {})).layout.scenes!;
@@ -89,7 +89,7 @@ it(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@pass.pick, @pass.put"><Main /></Scene>
+  <Scene name="main" case="main" pause="@pass.pick.end, @pass.put.end"><Main /></Scene>
 </Storyboard>`;
     // The pass as one label, which reads key and writes the row: its steps are its passes that
     // change the row, key out of scope before each and after it.
@@ -98,7 +98,7 @@ it(
         '@pick[const key = values[i];]\n    @put[values[i] = key;]',
         'const key = values[i];\n    values[i] = values[0];'
       )
-      .replace('pause="@pass.pick, @pass.put"', 'pause="@pass"');
+      .replace('pause="@pass.pick.end, @pass.put.end"', 'pause="@pass.end"');
     const kinds = async (text: string, chosen: Record<string, string | boolean> = {}) => {
       const prepared = prepareSvelteComponent(pausingEveryLabel(text));
       // Over every step: a node kept hidden at one is not drawn there.

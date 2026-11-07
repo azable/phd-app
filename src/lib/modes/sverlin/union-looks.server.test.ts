@@ -32,7 +32,7 @@ const costs = `<script domain>
 
 <Case name="main" costs={['unknown', 'unknown', 'unknown']} />
 <Storyboard>
-  <Scene name="s" case="main" pause="@fill.set"><Main /></Scene>
+  <Scene name="s" case="main" pause="@fill.set.end"><Main /></Scene>
 </Storyboard>`;
 
 type Box = { x: number; y: number; width: number; height: number };

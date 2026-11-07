@@ -142,10 +142,10 @@ describe('algorithm interpretation', () => {
     // Pausing at the passes alone shows three steps.
     const passes = traceAlgorithm(body, undefined, atoms, { pauses: new Set(['pass']) });
     expect(passes.steps.map(({ name }) => name)).toEqual([
-      '@pass#1',
-      '@pass#2',
-      '@pass#3',
-      ':after'
+      '@pass#1.end',
+      '@pass#2.end',
+      '@pass#3.end',
+      '@case.end'
     ]);
     // Pausing at each step shows more than one presentation can, and says where to pause less.
     expect(() =>

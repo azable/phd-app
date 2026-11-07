@@ -86,5 +86,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="sort" case="main" pause="@pass.shift, @pass.put"><Board /></Scene>
+  <Scene name="sort" case="main" pause="@pass.shift.end, @pass.put.end"><Board /></Scene>
 </Storyboard>

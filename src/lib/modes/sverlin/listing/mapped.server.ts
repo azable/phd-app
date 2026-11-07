@@ -26,13 +26,14 @@ import {
 import { closesOnly, keptLines, opensOnly } from './source-lines';
 
 /** A region of a listing's text, by its label, at its span in the text as shown and in the block. */
-export type Region = { label: string; start: number; end: number; at: number };
+/** A region of a listing: its label by the regions around it and as written, and where it is. */
+export type Region = { label: string; written: string; start: number; end: number; at: number };
 
 /**
  * A token of a listing's text, marked $name[…]: a reference to the place the view renders at @name
  * (see Place), at its span in the text as shown and in the block.
  */
-export type Token = { place: string; start: number; end: number; at: number };
+export type Token = { place: string; written: string; start: number; end: number; at: number };
 
 /** A problem with a listing: in its block's body, or in the algorithm's, at an offset there. */
 export type MappingProblem = { message: string; block: 'listing' | 'algorithm'; at: number };
@@ -152,8 +153,8 @@ export function readRegions(body: string): {
       at: match.index ?? 0
     });
   type Opened =
-    | { label: string; start: number; at: number }
-    | { place: string; start: number; at: number; inside: boolean }
+    | { label: string; written: string; start: number; at: number }
+    | { place: string; written: string; start: number; at: number; inside: boolean }
     | 'plain';
   const open: Opened[] = [];
   const prefix = () =>
@@ -201,6 +202,7 @@ export function readRegions(body: string): {
       const around = token[1].startsWith('@') ? prefix() : undefined;
       open.push({
         place: around ? `:@${around}.${token[1].slice(1)}` : `:${token[1]}`,
+        written: `:${token[1]}`,
         start: text.length,
         at: characters[index].at,
         inside: Boolean(outer)
@@ -213,6 +215,7 @@ export function readRegions(body: string): {
       const outer = prefix();
       open.push({
         label: outer ? `${outer}.${opening[1]}` : opening[1],
+        written: opening[1],
         start: text.length,
         at: characters[index].at
       });
@@ -226,6 +229,7 @@ export function readRegions(body: string): {
         if (!closing.inside)
           tokens.push({
             place: closing.place,
+            written: closing.written,
             start: closing.start,
             end: text.length,
             at: closing.at
@@ -235,6 +239,7 @@ export function readRegions(body: string): {
       if (closing !== 'plain' && closing) {
         regions.push({
           label: closing.label,
+          written: closing.written,
           start: closing.start,
           end: text.length,
           at: closing.at
@@ -342,8 +347,8 @@ function ownLines(
 }
 
 /**
- * Each region checked against the labels: its name as written, after the names of the regions
- * around it, is a label's full name. A short name, the end of a full name, is a problem giving the
+ * Each region checked against the labels: its name after the names of the regions around it, or
+ * as written, is a label's full name. A short name, the end of a full name, is a problem giving the
  * full name, or the region to write it inside; one no label ends with is left for unlabelledRegion.
  */
 function resolveRegions(
@@ -354,6 +359,10 @@ function resolveRegions(
   const unclear = new Set<Region>();
   for (const region of regions) {
     if (labels.some(({ full }) => full === region.label)) continue;
+    if (labels.some(({ full }) => full === region.written)) {
+      region.label = region.written;
+      continue;
+    }
     const ending = labels.filter(({ full }) => full.endsWith(`.${region.label}`));
     if (!ending.length) continue;
     const names = ending.map(({ full }) => `@${full}[…]`);
@@ -408,7 +417,13 @@ export function mappedListing(
   problems.push(...resolved.problems);
   for (const token of tokens) {
     if (!isLabelPlace(token.place)) continue;
-    const named = labelNamed(token.place.slice(2), labels);
+    const around = labelNamed(token.place.slice(2), labels);
+    const named =
+      'full' in around || !isLabelPlace(token.written)
+        ? around
+        : 'full' in labelNamed(token.written.slice(2), labels)
+          ? labelNamed(token.written.slice(2), labels)
+          : around;
     if ('full' in named) token.place = `:@${named.full}`;
     else
       problems.push({

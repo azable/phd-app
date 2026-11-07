@@ -18,7 +18,7 @@ import { smallestReadableText } from '$lib/shared/readability';
 // Every label paused at, the finest steps a source has, as the starter was before it thinned them.
 /** A source prepared with its scene pausing at every label. */
 const everyPause = (source: string) => {
-  const labels = prepareSvelteComponent(source).pauses.labels.map((label) => `@${label}`);
+  const labels = prepareSvelteComponent(source).pauses.labels.map((label) => `@${label}.end`);
   return prepareSvelteComponent(source.replace(/pause="[^"]*"/u, `pause="${labels.join(', ')}"`));
 };
 

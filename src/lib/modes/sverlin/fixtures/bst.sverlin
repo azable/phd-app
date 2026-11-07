@@ -72,5 +72,5 @@
   }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.attach, @sequence.pick"><Main /></Scene>
+  <Scene name="main" case="main" pause="@insert.attach.end, @sequence.pick.end"><Main /></Scene>
 </Storyboard>

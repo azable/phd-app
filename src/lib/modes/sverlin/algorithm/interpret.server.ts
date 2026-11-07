@@ -340,8 +340,8 @@ export type Stop = 'before' | 'after';
 /** The pause at a label's :before, in Pauses. */
 export const beforeStop = (label: string): string => `${label}:before`;
 
-/** The label a step's name is for, as insert.swap for @insert.swap#2 or @insert.swap#2:before. */
-export const labelOfStep = (name = ''): string => name.replace(/^@|#\d+(?::before)?$/gu, '');
+/** The label a step's name is for, as insert.swap for @insert.swap#2.end or @insert.swap#2.start. */
+export const labelOfStep = (name = ''): string => name.replace(/^@|#\d+\.(?:start|end)$/gu, '');
 
 /**
  * Where the page pauses, which makes the steps: the end of each run of each label in `pauses`, by
@@ -786,13 +786,13 @@ class Interpreter {
         gap: this.#log.pending
       },
       undefined,
-      { name: ':after', at: 'after' }
+      { name: '@case.end', at: 'after' }
     );
     if ((this.#trace[0]?.moment ?? 0) <= 0)
       for (const step of this.#trace) step.moment = (step.moment ?? 0) + 1;
     this.opening = {
       moment: 0,
-      name: ':before',
+      name: '@case.start',
       edge: 'before',
       ...opening,
       before: opening,
@@ -1719,7 +1719,7 @@ class Interpreter {
     const edge = this.#isEdge(label, ordinal);
     if (label !== undefined && (edge || this.#pauses.has(beforeStop(label))))
       this.#record(node, node, scope, this.#since ?? this.#sinceNow(node, scope), undefined, {
-        name: `@${label}#${ordinal}:before`,
+        name: `@${label}#${ordinal}.start`,
         ...(edge ? { at: 'before' as const } : {})
       });
     this.#runs.push({
@@ -1830,7 +1830,7 @@ class Interpreter {
 
   /** A step's name, ending a run: its label and which run of it this is, counted as runs begin. */
   #nameOf(run: Run): string {
-    return `@${this.#named.get(run.unit)}#${run.ordinal}`;
+    return `@${this.#named.get(run.unit)}#${run.ordinal}.end`;
   }
 
   /** The label on a run's code, as a list, empty where none is. */
@@ -1842,7 +1842,7 @@ class Interpreter {
   /** Why a scene shows too many steps: the labels most of them end at, to pause at less. */
   #tooManySteps(): string {
     const most = [...this.#stepsAt]
-      .filter(([label]) => label !== ':after')
+      .filter(([label]) => label !== '@case.end')
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3);
     const counts = most.map(([label, count]) => `@${label} (${count})`).join(', ');
@@ -1900,7 +1900,7 @@ class Interpreter {
         ? single
         : undefined;
     });
-    const name = stop?.name ?? (ending ? this.#nameOf(ending) : ':after');
+    const name = stop?.name ?? (ending ? this.#nameOf(ending) : '@case.end');
     const label = labelOfStep(name);
     this.#stepsAt.set(label, (this.#stepsAt.get(label) ?? 0) + 1);
     this.#trace.push({

@@ -864,7 +864,7 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
   const callType = domainBlock && /\bcall\(\s*(['"])([A-Za-z_$][\w$]*)\1/u.exec(domainBlock[1]);
   if (domainBlock && callType)
     throw new InvalidSvelteSourceError(
-      `call('${callType[2]}', …) is not written: a call of ${callType[2]} is a span of its body's label, as function ${callType[2]}(…) @${callType[2]}{ … }, so a view of the label draws one call, <View of="@${callType[2]}" name="Frame">, reading its parameters, its locals and result, the value it returned, and a query lists its calls, <Select name="calls" from="@${callType[2]}" where="started <= now" max="15" />.`,
+      `call('${callType[2]}', …) is not written: a call of ${callType[2]} is a span of its body's label, as function ${callType[2]}(…) @${callType[2]}{ … }, so a view of the label draws one call, <View of="@${callType[2]}" name="Frame">, reading its parameters, its locals and result, the value it returned, and a query lists its calls, <Select name="calls" from="@${callType[2]}" where="start <= now" max="15" />.`,
       {
         code: 'view_component',
         start: sourcePosition(
@@ -1599,12 +1599,12 @@ function prepareViews(
         const problem = (message: string) =>
           labelProblems.push(new InvalidSvelteSourceError(message, at));
         if (reference.kind === 'during') {
-          const call = `when="${reference.moment ? `:${reference.moment}` : `@${reference.path ?? ''}`}"`;
+          const call = `when="${reference.moment ? `@case.${reference.moment === 'before' ? 'start' : 'end'}` : `@${reference.path ?? ''}`}"`;
           if (snippets.some(({ start, end }) => start <= reference.start && reference.start < end))
             problem(`${call} is in a view, which draws only its value: write it in a layout.`);
           else if (reference.path === undefined && !reference.moment)
             problem(
-              'when takes a label by its full name, as <Node when="@insert.swap">…</Node>, and shows the node at each step inside a span of that label; when=":before" and when=":after" show it at the case\'s first step, the input as given, and its last.'
+              'when takes a label by its full name, as <Node when="@insert.swap">…</Node>, and shows the node at each step inside a span of that label; when="@case.start" and when="@case.end" show it at the case\'s first step, the input as given, and its last.'
             );
           else if (!duringTests.has(reference.start))
             problem(
@@ -5080,7 +5080,7 @@ function labelRuns(
 ): Record<string, LabelRuns> {
   const runs: Record<string, LabelRuns> = {};
   for (const step of steps) {
-    const label = /^@(.+)#\d+$/u.exec(step.name ?? '')?.[1];
+    const label = /^@(.+)#\d+\.end$/u.exec(step.name ?? '')?.[1];
     if (!label) continue;
     const count = (runs[label] ??= { runs: 0, drawn: 0 });
     count.runs++;

@@ -159,5 +159,5 @@ BFS(start)
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.neighbour, @visit.look.add"><Main /></Scene>
+  <Scene name="main" case="main" pause="@init.end, @visit.end, @visit.take.end, @visit.look.check.neighbour.end, @visit.look.add.end"><Main /></Scene>
 </Storyboard>

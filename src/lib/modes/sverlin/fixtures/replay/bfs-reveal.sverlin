@@ -205,8 +205,8 @@
   <Scene
     name="search"
     case="main"
-    pause="@init, @visit.take, @visit.look.unseen,
-      @visit.look.discover, @done"
+    pause="@init.end, @visit.take.end, @visit.look.unseen.end,
+      @visit.look.discover.end, @done.end"
   >
     <Stacked />
   </Scene>

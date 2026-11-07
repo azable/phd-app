@@ -110,7 +110,7 @@ LINEAR-SEARCH(A, target)
   <Scene
     name="search"
     case="present"
-    pause="@scan.check, @scan.found, @missing"
+    pause="@scan.check.end, @scan.found.end, @missing.end"
   >
     <Stacked />
   </Scene>

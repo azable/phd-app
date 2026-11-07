@@ -119,5 +119,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@none, @round.reset, @round.choose.select, @round.visit, @round.visit.settle, @round.visit.firstEdge, @round.visit.nextEdge, @round.visit.edge.relax.check, @round.visit.edge.relax.update"><Main /></Scene>
+  <Scene name="main" case="main" pause="@none.end, @round.reset.end, @round.choose.select.end, @round.visit.end, @round.visit.settle.end, @round.visit.firstEdge.end, @round.visit.nextEdge.end, @round.visit.edge.relax.check.end, @round.visit.edge.relax.update.end"><Main /></Scene>
 </Storyboard>

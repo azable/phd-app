@@ -39,11 +39,11 @@
     <Board />
     <Node layout="stack">
       <Node when="@next" kind="Note">The blue part is always sorted. Each pass adds one more value to it.</Node>
-      <Node when=":after" kind="Note">Pass i compares the key with at most i values, so n passes take about n²/2 comparisons: O(n²) time.</Node>
+      <Node when="@case.end" kind="Note">Pass i compares the key with at most i values, so n passes take about n²/2 comparisons: O(n²) time.</Node>
     </Node>
   </Node>
 </Layout>
 <Case name="main" values={[31, 12, 25, 8, 17, 4]} />
 <Storyboard>
-  <Scene name="sort" case="main" pause="@pass.key, @pass.shift, @pass.put, @next"><Story /></Scene>
+  <Scene name="sort" case="main" pause="@pass.key.end, @pass.shift.end, @pass.put.end, @next.end"><Story /></Scene>
 </Storyboard>

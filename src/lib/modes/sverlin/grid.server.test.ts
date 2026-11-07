@@ -37,7 +37,7 @@ ${cells}
 
 <Case name="main" values={[5, 2, 4, 1, 3]} />
 <Storyboard>
-  <Scene name="sort" case="main" pause="@insert.init, @insert.scan.cmp, @insert.scan.swap"><Main /></Scene>
+  <Scene name="sort" case="main" pause="@insert.init.end, @insert.scan.cmp.end, @insert.scan.swap.end"><Main /></Scene>
 </Storyboard>`;
 
 const valuesRow = `    {#each values as v, k}<Node row={0} col={k}>{v}</Node>{/each}`;

@@ -575,7 +575,7 @@ function unfit(space: DesignSpace, key: string, value: unknown): string {
       return `${kind}'s ${axis} is bound to its value in the view, ${axis}={…}, so it has no ${axis} variable; ${kind}.${axis === 'width' ? 'x' : 'y'}Anchor places it.`;
     }
     if (key.startsWith('pause@'))
-      return `The design has no variable ${key}: the steps a scene shows are its pause, in the source, as <Scene name="…" pause="@${key.slice('pause@'.length)}">.`;
+      return `The design has no variable ${key}: the steps a scene shows are its pause, in the source, as <Scene name="…" pause="@$.end{key.slice('pause@'.length)}">.`;
     // A view choice, a type's or a place's, is one variable, not a kind and a prop.
     if (key.startsWith('views.') || key.startsWith('pointers.')) {
       const choices = Object.keys(space).filter((other) => other.startsWith('views.'));

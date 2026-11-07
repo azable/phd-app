@@ -69,12 +69,12 @@ describe('records of spans', () => {
         mergeSort(
           '<View of="@sort" name="CallFrame"><Node>sort {this.lo} to {this.hi}</Node></View>',
           '<Layout name="Arrays"><Node layout="column">{values}{@sort}</Node></Layout>',
-          '<Scene name="sort" case="eight" pause="@sort"><Arrays /></Scene>'
+          '<Scene name="sort" case="eight" pause="@sort.end"><Arrays /></Scene>'
         )
       ),
       1
     );
-    expect(labels.slice(0, 3)).toEqual([':before', '@sort#4', '@sort#5']);
+    expect(labels.slice(0, 3)).toEqual(['@case.start', '@sort#4.end', '@sort#5.end']);
   });
 
   it('refuses a field that is never in scope at the label', () => {
@@ -83,7 +83,7 @@ describe('records of spans', () => {
         mergeSort(
           '<View of="@sort" name="CallFrame"><Node>{this.missing}</Node></View>',
           '<Layout name="Arrays"><Node layout="column">{values}{@sort}</Node></Layout>',
-          '<Scene name="sort" case="eight" pause="@sort"><Arrays /></Scene>'
+          '<Scene name="sort" case="eight" pause="@sort.end"><Arrays /></Scene>'
         )
       )
     ).toMatch(/missing/u);
@@ -96,19 +96,19 @@ describe('queries', () => {
   it('gives the open calls, the call stack, as a list at every step', async () => {
     const source = mergeSort(
       frame,
-      '<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />\n<Layout name="Stack"><Node layout="column">{#each stack as call}{call}{/each}</Node></Layout>',
-      '<Scene name="calls" case="eight" pause="@sort.split"><Stack /></Scene>'
+      '<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />\n<Layout name="Stack"><Node layout="column">{#each stack as call}{call}{/each}</Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort.split.end"><Stack /></Scene>'
     );
     const prepared = prepareSvelteComponent(source);
     const { labels } = await bundlePresentation(prepared, 1);
     expect(labels.slice(0, 4)).toEqual([
-      ':before',
-      '@sort.split#1',
-      '@sort.split#2',
-      '@sort.split#3'
+      '@case.start',
+      '@sort.split#1.end',
+      '@sort.split#2.end',
+      '@sort.split#3.end'
     ]);
     // At the third split, the calls on 0–8, 0–4 and 0–2 are open, outermost first.
-    const third = prepared.master.find(({ name }) => name === '@sort.split#3')!;
+    const third = prepared.master.find(({ name }) => name === '@sort.split#3.end')!;
     const stack = third.state.stack as { lo: number; hi: number }[];
     expect(stack.map(({ lo, hi }) => `${lo}-${hi}`)).toEqual(['0-8', '0-4', '0-2']);
   });
@@ -116,8 +116,8 @@ describe('queries', () => {
   it("names each listed call's caller as parent, its position in the list, for a tree of calls", () => {
     const source = mergeSort(
       frame,
-      '<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />\n<Layout name="Tree"><Node><Node kind="Calls" layout="free">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
-      '<Scene name="calls" case="eight" pause="@sort:before, @sort"><Tree /></Scene>'
+      '<Select name="calls" from="@sort" where="start <= now" order="start" max="15" />\n<Layout name="Tree"><Node><Node kind="Calls" layout="free">{#each calls as call, k}{call}<Link from={call.parent} to={k} />{/each}</Node></Node></Layout>',
+      '<Scene name="calls" case="eight" pause="@sort.start, @sort.end"><Tree /></Scene>'
     );
     const prepared = prepareSvelteComponent(source);
     const calls = prepared.master.at(-1)!.state.calls as { lo: number; parent?: number }[];
@@ -158,7 +158,10 @@ describe('queries', () => {
   it('refuses a scene over a list that also pauses, or passes a live variable', () => {
     expect(
       problemOf(
-        levelsFixture.replace('over={levels} as="level"', 'over={levels} as="level" pause="@sort"')
+        levelsFixture.replace(
+          'over={levels} as="level"',
+          'over={levels} as="level" pause="@sort.end"'
+        )
       )
     ).toContain('steps through the case');
     expect(
@@ -175,7 +178,7 @@ describe('queries', () => {
   });
 
   it.each([
-    ['JavaScript operators', 'where="started <= now && now < ended"', "SQL's words"],
+    ['JavaScript operators', 'where="start <= now && now < end"', "SQL's words"],
     ['a missing bound', '', 'needs a bound on its rows'],
     ['an unknown attribute', 'limit="3"', 'takes name, from, where, order, group and max']
   ])('refuses %s', (_, attributes, message) => {

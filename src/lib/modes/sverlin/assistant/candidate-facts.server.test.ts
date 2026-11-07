@@ -7,10 +7,9 @@ import { candidateFacts, factsText, pausedLabels } from './candidate-facts.serve
 
 describe('what the app measures of a candidate', () => {
   it('reads the labels the scenes pause at', () => {
-    expect(pausedLabels('<Scene pause="@a, @b.c" /><Scene pause="@a, :after" />')).toEqual([
-      '@a',
-      '@b.c'
-    ]);
+    expect(
+      pausedLabels('<Scene pause="@a.end, @b.c.end" /><Scene pause="@a.end, @case.end" />')
+    ).toEqual(['@a', '@b.c']);
   });
 
   it('measures a build, checks the constraints it can, and says which it cannot', async () => {

@@ -172,7 +172,7 @@ describe('place and label checks', () => {
 <Case name="main" values={[1, 2, 3]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@first"><Main /></Scene>
+  <Scene name="main" case="main" pause="@first.end"><Main /></Scene>
 </Storyboard>`);
     expect(built.warnings).toContainEqual({
       code: 'label.clumped',

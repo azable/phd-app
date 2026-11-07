@@ -33,17 +33,17 @@ describe('plain message text', () => {
     expect(
       plainMessageText([
         { type: 'markdown', text: 'Viewing' },
-        { type: 'presentation-ref', presentationId, step: 2, stepName: '@insert.swap#1' },
+        { type: 'presentation-ref', presentationId, step: 2, stepName: '@insert.swap#1.end' },
         {
           type: 'element-ref',
           presentationId,
           step: 2,
-          stepName: '@insert.swap#1',
+          stepName: '@insert.swap#1.end',
           element: { id: '62:7', label: 'Int 8' }
         }
       ])
     ).toBe(
-      `Viewing [Presentation ${presentationId} at @insert.swap#1 (step 3)] [Element "Int 8" (62:7) at @insert.swap#1 (step 3) of presentation ${presentationId}]`
+      `Viewing [Presentation ${presentationId} at @insert.swap#1.end (step 3)] [Element "Int 8" (62:7) at @insert.swap#1.end (step 3) of presentation ${presentationId}]`
     );
   });
 
@@ -55,8 +55,16 @@ describe('plain message text', () => {
         step: 0,
         stepName
       });
-    for (const name of ['start', 'end', '@insert.compare.left#3']) expect(named(name)).toBe(true);
-    for (const name of ['Step 1', '@insert.swap #1', 'insert.swap#1', '@insert.swap'])
+    for (const name of ['@case.start', '@case.end', '@insert.compare.left#3.end'])
+      expect(named(name)).toBe(true);
+    for (const name of [
+      'Step 1',
+      '@insert.swap #1',
+      'insert.swap#1',
+      '@insert.swap',
+      '@insert.swap#1',
+      ':before'
+    ])
       expect(named(name)).toBe(false);
   });
 });

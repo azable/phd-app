@@ -170,7 +170,7 @@ scene at least.
 ```svelte
 <Storyboard>
   <Scene name="sort" case="main"><Arrays /></Scene>
-  <Scene name="one-merge" case="main" within="@sort.merge#1" pause="@sort.merge.take">
+  <Scene name="one-merge" case="main" within="@sort.merge#1" pause="@sort.merge.take.end">
     <Arrays />
   </Scene>
   <Scene name="then"><Note /></Scene>
@@ -186,31 +186,33 @@ scene at least.
 - A stepping scene names the case it shows, as `case="present"` (see Cases); one
   naming none, or a case no `<Case>` names, is refused. Its stops, `within`,
   `pause` and `at` are those of that case, and two scenes may show two cases.
-- Each span of a label has two stops: `:before`, just before its code begins,
-  and `:after`, just after it ends. The whole case has them too: its `:before`
-  is the input as the case gives it, and its `:after` the state the algorithm
-  ends on.
+- A label names a stretch of time, its spans, and `.start` and `.end` name its
+  two moments: `@sort.merge.start`, just before a span's code begins, and
+  `@sort.merge.end`, just after it ends. The whole case is a stretch too,
+  `@case`: `@case.start` is the input as the case gives it, and `@case.end` the
+  state the algorithm ends on. `case` is no label's name.
 - A stepping scene steps through the whole case, or the spans of one label
-  `within` names: every span, `within="@sort.merge"`, or the nth to begin,
-  `within="@sort.merge#1"`. It opens on their `:before` (the first span's, for
-  every span) and closes on their `:after` (the last span's), as
-  `@sort.merge#1:before` and `@sort.merge#1` in the controls, or the whole
-  case's, `:before` and `:after`. `pause` names, separated by commas, the stops
-  where the scene takes a step between them: a label by its full name for the
-  end of each of its spans, as `pause="@sort.merge.take"`, which
-  `@sort.merge.take:after` also writes, and `@sort.merge.take:before` for just
-  before each begins; `pause="@sort.merge.take:before, @sort.merge.take"` takes
-  both. The scene pauses at those stops and no others, and `within` only chooses
-  which spans it shows, so a scene with no `pause` shows its `:before` and its
-  `:after`. A step the view draws from exactly what it drew the step before from
-  (the variables it reads, the marks held, the code lit, and each `when`) draws
-  the same picture, so it is left out, and the build warns, naming both steps,
-  unless the step left out is the scene's own `:before` or `:after`. A paused
-  step whose values differ but whose drawn picture is the step before's, as one
-  moving a pointer that marks nothing, is shown, and the build warns, naming the
-  first run of such steps at each label. `at=":before"` or `at=":after"` shows
-  only one of them. `title` is a caption beside its name in the controls. Props
-  are written as they are, never computed.
+  `within` names, a stretch: every span, `within="@sort.merge"`, or the nth to
+  begin, `within="@sort.merge#1"`. It opens on their `.start` (the first span's,
+  for every span) and closes on their `.end` (the last span's), as
+  `@sort.merge#1.start` and `@sort.merge#1.end` in the controls, or the whole
+  case's, `@case.start` and `@case.end`. `pause` names, separated by commas, the
+  moments where the scene takes a step between them, each a label by its full
+  name and `.end` for the end of each of its spans, as
+  `pause="@sort.merge.take.end"`, or `.start` for just before each begins;
+  `pause="@sort.merge.take.start, @sort.merge.take.end"` takes both. A label
+  alone is a stretch, which a pause cannot stop at, and is refused. The scene
+  pauses at those moments and no others, and `within` only chooses which spans
+  it shows, so a scene with no `pause` shows its first step and its last. A step
+  the view draws from exactly what it drew the step before from (the variables
+  it reads, the marks held, the code lit, and each `when`) draws the same
+  picture, so it is left out, and the build warns, naming both steps, unless the
+  step left out is the scene's own first or last. A paused step whose values
+  differ but whose drawn picture is the step before's, as one moving a pointer
+  that marks nothing, is shown, and the build warns, naming the first run of
+  such steps at each label. `at="@case.start"` or `at="@case.end"` shows only
+  one of them. `title` is a caption beside its name in the controls. Props are
+  written as they are, never computed.
 - Pause at each decision as well as at the action it leads to: a loop's test and
   an `if`'s test, labelled, so the reader sees why something happens and why it
   stops, not only that it did. Draw the decision's answer where it helps,
@@ -233,16 +235,16 @@ scene at least.
   ```
 
   ```svelte
-  <Scene name="sort" case="main" pause="@insert.init, @insert.front, @insert.scan.cmp, @insert.scan.swap">
+  <Scene name="sort" case="main" pause="@insert.init.end, @insert.front.end, @insert.scan.cmp.end, @insert.scan.swap.end">
     <Main />
   </Scene>
   ```
 
   Each round then shows its start, "is j above 0?", "is the left value larger?",
   and the swap after a yes, with `j` on the item being inserted; a no, or `j` at
-  the front, shows why the round ends. With `pause="@insert.scan.swap.exchange"`
-  alone, only the swaps play, the mark stays on the value moved right, and
-  nothing shows when or why a round ends.
+  the front, shows why the round ends. With
+  `pause="@insert.scan.swap.exchange.end"` alone, only the swaps play, the mark
+  stays on the value moved right, and nothing shows when or why a round ends.
 
 - Scenes play in the storyboard's order, each showing what it selects, from its
   first step's state, whatever the scene before it showed: a merge may be shown
@@ -464,9 +466,9 @@ view for all pointers. -->
 - A step inside a span shows only its own part and the code leading up to it; a
   step ending a span shows its whole span, the values its labels gave inside it
   drawn and its code lit.
-- At a case's `:before` no code has run: what the algorithm declares, its
-  labels' values, and its applications appear from the first step on (see
-  `shown` in Design). `return;` stops the algorithm early.
+- At `@case.start` no code has run: what the algorithm declares, its labels'
+  values, and its applications appear from the first step on (see `shown` in
+  Design). `return;` stops the algorithm early.
 - Each step records every variable in scope, before and after its code: the
   input's, the top level's, and those of the blocks around it. A variable out of
   scope at a step is not part of it, so whatever the view draws from it is
@@ -474,14 +476,15 @@ view for all pointers. -->
   never at the top level with a stand-in such as -1. A name is declared once
   among the blocks in scope: a loop inside another cannot declare `j` again,
   while loops one after another can.
-- A step is named by the stop it is at: the label whose span it ends and which
-  span that is, as `@insert.swap#1`, or `@insert.swap#1:before` just before that
-  span begins, and `:before` and `:after` for the whole case's: in a recursive
-  function, `@sort#1` ends the first call made, the outermost, at the last of
-  its steps. The name is the same in every variant, which numbers only the steps
-  it shows. A step has no text: the view says what it shows, from the recorded
-  variables, so what it should say is in the algorithm's variables, as an answer
-  is the value a search returns or where its loop stops.
+- A step is named by the moment it is at: the label, which span it is, and
+  `.end` or `.start`, as `@insert.swap#1.end` where the first span ends, or
+  `@insert.swap#1.start` just before it begins, and `@case.start` and
+  `@case.end` for the whole case's: in a recursive function, `@sort#1.end` ends
+  the first call made, the outermost, at the last of its steps. The name is the
+  same in every variant, which numbers only the steps it shows. A step has no
+  text: the view says what it shows, from the recorded variables, so what it
+  should say is in the algorithm's variables, as an answer is the value a search
+  returns or where its loop stops.
 - Between steps the page moves each value from where it was drawn, so a swap
   shows as two values trading places, a value moved through a temporary being
   the same value. A variable holding a value an array also holds shows a copy,
@@ -574,7 +577,7 @@ Binary search, stopping where it finds the target:
 <Case name="main" values={[2, 5, 8, 12, 16, 23, 38]} target={23} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@range, @probe.check, @probe.right, @probe.left"><Stacked /></Scene>
+  <Scene name="main" case="main" pause="@range.end, @probe.check.end, @probe.right.end, @probe.left.end"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -770,7 +773,7 @@ is refused. A list reversed, the nodes `prev` and `cur` refer to both marked:
       nodes.add(ListNode({ name: 'C', next: End('end') })) })) }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@begin, @rewire"><Stacked /></Scene>
+  <Scene name="main" case="main" pause="@begin.end, @rewire.end"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -944,13 +947,13 @@ place:
 <Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Stacked /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test.end, @sweep.pair.swap.end"><Stacked /></Scene>
 </Storyboard>
 ```
 
 Paused at both, a comparison reads "is 5 > 1? true", its operands lifting out of
 their cells, and the swap after it says why they trade places. With
-`pause="@sweep.pair.swap"` alone the page plays the swaps alone; with
+`pause="@sweep.pair.swap.end"` alone the page plays the swaps alone; with
 `{@sweep.pair.test}` none the question is left out and the steps stay as they
 were.
 
@@ -1006,12 +1009,13 @@ does it.
 `<Node when="@insert.swap">…</Node>`, or a link with `when`, shows it at each
 step inside a span of a label, any label: the step that ends a span and those
 inside it where labels within pause, whatever the pauses, never steps leading up
-to it or after it; elsewhere it is hidden, keeping its room. `when=":before"`
-and `when=":after"`, the whole case's stops, show it at the first step, the
-input as given, and at the last, as a note the same in every case, as "the array
-is now sorted". `when` names one label or stop, written as text, and never reads
-the label's value: `when={i < n}` and `{#if @label}` are refused. Nodes that
-take turns share one place in a stack, as large as the largest,
+to it or after it; elsewhere it is hidden, keeping its room.
+`when="@case.start"` and `when="@case.end"`, the whole case's stops, show it at
+the first step, the input as given, and at the last, as a note the same in every
+case, as "the array is now sorted". `when` names one label or stop, written as
+text, and never reads the label's value: `when={i < n}` and `{#if @label}` are
+refused. Nodes that take turns share one place in a stack, as large as the
+largest,
 `<Node layout="stack"><Node when="@a">…</Node><Node when="@b">…</Node></Node>`;
 give them labels that never show at one step, or their texts overlap. Text that
 changes from step to step in one place, as a status line saying what each step
@@ -1020,9 +1024,9 @@ their texts stack down the page instead of replacing one another.
 
 Each outcome of the algorithm, as found and not found, is a label of its own,
 and its message a node with `when` of that label. An outcome is decided in the
-algorithm, never in a layout by testing the state at `:before` or `:after`.
-`return;` ends the algorithm at an outcome, so code after a loop runs only for
-the other:
+algorithm, never in a layout by testing the state at `@case.start` or
+`@case.end`. `return;` ends the algorithm at an outcome, so code after a loop
+runs only for the other:
 
 ```
 <script algorithm>
@@ -1057,22 +1061,22 @@ A query is a list of the spans of one label, given at every step. Write it
 beside the layouts:
 
 ```svelte
-<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />
+<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />
 ```
 
 - Each row is one span of the label. It holds the variables in scope at the
-  span's latest stop so far: its `:before` while it goes on, its `:after` once
-  it has ended. A view of the label draws each row, as
+  span's latest moment so far: its `.start` while it goes on, its `.end` once it
+  has ended. A view of the label draws each row, as
   `{#each stack as call} {call}{/each}`.
 - `where` keeps only the rows for which it is true. It is written in SQL's
   words: `=`, `<>`, `<`, `<=`, `>`, `>=`, `and`, `or`, `not`, numbers, and text
-  in single quotes. `now` is the current step. `started` and `ended` are when
+  in single quotes. `now` is the current step. `start` and `end` are the moments
   the span began and ended. `depth` counts the calls around the span's call, the
-  first call having depth 0. `call.started`, `call.ended` and `call.depth` are
-  its call's. A variable in the span's record is read by its name, for example
-  `lo`. JavaScript's `===`, `&&` and `!` are refused.
-- For example, `started <= now and now < ended` gives the calls going on, the
-  call stack; `ended <= now` gives the spans that have ended so far.
+  first call having depth 0. `call.start`, `call.end` and `call.depth` are its
+  call's. A variable in the span's record is read by its name, for example `lo`.
+  JavaScript's `===`, `&&` and `!` are refused.
+- For example, `start <= now and now < end` gives the calls going on, the call
+  stack; `end <= now` gives the spans that have ended so far.
 - `order` sorts the rows by one or more fields, separated by commas, each
   ascending, or descending with `desc`. Rows with equal fields stay in the order
   their spans began.
@@ -1089,7 +1093,7 @@ A scene can step through a query's result, one row a step, in the result's
 order:
 
 ```svelte
-<Select name="levels" from="@sort" where="ended <= now" group="depth" order="depth, lo" max="8" />
+<Select name="levels" from="@sort" where="end <= now" group="depth" order="depth, lo" max="8" />
 <Scene name="levels" case="main" over={levels} as="level"><Level /></Scene>
 ```
 
@@ -1115,7 +1119,7 @@ call and a query of the calls name:
 
 ```
 <View of="@sort" name="Frame"><Node>sort({this.lo}, {this.hi})</Node></View>
-<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />
+<Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />
 ```
 
 A tree of calls, as merge sort's splits and merges, is read from the run: list
@@ -1129,7 +1133,7 @@ counts every call, 15 for 8 values, not only those open at once:
 <View of="@sort" name="Part">
   <Node layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
 </View>
-<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />
+<Select name="calls" from="@sort" where="start <= now" order="start" max="15" />
 <Layout name="Tree">
   <Node>
     <Node kind="Calls" layout="free">
@@ -1140,8 +1144,9 @@ counts every call, 15 for 8 values, not only those open at once:
 ```
 
 - Each row's box fits its own part, a leaf one value, so the tree stays narrow;
-  `Calls.direction` turns it to run across. Pause at `@sort:before` and `@sort`
-  to add each call as it starts and show its part sorted as it returns.
+  `Calls.direction` turns it to run across. Pause at `@sort.start` and
+  `@sort.end` to add each call as it starts and show its part sorted as it
+  returns.
 - Never type the tree's lists into the case or the domain: what the algorithm
   does is read from its run.
 
@@ -1183,7 +1188,7 @@ in the source, or `undefined` for the view's or layout's own kind, as
 `kind={k === j ? 'AtJ' : k < i ? 'Sorted' : undefined}`: the node takes the kind
 its expression gives at each step, so one node, not an `{#if}` doubling it,
 marks a cell; at a step where a variable the expression reads does not exist, as
-`j` at a `:before`, the node is still drawn and the expression reads that
+`j` at `@case.start`, the node is still drawn and the expression reads that
 variable as `undefined`, so `k === j ? 'AtJ' : 'Cell'` gives `'Cell'` (a
 `{@const}` name as well, where a variable its value reads does not). The nodes
 inside it keep the kind around it, and a kind built from text, as
@@ -1199,8 +1204,8 @@ Every kind of node has these props, each with a fixed set of options:
   keeps no room. A render is missing where its view is `none` or not shown or it
   draws an absent value: for a whole presentation left out, keeping no room, and
   at one step hidden, keeping its room. A part that reads a variable which does
-  not exist at a step, not declared yet, as at a `:before`, or out of scope, is
-  not drawn there and keeps its room: a node by what it reads (its `kind`
+  not exist at a step, not declared yet, as at `@case.start`, or out of scope,
+  is not drawn there and keeps its room: a node by what it reads (its `kind`
   aside), an `{#if}`, `{#key}` or `{#each}` with all it holds by its test. A
   `{@const}` name reads what its value reads, so after `{@const next = j + 1}` a
   node reading `next` hides where `j` does not exist, and the node holding the
@@ -1816,7 +1821,7 @@ Insertion sort, beside a textbook's pseudocode, its tokens naming `i`, `j`, and
 <Case name="main" values={[5, 2, 4, 1]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.key, @insert.shift, @insert.place"><Stacked /></Scene>
+  <Scene name="main" case="main" pause="@insert.key.end, @insert.shift.end, @insert.place.end"><Stacked /></Scene>
 </Storyboard>
 ```
 
@@ -1984,7 +1989,7 @@ lanes below them, `j` reaching −1 before the first cell:
 
 <Case name="main" values={[5, 2, 4, 6, 1, 3]} />
 <Storyboard>
-  <Scene name="sort" case="main" pause="@insert.take, @insert.shift.move, @insert.drop"><Main /></Scene>
+  <Scene name="sort" case="main" pause="@insert.take.end, @insert.shift.move.end, @insert.drop.end"><Main /></Scene>
 </Storyboard>
 ```
 
@@ -2154,7 +2159,7 @@ two it is computed from:
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main /></Scene>
+  <Scene name="main" case="main" pause="@row.cell.diagonal.end, @row.cell.fromUp.end, @row.cell.fromLeft.end"><Main /></Scene>
 </Storyboard>
 ```
 
@@ -2402,6 +2407,6 @@ at marked and the queue drawn by number:
   ]} out={[[1, 2], [3], [3], [4], []]} />
 
 <Storyboard>
-  <Scene name="search" case="main" pause="@init, @visit.take, @visit.look.check, @visit.look.add"><Stacked /></Scene>
+  <Scene name="search" case="main" pause="@init.end, @visit.take.end, @visit.look.check.end, @visit.look.add.end"><Stacked /></Scene>
 </Storyboard>
 ```

@@ -44,7 +44,7 @@
   </Node>
 </View>
 
-<Select name="stack" from="@sort" where="started <= now and now < ended"
+<Select name="stack" from="@sort" where="start <= now and now < end"
         order="depth" max="4" />
 
 <Layout name="Stack">
@@ -59,7 +59,7 @@
       from={[0, 0, 0, 0, 0, 0, 0, 0]} />
 
 <Storyboard>
-  <Scene name="calls" case="eight" pause="@sort.split, @sort.merge">
+  <Scene name="calls" case="eight" pause="@sort.split.end, @sort.merge.end">
     <Stack />
   </Scene>
 </Storyboard>

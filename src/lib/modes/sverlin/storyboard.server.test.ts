@@ -70,7 +70,7 @@ describe('storyboards', () => {
   it('keeps the steps’ own names for one scene', async () => {
     const one = prepareSvelteComponent(storyboard(scene('name="search"')));
     const { labels } = await bundlePresentation(one, 1);
-    expect(labels[0]).toBe(':before');
+    expect(labels[0]).toBe('@case.start');
     expect(labels.some((label) => /^[\w-]+ ?.*: /u.test(label))).toBe(false);
     expect(one.design.space).not.toHaveProperty('layout');
   });
@@ -80,7 +80,7 @@ describe('storyboards', () => {
       storyboard(
         scene('name="search"'),
         scene('name="then"', '<Card />'),
-        scene('name="probe" within="@probe#2" pause="@probe.pick" title="the second probe"')
+        scene('name="probe" within="@probe#2" pause="@probe.pick.end" title="the second probe"')
       )
     );
     expect(prepared.storyboard.scenes.map(({ name, frame }) => [name, frame])).toEqual([
@@ -91,17 +91,17 @@ describe('storyboards', () => {
     const { labels, warnings } = await bundlePresentation(prepared, 1);
     const scenes = labels.map((label) => label.split(':')[0]);
     // The whole case, the card as one frame, then the second probe again from its :before.
-    expect(labels[0]).toBe('search: :before');
+    expect(labels[0]).toBe('search: @case.start');
     expect(scenes.indexOf('then')).toBe(scenes.lastIndexOf('then'));
     expect(
       scenes.slice(scenes.indexOf('then') + 1).every((name) => name === 'probe (the second probe)')
     ).toBe(true);
-    // The second probe opens on its :before. Its pick sets only mid and its end, finding the
+    // The second probe opens on its .start. Its pick sets only mid and its end, finding the
     // target, moves nothing, and the view reads neither: each draws what the step before drew, so
     // is left out, with a warning naming it.
-    expect(labels.at(-1)).toBe('probe (the second probe): @probe#2:before');
+    expect(labels.at(-1)).toBe('probe (the second probe): @probe#2.start');
     expect(warnings?.map(({ message }) => message)).toContain(
-      'In the scene probe, @probe#2:before and @probe.pick#2 draw the same picture, so @probe.pick#2 is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
+      'In the scene probe, @probe#2.start and @probe.pick#2.end draw the same picture, so @probe.pick#2.end is left out: pause at what changes the picture, or show what this step means with a node with when, as <Node when="@label">…</Node>.'
     );
     // Every presentation shows the source's steps.
     expect(labels).toEqual(prepared.steps);
@@ -109,23 +109,23 @@ describe('storyboards', () => {
 
   it('shows one edge of a scene, its :before or its :after', async () => {
     const prepared = prepareSvelteComponent(
-      storyboard(scene('name="first" at=":before"'), scene('name="last" at=":after"'))
+      storyboard(scene('name="first" at="@case.start"'), scene('name="last" at="@case.end"'))
     );
     const { labels } = await bundlePresentation(prepared, 1);
     const whole = await bundlePresentation(
       prepareSvelteComponent(storyboard(scene('name="search"'))),
       1
     );
-    expect(labels).toEqual(['first: :before', `last: ${whole.labels.at(-1)}`]);
-    expect(problemOf(storyboard(scene('name="first" at="start"')))).toContain('at=":before"');
+    expect(labels).toEqual(['first: @case.start', `last: ${whole.labels.at(-1)}`]);
+    expect(problemOf(storyboard(scene('name="first" at="start"')))).toContain('at="@case.start"');
   });
 
-  it('opens and closes each stepping scene on its :before and :after, its pauses between', async () => {
+  it('opens and closes each stepping scene on its .start and .end, its pauses between', async () => {
     const prepared = prepareSvelteComponent(
       storyboard(
         scene('name="whole"'),
         scene('name="first" within="@probe#1"'),
-        scene('name="picks" within="@probe#1" pause="@probe.pick"'),
+        scene('name="picks" within="@probe#1" pause="@probe.pick.end"'),
         scene('name="hit" within="@probe#2"')
       )
     );
@@ -135,17 +135,17 @@ describe('storyboards', () => {
     // the probe finding the target moves nothing drawn: each is left out, drawing what the step
     // before it drew.
     expect(labels).toEqual([
-      'whole: :before',
-      'whole: :after',
-      'first: @probe#1:before',
-      'first: @probe#1',
-      'picks: @probe#1:before',
-      'picks: @probe#1',
-      'hit: @probe#2:before'
+      'whole: @case.start',
+      'whole: @case.end',
+      'first: @probe#1.start',
+      'first: @probe#1.end',
+      'picks: @probe#1.start',
+      'picks: @probe#1.end',
+      'hit: @probe#2.start'
     ]);
   });
 
-  it('pauses just before each run of a label at its :before, and at its end at :after', async () => {
+  it('pauses just before each span of a label at its .start, and at its end at .end', async () => {
     const labelsOf = async (pause: string) =>
       (
         await bundlePresentation(
@@ -153,21 +153,27 @@ describe('storyboards', () => {
           1
         )
       ).labels;
-    const both = await labelsOf('@probe.right:before, @probe.right');
-    expect(both).toContain('@probe.right#1:before');
-    expect(both).toContain('@probe.right#1');
-    expect(both.indexOf('@probe.right#1:before')).toBeLessThan(both.indexOf('@probe.right#1'));
-    expect(await labelsOf('@probe.right:after')).toEqual(await labelsOf('@probe.right'));
+    const both = await labelsOf('@probe.right.start, @probe.right.end');
+    expect(both).toContain('@probe.right#1.start');
+    expect(both).toContain('@probe.right#1.end');
+    expect(both.indexOf('@probe.right#1.start')).toBeLessThan(both.indexOf('@probe.right#1.end'));
+    // A label alone is a stretch, and a pause takes a moment.
+    await expect(labelsOf('@probe.right')).rejects.toThrow('a label alone is a stretch');
+    await expect(labelsOf('@probe.right:after')).rejects.toThrow('a label alone is a stretch');
     expect(
-      (await labelsOf('@probe.right:before')).some((label) => /^@probe\.right#\d+$/u.test(label))
+      (await labelsOf('@probe.right.start')).some((label) =>
+        /^@probe\.right#\d+\.end$/u.test(label)
+      )
     ).toBe(false);
   });
 
   it('paces a scene by its own pauses alone', async () => {
-    const prepared = prepareSvelteComponent(storyboard(scene('name="probes" pause="@probe"')));
+    const prepared = prepareSvelteComponent(storyboard(scene('name="probes" pause="@probe.end"')));
     const { labels } = await bundlePresentation(prepared, 1);
     expect(
-      labels.filter((label) => label.startsWith('@')).every((label) => /^@probe#\d+$/u.test(label))
+      labels
+        .filter((label) => label.startsWith('@') && !label.startsWith('@case.'))
+        .every((label) => /^@probe#\d+\.end$/u.test(label))
     ).toBe(true);
   });
 
@@ -180,7 +186,7 @@ describe('storyboards', () => {
     const both = await reserved(
       storyboard(
         scene('name="search"'),
-        scene('name="probe" within="@probe#2" pause="@probe.pick"')
+        scene('name="probe" within="@probe#2" pause="@probe.pick.end"')
       )
     );
     expect(both).toEqual(whole);
@@ -215,12 +221,12 @@ describe('storyboards', () => {
     ],
     [
       'a label that is none of the algorithm’s',
-      storyboard(scene('name="probe" pause="@nothing"')),
+      storyboard(scene('name="probe" pause="@nothing.end"')),
       'The scene probe names @nothing, no label of the algorithm'
     ],
     [
       'pause on a single frame',
-      storyboard(scene('name="then" pause="@probe"', '<Card />')),
+      storyboard(scene('name="then" pause="@probe.end"', '<Card />')),
       'The scene then shows Card, which reads no state, so it is one frame'
     ],
     [
@@ -263,12 +269,12 @@ describe('cases', () => {
       )
     );
     const { labels } = await bundlePresentation(two, 1);
-    expect(labels[0]).toBe('found: :before');
+    expect(labels[0]).toBe('found: @case.start');
     expect(labels).toContain('card');
     // The absent target takes three probes, the present one two.
     expect(labels.filter((label) => label.startsWith('missing: '))).toEqual([
-      'missing: :before',
-      'missing: :after'
+      'missing: @case.start',
+      'missing: @case.end'
     ]);
     expect(two.steps).toEqual(labels);
   });
@@ -369,40 +375,46 @@ describe('steps drawing the same picture', () => {
   <Scene name="scan" case="main" pause="${pause}"><Scan /></Scene>
 </Storyboard>`;
 
-  it("leaves out the scene's :after where it draws what the last pause drew, unwarned, as no pause chose it", async () => {
+  it("leaves out the scene's @case.end where it draws what the last pause drew, unwarned, as no pause chose it", async () => {
     const { labels, warnings } = await bundlePresentation(
-      prepareSvelteComponent(linear('@compare')),
+      prepareSvelteComponent(linear('@compare.end')),
       1
     );
-    expect(labels).toEqual([':before', '@compare#1', '@compare#2', '@compare#3', '@compare#4']);
+    expect(labels).toEqual([
+      '@case.start',
+      '@compare#1.end',
+      '@compare#2.end',
+      '@compare#3.end',
+      '@compare#4.end'
+    ]);
     expect(unlooked(warnings)).toEqual([]);
   });
 
   it('leaves out a paused step drawing exactly what the step before drew, with a warning naming both', async () => {
     const { labels, warnings } = await bundlePresentation(
-      prepareSvelteComponent(linear('@start, @compare:before')),
+      prepareSvelteComponent(linear('@start.end, @compare.start')),
       1
     );
     expect(labels).toEqual([
-      ':before',
-      '@start#1',
-      '@compare#2:before',
-      '@compare#3:before',
-      '@compare#4:before'
+      '@case.start',
+      '@start#1.end',
+      '@compare#2.start',
+      '@compare#3.start',
+      '@compare#4.start'
     ]);
     expect(unlooked(warnings)).toEqual([
-      '@start#1 and @compare#1:before draw the same picture, so @compare#1:before is left out: pause at what changes the picture, or show what this step means with <When of="@label">.'
+      '@start#1.end and @compare#1.start draw the same picture, so @compare#1.start is left out: pause at what changes the picture, or show what this step means with a node with when, as <Node when="@label">…</Node>.'
     ]);
   });
 
-  it('keeps the end where a node with when=":after" draws something new there, one at each step', async () => {
+  it('keeps the end where a node with when="@case.end" draws something new there, one at each step', async () => {
     const oneOf =
-      '<Node layout="stack"><Node when="@compare">checking</Node><Node when=":after">done</Node></Node>';
+      '<Node layout="stack"><Node when="@compare">checking</Node><Node when="@case.end">done</Node></Node>';
     const prepared = prepareSvelteComponent(
-      linear('@compare', oneOf).replace('of="values, i"', 'of="values, i, @compare"')
+      linear('@compare.end', oneOf).replace('of="values, i"', 'of="values, i, @compare"')
     );
     const { labels, warnings } = await bundlePresentation(prepared, 1);
-    expect(labels.slice(-2)).toEqual(['@compare#4', ':after']);
+    expect(labels.slice(-2)).toEqual(['@compare#4.end', '@case.end']);
     expect(unlooked(warnings)).toEqual([]);
   });
 
@@ -432,15 +444,15 @@ ${views}
 </Layout>
 <Case name="main" items={[{ value: 4 }, { value: 9 }, { value: 2 }, { value: 7 }]} target={7} />
 <Storyboard>
-  <Scene name="scan" case="main" pause="@next"><Scan /></Scene>
+  <Scene name="scan" case="main" pause="@next.end"><Scan /></Scene>
 </Storyboard>`;
 
   it('warns of the paused steps a link reaching nothing leaves alike, its elements drawn only by their fields', async () => {
     const built = await bundlePresentation(prepareSvelteComponent(records('{item.value}')), 1);
     // Each step moves i, which the view reads, so none is left out; but none shows it.
-    expect(built.labels).toEqual([':before', '@next#1', '@next#2', '@next#3']);
+    expect(built.labels).toEqual(['@case.start', '@next#1.end', '@next#2.end', '@next#3.end']);
     expect(unlooked(built.warnings)).toEqual([
-      '2 steps at @next draw the same picture as the step before them, as @next#1 to @next#3: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
+      '2 steps at @next draw the same picture as the step before them, as @next#1.end to @next#3.end: what changes there shows nowhere in the view. Pause at what changes the picture, or draw what changes, as a value or a pointer at an element the view draws.'
     ]);
     const marked = await bundlePresentation(
       prepareSvelteComponent(
@@ -476,13 +488,16 @@ ${views}
   <Scene name="scan" case="main" pause="${pause}"><Scan /></Scene>
 </Storyboard>`;
     const value = '@probe[const mid = @mid[Index(Math.floor(values.length / 2))];]';
-    const before = await bundlePresentation(prepareSvelteComponent(search(value, '@probe.mid')), 1);
+    const before = await bundlePresentation(
+      prepareSvelteComponent(search(value, '@probe.mid.end')),
+      1
+    );
     expect(before.warnings?.map(({ message }) => message)).toContain(
       '@probe.mid wraps only the value given to mid, so a scene pausing there pauses after the value is worked out but before mid holds it: mid does not exist at that step, and nothing drawing it shows. Label the whole statement, as @mid[const mid = …;].'
     );
     const whole = await bundlePresentation(
       prepareSvelteComponent(
-        search('@mid[const mid = Index(Math.floor(values.length / 2));]', '@mid')
+        search('@mid[const mid = Index(Math.floor(values.length / 2));]', '@mid.end')
       ),
       1
     );
@@ -500,22 +515,22 @@ ${views}
     expect(
       repeatedStepWarnings(
         [
-          step(first, ':before', 'a'),
-          step(first, '@pick#1', 'b'),
-          step(first, '@pick#2', 'b'),
+          step(first, '@case.start', 'a'),
+          step(first, '@pick#1.end', 'b'),
+          step(first, '@pick#2.end', 'b'),
           // A scene opens on its own first step, whatever the one before drew.
-          step(second, '@pick#3', 'b'),
-          step(second, ':after', 'b')
+          step(second, '@pick#3.end', 'b'),
+          step(second, '@case.end', 'b')
         ],
         2
       )
-    ).toEqual([`In the scene first, @pick#2 draws the same picture as @pick#1${hint}`]);
+    ).toEqual([`In the scene first, @pick#2.end draws the same picture as @pick#1.end${hint}`]);
     const labels = ['@a', '@b', '@c', '@d', '@e', '@f', '@g'];
     expect(
       repeatedStepWarnings(
         labels.flatMap((label) => [
-          step(first, `${label}#1`, label),
-          step(first, `${label}#2`, label)
+          step(first, `${label}#1.end`, label),
+          step(first, `${label}#2.end`, label)
         ]),
         1
       ).at(-1)

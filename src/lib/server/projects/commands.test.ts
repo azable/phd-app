@@ -661,7 +661,9 @@ describe('submitProjectFeedback', () => {
     const stepName = presentationStepName(shown, 1);
     expect(
       await queue('12345678-1234-4123-8123-123456789abc', {
-        presentations: [{ presentationId: shown.presentationId, step: 1, stepName: '@made.up#1' }]
+        presentations: [
+          { presentationId: shown.presentationId, step: 1, stepName: '@made.up#1.end' }
+        ]
       })
     ).toMatchObject({
       type: 'feedback.submitted',
@@ -1949,7 +1951,7 @@ describe('submitProjectFeedback', () => {
     it('keeps a first source whose steps repeat the picture before them, as a merge sort’s singleton calls do', async () => {
       const { returnedWarnings } = await import('$lib/modes/sverlin/assistant/turn.server');
       const repeated =
-        '8 steps at @sort draw the same picture as the step before them, as @sort#4:before to @sort#4: what changes there shows nowhere in the view.';
+        '8 steps at @sort draw the same picture as the step before them, as @sort#4.start to @sort#4: what changes there shows nowhere in the view.';
       expect(returnedWarnings([repeated], true)).toEqual([]);
       expect(returnedWarnings([repeated], false)).toEqual([repeated]);
     });
@@ -2889,7 +2891,7 @@ describe('submitProjectFeedback', () => {
           projectId: created.projectId,
           expectedHead: projectHead(created).id,
           content: [
-            { type: 'presentation-ref', presentationId, step, stepName: '@guess#1' },
+            { type: 'presentation-ref', presentationId, step, stepName: '@guess#1.end' },
             ...markdownMessage('Here')
           ],
           focus: [],
@@ -2907,7 +2909,7 @@ describe('submitProjectFeedback', () => {
       type: 'presentation-ref',
       presentationId,
       step: 1,
-      stepName: '@first#1'
+      stepName: '@first#1.end'
     });
   });
 
@@ -3396,10 +3398,7 @@ describe('assistant edits', () => {
         '<Layout name="Main"',
         '<Layout name="Note"><Node>Caption</Node></Layout>\n<Layout name="Main"'
       )
-      .replace(
-        '<Result />',
-        '<Result /><Note />'
-      );
+      .replace('<Result />', '<Result /><Note />');
     mocks.generatePrepared.mockReset().mockResolvedValue(
       edit(
         [
@@ -4006,7 +4005,7 @@ describe('several variants from chat', () => {
       '</Layout>',
       '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
       '<Storyboard>',
-      '  <Scene name="scan" case="main" pause="@start, @next"><Scan /></Scene>',
+      '  <Scene name="scan" case="main" pause="@start.end, @next.end"><Scan /></Scene>',
       '</Storyboard>'
     ].join('\n');
     const result = await attempts(
@@ -4047,7 +4046,7 @@ describe('several variants from chat', () => {
       '</Layout>',
       '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
       '<Storyboard>',
-      '  <Scene name="scan" case="main" pause="@start, @compare:before"><Scan /></Scene>',
+      '  <Scene name="scan" case="main" pause="@start.end, @compare.start"><Scan /></Scene>',
       '</Storyboard>'
     ].join('\n');
     const result = await attempts(
@@ -4192,7 +4191,7 @@ describe('several variants from chat', () => {
       '</Layout>',
       '<Case name="main" values={[4, 9, 2, 7]} target={7} />',
       '<Storyboard>',
-      '  <Scene name="scan" case="main" pause="@next"><Scan /></Scene>',
+      '  <Scene name="scan" case="main" pause="@next.end"><Scan /></Scene>',
       '</Storyboard>'
     ].join('\n');
   const cellOrWord =

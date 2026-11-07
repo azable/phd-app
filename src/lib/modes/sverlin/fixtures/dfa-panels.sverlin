@@ -188,7 +188,7 @@
     name="run"
     title="Run 10101"
     case="ending-01"
-    pause="@begin, @run.zero, @run.one, @accepted, @rejected"
+    pause="@begin.end, @run.zero.end, @run.one.end, @accepted.end, @rejected.end"
   >
     <Page />
   </Scene>

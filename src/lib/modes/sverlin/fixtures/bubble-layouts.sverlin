@@ -74,6 +74,6 @@
 <Case name="main" values={[5, 1, 4, 2, 3]} />
 
 <Storyboard>
-  <Scene name="stacked" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Stacked /></Scene>
-  <Scene name="side" case="main" pause="@pass.pair.compare, @pass.pair.compare.left, @pass.pair.compare.right, @pass.pair.swap, @pass.pair.swap.from, @pass.pair.swap.to"><Side /></Scene>
+  <Scene name="stacked" case="main" pause="@pass.pair.compare.end, @pass.pair.compare.left.end, @pass.pair.compare.right.end, @pass.pair.swap.end, @pass.pair.swap.from.end, @pass.pair.swap.to.end"><Stacked /></Scene>
+  <Scene name="side" case="main" pause="@pass.pair.compare.end, @pass.pair.compare.left.end, @pass.pair.compare.right.end, @pass.pair.swap.end, @pass.pair.swap.from.end, @pass.pair.swap.to.end"><Side /></Scene>
 </Storyboard>

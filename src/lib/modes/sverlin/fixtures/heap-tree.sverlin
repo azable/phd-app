@@ -43,5 +43,5 @@
 <Case name="main" heap={[12, 40, 7, 55, 31, 68, 23]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert.sift.swap"><Main /></Scene>
+  <Scene name="main" case="main" pause="@insert.sift.swap.end"><Main /></Scene>
 </Storyboard>

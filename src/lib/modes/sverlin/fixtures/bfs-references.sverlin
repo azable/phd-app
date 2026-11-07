@@ -61,5 +61,5 @@
 <Case name="main" e={vertices.add(Vertex({ name: 'E', seen: false, out: [] }))} d={vertices.add(Vertex({ name: 'D', seen: false, out: [e] }))} b={vertices.add(Vertex({ name: 'B', seen: false, out: [d] }))} c={vertices.add(Vertex({ name: 'C', seen: false, out: [d] }))} a={vertices.add(Vertex({ name: 'A', seen: true, out: [b, c] }))} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@init, @visit, @visit.take, @visit.look.check.next, @visit.look.add"><Main /></Scene>
+  <Scene name="main" case="main" pause="@init.end, @visit.end, @visit.take.end, @visit.look.check.next.end, @visit.look.add.end"><Main /></Scene>
 </Storyboard>

@@ -23,11 +23,11 @@ export type Scene = {
   layout: string;
   /** The case it shows (see cases.server.ts); a frame shows none. */
   case?: string;
-  /** The stops it pauses at, by full name: a label for its :after, label:before for its :before. */
+  /** The moments it pauses at, by full name: a label for its .end, beforeStop(label) for its .start. */
   pause?: string[];
   /** The runs of one label it steps through, all of them or the nth to begin. */
   within?: { label: string; run?: number };
-  /** One of its edges: its :before, the first of its steps, or its :after, the last. */
+  /** One of its edges: @case.start, the first of its steps, or @case.end, the last. */
   at?: Stop;
   /** Shown beside its name in the controls. */
   title?: string;
@@ -45,7 +45,7 @@ type Problem = { message: string; start: number };
 type Inputs = { variables: readonly string[]; labels: readonly string[] };
 
 const sceneName = /^[A-Za-z][\w-]*$/u;
-const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?::(before|after))?$/u;
+const stop = /^@([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.(start|end)$/u;
 const prop = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
 const sceneProps = new Set(['name', 'case', 'pause', 'within', 'at', 'title', 'over', 'as']);
 
@@ -205,7 +205,7 @@ function sceneOf(
     }
     if (found[4] !== undefined)
       return fail(
-        `A <Scene>'s ${found[1]} is written as it is, not computed, as pause="@sort.merge.take": every scene's steps are known before the algorithm runs.`
+        `A <Scene>'s ${found[1]} is written as it is, not computed, as pause="@sort.merge.take.end": every scene's steps are known before the algorithm runs.`
       );
     given.set(found[1], (found[2] ?? found[3]).trim());
     rest = rest.slice(found[0].length);
@@ -223,9 +223,9 @@ function sceneOf(
       .map((each) => stop.exec(each.trim()));
     if (stops.some((each) => !each) || !stops.length)
       return fail(
-        `pause="${given.get('pause')}" names the stops of spans where ${name} takes a step, separated by commas: a label by its full name for the end of each of its spans, as pause="@sort.merge.take", which @sort.merge.take:after also writes, and @sort.merge.take:before for just before each begins.`
+        `pause="${given.get('pause')}" names the moments where ${name} takes a step, separated by commas: a label by its full name and .end for the end of each of its spans, as pause="@sort.merge.take.end", or .start for just before each begins; a label alone is a stretch, the whole of each span, which a pause cannot stop at.`
       );
-    pause = stops.map((each) => (each![2] === 'before' ? beforeStop(each![1]) : each![1]));
+    pause = stops.map((each) => (each![2] === 'start' ? beforeStop(each![1]) : each![1]));
   }
   let within: Scene['within'];
   if (given.has('within')) {
@@ -234,15 +234,15 @@ function sceneOf(
     );
     if (!run)
       return fail(
-        `within="${given.get('within')}" names the spans of a label ${name} steps through, every span, within="@sort.merge", or the nth to begin, within="@sort.merge#1"; it opens on their :before and closes on their :after.`
+        `within="${given.get('within')}" names the spans of a label ${name} steps through, every span, within="@sort.merge", or the nth to begin, within="@sort.merge#1", a stretch; it opens on their .start and closes on their .end.`
       );
     within = { label: run[1], ...(run[2] ? { run: Number(run[2]) } : {}) };
   }
   const written = given.get('at');
-  const at = written === ':before' ? 'before' : written === ':after' ? 'after' : undefined;
+  const at = written === '@case.start' ? 'before' : written === '@case.end' ? 'after' : undefined;
   if (written !== undefined && !at)
     return fail(
-      `at="${written}" is one edge of ${name}: at=":before", the first of its steps, or at=":after", its last.`
+      `at="${written}" is one moment of ${name}: at="@case.start", the first of its steps, the input as given, or at="@case.end", its last.`
     );
   let over: Scene['over'];
   if (given.has('over') || given.has('as')) {
@@ -345,7 +345,7 @@ export function sceneSteps(
     const ofRun = (step: MasterStep) =>
       run === undefined
         ? labelOfStep(step.name) === label
-        : step.name?.replace(/:before$/u, '') === `@${label}#${run}`;
+        : step.name?.replace(/\.(?:start|end)$/u, '') === `@${label}#${run}`;
     const first = steps.findIndex((step) => step.edge === 'before' && ofRun(step));
     const last = steps.findLastIndex((step) => step.edge === 'after' && ofRun(step));
     if (first < 0 || last < 0) return [];
@@ -431,8 +431,14 @@ export function repeatedStepWarnings(
   const runs = new Map<string, { scene: Scene; count: number; first: [number, number] }>();
   steps.forEach(({ scene, name, drawn }, index) => {
     const before = steps[index - 1];
-    if (!name?.startsWith('@') || before?.scene !== scene || before.drawn !== drawn) return;
-    const key = `${scene.name}\u0000${name.replace(/#\d+$/u, '')}`;
+    if (
+      !name?.startsWith('@') ||
+      name.startsWith('@case.') ||
+      before?.scene !== scene ||
+      before.drawn !== drawn
+    )
+      return;
+    const key = `${scene.name}\u0000${name.replace(/#\d+\.(?:start|end)$/u, '')}`;
     const run = runs.get(key);
     if (!run) runs.set(key, { scene, count: 1, first: [index - 1, index] });
     else {

@@ -25,7 +25,7 @@ const copying = `<script domain>
 </Layout>
 <Case name="main" values={[3, 8, 5]} />
 <Storyboard>
-  <Scene name="main" case="main" pause="@copy"><Main /></Scene>
+  <Scene name="main" case="main" pause="@copy.end"><Main /></Scene>
 </Storyboard>`;
 
 describe('a step back', () => {

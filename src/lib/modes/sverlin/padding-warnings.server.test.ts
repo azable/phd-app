@@ -98,7 +98,7 @@ const page = (inner: string) => `<script domain>
   </Node>
 </Layout>
 <Storyboard>
-  <Scene name="main" case="main" pause="@visit.look"><Main /></Scene>
+  <Scene name="main" case="main" pause="@visit.look.end"><Main /></Scene>
 </Storyboard>`;
 
 describe('padding warnings of a build', () => {

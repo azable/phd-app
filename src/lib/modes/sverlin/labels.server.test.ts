@@ -52,7 +52,7 @@ it(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@insert"><Main /></Scene>
+  <Scene name="main" case="main" pause="@insert.end"><Main /></Scene>
 </Storyboard>`;
     const keys = (await stepsOf(source, 4)).map((nodes) =>
       nodes.find((node) => node.startsWith('Inserting'))
@@ -100,7 +100,7 @@ it(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep.pair.test, @sweep.pair.swap"><Main /></Scene>
+  <Scene name="main" case="main" pause="@sweep.pair.test.end, @sweep.pair.swap.end"><Main /></Scene>
 </Storyboard>`;
     // Pausing at each comparison and each swap, which gives both values the caption draws.
     // [5, 1, 4]: the first sweep swaps twice; the second sweep's 1 > 4 swaps nothing.
@@ -139,7 +139,7 @@ it(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@check"><Main /></Scene>
+  <Scene name="main" case="main" pause="@check.end"><Main /></Scene>
 </Storyboard>`;
     const checked = (await stepsOf(search, 4)).map((nodes) =>
       nodes.filter((node) => node.startsWith('Checked')).map((node) => node.split(':')[1])
@@ -177,7 +177,7 @@ it(
 </Layout>
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@count"><Main /></Scene>
+  <Scene name="main" case="main" pause="@count.end"><Main /></Scene>
 </Storyboard>`;
     const reading = (await stepsOf(counting, 4)).map(
       (nodes) => nodes.find((node) => node.startsWith('Reading'))?.split(':')[1]

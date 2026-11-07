@@ -38,7 +38,7 @@ ${array}
   </Node>
 </Layout>
 <Storyboard>
-  <Scene name="main" case="main" pause="@range, @probe.mid"><Main /></Scene>
+  <Scene name="main" case="main" pause="@range.end, @probe.mid.end"><Main /></Scene>
 </Storyboard>`;
 const asView =
   '<View of="Values" name="Cells"><Node layout="row">{#each this as v}{v}{/each}</Node></View>';
@@ -111,7 +111,10 @@ describe('place() in a pointer view', () => {
     const source = search('{place()}', asView, '{values}{@probe.low.probed}')
       .replace('if (@low[values[mid] < target])', 'if (@low[values[@probed[mid]] < target])')
       .replace('of="lo, hi, mid, values"', 'of="lo, hi, mid, values, @probe.low.probed"')
-      .replace('pause="@range, @probe.mid"', 'pause="@range, @probe.mid, @probe.low"');
+      .replace(
+        'pause="@range.end, @probe.mid.end"',
+        'pause="@range.end, @probe.mid.end, @probe.low.end"'
+      );
     const named = await drawnSteps(source);
     const atCheck = named.steps.find((step) => captions(step).includes('probed'));
     expect(atCheck).toBeDefined();

@@ -208,8 +208,8 @@
   <Scene
     name="search"
     case="main"
-    pause="@setup, @search.take,
-      @search.edges.consider.relax.update, @search.goal"
+    pause="@setup.end, @search.take.end,
+      @search.edges.consider.relax.update.end, @search.goal.end"
   >
     <Stacked />
   </Scene>

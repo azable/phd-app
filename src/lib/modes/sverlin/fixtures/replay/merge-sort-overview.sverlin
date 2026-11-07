@@ -235,7 +235,7 @@ MERGE-SORT(A, lo, hi)
     name="split-tree"
     title="Intermediate lists"
     case="main"
-    at=":before"
+    at="@case.start"
   >
     <TreePage />
   </Scene>
@@ -243,9 +243,9 @@ MERGE-SORT(A, lo, hi)
     name="merge-sort"
     title="Split and merge"
     case="main"
-    pause="@sort.split, @sort.merge.ordered,
-      @sort.merge.insert.shift.move,
-      @sort.merge.insert.place, @complete"
+    pause="@sort.split.end, @sort.merge.ordered.end,
+      @sort.merge.insert.shift.move.end,
+      @sort.merge.insert.place.end, @complete.end"
   >
     <Stacked />
   </Scene>

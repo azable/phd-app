@@ -1,9 +1,9 @@
 /**
- * Queries, `<Select name="stack" from="@sort" where="started <= now and now < ended" max="4" />`:
+ * Queries, `<Select name="stack" from="@sort" where="start <= now and now < end" max="4" />`:
  * each a list of the records of a label's spans (see SpanRecord), filtered by a condition in SQL's
  * words, in an order, perhaps in groups, given at every step as a variable the scenes pass to
- * layouts. A record holds the variables in scope at its span's latest stop so far, its :before while
- * it goes on and its :after once it has ended. `now` is the stop of the step. Selects are read from
+ * layouts. A record holds the variables in scope at its span's latest moment so far, its .start while
+ * it goes on and its .end once it has ended. `now` is the moment of the step. Selects are read from
  * the text before Svelte sees the view, and then blanked.
  */
 
@@ -27,7 +27,7 @@ type Problem = { message: string; start: number };
 
 /** How a query is written, for messages. */
 export const selectAdvice =
-  'a query is written <Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />, naming the label whose spans it reads, and a layout reads its result by name, as {#each stack as call}';
+  'a query is written <Select name="stack" from="@sort" where="start <= now and now < end" order="depth" max="4" />, naming the label whose spans it reads, and a layout reads its result by name, as {#each stack as call}';
 
 const selectName = /^[A-Za-z_$][\w$]*$/u;
 const attribute = /^\s*([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{[^}]*\}))/u;
@@ -64,7 +64,7 @@ export function selectsOf(source: string): {
       else if (!known.has(found[1]))
         bad = `A <Select> takes name, from, where, order, group and max: ${found[1]} is none of them.`;
       else if (found[4] !== undefined)
-        bad = `A <Select>'s ${found[1]} is written as it is, not computed, as where="ended <= now": every query is known before the algorithm runs.`;
+        bad = `A <Select>'s ${found[1]} is written as it is, not computed, as where="end <= now": every query is known before the algorithm runs.`;
       else {
         given.set(found[1], (found[2] ?? found[3]).trim());
         rest = rest.slice(found[0].length);
@@ -104,6 +104,13 @@ export function selectsOf(source: string): {
         const [field, way] = each.split(/\s+/u);
         return { field, descending: way?.toLowerCase() === 'desc' };
       });
+    const oldOrder = order.find(({ field }) => /(?:^|\.)(?:started|ended)$/u.test(field));
+    if (oldOrder) {
+      problem(
+        `In the query ${name}, order="${given.get('order')}": ${oldOrder.field} is written ${oldOrder.field.replace('started', 'start').replace('ended', 'end')}, the moment a span begins or ends.`
+      );
+      continue;
+    }
     if (selects.some((each) => each.name === name)) {
       problem(`Two queries are named ${name}: give each its own name.`);
       continue;
@@ -153,7 +160,7 @@ export function parseCondition(text: string): { condition: Condition } | { probl
   for (const [pattern, word] of javascript)
     if (pattern.test(text))
       return {
-        problem: `a query is written in SQL's words, not JavaScript's: write ${word} for ${pattern.exec(text)![0]}, as started <= now and now < ended.`
+        problem: `a query is written in SQL's words, not JavaScript's: write ${word} for ${pattern.exec(text)![0]}, as start <= now and now < end.`
       };
   const tokens = text.match(
     /\s*(<=|>=|<>|[<>=()]|[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|\d+(?:\.\d+)?|'[^']*')/guy
@@ -172,7 +179,14 @@ export function parseCondition(text: string): { condition: Condition } | { probl
     if (token === undefined) return fail('it ends where a value should come.');
     if (/^\d/u.test(token)) return { kind: 'number', value: Number(token) };
     if (token.startsWith("'")) return { kind: 'string', value: token.slice(1, -1) };
-    if (/^[A-Za-z_$]/u.test(token)) return { kind: 'name', path: token.split('.') };
+    if (/^[A-Za-z_$]/u.test(token)) {
+      const old = token.split('.').find((part) => part === 'started' || part === 'ended');
+      if (old)
+        return fail(
+          `${old} is written ${old === 'started' ? 'start' : 'end'}, the moment a span begins or ends, as start <= now and now < end.`
+        );
+      return { kind: 'name', path: token.split('.') };
+    }
     return fail(`"${token}" is no value.`);
   };
   const comparison = (): Condition => {
@@ -241,9 +255,9 @@ export function rowsAt(select: WrittenSelect, records: readonly SpanRecord[], no
     if (operand.kind !== 'name') return operand.value;
     const [first, second] = operand.path;
     const timing = (record: SpanRecord | undefined, field: string | undefined) =>
-      field === 'started'
+      field === 'start'
         ? record?.started
-        : field === 'ended'
+        : field === 'end'
           ? record?.ended
           : field === 'depth'
             ? record?.depth
@@ -251,8 +265,7 @@ export function rowsAt(select: WrittenSelect, records: readonly SpanRecord[], no
     if (first === 'now') return now;
     if (first === 'call')
       return timing(row.record.call ? calls.get(row.record.call) : undefined, second);
-    if (first === 'started' || first === 'ended' || first === 'depth')
-      return timing(row.record, first);
+    if (first === 'start' || first === 'end' || first === 'depth') return timing(row.record, first);
     const value = row.state[first];
     return second === undefined ? value : (value as Record<string, unknown> | undefined)?.[second];
   };

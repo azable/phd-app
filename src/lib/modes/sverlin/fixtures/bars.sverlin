@@ -42,5 +42,5 @@
 <Case name="main" values={[6, 2, 9, 4, 0, 7]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@sweep, @sweep.first, @sweep.next, @sweep.pair.swap"><Main /></Scene>
+  <Scene name="main" case="main" pause="@sweep.end, @sweep.first.end, @sweep.next.end, @sweep.pair.swap.end"><Main /></Scene>
 </Storyboard>

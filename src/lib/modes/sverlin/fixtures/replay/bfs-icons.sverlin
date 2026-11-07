@@ -133,7 +133,7 @@
     name="search"
     title="BFS from A"
     case="main"
-    pause="@init, @visit.take, @visit.look.check, @visit.look.add"
+    pause="@init.end, @visit.take.end, @visit.look.check.end, @visit.look.add.end"
   >
     <Stacked />
   </Scene>

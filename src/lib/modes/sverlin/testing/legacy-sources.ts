@@ -255,7 +255,7 @@ function withStoryboard(text: string): string {
   if (!page) return text;
   // A layout reading no state is one frame, which pauses nowhere.
   const labels = page[2] ? labelNames(text) : [];
-  const pause = labels.length ? ` pause="${labels.join(', ')}"` : '';
+  const pause = labels.length ? ` pause="${labels.map((label) => `${label}.end`).join(', ')}"` : '';
   // A layout reading state, variables or labels, shows a case.
   const shown = page[2] ? ' case="main"' : '';
   const cases = page[2] && !/<Case\b/u.test(text) ? '\n<Case name="main" />' : '';

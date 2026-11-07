@@ -299,8 +299,8 @@ describe('free layouts', () => {
       'Tree.curve': 'straight',
       'Tree.layoutSeed': 1
     });
-    // The tree's flow sets the way it runs; a graph with none runs right unless a variant says.
-    expect(Object.hasOwn(tree.space, 'Tree.direction')).toBe(false);
+    // Every structure runs right unless a variant says, a tree too.
+    expect(tree.space['Tree.direction']).toEqual(['down', 'right']);
     expect(graph.space['Graph.direction']).toEqual(['down', 'right']);
     expect(graph.starter['Graph.direction']).toBe('right');
     // Rows and columns have no such look.

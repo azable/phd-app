@@ -59,8 +59,9 @@ export function pausedLabels(source: string): string[] {
       [...source.matchAll(/\bpause="([^"]*)"/gu)].flatMap(([, list]) =>
         list
           .split(',')
-          .map((label) => label.trim())
-          .filter((label) => label.startsWith('@'))
+          .map((moment) => moment.trim())
+          .filter((moment) => moment.startsWith('@') && !moment.startsWith('@case.'))
+          .map((moment) => moment.replace(/\.(?:start|end)$/u, ''))
       )
     )
   ];
@@ -68,7 +69,7 @@ export function pausedLabels(source: string): string[] {
 
 /** The labels a step list shows, as @insert.take of @insert.take#2. */
 const shownLabels = (steps: readonly string[]) =>
-  new Set(steps.map((step) => step.replace(/#\d+$/u, '')));
+  new Set(steps.map((step) => step.replace(/#\d+\.(?:start|end)$/u, '')));
 
 /**
  * Whether one constraint holds, for the forms the app can check: "at most N steps", "every label

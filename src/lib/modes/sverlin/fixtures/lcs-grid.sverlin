@@ -50,5 +50,5 @@
   ]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@row.cell.diagonal, @row.cell.fromUp, @row.cell.fromLeft"><Main /></Scene>
+  <Scene name="main" case="main" pause="@row.cell.diagonal.end, @row.cell.fromUp.end, @row.cell.fromLeft.end"><Main /></Scene>
 </Storyboard>

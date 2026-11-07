@@ -20,7 +20,7 @@
   <Node>fib({this.k}) = {this.result}</Node>
 </View>
 
-<Select name="calls" from="@fib" where="started <= now" order="started" max="15" />
+<Select name="calls" from="@fib" where="start <= now" order="start" max="15" />
 
 <Layout name="Calls">
   <Node layout="column">{#each calls as call}{call}{/each}</Node>
@@ -29,7 +29,7 @@
 <Case name="five" n={5} />
 
 <Storyboard>
-  <Scene name="calls" case="five" pause="@fib:before, @fib">
+  <Scene name="calls" case="five" pause="@fib.start, @fib.end">
     <Calls />
   </Scene>
 </Storyboard>

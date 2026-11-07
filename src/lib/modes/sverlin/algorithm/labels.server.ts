@@ -103,6 +103,13 @@ export function readMarkers(body: string): {
         });
         continue;
       }
+      if (name === 'case') {
+        problems.push({
+          message: `@case is a reserved name, the whole case, whose moments are @case.start and @case.end: name the label after what its code does, as @scan.`,
+          at
+        });
+        continue;
+      }
       if (!bracket) {
         problems.push({
           message: `@${name} needs code to label: write @${name}[…] around a statement or part of one, or @${name}{ on a loop's, an if's, or a function's block.`,

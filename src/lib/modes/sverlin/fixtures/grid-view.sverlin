@@ -34,5 +34,5 @@
 <Case name="main" a={[[1, 2], [3, 4]]} b={[[5, 6], [7, 8]]} />
 
 <Storyboard>
-  <Scene name="main" case="main" pause="@scale.grow, @scale.copy"><Main /></Scene>
+  <Scene name="main" case="main" pause="@scale.grow.end, @scale.copy.end"><Main /></Scene>
 </Storyboard>

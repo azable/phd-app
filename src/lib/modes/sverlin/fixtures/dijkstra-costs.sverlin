@@ -223,8 +223,8 @@
   <Scene
     name="search"
     case="main"
-    pause="@init, @search.take, @search.settle,
-      @search.edges.consider.relax, @search.goal"
+    pause="@init.end, @search.take.end, @search.settle.end,
+      @search.edges.consider.relax.end, @search.goal.end"
   >
     <Page />
   </Scene>

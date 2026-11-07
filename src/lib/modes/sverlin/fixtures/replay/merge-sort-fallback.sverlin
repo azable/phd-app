@@ -155,7 +155,7 @@
     <Node kind="Action" when="@pass.grow">
       Double the run width for the next pass.
     </Node>
-    <Node kind="Result" when=":after">
+    <Node kind="Result" when="@case.end">
       Every run has been merged; the array is sorted.
     </Node>
   </Node>
@@ -192,9 +192,9 @@
   <Scene
     name="merging"
     case="main"
-    pause="@setup, @pass.pair.merge.takeLeft,
-      @pass.pair.merge.takeRight, @pass.pair.leftTail,
-      @pass.pair.rightTail, @pass.pair.copy, @pass.grow"
+    pause="@setup.end, @pass.pair.merge.takeLeft.end,
+      @pass.pair.merge.takeRight.end, @pass.pair.leftTail.end,
+      @pass.pair.rightTail.end, @pass.pair.copy.end, @pass.grow.end"
   >
     <Stacked />
   </Scene>

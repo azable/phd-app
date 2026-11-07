@@ -41,7 +41,7 @@
   <Node>sort({this.lo}, {this.hi})</Node>
 </View>
 
-<Select name="levels" from="@sort" where="ended <= now" group="depth"
+<Select name="levels" from="@sort" where="end <= now" group="depth"
         order="depth, lo" max="8" />
 
 <Layout name="Level">

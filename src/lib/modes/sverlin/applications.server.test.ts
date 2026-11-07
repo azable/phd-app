@@ -63,7 +63,7 @@ async function captionAt(step: number, chosen: Record<string, unknown> = {}) {
   const headers = ['last', 'more', 'shrink', 'sweep.first', 'sweep.inside', 'sweep.step'];
   const pause = prepareSvelteComponent(source)
     .pauses.labels.filter((label) => !headers.includes(label))
-    .map((label) => `@${label}`)
+    .map((label) => `@${label}.end`)
     .join(', ');
   const { steps } = await drawnSteps(pausingAt(source, pause), { chosen });
   const node = steps[step].nodes.find(({ kind }) => kind?.startsWith('Ask'));

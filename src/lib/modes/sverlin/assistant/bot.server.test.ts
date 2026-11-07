@@ -257,18 +257,18 @@ describe('recorded steps in the assistant context', () => {
     // scope, and the end.
     expect(context(counting(2)).recordedSteps).toEqual({
       steps: [
-        { name: ':before', state: {} },
-        { name: '@run#1', state: { last: 9 } },
-        { name: '@setup#1', state: { last: 9, n: 0 } },
-        { name: '@guard#1', state: { last: 9, n: 0 } },
-        { name: '@step#1', state: { last: 0, n: 0 } },
-        { name: '@onward#1', state: { last: 0, n: 1 } },
-        { name: '@guard#2', state: { last: 0, n: 1 } },
-        { name: '@step#2', state: { last: 1, n: 1 } },
-        { name: '@onward#2', state: { last: 1, n: 2 } },
-        { name: '@guard#3', state: { last: 1, n: 2 } },
-        { name: '@done#1', state: { last: 1, done: true } },
-        { name: ':after', state: { last: 1, done: true } }
+        { name: '@case.start', state: {} },
+        { name: '@run#1.end', state: { last: 9 } },
+        { name: '@setup#1.end', state: { last: 9, n: 0 } },
+        { name: '@guard#1.end', state: { last: 9, n: 0 } },
+        { name: '@step#1.end', state: { last: 0, n: 0 } },
+        { name: '@onward#1.end', state: { last: 0, n: 1 } },
+        { name: '@guard#2.end', state: { last: 0, n: 1 } },
+        { name: '@step#2.end', state: { last: 1, n: 1 } },
+        { name: '@onward#2.end', state: { last: 1, n: 2 } },
+        { name: '@guard#3.end', state: { last: 1, n: 2 } },
+        { name: '@done#1.end', state: { last: 1, done: true } },
+        { name: '@case.end', state: { last: 1, done: true } }
       ]
     });
   });
@@ -276,15 +276,15 @@ describe('recorded steps in the assistant context', () => {
   it('gives a repair the steps of the candidate that failed, and why there are none', () => {
     expect(context(counting(2), counting(1)).recordedSteps).toEqual({
       steps: [
-        { name: ':before', state: {} },
-        { name: '@run#1', state: { last: 9 } },
-        { name: '@setup#1', state: { last: 9, n: 0 } },
-        { name: '@guard#1', state: { last: 9, n: 0 } },
-        { name: '@step#1', state: { last: 0, n: 0 } },
-        { name: '@onward#1', state: { last: 0, n: 1 } },
-        { name: '@guard#2', state: { last: 0, n: 1 } },
-        { name: '@done#1', state: { last: 0, done: true } },
-        { name: ':after', state: { last: 0, done: true } }
+        { name: '@case.start', state: {} },
+        { name: '@run#1.end', state: { last: 9 } },
+        { name: '@setup#1.end', state: { last: 9, n: 0 } },
+        { name: '@guard#1.end', state: { last: 9, n: 0 } },
+        { name: '@step#1.end', state: { last: 0, n: 0 } },
+        { name: '@onward#1.end', state: { last: 0, n: 1 } },
+        { name: '@guard#2.end', state: { last: 0, n: 1 } },
+        { name: '@done#1.end', state: { last: 0, done: true } },
+        { name: '@case.end', state: { last: 0, done: true } }
       ]
     });
     expect(

@@ -187,8 +187,8 @@ BINARY-SEARCH(A, target)
   <Scene
     name="search"
     case="main"
-    pause="@begin, @probe.equal, @probe.right, @probe.left,
-      @probe.found, @missing"
+    pause="@begin.end, @probe.equal.end, @probe.right.end, @probe.left.end,
+      @probe.found.end, @missing.end"
   >
     <Stacked />
   </Scene>

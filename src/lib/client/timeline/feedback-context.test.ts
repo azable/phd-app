@@ -55,7 +55,7 @@ describe('feedback context', () => {
       )
     ).toEqual({
       presentations: [
-        { presentationId: presentationIds[0], step: 2, stepName: '@check#2' },
+        { presentationId: presentationIds[0], step: 2, stepName: '@check#2.end' },
         { presentationId: presentationIds[1] }
       ]
     });
@@ -86,7 +86,10 @@ function presentation(eventId: number, presentationId: string): TimelinePresenta
         text: JSON.stringify({
           format: 'sverlin-html-frames',
           version: 1,
-          frames: ['start', '@check#1', '@check#2'].map((label) => ({ label, html: '<p>step</p>' }))
+          frames: ['start', '@check#1.end', '@check#2.end'].map((label) => ({
+            label,
+            html: '<p>step</p>'
+          }))
         }),
         mediaType: 'application/json',
         sha256: 'b'.repeat(64)
