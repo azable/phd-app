@@ -169,15 +169,33 @@ function sizer(options: ReserveOptions) {
   // A free layout's size where it was solved alone: a drawing only making room may hold one no
   // step records.
   const alone = new Map<ModelElement, Size>();
-  const leastOf = (at: Read, element: ModelElement): Size | undefined => {
+  const keptSize = (at: Read, element: ModelElement): Size | undefined => {
     const kind = at.kinds.get(element);
-    const size =
-      kind?.kind === 'boxed'
-        ? kind.size
-        : kind?.kind === 'reserved'
-          ? memory.reserved.get(kind.id)
-          : undefined;
-    return size && alongTracks(element, size);
+    return kind?.kind === 'boxed'
+      ? kind.size
+      : kind?.kind === 'reserved'
+        ? memory.reserved.get(kind.id)
+        : undefined;
+  };
+  const leastOf = (at: Read, element: ModelElement): Size | undefined => {
+    if (classesOf(element).includes('sv-room')) return roomLeast(at, element);
+    const size = keptSize(at, element);
+    return size && alongOwnAxes(element, alongTracks(element, size), false);
+  };
+  /**
+   * A node takes its own size along some axes, as a bar its height (data-sv-own, keepsSlot in
+   * Node.svelte), and the room round it keeps the node's size there, as the room's least size in
+   * Node.svelte does: the node keeps its size along the other axes, the room along these.
+   */
+  const alongOwnAxes = (node: ModelElement, size: Size, inRoom: boolean): Size => {
+    const own = node.attributes['data-sv-own']?.split(' ') ?? [];
+    const keeps = (axis: keyof Size) => own.includes(axis) === inRoom;
+    return { width: keeps('width') ? size.width : 0, height: keeps('height') ? size.height : 0 };
+  };
+  const roomLeast = (at: Read, room: ModelElement): Size | undefined => {
+    const node = elementsOf(room).find((child) => classesOf(child).includes('sv-node'));
+    const size = node && keptSize(at, node);
+    return size && node.attributes['data-sv-own'] ? alongOwnAxes(node, size, true) : undefined;
   };
   /**
    * A size with nothing kept along a subgrid's axis: there its size is its tracks', which the grid

@@ -2,7 +2,7 @@
 
 exports[`every fixture draws the scenes it drew 1`] = `
 {
-  "bars.sverlin": "e504ddd832f8b77a",
+  "bars.sverlin": "53351e91078ff9ba",
   "bfs-captions.sverlin": "70e2c05728d28263",
   "bfs-cards.sverlin": "6637fc10fe135987",
   "bfs-dequeue.sverlin": "ed8c244cdc39b0b2",

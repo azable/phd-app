@@ -205,6 +205,11 @@
   const slotHeight = $derived(varyingHeight && packedAlong !== 'height');
   const keepsSlot = (axis: 'width' | 'height') =>
     !(axis === 'width' ? varyingWidth : varyingHeight) && packedAlong !== axis;
+  // The axes it takes its own size along, for the layout model, which keeps its size along the
+  // others only (see leastOf in model/reserve.ts).
+  const ownAxes = $derived(
+    (['width', 'height'] as const).filter((axis) => !keepsSlot(axis)).join(' ') || undefined
+  );
   const xAnchor = $derived(slotAnchor(look('xAnchor'), 'x', __domains));
   const yAnchor = $derived(slotAnchor(look('yAnchor'), 'y', __domains));
   // A packed child tells its row where its kind places a box along the row, so an expansion grows
@@ -662,6 +667,7 @@
     data-sv-node={id}
     data-sv-kind={__view}
     data-sv-component={__component}
+    data-sv-own={ownAxes}
     data-sv-slot={slot}
     data-sv-identity={identity}
     data-sv-follower={__follower ? 'true' : undefined}

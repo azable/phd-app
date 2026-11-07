@@ -66,6 +66,10 @@
  *   a link: an EdgeIndex view's <Link to={this} /> drawn at {e} runs to the edge's middle and its
  *   <To> paints the edge's line, as commit 65694791 had left it out (replay/dijkstra-demo stays as
  *   the assistant wrote it).
+ * - bars: each bar is its value long, standing on its slot's bottom, as the page draws it; the
+ *   layout model had kept the Bar component's box (its largest value, 9) on the bar itself, so
+ *   every bar was drawn 9 long. A node keeps its size only along the axes it keeps a slot on, and
+ *   the room round it along the others (data-sv-own). No other fixture's scenes changed.
  */
 
 import { createHash } from 'node:crypto';
@@ -73,7 +77,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
 import type { SceneStep } from './library';
-import { drawnSteps } from './testing/scenes';
+import { drawnSteps, ofKind } from './testing/scenes';
 
 const root = join(import.meta.dirname, 'fixtures');
 const fixtures = (directory: string): string[] =>
@@ -172,3 +176,13 @@ test(
     expect(moved).toEqual({});
   }
 );
+
+test('a bar is its value long, on the bottom of a slot as long as the largest', async () => {
+  const { steps } = await drawn(join(root, 'bars.sverlin'));
+  const bars = ofKind(steps[0]!, 'Bar');
+  // The case's values are [6, 2, 9, 4, 0, 7]; 0 draws only the bar's border.
+  const unit = bars[2]!.box.height / 9;
+  const lengths = bars.map(({ box }) => Math.round(box.height / unit));
+  expect(lengths).toEqual([6, 2, 9, 4, 0, 7]);
+  expect(new Set(bars.map(({ box }) => Math.round(box.y + box.height))).size).toBe(1);
+});
