@@ -99,7 +99,6 @@ import {
   type Placement,
   type ComponentSignatures
 } from './components.server';
-import { callTypes } from './calls.server';
 import { paddingWarnings } from './padding-warnings.server';
 import { placeWarnings } from './place-checks.server';
 import type { BuildWarning } from './warnings';
@@ -506,8 +505,7 @@ function viewSteps(source: string): MasterStep[] | undefined {
  * not it builds, as by the assistant checking what its algorithm does.
  * Throws the domain, input, or algorithm's problem.
  */
-export function recordedTrace(written: string): MasterStep[] {
-  const source = callTypes(written).source;
+export function recordedTrace(source: string): MasterStep[] {
   const shown = viewSteps(source);
   if (shown) return shown;
   const { blocks, cases } = extractBlocks(source);
@@ -610,7 +608,7 @@ const unlitWarning = (full: string, name: string): string =>
 
 /** What an input the view draws but nothing reads shows: what was typed into the case, not the run. */
 const unreadInputWarning = (name: string): string =>
-  `The view draws the input ${name}, but the algorithm never reads it, so what it shows was typed into the case and does not come from the run: draw what the algorithm computes instead, its variables or a query of a label or a call type (as a tree of calls), and remove ${name}.`;
+  `The view draws the input ${name}, but the algorithm never reads it, so what it shows was typed into the case and does not come from the run: draw what the algorithm computes instead, its variables or a query of a label (as a tree of calls, from a function's label), and remove ${name}.`;
 
 /** The algorithm's steps paced as given (see Pacing), opening on step 0, the input as given. */
 
@@ -801,9 +799,8 @@ function copiesSincePrevious(
  * none without such a listing.
  */
 export function listingMapsOf(
-  written: string
+  source: string
 ): Record<string, (RegionMap & { lit: boolean })[]> | undefined {
-  const source = callTypes(written).source;
   const { blocks, listings: listingBlocks, cases } = extractBlocks(source);
   if (!listingBlocks.length || !blocks.algorithm) return undefined;
   const domain = blocks.domain
@@ -862,19 +859,21 @@ export function prepareSvelteComponent(authored: string): PreparedComponent {
           })
       )
     );
-  // A call type declared in the domain names its function's body label (see calls.server.ts).
-  const called = callTypes(authored);
-  if (called.problems.length)
-    throw InvalidSvelteSourceError.combine(
-      called.problems.map(
-        ({ message, start }) =>
-          new InvalidSvelteSourceError(message, {
-            code: 'view_component',
-            start: sourcePosition(authored, start)
-          })
-      )
+  // The calls of a function are its body label's spans: a call type is no more.
+  const domainBlock = /<script\s+domain\s*>([\s\S]*?)<\/script\s*>/u.exec(authored);
+  const callType = domainBlock && /\bcall\(\s*(['"])([A-Za-z_$][\w$]*)\1/u.exec(domainBlock[1]);
+  if (domainBlock && callType)
+    throw new InvalidSvelteSourceError(
+      `call('${callType[2]}', …) is not written: a call of ${callType[2]} is a span of its body's label, as function ${callType[2]}(…) @${callType[2]}{ … }, so a view of the label draws one call, <View of="@${callType[2]}" name="Frame">, reading its parameters, its locals and result, the value it returned, and a query lists its calls, <Select name="calls" from="@${callType[2]}" where="started <= now" max="15" />.`,
+      {
+        code: 'view_component',
+        start: sourcePosition(
+          authored,
+          (domainBlock.index ?? 0) + domainBlock[0].indexOf(domainBlock[1]) + (callType.index ?? 0)
+        )
+      }
     );
-  const written = called.source;
+  const written = authored;
   // Layouts rendered by tags become the snippets they stand for, their tags renders, and snippets
   // written by the author are refused (see layout-tags.server.ts).
   const laid = layoutTags(written);

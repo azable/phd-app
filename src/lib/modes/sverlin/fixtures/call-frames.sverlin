@@ -2,7 +2,6 @@
   const Int = type('integer', { min: 0, max: 9 });
   const Values = array(Int, { max: 8 });
   const Index = index(Values);
-  const SortCall = call('sort', { max: 4 });
 </script>
 
 <script input>
@@ -38,15 +37,15 @@
 <View of="Int" name="Cell"><Node value={this} /></View>
 <View of="Values" name="Row"><Node layout="row">{#each this as v}{v}{/each}</Node></View>
 <View of="Index" name="IndexText"><Node value={this} /></View>
-<View of="SortCall" name="Frame">
+<View of="@sort" name="Frame">
   <Node layout="row">
     <Node kind="Signature">sort({this.lo}, {this.hi})</Node>
     <Node kind="Part" layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
   </Node>
 </View>
 
-<Select name="stack" from="SortCall" where="started <= now and now < ended"
-        order="depth" />
+<Select name="stack" from="@sort" where="started <= now and now < ended"
+        order="depth" max="4" />
 
 <Layout name="Stack">
   <Node layout="column">

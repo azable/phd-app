@@ -1,6 +1,5 @@
 <script domain>
   const Int = type('integer', { min: 0, max: 20 });
-  const FibCall = call('fib', { max: 15 });
 </script>
 
 <script input>
@@ -17,11 +16,11 @@
 </script>
 
 <View of="Int" name="Cell"><Node value={this} /></View>
-<View of="FibCall" name="Frame">
+<View of="@fib" name="Frame">
   <Node>fib({this.k}) = {this.result}</Node>
 </View>
 
-<Select name="calls" from="FibCall" where="started <= now" order="started" />
+<Select name="calls" from="@fib" where="started <= now" order="started" max="15" />
 
 <Layout name="Calls">
   <Node layout="column">{#each calls as call}{call}{/each}</Node>

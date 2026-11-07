@@ -56,6 +56,8 @@
  * - bst: written without flow="y", which is refused; its tree starts running right, as every
  *   structure does, its kind's direction (down in a variant) turning every form. dfa-loops, without
  *   flow="x", draws as it did.
+ * - call-frames, fib-calls: a view and a query of the function's label in place of a call type,
+ *   which is refused; each source loses its declaration's line, so its ids move.
  */
 
 import { createHash } from 'node:crypto';

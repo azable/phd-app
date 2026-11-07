@@ -1103,25 +1103,19 @@ order:
 
 ### Calls
 
-A call type makes each call of an algorithm's function a record that a view can
-be of and a query can list. Declare it in the domain, naming the function, the
-most calls open at once, and any locals a view reads:
+Each call of an algorithm's function is a span of its body's label, as
+`function sort(a, b, lo, hi) @sort{ … }`, so the label is what a view of one
+call and a query of the calls name:
+
+- A view of the label draws one call, reading its parameters, the variables in
+  scope where the call ends, and `result`, the value the call returned, there
+  once it has returned with a value.
+- A query lists the calls with `from="@sort"`, and gives its `max`, the most
+  rows any input can give.
 
 ```
-const SortCall = call('sort', { max: 4, fields: ['mid'] });
-```
-
-- The function's body has a label of its own, as
-  `function sort(a, b, lo, hi) @sort{ … }`: a call is a span of that label.
-- A view of the call reads its parameters, the locals `fields` names, and
-  `result`, the value the call returned, there once it has returned. The build
-  refuses any other name, and says to add it to `fields`.
-- A query lists calls with `from="SortCall"`, and takes the call's `max` as its
-  bound when it gives none.
-
-```
-<View of="SortCall" name="Frame"><Node>sort({this.lo}, {this.hi})</Node></View>
-<Select name="stack" from="SortCall" where="started <= now and now < ended" order="depth" />
+<View of="@sort" name="Frame"><Node>sort({this.lo}, {this.hi})</Node></View>
+<Select name="stack" from="@sort" where="started <= now and now < ended" order="depth" max="4" />
 ```
 
 A tree of calls, as merge sort's splits and merges, is read from the run: list
@@ -1132,12 +1126,10 @@ sorted once it has returned, so the tree fills in as the calls run. Its `max`
 counts every call, 15 for 8 values, not only those open at once:
 
 ```
-const SortCall = call('sort', { max: 15 });
-
-<View of="SortCall" name="Part">
+<View of="@sort" name="Part">
   <Node layout="row">{#each this.a as v, k}{#if this.lo <= k && k < this.hi}{v}{/if}{/each}</Node>
 </View>
-<Select name="calls" from="SortCall" where="started <= now" order="started" />
+<Select name="calls" from="@sort" where="started <= now" order="started" max="15" />
 <Layout name="Tree">
   <Node>
     <Node kind="Calls" layout="free">
