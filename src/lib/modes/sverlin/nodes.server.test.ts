@@ -44,7 +44,15 @@ const list = (algorithm: string) => `<script domain>
  * next field it leaves to the name cell its tip meets), and its nodes' text.
  */
 async function play(source: string, count: number) {
-  const { steps } = await drawnSteps(pausingEveryLabel(source));
+  // Each name, next field and end framed, as the template's $cell draws a value: the end is a
+  // member of next's union, drawn as the node it stands beside is.
+  const { steps } = await drawnSteps(pausingEveryLabel(source), {
+    chosen: {
+      'NameCell.inherit': '$cell',
+      'NodeBox.NextField.inherit': '$cell',
+      'EndMark.inherit': '$cell'
+    }
+  });
   return steps.slice(0, count).map((step) => {
     const boxes = ofKind(step, 'NodeBox');
     const nameOf = (box: (typeof boxes)[number] | undefined) =>

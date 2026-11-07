@@ -48,9 +48,9 @@ describe('templates', () => {
   });
 
   it('are told to the assistant as the stored file, as it is', () => {
-    const variant = { ...templateValues('slide'), '<Value>.radius': 0, 'IntCell.fill': 'white' };
+    const variant = { ...templateValues('slide'), '$cell.radius': 0, 'IntCell.fill': 'white' };
     const told = designContext(designVariables({ variant, design: variant } as never));
-    expect(told.file).toMatchObject({ '<Value>': { radius: 0 }, IntCell: { fill: 'white' } });
+    expect(told.file).toMatchObject({ $cell: { radius: 0 }, IntCell: { fill: 'white' } });
     expect((told.file.scale as Record<string, unknown>).spacing).toBe(
       templateValues('slide')['scale.spacing']
     );
@@ -66,19 +66,19 @@ describe('templates', () => {
       const resolve = (value: unknown) =>
         colourCss(typeof value === 'string' && value.startsWith('$') ? values[value] : value);
       const page = '#ffffff';
-      for (const role of ['<Value>', '<Text>', '<Container>']) {
-        const text = resolve(values[`${role}.color`])!;
-        const fill = resolve(values[`${role}.fill`]) ?? page;
-        expect(contrast(text, fill), `${name} ${role} text`).toBeGreaterThanOrEqual(4.5);
-        const stroke = resolve(values[`${role}.stroke`]);
-        if (stroke) expect(contrast(stroke, page), `${name} ${role}`).toBeGreaterThanOrEqual(3);
+      // Every node's text is <Node>'s colour, on <Node>'s fill or a style's over it.
+      const text = resolve(values['<Node>.color'])!;
+      for (const style of ['<Node>', '$cell', '$card', '$label']) {
+        const fill = resolve(values[`${style}.fill`] ?? values['<Node>.fill']) ?? page;
+        expect(contrast(text, fill), `${name} ${style} text`).toBeGreaterThanOrEqual(4.5);
+        const stroke = resolve(values[`${style}.stroke`]);
+        if (stroke) expect(contrast(stroke, page), `${name} ${style}`).toBeGreaterThanOrEqual(3);
       }
       expect(contrast(resolve(values['<Link>.stroke'])!, page)).toBeGreaterThanOrEqual(3);
       // What a link from a variable reaches: text on its fill, and its stroke on the page.
-      const target = resolve(values['<Pointer>.<To>.fill']) ?? page;
-      const text = resolve(values['<Text>.color'])!;
+      const target = resolve(values['<Link>.<To>.fill']) ?? page;
       expect(contrast(text, target), `${name} target text`).toBeGreaterThanOrEqual(4.5);
-      const edge = resolve(values['<Pointer>.<To>.stroke'])!;
+      const edge = resolve(values['<Link>.<To>.stroke'])!;
       expect(contrast(edge, page), `${name} target stroke`).toBeGreaterThanOrEqual(3);
     }
   );

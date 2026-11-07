@@ -10,7 +10,9 @@ import {
   type SvelteBundle
 } from '../compile.server';
 import { buildVariant, type VariantRequest } from '../design.server';
+import designs from '../fixtures/designs.json';
 import { templateKey } from '../library/node/design';
+import { flatDesign } from '../library/node/design-keys';
 import { templateValues } from '../templates/templates';
 import type { ServedScenes } from '../server-scenes';
 import type { SceneBox, SceneLink, SceneNode, ScenePoint, SceneStep } from '../library';
@@ -28,14 +30,28 @@ export function onStarter(request: VariantRequest): VariantRequest {
   return { ...request, chosen: { [templateKey]: '$starter', ...chosen } };
 }
 
-/** Every variable's value as a first version naming `$starter` draws it, the source's first look. */
+/**
+ * A fixture's design (fixtures/designs.json), by its path in fixtures without .sverlin, as
+ * `replay/ucs-ten`: the template it copies and the styles its kinds link, flat as a build takes it.
+ */
+export function fixtureDesign(name: string): Record<string, unknown> {
+  const design = (designs as Record<string, Record<string, unknown>>)[name];
+  if (!design) throw new Error(`The fixture ${name} has no design in fixtures/designs.json.`);
+  return flatDesign(design);
+}
+
+/**
+ * Every variable's value as a first version naming `$starter` draws it, with the values `chosen`
+ * beside it, as the styles its kinds link.
+ */
 export const starterValues = (
-  design: ReturnType<typeof prepareSvelteComponent>['design']
+  design: ReturnType<typeof prepareSvelteComponent>['design'],
+  chosen: Readonly<Record<string, unknown>> = {}
 ): Record<string, string | number | boolean> =>
   buildVariant(
     design.space,
     design.starter,
-    { chosen: { [templateKey]: '$starter' } },
+    { chosen: { [templateKey]: '$starter', ...chosen } },
     1,
     design.fallbacks,
     design.bases

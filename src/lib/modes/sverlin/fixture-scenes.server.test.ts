@@ -88,6 +88,12 @@
  *   hashes as before (checked 7 November 2026).
  * - design files: every fixture is built with its own design, {"template": "$starter"}, a copy of
  *   the starter base the build once wrote in; no scene changed.
+ * - four bases, no roles: each fixture's design links the kinds its roles once framed, 129 links
+ *   over 595 kinds (a value's to $cell, a type drawn only on links to $label, a record's card to
+ *   $card, a union's members as the one the build once made them); $starter's <Node> holds the old
+ *   text and container look with <Icon>'s size as iconSize, and $label keeps the value frame's
+ *   strokeWidth, unpainted but taking room, so no scene changed (checked byte for byte on PNGs of
+ *   bars, dijkstra, insertion-decisions and replay/binary-search-bars, 7 November 2026).
  */
 
 import { createHash } from 'node:crypto';
@@ -95,8 +101,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { expect, test } from 'vitest';
 import type { SceneNode, SceneStep } from './library';
-import { drawnSteps, ofKind } from './testing/scenes';
-import designs from './fixtures/designs.json';
+import { drawnSteps, fixtureDesign, ofKind } from './testing/scenes';
 
 const root = join(import.meta.dirname, 'fixtures');
 const fixtures = (directory: string): string[] =>
@@ -108,20 +113,16 @@ const fixtures = (directory: string): string[] =>
         : []
   );
 
-/** A fixture's design, by its path in fixtures without .sverlin, as `replay/ucs-ten`. */
-const fixtureDesign = (file: string): Record<string, unknown> => {
-  const design = (designs as Record<string, Record<string, unknown>>)[
-    relative(root, file).replace(/\.sverlin$/u, '')
-  ];
-  if (!design) throw new Error(`${file} has no design in fixtures/designs.json.`);
-  return design;
-};
-
 // Each fixture is built once for every test.
 const built = new Map<string, ReturnType<typeof drawnSteps>>();
 const drawn = (file: string) => {
   if (!built.has(file))
-    built.set(file, drawnSteps(readFileSync(file, 'utf8'), { chosen: fixtureDesign(file) }));
+    built.set(
+      file,
+      drawnSteps(readFileSync(file, 'utf8'), {
+        chosen: fixtureDesign(relative(root, file).replace(/\.sverlin$/u, ''))
+      })
+    );
   return built.get(file)!;
 };
 

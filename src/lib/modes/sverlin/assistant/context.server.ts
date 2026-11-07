@@ -14,8 +14,8 @@ import {
   listingOptions,
   listingPlacesOptions,
   listingPropOptions,
-  roleStyleOf,
-  roleStyleOptions,
+  baseOf,
+  tokenedOptions,
   isToken,
   propOptions,
   styleOf,
@@ -54,7 +54,7 @@ export function designContext(design: AiDesign): AiDesignContext {
   const kinds = new Map<string, string[]>();
   const variables = design.variables.filter((variable) => {
     const key = variable.variable;
-    if (isToken(key) || roleStyleOf(key) || styleOf(key) || paletteKey.test(key)) return false;
+    if (isToken(key) || baseOf(key) || styleOf(key) || paletteKey.test(key)) return false;
     if (key.startsWith('scale.')) return false;
     const dot = key.lastIndexOf('.');
     const prop = key.slice(dot + 1);
@@ -119,15 +119,15 @@ export function designVariables(
       options[style.prop] = baseOptions(style.prop, propOptions[style.prop as DesignProp], variant);
       return told(style.prop);
     }
-    // A token's options are its prop's; a role style's, its prop's and the tokens that fit it.
+    // A token's options are its prop's; a base's, its prop's and the tokens that fit it.
     if (isToken(key)) {
       const set = tokenProps[key];
       options[set] = baseOptions(set, propOptions[set], variant);
       return told(set);
     }
-    const roleStyle = roleStyleOf(key);
-    if (roleStyle) {
-      options[key] = roleStyleOptions(roleStyle.prop as DesignProp);
+    const base = baseOf(key);
+    if (base) {
+      options[key] = tokenedOptions(base.prop, base.base === '<Link>.<To>');
       return told(key);
     }
     // A place's own choice, as views.Int:swap.held or views.Ask.Int:g.a, has its type's options; a

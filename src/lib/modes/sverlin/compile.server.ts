@@ -140,15 +140,17 @@ import {
   placeName,
   placeProps,
   isLinkEnd,
-  kindProps,
+  endProps,
+  iconProps,
+  layoutProps,
+  linkProps,
+  nodeProps,
   linkEnd,
   listingPlacesOptions,
-  roleProps,
-  kindStyle,
   neutralListing,
   type DesignProp,
   type ListingPlacesLook,
-  type KindRole
+  type DesignBase
 } from './library/node/design';
 import type { StepListing } from './library/steps';
 import { packStates } from './library/trace-pack';
@@ -1493,7 +1495,7 @@ function prepareViews(
     const placeChoices: Record<string, { key: string; base: string; options: string[] }> = {};
     const placeKinds = new Map<
       string,
-      { base: string; role: KindRole; unboxed?: Readonly<Record<string, string>> }
+      { base: string; props: readonly DesignProp[]; unboxed?: Readonly<Record<string, string>> }
     >();
     // A view of a record whose root arranges its parts is a card: one box, its fields drawn in it
     // unboxed, as parts of one thing rather than things of their own.
@@ -1502,7 +1504,7 @@ function prepareViews(
         .filter(
           ([name, type]) =>
             viewing.structures[type]?.kind === 'record' &&
-            unlaid.some(({ key, role }) => key === name && role === 'container')
+            unlaid.some(({ key, props }) => key === name && props.includes('gap'))
         )
         .map(([name]) => name)
     );
@@ -1530,14 +1532,6 @@ function prepareViews(
     const aliasOf = new Map<string, string>();
     // The places the root and its parts render at, which a listing's tokens can name.
     const rootPlaces = new Map<string, RenderedPlace>();
-    // A type drawn only as links' labels, as a weight, starts its views as a label: plain text, as
-    // small as its words, so the layout keeps room for the words rather than a value's box.
-    const linkLabelViews = new Set(
-      [...Map.groupBy(sites, ({ name }) => name)]
-        .filter(([type, at]) => views[type] && at.every(({ inLink }) => inLink))
-        .flatMap(([type]) => optionsOf(type))
-        .filter((view) => unlaid.some(({ key, role }) => key === view && role === 'value'))
-    );
     for (const site of sites) {
       const { name, start, at } = site;
       if (!chosen[name]) continue;
@@ -1571,7 +1565,7 @@ function prepareViews(
           if (kind.key === view || kind.key.startsWith(`${view}.`))
             placeKinds.set(`${within}${kind.key}${at}`, {
               base: kind.key,
-              role: kind.role,
+              props: kind.props,
               ...(kind.key !== view
                 ? {}
                 : site.inLink
@@ -1760,9 +1754,7 @@ function prepareViews(
         ? { ...kind, free: { structure } }
         : gridKinds.has(kind.key)
           ? { ...kind, grid: true }
-          : kind.role === 'link' &&
-              isLinkEnd(kind.key) &&
-              lines.has(kind.key.slice(0, -linkEnd.length - 1))
+          : isLinkEnd(kind.key) && lines.has(kind.key.slice(0, -linkEnd.length - 1))
             ? { ...kind, lines: true }
             : items
               ? {
@@ -2265,11 +2257,11 @@ function prepareViews(
         }),
         renders: renderVariables,
         places: placeChoices,
-        bases: Object.fromEntries(kinds.map(({ key, role }) => [key, kindStyle(role, key)])),
+        bases: Object.fromEntries(kinds.map(({ key, base }) => [key, base])),
         fallbacks: Object.fromEntries([
           ...Object.values(placeChoices).map(({ key, base }) => [key, base]),
-          ...[...placeKinds].flatMap(([key, { base, role, unboxed }]) =>
-            kindProps(role, base)
+          ...[...placeKinds].flatMap(([key, { base, props, unboxed }]) =>
+            (isLinkEnd(base) ? endProps : props)
               .filter((prop) => placeProps.has(prop) && !(unboxed && prop in unboxed))
               .map((prop) => [`${key}.${prop}`, `${base}.${prop}`])
           ),
@@ -2283,7 +2275,7 @@ function prepareViews(
               listing,
               ownListings,
               {
-                kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+                kinds: [...placeKinds].map(([key, { props }]) => ({ key, props })),
                 choices: Object.values(placeChoices)
               },
               layoutDesign
@@ -2306,7 +2298,7 @@ function prepareViews(
               listing,
               ownListings,
               {
-                kinds: [...placeKinds].map(([key, { role }]) => ({ key, role })),
+                kinds: [...placeKinds].map(([key, { props }]) => ({ key, props })),
                 choices: Object.values(placeChoices)
               },
               layoutDesign
@@ -2322,16 +2314,6 @@ function prepareViews(
                 unboxed
                   ? Object.entries(unboxed).map(([prop, value]) => [`${key}.${prop}`, value])
                   : []
-              )
-            ),
-            ...Object.fromEntries(
-              [...cards].flatMap((card) =>
-                Object.entries(cardLook).map(([prop, value]) => [`${card}.${prop}`, value])
-              )
-            ),
-            ...Object.fromEntries(
-              [...linkLabelViews].flatMap((view) =>
-                Object.entries(linkLabelLook).map(([prop, value]) => [`${view}.${prop}`, value])
               )
             ),
             ...(Object.keys(placesSpace).length
@@ -3257,7 +3239,7 @@ function checkProps(
     // A caption token's node, which the build writes (see captionTokens in layout-tags).
     if (component === 'Node' && ['__code', '__math', '__mathText'].includes(attribute.name))
       continue;
-    // A bare icon draws the one icon its kind's design chooses (see roleOf).
+    // A bare icon draws the one icon its kind's design chooses (see functionOf).
     if (component === 'Node' && attribute.name === 'icon' && attribute.value === true) continue;
     const at = { start: sourcePosition(source, attribute.start ?? start) };
     // A length a view binds is taken out before this (see bind), so one left is written elsewhere.
@@ -3950,26 +3932,24 @@ function withNodeRefs(
       )
     );
   };
-  const roleOf = (entry: Entry): KindRole => {
+  // What a node does says which props its kind has: a <Link> a link's; a token in a node's text,
+  // drawn as inline code, a node's, following <Code>; a node arranging others, with a layout, links,
+  // or one {#each}, a layout's besides a node's; a bare icon, <Node icon />, an icon's; and any
+  // other node a node's. Every node follows <Node>.
+  const functionOf = (entry: Entry): { base: DesignBase; props: readonly DesignProp[] } => {
     const { name, links, tag } = entry;
     const attributes = tag.attributes ?? [];
     const has = (prop: string) => attributes.some((attribute) => attribute.name === prop);
-    // A link from a variable, written with no from, is a pointer.
-    if (name === 'Link') return has('from') ? 'link' : 'pointer';
-    if (has('__code')) return 'code';
-    if (has('__math')) return 'text';
+    if (name === 'Link') return { base: '<Link>', props: linkProps };
+    if (has('__code')) return { base: '<Code>', props: nodeProps };
     const children = (tag.children ?? []).filter(
       (child) => !(child.type === 'Text' && !child.data?.trim())
     );
     if (has('layout') || links || (children.length === 1 && children[0].type === 'EachBlock'))
-      return 'container';
-    // A bare icon, <Node icon />, draws the one icon its kind chooses.
+      return { base: '<Node>', props: [...nodeProps, ...layoutProps] };
     if (attributes.some((attribute) => attribute.name === 'icon' && attribute.value === true))
-      return 'icon';
-    // A node drawing only an icon stands beside other content, as a word does, so it starts unboxed.
-    if (has('icon') && !has('value') && !children.length) return 'text';
-    if (has('value') || !children.length || isField(entry)) return 'value';
-    return 'text';
+      return { base: '<Node>', props: [...nodeProps, ...iconProps] };
+    return { base: '<Node>', props: nodeProps };
   };
   // A child of a free layout outside every {#each} that draws variables or labels by their bare
   // names, as <Node kind="Var">{cur}</Node>, is a variable's label: it follows what its variable's
@@ -3999,9 +3979,16 @@ function withNodeRefs(
       if (key === 'children' || key === 'else' || key === 'body' || key === 'consequent')
         childNodes(child, inEach || part.type === 'EachBlock');
   };
-  // A kind several roles share takes the plainest look, and every prop any of them has.
-  const plainest: KindRole[] = ['container', 'icon', 'text', 'code', 'value', 'link', 'pointer'];
-  const kinds = new Map<string, KindRole>();
+  // A kind several nodes share has every prop any of them has, and follows <Node> where any of
+  // them is no token's code.
+  const kinds = new Map<string, { base: DesignBase; props: Set<DesignProp> }>();
+  const joined = (key: string, made: ReturnType<typeof functionOf>) => {
+    const known = kinds.get(key);
+    kinds.set(key, {
+      base: known && known.base !== made.base ? '<Node>' : made.base,
+      props: new Set([...(known?.props ?? []), ...made.props])
+    });
+  };
   // A kind with a node laid out freely has that layout's look among its props, and the structure
   // its data makes (see structure.server.ts), read from those nodes.
   const freeNodes = new Map<string, Tag[]>();
@@ -4019,7 +4006,7 @@ function withNodeRefs(
   const tagKinds: Record<string, string[]> = {};
   const nodeKinds = new Map<number, string>();
   const collections = new Map<string, { axis: 'x' | 'y'; type?: string; over?: string }>();
-  const apart = (of: KindRole) => (of === 'link' || of === 'pointer' ? 'link' : 'node');
+  const apart = (base: DesignBase) => (base === '<Link>' ? 'link' : 'node');
   for (const entry of tags) if (laidOutFreely(entry)) childNodes(entry.tag.children, false);
   for (const entry of tags) {
     // A node joining links says how its children are placed: freely, as a linked list or a graph,
@@ -4039,16 +4026,16 @@ function withNodeRefs(
           entry.start
         );
     }
-    const role = roleOf(entry);
+    const made = functionOf(entry);
     const key = kindKey(entry.view, entry.name === 'Link' ? 'Link' : undefined);
     const known = kinds.get(key);
-    if (known && apart(known) !== apart(role))
+    if (known && apart(known.base) !== apart(made.base))
       reject(
-        `${key} is the kind of a <${apart(role) === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
+        `${key} is the kind of a <${apart(made.base) === 'link' ? 'Link' : 'Node'}> and of another kind of tag: rename the view, layout, or kind called ${key.slice(key.lastIndexOf('.') + 1)}.`,
         'view_kinds',
         entry.start
       );
-    kinds.set(key, known && plainest.indexOf(known) < plainest.indexOf(role) ? known : role);
+    joined(key, made);
     if (laidOutFreely(entry)) {
       freeNodes.set(key, [...(freeNodes.get(key) ?? []), entry.tag]);
     }
@@ -4076,29 +4063,11 @@ function withNodeRefs(
       });
     }
     const { line, column } = sourcePosition(source, entry.start);
-    // A kind chosen by an expression is each of its names, all with the node's role.
+    // A kind chosen by an expression is each of its names, all with the node's props.
     const chosen = chosenKinds.get(entry.start);
     const alternatives = chosen?.names.map((each) => `${chosen.base}.${each}`) ?? [];
-    for (const alternative of alternatives) {
-      const knownAlternative = kinds.get(alternative);
-      kinds.set(
-        alternative,
-        knownAlternative && plainest.indexOf(knownAlternative) < plainest.indexOf(role)
-          ? knownAlternative
-          : role
-      );
-    }
+    for (const alternative of alternatives) joined(alternative, made);
     tagKinds[`${line}:${column + 1}`] = [key, ...alternatives];
-  }
-  // A union is one variable, so its members start with one look: where a member's view draws a
-  // value, a member's view drawing words (as ∞ for a cost not yet known) starts as a value too.
-  for (const structure of Object.values(domain?.structures ?? {})) {
-    if (structure.kind !== 'union') continue;
-    const memberViews = [...viewTypes]
-      .filter(([, type]) => structure.members.includes(type))
-      .map(([view]) => view);
-    if (!memberViews.some((view) => kinds.get(view) === 'value')) continue;
-    for (const view of memberViews) if (kinds.get(view) === 'text') kinds.set(view, 'value');
   }
   const insertions = tags.map((entry): Insertion => {
     const { start, name, links, view } = entry;
@@ -4115,9 +4084,9 @@ function withNodeRefs(
   });
   // A kind arranging no children has no gap, align, or justify to bind.
   for (const { kind, prop } of bindings) {
-    const role = kinds.get(kind);
+    const props = kinds.get(kind)?.props;
     if (valueOnlyProps.has(prop)) {
-      if (role === 'container')
+      if (props?.has('gap'))
         reject(
           `${kind} arranges children, and an ${prop} is drawn in a node of a value or of text: put it in a node of its own, as <Node kind="Mark" ${prop}={…} />.`,
           'bound_prop',
@@ -4125,7 +4094,7 @@ function withNodeRefs(
         );
       continue;
     }
-    if (role && !lengthProps.has(prop) && !roleProps[role].includes(prop as DesignProp))
+    if (props && !lengthProps.has(prop) && !props.has(prop as DesignProp))
       reject(
         `${kind} has no ${prop} to bind: it is a look only of a node arranging children, with a layout.`,
         'bound_prop',
@@ -4157,9 +4126,11 @@ function withNodeRefs(
     localKinds,
     problems,
     // A link's kind holds its end's, as Arrow.<Link>.<To>, its head and the paint it gives.
-    kinds: [...kinds].flatMap(([key, role]) => [
-      { key, role },
-      ...(role === 'link' || role === 'pointer' ? [{ key: `${key}.${linkEnd}`, role }] : [])
+    kinds: [...kinds].flatMap(([key, { base, props }]) => [
+      { key, base, props: [...props] },
+      ...(base === '<Link>'
+        ? [{ key: `${key}.${linkEnd}`, base: '<Link>.<To>' as const, props: endProps }]
+        : [])
     ]),
     freeNodes,
     gridKinds,
@@ -4441,32 +4412,8 @@ function visit(value: unknown, check: (node: { type: string }) => void): void {
  */
 const linkLabelPaint: Readonly<Record<string, string>> = { fill: 'white', stroke: 'none' };
 
-/**
- * A label view's starting look, for a type drawn only on links: its words alone, smaller than a
- * value's, on the stage's white so the line breaks round them; still a kind, so the design can
- * box it.
- */
-const linkLabelLook: Readonly<Record<string, string | number>> = {
-  fill: 'white',
-  stroke: 'none',
-  padding: 0,
-  radius: 0,
-  minSize: 0,
-  textSize: 14
-};
-
 /** The paint a value starts with where it is a card's field: none, the card being its box. */
 const cardFieldPaint: Readonly<Record<string, string>> = { fill: 'none', stroke: 'none' };
-
-/** A card's starting look: the one box around its parts, which sit close together. */
-const cardLook: Readonly<Record<string, string | number>> = {
-  fill: 'white',
-  stroke: 'neutral-300',
-  strokeWidth: 1.5,
-  radius: 8,
-  padding: 0.375,
-  gap: 0.25
-};
 
 /**
  * Every {@render} tag: the name it calls, where it starts, whether it is inside a <Node>, and its

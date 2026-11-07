@@ -6,7 +6,6 @@ import bst from './fixtures/bst.sverlin?raw';
 import pseudocode from './fixtures/listing-pseudocode.sverlin?raw';
 import bfs from './fixtures/bfs-visit-order.sverlin?raw';
 import undirected from './fixtures/bfs-undirected.sverlin?raw';
-import dijkstraFields from './fixtures/dijkstra-fields.sverlin?raw';
 import { forms } from './library/node/forms';
 import {
   buildVariant as buildOnBase,
@@ -127,9 +126,9 @@ describe('variants', () => {
     expect(origins['views.Int']).toBe('chosen');
     expect(values['IntCell.radius']).toBe(999);
     expect(origins['IntCell.radius']).toBe('kept');
-    // A value the file no longer holds follows the kind's base, as the starter template's file.
-    expect(values['IntCell.fill']).toBe('white');
-    expect(origins['IntCell.fill']).toBe('kept');
+    // A value the file no longer holds follows the kind's base, <Node>, which writes no fill.
+    expect(values['IntCell.fill']).toBe('none');
+    expect(origins['IntCell.fill']).toBe('starter');
     expect(values).not.toHaveProperty('gone');
     // A base value outside its variable's options is said; a variable the source lost goes quietly.
     expect(dropped).toHaveLength(1);
@@ -253,7 +252,7 @@ describe('variants', () => {
     expect(buildVariant(space, starter, { randomise: true }, 3).values).toEqual(variants[2]);
   });
 
-  it('gives every kind of node the style props, drawn at random but for decoration', () => {
+  it('gives every kind of node the style props, drawn at random where the file writes them but for decoration', () => {
     expect(space['IntCell.shadow']).toEqual(['none', 'soft', 'lifted', 'hard']);
     expect(space['Highlight.Name.case']).toEqual(['normal', 'uppercase', 'small-caps']);
     expect(plain()['Row.fillStyle']).toBe('solid');
@@ -262,9 +261,15 @@ describe('variants', () => {
     );
     const variants = Array.from(
       { length: 8 },
-      (_, seed) => buildVariant(space, starter, { randomise: true }, seed + 1).values
+      (_, seed) =>
+        buildVariant(
+          space,
+          starter,
+          { base: { '<Node>.shadow': 'soft', '<Node>.decoration': 'underline' }, randomise: true },
+          seed + 1
+        ).values
     );
-    for (const values of variants) expect(values['Title.decoration']).toBe('none');
+    for (const values of variants) expect(values['Title.decoration']).toBe('underline');
     expect(new Set(variants.map((values) => values['IntCell.shadow'])).size).toBeGreaterThan(1);
   });
 
@@ -374,49 +379,65 @@ describe('free layouts', () => {
   });
 });
 
-describe('design tokens and role styles', () => {
-  // IntCell and IntDot are values, Cells a container and Note a text, all made by <Node>;
-  // Arrow.<Link> is a link, made by <Link>; `{v}` is a place, IntCell:v.
+describe('design tokens, bases and styles', () => {
+  // IntCell, IntDot, Cells and Note are kinds of <Node>, Cells arranging others; Arrow.<Link> is a
+  // link, made by <Link>, and Arrow.<Link>.<To> its end; `{v}` is a place, IntCell:v.
   const levelled = prepareSvelteComponent(
     `<script domain>const Int = type([1, 3]); const Values = array(Int, { max: 8 }); const Position = index(Values);</script><script input>const values = Values;</script><Case name="main" values={[1, 3]} /><script algorithm>@run[let i = Position(0); let j = Position(1);]</script><View of="Int" name="IntCell"><Node value={this} /></View>\n<View of="Int" name="IntDot"><Node value={this} /></View>\n<View of="Position" name="Arrow"><Node layout="column"><Link to={this} /><Node kind="Name">i</Node></Node></View>\n<Layout name="Cells"><Node layout="row">{#each values as v}{v}{/each}</Node></Layout><Layout name="Note"><Node>note</Node></Layout><Layout name="Main"><Node><Cells />{i}<Note /></Node></Layout><Storyboard><Scene name="main" case="main"><Main /></Scene></Storyboard>`
   ).design;
   const built = (request: Parameters<typeof buildVariant>[2]) =>
     buildVariant(levelled.space, levelled.starter, request, 1, levelled.fallbacks, levelled.bases);
   const build = (request: Parameters<typeof buildVariant>[2]) => built(request).values;
+  // The value kinds linked to the template's value frame, as a design links each kind to a style.
+  const cells = { 'IntCell.inherit': '$cell', 'IntDot.inherit': '$cell' };
 
-  it('starts every kind at its role look, which names the tokens it shares', () => {
+  it('starts every kind at its base, which names the tokens it shares', () => {
     expect(build({})['$spacing']).toBe(0.375);
-    expect(levelled.space['<Value>.padding']).toContain('$spacing');
-    expect(levelled.space['<Value>.shown']).toBeUndefined();
-    expect(levelled.space['<Pointer>.<To>.fill']).toBeDefined();
-    expect(levelled.space['<Value>.<To>.fill']).toBeUndefined();
-    expect(levelled.bases['Arrow.<Link>.<To>']).toBe('<Pointer>.<To>');
-    expect(levelled.bases['Arrow.<Link>']).toBe('<Pointer>');
+    expect(levelled.space['<Node>.padding']).toContain('$spacing');
+    expect(levelled.space['<Node>.shown']).toBeUndefined();
+    expect(levelled.space['<Link>.<To>.fill']).toBeDefined();
+    expect(levelled.space['<Node>.<To>.fill']).toBeUndefined();
+    expect(levelled.bases).toMatchObject({
+      IntCell: '<Node>',
+      Cells: '<Node>',
+      'Arrow.<Link>': '<Link>',
+      'Arrow.<Link>.<To>': '<Link>.<To>'
+    });
+    // A kind's props come from what its nodes do: a node arranging others has a layout's.
+    expect(levelled.space['Cells.gap']).toBeDefined();
+    expect(levelled.space['IntCell.gap']).toBeUndefined();
     const values = build({});
     for (const [key, value] of Object.entries(levelled.starter)) expect(values[key]).toBe(value);
+    // Not linked, a value's kind takes <Node>'s plain look.
+    expect([values['IntCell.fill'], values['IntCell.padding']]).toEqual(['none', 0]);
   });
 
-  it('changes every kind following a token, and a role style overrides the token for its role', () => {
-    const spacing = build({ chosen: { $spacing: 0.25 } });
+  it('changes every kind following a token, and a base or style sets every kind following it', () => {
+    const spacing = build({ chosen: { ...cells, $spacing: 0.25 } });
     expect([spacing['IntCell.padding'], spacing['IntDot.padding']]).toEqual([0.25, 0.25]);
     expect(spacing['Cells.padding']).toBe(0);
-    const styled = build({ chosen: { $spacing: 0.25, '<Value>.padding': 0.5 } });
+    const styled = build({ chosen: { ...cells, $spacing: 0.25, '$cell.padding': 0.5 } });
     expect([styled['IntCell.padding'], styled['IntDot.padding'], styled['Note.padding']]).toEqual([
       0.5, 0.5, 0
     ]);
-    const named = build({ chosen: { '<Text>.fill': '$highlight' } });
+    const named = build({ chosen: { ...cells, '<Node>.fill': '$highlight' } });
     expect([named['IntCell.fill'], named['Note.fill']]).toEqual(['white', 'amber-100']);
   });
 
-  it('refuses the old spellings of built-in names, giving the new', () => {
+  it('refuses the names of the roles’ styles and other old spellings, giving the new', () => {
     expect(() => build({ chosen: { '$Value.fill': 'white' } })).toThrow(
-      /\$Value is written <Value>/u
+      /\$Value is gone: write a template's style a kind links to, as "IntCell": \{"\.\.\.": "\$cell"\}/u
     );
-    expect(() => build({ chosen: { '<Node>.padding': 0.5 } })).toThrow(
-      /<Node>\.padding: the <Node> group is gone; set the role styles <Container>, <Value>/u
+    for (const role of ['<Value>', '<Container>', '<Text>', '<Icon>'])
+      expect(() => build({ chosen: { [`${role}.padding`]: 0.5 } })).toThrow(
+        new RegExp(`${role} is gone: write a template's style a kind links to`, 'u')
+      );
+    expect(() => build({ chosen: { '<Pointer>.stroke': 'red-500' } })).toThrow(
+      /<Pointer> is gone: write <Link>/u
     );
+    expect(() => build({ chosen: { 'IntCell.inherit': '<Value>' } })).toThrow(/<Value> is gone/u);
     expect(() => build({ chosen: { 'listing.syntax': 'colour' } })).toThrow(
-      /listing is written <Listing>/u
+      /listing is gone: write <Listing>/u
     );
     expect(() => build({ chosen: { base: '$starter' } })).toThrow(
       /"\.\.\." at the top named a base the design followed, which is gone/u
@@ -429,30 +450,30 @@ describe('design tokens and role styles', () => {
     );
   });
 
-  it("keeps a kind's own value and a place's over its role style", () => {
-    const own = build({ chosen: { '<Value>.padding': 0.5, 'IntCell.padding': 0.125 } });
+  it("keeps a kind's own value and a place's over its base", () => {
+    const own = build({ chosen: { '<Node>.padding': 0.5, 'IntCell.padding': 0.125 } });
     expect([own['IntCell.padding'], own['IntDot.padding']]).toEqual([0.125, 0.5]);
-    const placed = build({ chosen: { '<Value>.fill': 'sky-100', 'IntCell:v.fill': 'rose-100' } });
+    const placed = build({ chosen: { '<Node>.fill': 'sky-100', 'IntCell:v.fill': 'rose-100' } });
     expect([placed['IntCell.fill'], placed['IntCell:v.fill']]).toEqual(['sky-100', 'rose-100']);
-    // A place not set apart follows its kind, and so the role style.
-    expect(build({ chosen: { '<Value>.fill': 'sky-100' } })['IntCell:v.fill']).toBe('sky-100');
+    // A place not set apart follows its kind, and so the base.
+    expect(build({ chosen: { '<Node>.fill': 'sky-100' } })['IntCell:v.fill']).toBe('sky-100');
     // A value the design file writes stays when a token changes later.
-    const base = built({ chosen: { 'IntCell.padding': 0.125 } }).design;
+    const base = built({ chosen: { ...cells, 'IntCell.padding': 0.125 } }).design;
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntCell.padding']).toBe(0.125);
     expect(build({ base, chosen: { $spacing: 0.5 } })['IntDot.padding']).toBe(0.5);
   });
 
-  it('refuses a token or a role style outside its options, naming them', () => {
+  it('refuses a token or a base’s value outside its options, naming them', () => {
     expect(() => build({ chosen: { $radius: 5 } })).toThrow(
       /\$radius cannot be 5; its options are 0, 2, 4, 6, 8, 12, 999/u
     );
-    expect(() => build({ chosen: { '<Value>.padding': '$radius' } })).toThrow(
-      /<Value>\.padding cannot be "\$radius"/u
+    expect(() => build({ chosen: { '<Node>.padding': '$radius' } })).toThrow(
+      /<Node>\.padding cannot be "\$radius"/u
     );
   });
 
   it('draws tokens with the kinds holding their value, so kinds following one stay alike', () => {
-    const drawn = build({ randomise: true });
+    const drawn = build({ chosen: cells, randomise: true });
     expect(drawn['IntCell.padding']).toBe(drawn['$spacing']);
     expect(drawn['IntCell.color']).toBe(drawn['$text']);
   });
@@ -462,7 +483,7 @@ describe('design tokens and role styles', () => {
       buildOnBase(
         levelled.space,
         levelled.starter,
-        { chosen: { template: '$starter' }, randomise: true },
+        { chosen: { template: '$starter', ...cells }, randomise: true },
         seed,
         levelled.fallbacks,
         levelled.bases
@@ -486,20 +507,19 @@ describe('design tokens and role styles', () => {
     expect(values['<Listing>.syntax']).toBe('colour');
   });
 
-  it('gives a kind what it inherits from a style, over its role style and token, under its own', () => {
+  it('gives a kind what it inherits from a style, over its base and token, under its own', () => {
     const styled = build({
       chosen: {
         $spacing: 0.25,
-        '<Text>.padding': 0.5,
+        '<Node>.padding': 0.5,
         '$cell.padding': 0.125,
         '$cell.radius': 2,
-        'IntCell.inherit': '$cell',
-        'IntDot.inherit': '$cell',
+        ...cells,
         'IntDot.radius': 999
       }
     });
     expect([styled['IntCell.padding'], styled['IntDot.padding']]).toEqual([0.125, 0.125]);
-    // Its own value wins; a prop the style does not set comes from the role's style.
+    // Its own value wins; a prop the style does not set comes from its base.
     expect([styled['IntCell.radius'], styled['IntDot.radius']]).toEqual([2, 999]);
     expect(styled['Note.padding']).toBe(0.5);
     // A style's value can name a token, which it then follows.
@@ -510,7 +530,7 @@ describe('design tokens and role styles', () => {
     expect(levelled.starter['IntCell.inherit']).toBeUndefined();
   });
 
-  it('gives a kind what it inherits from a kind of its role, after that kind settles', () => {
+  it('gives a kind what it inherits from any other kind, after that kind settles', () => {
     const values = build({
       chosen: { 'IntDot.inherit': 'IntCell', 'IntCell.fill': 'sky-100', 'IntCell.radius': 999 }
     });
@@ -521,30 +541,28 @@ describe('design tokens and role styles', () => {
     }).design;
     const later = build({ base: file, chosen: { 'IntCell.fill': 'rose-100' } });
     expect(later['IntDot.fill']).toBe('rose-100');
-    // Only a kind of the same role.
-    expect(() => build({ chosen: { 'IntDot.inherit': 'Note' } })).toThrow(
-      /IntDot\.inherit cannot be "Note"/u
+    // Any kind of the source, a text's or a layout's too, but no kind it has not.
+    expect(build({ chosen: { 'IntDot.inherit': 'Note' } })['IntDot.inherit']).toBe('Note');
+    expect(() => build({ chosen: { 'IntDot.inherit': 'Nothing' } })).toThrow(
+      /IntDot\.inherit cannot be "Nothing"/u
     );
   });
 
-  it('lets a kind chosen to inherit follow it where only its starter look set it apart', () => {
-    // Dijkstra's weights are drawn only on links, so WeightText starts unboxed, its radius 0.
-    const { design } = prepareSvelteComponent(dijkstraFields);
-    expect(design.starter['WeightText.radius']).toBe(0);
-    const chosen = { '$cell.radius': 4, 'WeightText.inherit': '$cell' };
+  it('lets a kind chosen to inherit follow it over the starting look its nodes give it', () => {
+    // A collection's items sit at its start or centre by whether its length changes: its own start.
+    const [key, look] = Object.entries(starter).find(([variable]) =>
+      /\.(justify|xAnchor|yAnchor)$/u.test(variable)
+    )!;
+    const kind = key.slice(0, key.lastIndexOf('.'));
+    const prop = key.slice(kind.length + 1);
+    const other = space[key].find((option) => option !== look)!;
     const run = (request: Parameters<typeof buildVariant>[2]) =>
-      buildVariant(design.space, design.starter, request, 1, design.fallbacks, design.bases).values;
-    expect(run({ chosen })['WeightText.radius']).toBe(4);
-    // A value of its own, chosen before, stays.
-    const base = buildVariant(
-      design.space,
-      design.starter,
-      { chosen: { 'WeightText.radius': 2 } },
-      1,
-      design.fallbacks,
-      design.bases
-    ).design;
-    expect(run({ base, chosen })['WeightText.radius']).toBe(2);
+      buildVariant(space, starter, request, 1, prepared.design.fallbacks, prepared.design.bases)
+        .values;
+    expect(run({})[key]).toBe(look);
+    expect(run({ chosen: { [`$along.${prop}`]: other, [`${kind}.inherit`]: '$along' } })[key]).toBe(
+      other
+    );
   });
 
   it('refuses a kind inheriting what inherits it back, naming the round', () => {
@@ -568,22 +586,28 @@ describe('design tokens and role styles', () => {
     expect(drawn['IntCell.radius']).toBe(drawn['$cell.radius']);
   });
 
-  it('takes a role’s look from its style in the base, below a kind’s own value', () => {
-    const based = build({ chosen: { '<Value>.radius': 0, '<Value>.fill': '$surface' } });
-    expect([based['IntCell.radius'], based['IntDot.radius']]).toEqual([0, 0]);
+  it('takes a kind’s look from its base, below a kind’s own value', () => {
+    const based = build({ chosen: { '<Node>.radius': 4, '<Node>.fill': '$surface' } });
+    expect([based['IntCell.radius'], based['Note.radius']]).toEqual([4, 4]);
     expect(based['IntCell.fill']).toBe('white');
-    const own = build({ chosen: { '<Value>.radius': 0, 'IntCell.radius': 12 } });
-    expect([own['IntCell.radius'], own['IntDot.radius']]).toEqual([12, 0]);
+    const own = build({ chosen: { '<Node>.radius': 4, 'IntCell.radius': 12 } });
+    expect([own['IntCell.radius'], own['IntDot.radius']]).toEqual([12, 4]);
+    // A link's line follows <Link>, and the paint its end gives what it reaches <Link>.<To>.
+    const linked = build({ chosen: { '<Link>.stroke': 'red-500', '<Link>.<To>.fill': 'sky-100' } });
+    expect([linked['Arrow.<Link>.stroke'], linked['Arrow.<Link>.<To>.fill']]).toEqual([
+      'red-500',
+      'sky-100'
+    ]);
   });
 
   it('gives each prop on a scale only its steps, refusing a value off the scale', () => {
-    // The base's own values must sit on its scale too: the starter's radii 8 and 4 do not.
+    // The template's own values must sit on its scale too: the starter's radii 8 and 4 do not.
     const onScale = { $radius: 6, '<Code>.radius': 0 };
     expect(() => build({ chosen: { 'scale.radius': '0 6 999' } })).toThrow(
       /\$radius cannot be 8; its options are 0, 6, 999/u
     );
     const scaled = build({
-      chosen: { 'scale.radius': '0 6 999', ...onScale, '<Value>.radius': 6 }
+      chosen: { 'scale.radius': '0 6 999', ...onScale, ...cells, '$cell.radius': 6 }
     });
     expect(scaled['IntCell.radius']).toBe(6);
     expect(() =>

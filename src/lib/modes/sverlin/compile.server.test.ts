@@ -2378,11 +2378,12 @@ describe('props bound to a view’s value', () => {
       expect(design.space['StateMark.icon.from']).toBeUndefined();
     });
 
-    it('starts a node drawing only an icon unboxed, as a word, and a value cell boxed', () => {
+    it('gives a node drawing only an icon <Node>’s plain look, as a word, and a value cell linked to $cell its frame', () => {
       const { design } = withState(
         '<View of="State" name="StateMark"><Node icon={this} /></View>\n<View of="State" name="StateCell"><Node value={this} /></View>'
       );
-      expect(starterValues(design)).toMatchObject({
+      expect(design.bases).toMatchObject({ StateMark: '<Node>', StateCell: '<Node>' });
+      expect(starterValues(design, { 'StateCell.inherit': '$cell' })).toMatchObject({
         'StateMark.fill': 'none',
         'StateMark.stroke': 'none',
         'StateMark.strokeWidth': 0,
@@ -2402,6 +2403,9 @@ describe('props bound to a view’s value', () => {
       expect(starterValues(design)['StateMark.Mark.icon']).toBe('circle-dot');
       expect(starterValues(design)['StateMark.Mark.fill']).toBe('none');
       expect(starterValues(design)['StateMark.Mark.stroke']).toBe('none');
+      // Drawn at <Node>'s icon size, a bare icon alone having one.
+      expect(starterValues(design)['StateMark.Mark.iconSize']).toBe(20);
+      expect(design.space['StateMark.iconSize']).toBeUndefined();
     });
 
     it('refuses an icon written as it is, the design choosing each value’s', () => {
@@ -2870,28 +2874,33 @@ describe('starter looks of a graph', () => {
     const { design } = prepareSvelteComponent(graph);
     expect(starterValues(design)['WeightText:edge.weight.fill']).toBe('white');
     expect(starterValues(design)['WeightText:edge.weight.stroke']).toBe('none');
-    // Its own paint, not its kind's; here the weight is drawn only on links, so its view starts as
-    // plain text too (a weight drawn elsewhere keeps its box: see layout.server.test.ts).
+    // Its own paint, not its kind's; its kind's look is what it links, as the template's $label.
     expect(design.fallbacks['WeightText:edge.weight.fill']).toBeUndefined();
     expect(starterValues(design)['WeightText.stroke']).toBe('none');
+    expect(starterValues(design, { 'WeightText.inherit': '$label' })['WeightText.textSize']).toBe(
+      14
+    );
   });
 
-  it('starts a view of a record arranging its parts as one boxed card, its fields unboxed', () => {
+  it('starts the fields of a view of a record arranging its parts unboxed, its card linking $card the one box', () => {
     const { design } = prepareSvelteComponent(graph);
-    expect(starterValues(design)['VertexCard.fill']).toBe('white');
-    expect(starterValues(design)['VertexCard.stroke']).toBe('neutral-300');
-    expect(starterValues(design)['VertexCard.gap']).toBe(0.25);
-    expect(starterValues(design)['VertexCard.NameText:this.name.fill']).toBe('none');
-    expect(starterValues(design)['VertexCard.StateText:this.state.stroke']).toBe('none');
+    const card = starterValues(design, { 'VertexCard.inherit': '$card' });
+    expect(card['VertexCard.fill']).toBe('white');
+    expect(card['VertexCard.stroke']).toBe('neutral-300');
+    expect(card['VertexCard.gap']).toBe(0.25);
+    expect(starterValues(design)['VertexCard.fill']).toBe('none');
+    expect(card['VertexCard.NameText:this.name.fill']).toBe('none');
+    expect(card['VertexCard.StateText:this.state.stroke']).toBe('none');
     expect(design.fallbacks['VertexCard.NameText:this.name.fill']).toBeUndefined();
   });
 
-  it('gives the nodes a free layout’s links join the role their written props give, as any node', async () => {
+  it('gives the nodes a free layout’s links join the props their function gives, as any node', async () => {
     const { readFileSync } = await import('node:fs');
     const dfa = readFileSync('src/lib/modes/sverlin/fixtures/dfa-loops.sverlin', 'utf8');
     const { design } = prepareSvelteComponent(dfa);
-    // <Node kind="StateSlot">{state}</Node> holds a render: text, its value boxed by its own view.
-    expect(design.bases['StateDiagram.StateSlot']).toBe('<Text>');
+    // <Node kind="StateSlot">{state}</Node> holds a render: a node, its value boxed by its own view.
+    expect(design.bases['StateDiagram.StateSlot']).toBe('<Node>');
+    expect(design.space['StateDiagram.StateSlot.gap']).toBeUndefined();
     expect(starterValues(design)['StateDiagram.StateSlot.radius']).toBe(0);
     expect(starterValues(design)['StateDiagram.StateSlot.fill']).toBe('none');
   });

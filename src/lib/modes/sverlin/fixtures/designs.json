@@ -1,143 +1,576 @@
 {
   "bars": {
-    "template": "$starter"
+    "template": "$starter",
+    "Bar": {
+      "...": "$cell"
+    }
   },
   "bfs-captions": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$cell"
+    }
   },
   "bfs-cards": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "bfs-dequeue": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "VertexNumber": {
+      "...": "$cell"
+    }
   },
   "bfs-neighbours": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "RefCard": {
+      "...": "$cell"
+    }
   },
   "bfs-queue-names": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "VertexNumber": {
+      "...": "$cell"
+    }
   },
   "bfs-references": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "bfs-undirected": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "bfs-visit-order": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "bst": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "TreeCard": {
+      "...": "$card"
+    }
   },
   "bubble-arrow": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    }
   },
   "bubble-layouts": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    }
   },
   "call-frames": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    },
+    "IndexText": {
+      "...": "$cell"
+    },
+    "Frame": {
+      "...": "$card"
+    }
   },
   "count-dots": {
     "template": "$starter"
   },
   "dfa-loops": {
-    "template": "$starter"
+    "template": "$starter",
+    "CharacterCell": {
+      "...": "$cell"
+    },
+    "IndexNumber": {
+      "...": "$cell"
+    }
   },
   "dfa-panels": {
-    "template": "$starter"
+    "template": "$starter",
+    "StateName": {
+      "...": "$cell"
+    },
+    "SymbolCell": {
+      "...": "$cell"
+    },
+    "StateCard": {
+      "...": "$card"
+    },
+    "WordIndexText": {
+      "...": "$cell"
+    }
   },
   "dijkstra-costs": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "CostText": {
+      "...": "$cell"
+    },
+    "InfinityText": {
+      "...": "$cell"
+    },
+    "WeightText": {
+      "...": "$label"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "FrontierEntry": {
+      "...": "$card"
+    }
   },
   "dijkstra-fields": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "DistanceCell": {
+      "...": "$cell"
+    },
+    "InfinityCell": {
+      "...": "$cell"
+    },
+    "WeightText": {
+      "...": "$label"
+    },
+    "NoneMark": {
+      "...": "$cell"
+    }
   },
   "dijkstra": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "IntCell": {
+      "...": "$cell"
+    },
+    "WeightText": {
+      "...": "$label"
+    },
+    "IndexText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "fib-calls": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    }
   },
   "grid-marks": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    }
   },
   "grid-view": {
-    "template": "$starter"
+    "template": "$starter",
+    "Numeral": {
+      "...": "$cell"
+    },
+    "IndexText": {
+      "...": "$cell"
+    }
   },
   "heap-tree": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    }
   },
   "insertion-decisions": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntColumn": {
+      "ColumnLength": {
+        "...": "$cell"
+      }
+    }
   },
   "lcs-grid": {
-    "template": "$starter"
+    "template": "$starter",
+    "Numeral": {
+      "...": "$cell"
+    },
+    "Letter": {
+      "...": "$cell"
+    },
+    "CountText": {
+      "...": "$cell"
+    }
   },
   "linear-search": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "Status": {
+      "Outcome": {
+        "Number": {
+          "...": "$cell"
+        }
+      }
+    }
   },
   "list-markers": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameCell": {
+      "...": "$cell"
+    },
+    "NodeBox": {
+      "...": "$card",
+      "NextField": {
+        "...": "$cell"
+      }
+    }
   },
   "listing-pseudocode": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    }
   },
   "listing-python": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    }
   },
   "merge-sort-levels": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    },
+    "IndexText": {
+      "...": "$cell"
+    }
   },
   "merge-sort-stack": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    },
+    "IndexText": {
+      "...": "$cell"
+    }
   },
   "replay/bfs-icons": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$cell"
+    }
   },
   "replay/bfs-reveal": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "Graph": {
+      "VertexPlace": {
+        "Position": {
+          "PositionDot": {
+            "...": "$cell"
+          }
+        }
+      }
+    }
   },
   "replay/binary-search-bars": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "Bars": {
+      "BarItem": {
+        "Bar": {
+          "...": "$cell"
+        },
+        "BarLabel": {
+          "...": "$cell"
+        }
+      }
+    },
+    "IndexNumber": {
+      "...": "$cell"
+    },
+    "StatusWord": {
+      "...": "$cell"
+    },
+    "RangeNote": {
+      "Bound": {
+        "...": "$cell"
+      }
+    },
+    "Explanation": {
+      "Number": {
+        "...": "$cell"
+      }
+    }
   },
   "replay/binary-search-compact": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "Range": {
+      "Bound": {
+        "...": "$cell"
+      }
+    },
+    "Status": {
+      "Number": {
+        "...": "$cell"
+      }
+    }
   },
   "replay/binary-search-recursive": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IntBar": {
+      "Length": {
+        "...": "$cell"
+      },
+      "BarLabel": {
+        "...": "$cell"
+      }
+    },
+    "IndexText": {
+      "...": "$cell"
+    },
+    "Range": {
+      "Bound": {
+        "...": "$cell"
+      }
+    },
+    "Status": {
+      "Number": {
+        "...": "$cell"
+      }
+    }
   },
   "replay/cards-drawings": {
-    "template": "$starter"
+    "template": "$starter",
+    "RankText": {
+      "...": "$cell"
+    },
+    "SuitName": {
+      "...": "$cell"
+    },
+    "CardFace": {
+      "...": "$card"
+    }
   },
   "replay/dijkstra-demo": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "IntCell": {
+      "...": "$cell"
+    },
+    "WeightText": {
+      "...": "$label"
+    },
+    "IndexText": {
+      "...": "$cell"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "replay/linear-search": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IndexNumber": {
+      "...": "$cell"
+    },
+    "Status": {
+      "Outcome": {
+        "Number": {
+          "...": "$cell"
+        }
+      }
+    }
   },
   "replay/merge-sort-fallback": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IntDots": {
+      "DotValue": {
+        "...": "$cell"
+      }
+    },
+    "PositionNumber": {
+      "...": "$cell"
+    },
+    "ScratchNumber": {
+      "...": "$cell"
+    },
+    "PassInfo": {
+      "Number": {
+        "...": "$cell"
+      }
+    }
   },
   "replay/merge-sort-overview": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IntBar": {
+      "Length": {
+        "...": "$cell"
+      },
+      "BarValue": {
+        "...": "$cell"
+      }
+    },
+    "IndexText": {
+      "...": "$cell"
+    }
   },
   "replay/ucs-ten": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "CostValue": {
+      "...": "$cell"
+    },
+    "UnknownCost": {
+      "...": "$cell"
+    },
+    "WeightPill": {
+      "...": "$label"
+    },
+    "VertexCard": {
+      "...": "$card"
+    }
   },
   "search-at": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IndexNumber": {
+      "...": "$cell"
+    },
+    "Bounds": {
+      "Bound": {
+        "...": "$cell"
+      }
+    }
   },
   "search-labels": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    },
+    "IndexNumber": {
+      "...": "$cell"
+    }
   },
   "search-places": {
-    "template": "$starter"
+    "template": "$starter",
+    "IntCell": {
+      "...": "$cell"
+    }
   },
   "stack-highlight": {
-    "template": "$starter"
+    "template": "$starter",
+    "Cell": {
+      "...": "$cell"
+    },
+    "Board": {
+      "Sorted": {
+        "SortedMark": {
+          "...": "$cell"
+        }
+      }
+    }
   },
   "ucs-compare": {
-    "template": "$starter"
+    "template": "$starter",
+    "NameText": {
+      "...": "$cell"
+    },
+    "CostText": {
+      "...": "$cell"
+    },
+    "InfinityText": {
+      "...": "$cell"
+    },
+    "WeightText": {
+      "...": "$label"
+    },
+    "VertexCard": {
+      "...": "$card"
+    },
+    "FrontierEntry": {
+      "...": "$card"
+    }
   }
 }

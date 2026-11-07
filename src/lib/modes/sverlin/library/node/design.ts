@@ -226,6 +226,7 @@ export const propOptions = {
   color: colours,
   font: fontValues,
   textSize: [12, 14, 16, 18, 20, 24, 30, 36, 48],
+  iconSize: [12, 14, 16, 18, 20, 24, 30, 36, 48],
   weight: ['normal', 'bold'],
   padding: spacing,
   radius: [0, 2, 4, 6, 8, 12, 999],
@@ -322,10 +323,6 @@ export const linkEnd = '<To>';
 /** Whether a kind is a link's end, as `Arrow.<Link>.<To>`, or a place's, as `Arrow.<Link>.<To>:i`. */
 export const isLinkEnd = (kind: string): boolean => /\.<To>(?::|$)/u.test(kind);
 
-/** The props a kind has: a link end's, or its role's. */
-export const kindProps = (role: KindRole, kind: string): readonly DesignProp[] =>
-  isLinkEnd(kind) ? endProps : roleProps[role];
-
 /** The props a region of a listing sets for itself, as `<Listing>.lit@insert.compare.left.fill`. */
 export const listingRegionProps = placePaint;
 
@@ -360,10 +357,8 @@ export const listingOptions: Record<string, readonly (string | number)[]> & {
 export const listingPlacesOptions = ['none', 'fill', 'underline', 'outline'] as const;
 export type ListingPlacesLook = (typeof listingPlacesOptions)[number];
 
-/** What a kind of node is, which says the props it has. */
-export type KindRole = 'container' | 'value' | 'text' | 'code' | 'icon' | 'link' | 'pointer';
-
-const nodeProps: readonly DesignProp[] = [
+/** A node's props, every kind of node's (see KindFunction for the others a kind has). */
+export const nodeProps: readonly DesignProp[] = [
   'shown',
   'fill',
   'stroke',
@@ -389,7 +384,7 @@ const nodeProps: readonly DesignProp[] = [
 ];
 
 /** A link's props: its line, its route, its heads, and the paint it gives what it reaches. */
-const linkProps: readonly DesignProp[] = [
+export const linkProps: readonly DesignProp[] = [
   'shown',
   'stroke',
   'strokeWidth',
@@ -399,25 +394,41 @@ const linkProps: readonly DesignProp[] = [
   'headSize'
 ];
 
-/**
- * The props a kind of node has: a layout's own, a link's line. A link from a variable, a <Link>
- * with no from, is a pointer, with a link's props and a look of its own.
- */
-export const roleProps: Record<KindRole, readonly DesignProp[]> = {
-  container: [...nodeProps, 'gap', 'align', 'justify', 'spacing'],
-  value: nodeProps,
-  text: nodeProps,
-  code: nodeProps,
-  icon: [...nodeProps, 'icon'],
-  link: linkProps,
-  pointer: linkProps
-};
+/** The props of a node arranging others, with a layout, links, or one {#each}: how it lays them out. */
+export const layoutProps: readonly DesignProp[] = ['gap', 'align', 'justify', 'spacing'];
 
-/** The props a kind arranging a free layout has besides its role's: how the layout looks. */
+/** The props of a bare icon, `<Node icon />`: which icon it draws, and how large. */
+export const iconProps: readonly DesignProp[] = ['icon', 'iconSize'];
+
+/**
+ * The bases, built-in styles each kind follows where neither it nor what it inherits sets a prop:
+ * `<Node>` every node, `<Code>` the inline code a token in a node's text draws (kind `Code` under
+ * its node), and `<Link>` every link, with its end, `<Link>.<To>`. The listing's look is
+ * `<Listing>`. Each holds the props its kinds can have.
+ */
+export const baseProps = {
+  '<Node>': [...nodeProps, ...layoutProps, ...iconProps].filter((prop) => prop !== 'shown'),
+  '<Code>': nodeProps.filter((prop) => prop !== 'shown'),
+  '<Link>': linkProps.filter((prop) => prop !== 'shown'),
+  '<Link>.<To>': endProps
+} as const satisfies Record<string, readonly DesignProp[]>;
+
+export type DesignBase = keyof typeof baseProps;
+
+/** A base's prop, as `<Node>` and fill for `<Node>.fill`, or `<Link>.<To>` and fill. */
+export function baseOf(key: string): { base: DesignBase; prop: DesignProp } | undefined {
+  const match = /^(<Node>|<Code>|<Link>(?:\.<To>)?)\.([a-z]\w*)$/u.exec(key);
+  const base = match?.[1] as DesignBase | undefined;
+  return base && (baseProps[base] as readonly string[]).includes(match![2])
+    ? { base, prop: match![2] as DesignProp }
+    : undefined;
+}
+
+/** The props a kind arranging a free layout has besides a node's: how the layout looks. */
 export const freeLayoutProps: readonly DesignProp[] = ['form', 'direction', 'curve', 'layoutSeed'];
 
 /**
- * The props a kind arranging a grid has besides its role's: its basis, the x and y of the vector
+ * The props a kind arranging a grid has besides a node's: its basis, the x and y of the vector
  * its columns run along and of the one its rows run along, starting square, as a table.
  */
 export const gridProps: readonly DesignProp[] = ['colX', 'colY', 'rowX', 'rowY'];
@@ -517,8 +528,8 @@ export type DesignValues = Readonly<Record<string, string | number | boolean>>;
 
 /**
  * The design's tokens, each written with `$` and holding one value of one prop, as `$accent` a
- * stroke: the values the starter looks share across roles, so one token changes all of them. A
- * role's value can name a token of a prop with no more options than its own (see tokenFits).
+ * stroke: values a template's styles and bases share, so one token changes all of them. A value
+ * can name a token of a prop with no more options than its own (see tokenFits).
  */
 export const tokenProps = {
   $text: 'color',
@@ -537,13 +548,6 @@ export type DesignToken = keyof typeof tokenProps;
 export const isToken = (name: unknown): name is DesignToken =>
   typeof name === 'string' && Object.hasOwn(tokenProps, name);
 
-/**
- * The props a role's kinds take from their role's style: their role's, but whether a kind is shown,
- * which stays each kind's own, so no one value hides every kind of a role.
- */
-export const lookProps = (role: KindRole): readonly DesignProp[] =>
-  roleProps[role].filter((prop) => prop !== 'shown');
-
 /** Whether a prop can name a token: every value the token can hold is one of the prop's. */
 export function tokenFits(prop: DesignProp, token: DesignToken): boolean {
   const options = propOptions[prop];
@@ -560,8 +564,8 @@ export const kindPropOptions = (
 ): readonly (string | number | boolean)[] =>
   end && prop === 'color' ? ['none', ...colours] : propOptions[prop];
 
-/** A role style's options for a prop: the prop's, and each token that fits it. */
-export function roleStyleOptions(
+/** A base's options for a prop: the prop's, and each token that fits it (see baseOptions for scales). */
+export function tokenedOptions(
   prop: DesignProp,
   end = false
 ): readonly (string | number | boolean)[] {
@@ -583,23 +587,20 @@ export const isStyle = (name: unknown): name is `$${string}` =>
   oldBuiltIn(name) === undefined;
 
 /**
- * The built-in name a key's first part once was, written with `$` or as a group, with the name it
- * now has, as `<Value>` for `$Value`; undefined for any other.
+ * The built-in name a key's first part once was, with what is written now: a role's style, as
+ * `<Value>` or `$Value`, is a template's style a kind links to, as `"IntCell": {"...": "$cell"}`;
+ * `<Pointer>` is `<Link>`, whose end paints what a link from a variable reaches; and `listing` is
+ * `<Listing>`. Undefined for any other.
  */
 export function oldBuiltIn(key: string): { old: string; now: string } | undefined {
   const first = /^(\$[A-Za-z]\w*|<[A-Za-z]+>|listing)(?=\.|$)/u.exec(key)?.[1];
   if (first === 'listing') return { old: first, now: '<Listing>' };
-  if (first === '<Node>')
-    return { old: first, now: nodeRoles.map((role) => roleStyle(role)).join(', ') };
-  const role = first && /^\$[A-Z]/u.test(first) ? first.slice(1) : undefined;
-  if (role && ['Bar', 'Vertex'].includes(role)) return { old: first!, now: '<Value>' };
-  return role && (Object.keys(roleProps) as string[]).includes(role.toLowerCase())
-    ? { old: first!, now: `<${role}>` }
+  const name = first && /^(?:\$|<)([A-Z][a-z]+)>?$/u.exec(first)?.[1];
+  if (name === 'Pointer') return { old: first!, now: '<Link>' };
+  return name && ['Value', 'Container', 'Text', 'Icon', 'Bar', 'Vertex'].includes(name)
+    ? { old: first!, now: 'a template\'s style a kind links to, as "IntCell": {"...": "$cell"}' }
     : undefined;
 }
-
-/** The roles of a node's kinds, those the old `<Node>` group set together. */
-const nodeRoles: readonly KindRole[] = ['container', 'value', 'text', 'code', 'icon'];
 
 /** A style's prop, as `$cell` and padding for `$cell.padding`. */
 export function styleOf(key: string): { style: `$${string}`; prop: string } | undefined {
@@ -610,39 +611,6 @@ export function styleOf(key: string): { style: `$${string}`; prop: string } | un
 }
 
 /**
- * The style holding a role's look in a design's base, written in angle brackets as every built-in
- * name is, as `<Value>` for every value kind: each prop a kind of the role follows where neither it
- * nor what it inherits writes the prop, so a template sets every role's look as data.
- */
-export const roleStyle = (role: KindRole): string => `<${role[0].toUpperCase()}${role.slice(1)}>`;
-
-/** The role a style holds the look of, as value for `<Value>`, or undefined for any other name. */
-export function roleOfStyle(style: string): KindRole | undefined {
-  return (Object.keys(roleProps) as KindRole[]).find((role) => roleStyle(role) === style);
-}
-
-/**
- * A role style's prop, as `<Value>` and fill for `<Value>.fill`, or of its link end's, as
- * `<Pointer>.<To>.fill`.
- */
-export function roleStyleOf(
-  key: string
-): { role: KindRole; prop: string; end?: typeof linkEnd } | undefined {
-  const match = /^(<[A-Z][a-z]+>)(\.<To>)?\.([a-z]\w*)$/u.exec(key);
-  const role = match ? roleOfStyle(match[1]) : undefined;
-  if (!role || (match![2] && role !== 'link' && role !== 'pointer')) return undefined;
-  return { role, prop: match![3], ...(match![2] ? { end: linkEnd } : {}) };
-}
-
-/** The style a kind follows: its role's, as `<Pointer>`, or for a link's end its end's, `<Pointer>.<To>`. */
-export const kindStyle = (role: KindRole, kind: string): string =>
-  isLinkEnd(kind) ? `${roleStyle(role)}.${linkEnd}` : roleStyle(role);
-
-/** The props a kind takes from its style: a link end's, or its role's but `shown`. */
-export const kindLookProps = (role: KindRole, kind: string): readonly DesignProp[] =>
-  isLinkEnd(kind) ? endProps : lookProps(role);
-
-/**
  * The key a request names a template by, as `"template": "$slide"`: the build copies that
  * template's file in as the design (see ../../templates), so the version holds every value it draws
  * with and keeps no link to the template; the stored design never names one.
@@ -651,7 +619,7 @@ export const templateKey = 'template';
 
 /**
  * A base's scales, each the steps its props take (see scaleKey): spacing for padding and gaps, in
- * em; radius, type (textSize) and line (strokeWidth) in pixels; opacity from 0 to 1. A kind, a
+ * em; radius, type (textSize, iconSize) and line (strokeWidth) in pixels; opacity from 0 to 1. A kind, a
  * group or a token then takes only a step on its prop's scale, so two kinds cannot drift to 13 px
  * and 14 px, and a comparison or a random variant moves along the scale. A design without a scale
  * keeps the prop's full option set (propOptions), as every design did before bases.
@@ -659,7 +627,7 @@ export const templateKey = 'template';
 export const scaleProps = {
   spacing: ['padding', 'gap'],
   radius: ['radius'],
-  type: ['textSize'],
+  type: ['textSize', 'iconSize'],
   line: ['strokeWidth'],
   opacity: ['opacity']
 } as const satisfies Record<string, readonly DesignProp[]>;
@@ -698,7 +666,7 @@ export const paletteKey = /^palette\.[a-z]\w*$/u;
 
 /**
  * Whether a variable belongs to a template's file, which holds every value whether the source uses
- * it or not: a token, a role's style, a scale, a colour of the palette, and the listing's look. A source with no use for one, as a listing's look where the view places no <Listing />,
+ * it or not: a token, a base's prop, a scale, a colour of the palette, and the listing's look. A source with no use for one, as a listing's look where the view places no <Listing />,
  * leaves it out without a word.
  */
 export function isBaseKey(key: string): boolean {
@@ -706,7 +674,7 @@ export function isBaseKey(key: string): boolean {
     isToken(key) ||
     paletteKey.test(key) ||
     /^scale\.[a-z]+$/u.test(key) ||
-    roleStyleOf(key) !== undefined ||
+    baseOf(key) !== undefined ||
     (key.startsWith('<Listing>.') && key !== '<Listing>.language')
   );
 }
@@ -755,6 +723,7 @@ export const neutralValues: Readonly<Record<DesignProp, string | number | boolea
   color: 'black',
   font: 'sans',
   textSize: 16,
+  iconSize: 16,
   weight: 'normal',
   padding: 0,
   radius: 0,

@@ -174,16 +174,15 @@ same props; each prop's options are project.design.options of the prop, a set
 written as a rule, as colours, naming every hue in every shade. Its variables
 list, with their options and values, only the variables with options of their
 own: views, a listing's language, a place's label. A kind's prop the file does
-not write takes what the kind inherits, else its role's style, else the prop's
-neutral value (see Shared values in the guide). For a look asked of many kinds
-at once, as “less padding everywhere” or “every pointer teal”, set a token or a
-role's style, as `<Pointer>`, whose end, `<Pointer>.<To>`, paints what it
-reaches (see Shared values in the guide), rather than each kind; for a look
-several kinds share, as “value cells rounder with a darker frame”, set a style's
-props and have those kinds inherit it
-(`{"$cell": {"radius": 4}, "IntCell": {"...": "$cell"}}`). Write values nested,
-one level for each part of a key; a key written flat, as `"IntCell.fill"`, goes
-back to be written again.
+not write takes what the kind inherits, else its base's (`<Node>`, `<Code>` or
+`<Link>`), else the prop's neutral value (see Shared values in the guide). For a
+look asked of many kinds at once, as “less padding everywhere” or “every pointer
+teal”, set a token, a style the kinds link, or a base, as `<Link>`, whose end,
+`<Link>.<To>`, paints what a link from a variable reaches (see Shared values in
+the guide), rather than each kind; for a look several kinds share, as “value
+cells rounder with a darker frame”, set the style they link
+(`{"$cell": {"radius": 4}}`). Write values nested, one level for each part of a
+key; a key written flat, as `"IntCell.fill"`, goes back to be written again.
 
 A first version names the template its design copies, as
 `{"template": "$slide"}` in its values with any changes beside it, as
@@ -194,7 +193,7 @@ file in place of the version's, so write again beside it every change to keep.
 Every value takes a step on the file's scales and the named colours or its
 palette.
 
-- `$starter`: framed white values, grey frames, amber pointers.
+- `$starter`: white value cells in grey frames, amber pointers.
 - `$textbook`: black on white in a serif with no hue, so it prints in greyscale;
   the item of the step a grey fill with a thicker black frame, a second state
   hatched with a dashed frame. For printed notes and handouts.
@@ -204,24 +203,28 @@ palette.
   the step yellow with a thick frame, a second state blue and dashed. For low
   vision, glare, or a participant who asks for stronger contrast.
 
-Each follows the same principles: a plain base with one salient thing, the item
-of the step; nothing decorative (no shadows, glows, or decorative fills); one
-colour for one state, the same in the picture and the listing; text at least
-4.5:1 on its fill and the lines needed to read the picture at least 3:1 on the
-page; and no state told by colour alone (the item of the step also takes the
-thickest line). A second state, as visited, inherits `$second`, as
-`"Visited": {"...": "$second"}`. Offer another template as a comparison
-(“textbook or slide?”) rather than switching unasked. Where no template fits
-what the participant asks, change the copy's tokens, role styles (`<Value>`,
-`<Container>`, `<Text>`, `<Code>`, `<Icon>`, `<Link>`), scales and palette. A
-kind's role comes only from what its node writes (see Shared values in the
-guide): a vertex or a bar is a value or text like any other node, so a look such
-as round vertices or grey bars is a kind's values, every prop it needs, as
-`"StateSlot": {"radius": 999, "fill": "white", "stroke": "neutral-400", "strokeWidth": 1.5, "padding": 0.5, "minSize": 2.5}`
-for a vertex holding text, or
+Each is a library of looks: tokens, scales, the bases, and styles to link, the
+same names in each, `$cell` (a framed value), `$card` (a record's parts in one
+box), `$label` (a link's words on the stage's white), `$caption` (smaller words)
+and `$second` (a second state). Link each kind to the style it draws with as you
+write it, as `{"IntCell": {"...": "$cell"}, "VertexCard": {"...": "$card"}}`: a
+kind linking nothing takes its base's plain look, so a value linking no style
+draws as plain words. Each follows the same principles: a plain base with one
+salient thing, the item of the step; nothing decorative (no shadows, glows, or
+decorative fills); one colour for one state, the same in the picture and the
+listing; text at least 4.5:1 on its fill and the lines needed to read the
+picture at least 3:1 on the page; and no state told by colour alone (the item of
+the step also takes the thickest line). A second state, as visited, inherits
+`$second`, as `"Visited": {"...": "$second"}`. Offer another template as a
+comparison (“textbook or slide?”) rather than switching unasked. Where no
+template fits what the participant asks, change the copy's tokens, styles,
+bases, scales and palette, or add a style of your own and link the kinds to it.
+Which props a kind has comes only from what its nodes do (see Shared values in
+the guide), so a look such as round vertices or grey bars is a style or a kind's
+values, every prop it needs, as
+`"$vertex": {"radius": 999, "fill": "white", "stroke": "neutral-400", "strokeWidth": 1.5, "padding": 0.5, "minSize": 2.5}`
+linked as `"StateSlot": {"...": "$vertex"}` for a vertex holding text, or
 `"Bar": {"fill": "neutral-300", "stroke": "neutral-500", "strokeWidth": 1, "radius": 2}`.
-Every kind follows its role's look; leave `"..."` out unless it inherits a style
-or a kind.
 
 <!-- Sources for the principles: projects/phd-app/design.md (workspace),
 "Templates and their sources", cited through Socrates there; the table of
@@ -311,9 +314,9 @@ the graph and without it. When the participant names a structure with several
 readings, for example "the intermediate lists as a tree" (a tree of the splits,
 of the merged lists, or of both, each call showing its part as split and then
 sorted), compare the readings. When the source already has two views of a type,
-compare them. When you add a view or a kind, give the looks its role needs in
-the decision's values where its role's look would read wrongly, for example no
-box around an icon or a caption.
+compare them. When you add a view or a kind, link it in the decision's values to
+the style it draws with, as `$cell` for a value or `$caption` for a caption, or
+give the props that differ.
 
 Show before you ask: a participant judges a picture more easily than they
 describe one, so ask in words only what a picture cannot answer (who it is for,

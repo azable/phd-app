@@ -343,7 +343,9 @@ describe('design variables in the AI context', () => {
 
   it('tells what a kind inherits as "...", taking any kind or style the file writes', () => {
     const { design: built } = prepareSvelteComponent(bfs);
-    const valueKind = Object.keys(built.bases).find((kind) => built.bases[kind] === '<Value>')!;
+    const valueKind = Object.keys(built.bases).find(
+      (kind) => built.bases[kind] === '<Node>' && built.space[`${kind}.gap`] === undefined
+    )!;
     const chosen = {
       '$cell.radius': 2,
       '$cell.stroke': 'neutral-500',
@@ -358,7 +360,7 @@ describe('design variables in the AI context', () => {
     expect(variables.options.inherit).toContain('$cell');
     expect(variables.options.inherit).toContain(valueKind);
     const design = designContext(variables);
-    expect(design.file.$cell).toEqual({ radius: 2, stroke: 'neutral-500' });
+    expect(design.file.$cell).toMatchObject({ radius: 2, stroke: 'neutral-500' });
     expect((design.file[valueKind] as Record<string, unknown>)['...']).toBe('$cell');
     const props = Object.entries(design.kinds).find(([kinds]) =>
       kinds.split(', ').includes(valueKind)

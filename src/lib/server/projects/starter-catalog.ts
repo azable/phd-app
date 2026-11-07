@@ -1,10 +1,13 @@
 /**
  * Developer-owned project starters: each a source and the design its versions start from where no
- * version has been built yet, a template's name (see modes/sverlin/templates).
+ * version has been built yet, nested as the design reads: the template it copies (see
+ * modes/sverlin/templates) and the style each of its kinds links.
  */
 
 import type { ProjectCreation, ProjectTemplateSummary } from '$lib/shared/projects/creation';
+import type { DesignValues } from '$lib/shared/presentations';
 import { linearSearchSource, sverlinStarter } from '$lib/modes/sverlin/contract';
+import { designKeys } from '$lib/modes/server';
 
 const templates = [
   {
@@ -21,7 +24,12 @@ const templates = [
     summary: 'A stepped, seeded array search in one Svelte component.',
     features: ['steps', 'seeded input', 'Svelte'],
     source: linearSearchSource,
-    design: { template: '$starter' }
+    design: {
+      template: '$starter',
+      IntCell: { '...': '$cell' },
+      Checking: { Number: { '...': '$cell' } },
+      Result: { Number: { '...': '$cell' } }
+    }
   }
 ] as const;
 
@@ -43,13 +51,17 @@ export function getProjectTemplate(templateId: string): (typeof templates)[numbe
 export function resolveProjectTemplate(creation: ProjectCreation): {
   source: string;
   title: string;
-  design: Readonly<Record<string, string>>;
+  design: DesignValues;
 } {
   const template = getProjectTemplate(creation.templateId);
   if (creation.mode && creation.mode !== 'sverlin' && creation.templateId !== 'blank') {
     throw new Error('This starter is available only for the Svelte-backed mode.');
   }
-  return { source: template.source, title: template.title, design: template.design };
+  return {
+    source: template.source,
+    title: template.title,
+    design: designKeys.flat(template.design) as DesignValues
+  };
 }
 
 export class UnknownProjectTemplateError extends Error {

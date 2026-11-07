@@ -1,6 +1,6 @@
 /**
  * Design keys as written, which is also how the app keeps them. Each mark has one meaning: `$` a
- * token or a style, `<…>` a built-in name (a role's style, as `<Value>`, and the listing, `<Listing>`), `{Type}` the view a type is drawn with, `:` a place on the page, `=`
+ * token or a style, `<…>` a built-in name (a base, as `<Node>`, and the listing, `<Listing>`), `{Type}` the view a type is drawn with, `:` a place on the page, `=`
  * a value of the data, no mark a kind; `@` only a part of the run, a label, as a label marks a
  * moment or span of it. A place drawn from a label's value keeps the label's `@` after its `:`.
  * Only a view choice is kept apart from how it is written, as a choice holds a view's name rather
@@ -15,7 +15,7 @@
  * Every other key reads the same in both: `IntCell:target.stroke`, `Mark.<Link>.<To>:@scan.next.fill`,
  * `Card=true.stroke`, `Card:this.seen=true.stroke`, `Bar.height.from` (`.hue`, `.order`,
  * `.unit`), a place's caption `:target.label` (`:@scan.next.label`), `$` tokens and styles,
- * `<Value>.fill`, `<Listing>.lit@insert.key.fill` and `<Listing>.syntax`. People read the keys
+ * `<Node>.fill`, `<Listing>.lit@insert.key.fill` and `<Listing>.syntax`. People read the keys
  * nested (see nestedDesign).
  */
 
@@ -123,14 +123,14 @@ export function keptValues<T>(values: Readonly<Record<string, T>>): Record<strin
 }
 
 /**
- * A design as people and the assistant read it: nested, one object for each style, role style,
+ * A design as people and the assistant read it: nested, one object for each style, base,
  * kind and the listing, as the language guide's Shared values shows. Each written key's path:
  *
  * | Written                        | Nested                                        |
  * | ------------------------------ | --------------------------------------------- |
  * | `$text`                        | `"$text": …`                                  |
  * | `$cell.stroke`                 | `"$cell": { "stroke": … }`                    |
- * | `<Value>.padding`              | `"<Value>": { "padding": … }`                 |
+ * | `<Node>.padding`               | `"<Node>": { "padding": … }`                  |
  * | `{Int}`, `{Int}:target`, …     | `"{Int}": …`, `"{Int}:target": …` (whole)     |
  * | `<Listing>.lit.fill`           | `"<Listing>": { "lit": { "fill": … } }`       |
  * | `<Listing>.lit@insert.key.fill`| `… "lit": { "@insert.key": { "fill": … } }`   |

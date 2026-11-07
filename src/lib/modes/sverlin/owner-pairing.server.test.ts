@@ -50,7 +50,10 @@ function captionsBeside(from: DrawnScene, to: DrawnScene): { value: number; capt
 }
 
 async function move(algorithm: string, caption?: string) {
-  const { steps } = await drawnSteps(items(algorithm, caption));
+  // Each value framed, as the template's $cell draws one.
+  const { steps } = await drawnSteps(items(algorithm, caption), {
+    chosen: { 'CostCell.inherit': '$cell', 'NameText.inherit': '$cell' }
+  });
   return [drawnScene(steps.at(-2)!), drawnScene(steps.at(-1)!)] as const;
 }
 

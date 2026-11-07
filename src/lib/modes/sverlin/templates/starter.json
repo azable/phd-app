@@ -14,177 +14,69 @@
     "line": "0.5 1 1.5 2 3 4",
     "opacity": "0.25 0.5 0.75 1"
   },
-  "<Container>": {
-    "fill": "none",
-    "stroke": "none",
-    "strokeWidth": 0,
-    "strokeStyle": "solid",
-    "opacity": 1,
+  "<Node>": {
     "color": "$text",
     "font": "$font",
     "textSize": 16,
-    "weight": "normal",
-    "padding": 0,
-    "radius": 0,
-    "minSize": 0,
-    "width": "uniform",
-    "height": "uniform",
-    "xAnchor": "center",
-    "yAnchor": "center",
-    "shadow": "none",
-    "glow": "none",
-    "fillStyle": "solid",
-    "decoration": "none",
-    "case": "normal",
     "gap": 0.5,
-    "align": "center",
-    "justify": "start",
-    "spacing": "slots"
-  },
-  "<Value>": {
-    "fill": "$surface",
-    "stroke": "neutral-300",
-    "strokeWidth": "$lineWidth",
-    "strokeStyle": "solid",
-    "opacity": 1,
-    "color": "$text",
-    "font": "$font",
-    "textSize": 20,
-    "weight": "bold",
-    "padding": "$spacing",
-    "radius": "$radius",
-    "minSize": 2.5,
-    "width": "uniform",
-    "height": "uniform",
-    "xAnchor": "center",
-    "yAnchor": "center",
-    "shadow": "none",
-    "glow": "none",
-    "fillStyle": "solid",
-    "decoration": "none",
-    "case": "normal"
-  },
-  "<Text>": {
-    "fill": "none",
-    "stroke": "none",
-    "strokeWidth": 0,
-    "strokeStyle": "solid",
-    "opacity": 1,
-    "color": "$text",
-    "font": "$font",
-    "textSize": 16,
-    "weight": "normal",
-    "padding": 0,
-    "radius": 0,
-    "minSize": 0,
-    "width": "uniform",
-    "height": "uniform",
-    "xAnchor": "center",
-    "yAnchor": "center",
-    "shadow": "none",
-    "glow": "none",
-    "fillStyle": "solid",
-    "decoration": "none",
-    "case": "normal"
+    "iconSize": 20
   },
   "<Code>": {
     "fill": "neutral-100",
-    "stroke": "none",
-    "strokeWidth": 0,
-    "strokeStyle": "solid",
-    "opacity": 1,
     "color": "$text",
     "font": "mono",
     "textSize": 16,
-    "weight": "normal",
     "padding": 0.125,
-    "radius": 4,
-    "minSize": 0,
-    "width": "uniform",
-    "height": "uniform",
-    "xAnchor": "center",
-    "yAnchor": "center",
-    "shadow": "none",
-    "glow": "none",
-    "fillStyle": "solid",
-    "decoration": "none",
-    "case": "normal"
-  },
-  "<Icon>": {
-    "fill": "none",
-    "stroke": "none",
-    "strokeWidth": 0,
-    "strokeStyle": "solid",
-    "opacity": 1,
-    "color": "$text",
-    "font": "$font",
-    "textSize": 20,
-    "weight": "normal",
-    "padding": 0,
-    "radius": 0,
-    "minSize": 0,
-    "width": "uniform",
-    "height": "uniform",
-    "xAnchor": "center",
-    "yAnchor": "center",
-    "shadow": "none",
-    "glow": "none",
-    "fillStyle": "solid",
-    "decoration": "none",
-    "case": "normal",
-    "icon": "circle-dot"
+    "radius": 4
   },
   "<Link>": {
     "stroke": "neutral-500",
     "strokeWidth": 2,
-    "opacity": 1,
-    "strokeStyle": "solid",
-    "route": "layout",
-    "headSize": 9,
-    "<To>": {
-      "head": "arrow",
-      "fill": "none",
-      "stroke": "none",
-      "strokeWidth": "$lineWidth",
-      "color": "none",
-      "layer": 1
-    }
-  },
-  "<Pointer>": {
-    "stroke": "neutral-500",
-    "strokeWidth": 2,
-    "opacity": 1,
-    "strokeStyle": "solid",
-    "route": "layout",
-    "headSize": 9,
     "<To>": {
       "head": "arrow",
       "fill": "$highlight",
       "stroke": "$accent",
-      "strokeWidth": "$lineWidth",
-      "color": "none",
-      "layer": 1
+      "strokeWidth": "$lineWidth"
     }
+  },
+  "$cell": {
+    "fill": "$surface",
+    "stroke": "neutral-300",
+    "strokeWidth": "$lineWidth",
+    "textSize": 20,
+    "weight": "bold",
+    "padding": "$spacing",
+    "radius": "$radius",
+    "minSize": 2.5
+  },
+  "$card": {
+    "fill": "$surface",
+    "stroke": "neutral-300",
+    "strokeWidth": "$lineWidth",
+    "radius": "$radius",
+    "padding": "$spacing",
+    "gap": 0.25
+  },
+  "$label": {
+    "fill": "$surface",
+    "strokeWidth": "$lineWidth",
+    "textSize": 14,
+    "weight": "bold"
+  },
+  "$caption": {
+    "textSize": 14
   },
   "$second": {
     "fill": "sky-100",
     "stroke": "neutral-500",
-    "strokeWidth": 1.5,
-    "strokeStyle": "solid",
-    "fillStyle": "solid"
+    "strokeWidth": 1.5
   },
   "<Listing>": {
     "syntax": "keywords",
     "places": "fill",
     "lit": {
       "fill": "amber-200",
-      "stroke": "none",
-      "strokeWidth": 0,
-      "strokeStyle": "solid",
-      "radius": 2,
-      "color": "none",
-      "weight": "normal",
-      "padding": 0
+      "radius": 2
     }
   }
 }

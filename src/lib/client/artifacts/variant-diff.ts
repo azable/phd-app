@@ -111,7 +111,7 @@ export function choiceName(key: string): string {
     const name = `${words(type)} ${viewCategories[category]}`;
     return sentence(place ? `${name} for ${place}` : name);
   }
-  // A built-in name, as `<Value>.padding`, reads as its words: “Value padding”.
+  // A built-in name, as `<Node>.padding`, reads as its words: “Node padding”.
   const builtIn = /^<(\w+)>\.([\w.]+)$/u.exec(key);
   if (builtIn) return sentence([builtIn[1], ...builtIn[2].split('.')].map(words).join(' '));
   const parts = kindKeyParts(key);

@@ -9,28 +9,30 @@ import {
   paintProps,
   paintReach,
   placeProps,
-  propOptions,
-  roleProps,
-  roleStyle
+  linkProps,
+  neutralValues,
+  nodeProps,
+  propOptions
 } from './design';
-import { templateValues } from '../../templates/templates';
 
 const styleProps = ['shadow', 'glow', 'fillStyle', 'decoration', 'case'] as const;
 
 describe('style props', () => {
-  it('are props of every kind of node, not of links, starting at today’s look', () => {
+  it('are props of every kind of node, not of links, starting at their neutral values', () => {
     expect(propOptions.shadow).toEqual(['none', 'soft', 'lifted', 'hard']);
     expect(propOptions.glow).toEqual(['none', 'on']);
     expect(propOptions.fillStyle).toEqual(['solid', 'hatched']);
     expect(propOptions.decoration).toEqual(['none', 'underline', 'strike']);
     expect(propOptions.case).toEqual(['normal', 'uppercase', 'small-caps']);
-    for (const role of ['container', 'value', 'text'] as const) {
-      for (const prop of styleProps) expect(roleProps[role]).toContain(prop);
-      expect(
-        styleProps.map((prop) => templateValues('starter')[`${roleStyle(role)}.${prop}`])
-      ).toEqual(['none', 'none', 'solid', 'none', 'normal']);
-    }
-    for (const prop of styleProps) expect(roleProps.link).not.toContain(prop);
+    for (const prop of styleProps) expect(nodeProps).toContain(prop);
+    expect(styleProps.map((prop) => neutralValues[prop])).toEqual([
+      'none',
+      'none',
+      'solid',
+      'none',
+      'normal'
+    ]);
+    for (const prop of styleProps) expect(linkProps).not.toContain(prop);
   });
 
   it('paint, but for case, which sizes text', () => {

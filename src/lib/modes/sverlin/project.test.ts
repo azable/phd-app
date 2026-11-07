@@ -100,7 +100,7 @@ describe('Svelte-backed project lifecycle', () => {
       return { document: result.document, presentation };
     };
     const first = await save(created, {
-      variant: { template: '$starter', 'IntCell.fill': 'sky-100' }
+      variant: { template: '$starter', 'IntCell.inherit': '$cell', 'IntCell.fill': 'sky-100' }
     });
     expect(first.presentation.variant?.['IntCell.fill']).toBe('sky-100');
     const padding = first.presentation.variant?.['IntCell.padding'];
@@ -114,7 +114,7 @@ describe('Svelte-backed project lifecycle', () => {
     });
     expect(second.presentation.variant?.$spacing).toBe(0.125);
     // The kind that followed the token still does, and the one removed leaves the design file,
-    // taking its base's fill again.
+    // taking its style's fill again.
     expect(second.presentation.variant?.['IntCell.padding']).toBe(0.125);
     expect(second.presentation.design?.['IntCell.fill']).toBeUndefined();
     expect(second.presentation.variant?.['IntCell.fill']).toBe(

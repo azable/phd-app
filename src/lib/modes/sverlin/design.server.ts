@@ -13,8 +13,7 @@ import {
   exactColour,
   isBaseKey,
   paletteKey,
-  roleOfStyle,
-  roleStyle,
+  baseProps,
   scaleProps,
   scaleSteps,
   type ScaleName,
@@ -33,24 +32,21 @@ import {
   endProps,
   isLinkEnd,
   kindPropOptions,
-  kindProps,
   linkEnd,
-  lookProps,
   neutralListing,
   neutralValue,
   oldBuiltIn,
-  roleStyleOptions,
+  tokenedOptions,
   inheritKey,
   propOptions,
-  roleProps,
   starterFrame,
   styleOf,
   templateKey,
   tokenProps,
   type DesignProp,
   type DesignToken,
-  type DesignValues,
-  type KindRole
+  type DesignBase,
+  type DesignValues
 } from './library/node/design';
 import {
   isPlacedOrValued,
@@ -67,14 +63,16 @@ import { templateNames, templateOf, templateValues } from './templates/templates
 export type DesignValue = string | number | boolean;
 
 /**
- * A kind of node: its key, the snippet it is in (as Mark.<Link>), what it is, giving its props,
- * and, where it arranges a free layout, whose look its props hold too, the structure its data makes
- * (see structure.server.ts); and, for a link's kind, whether every link
- * of it is a two-way line, whose head starts as none.
+ * A kind of node: its key, the snippet it is in (as Mark.<Link>); the base it follows where neither
+ * it nor what it inherits sets a prop; the props its nodes' function gives it (see kindFunctions in
+ * compile.server.ts); where it arranges a free layout, the structure its data makes (see
+ * structure.server.ts); and, for a link's end, whether every link of its kind is a two-way line,
+ * whose head starts as none.
  */
 export type DesignKind = {
   key: string;
-  role: KindRole;
+  base: DesignBase;
+  props: readonly DesignProp[];
   free?: { structure: LayoutStructure };
   /** For a kind arranging a grid: its basis is its own too (see gridProps). */
   grid?: true;
@@ -85,14 +83,14 @@ export type DesignKind = {
 
 // A layout whose data makes no structure has no form to choose: the page lays it out freely, or in
 // the natural form of a structure it finds that the trace could not show.
-const propsOf = ({ key, role, free, grid }: DesignKind) =>
+const propsOf = ({ key, props, free, grid }: DesignKind) =>
   isLinkEnd(key)
     ? endProps
     : grid
-      ? [...roleProps[role], ...gridProps]
+      ? [...props, ...gridProps]
       : free
         ? [
-            ...roleProps[role],
+            ...props,
             ...freeLayoutProps.filter((prop) =>
               prop === 'form'
                 ? free.structure !== 'none'
@@ -101,7 +99,7 @@ const propsOf = ({ key, role, free, grid }: DesignKind) =>
                   : true
             )
           ]
-        : roleProps[role];
+        : props;
 
 /**
  * A kind's own starting value for a prop, from what its nodes do, where it has one: a link end's
@@ -138,12 +136,12 @@ export const starterListing = (): Record<string, DesignValue> => ({
  * place sets, and their own choices of view, as views.Int:@swap.held.
  */
 export type DesignPlaces = {
-  kinds: readonly DesignKind[];
+  kinds: readonly Pick<DesignKind, 'key' | 'props'>[];
   choices: readonly { key: string; options: readonly string[] }[];
 };
 
-const placePropsOf = ({ key, role }: DesignKind) =>
-  kindProps(role, key).filter((prop) => placeProps.has(prop));
+const placePropsOf = ({ key, props }: Pick<DesignKind, 'key' | 'props'>) =>
+  (isLinkEnd(key) ? endProps : props).filter((prop) => placeProps.has(prop));
 
 /** Each page layout's frame, as Stacked.ratio, by the layout's name; the scenes say which shows. */
 function layoutSpace(names: readonly string[]): DesignSpace {
@@ -175,25 +173,16 @@ const tokens = Object.keys(tokenProps) as DesignToken[];
 
 /**
  * The design's levels above its kinds (see Shared values in the language guide): every token, and
- * every role's style, as `<Value>.fill`, which each kind of the role follows, and a link role's
- * end's, as `<Pointer>.<To>.fill`.
+ * every base's props, as `<Node>.fill` or a link's end's `<Link>.<To>.fill`, whether the source has
+ * a kind of it or not, as a template holds every value.
  */
 function levelSpace(kinds: readonly DesignKind[]): DesignSpace {
   if (!kinds.length) return {};
   return {
     ...Object.fromEntries(tokens.map((token) => [token, propOptions[tokenProps[token]]])),
-    // Every role's style, the source's roles or not, as a template holds every value.
     ...Object.fromEntries(
-      (Object.keys(roleProps) as KindRole[]).flatMap((role) =>
-        lookProps(role).map((prop) => [`${roleStyle(role)}.${prop}`, roleStyleOptions(prop)])
-      )
-    ),
-    ...Object.fromEntries(
-      (['link', 'pointer'] as const).flatMap((role) =>
-        endProps.map((prop) => [
-          `${roleStyle(role)}.${linkEnd}.${prop}`,
-          roleStyleOptions(prop, true)
-        ])
+      Object.entries(baseProps).flatMap(([base, props]) =>
+        props.map((prop) => [`${base}.${prop}`, tokenedOptions(prop, base === '<Link>.<To>')])
       )
     )
   };
@@ -210,11 +199,7 @@ function withStyles(
   bases: Readonly<Record<string, string>>,
   values: Readonly<Record<string, unknown>>
 ): DesignSpace {
-  // A role's style is in the space already, with its role's options (see levelSpace).
-  const named = Object.keys(values).flatMap((key) => {
-    const style = styleOf(key);
-    return style && !roleOfStyle(style.style) ? [style] : [];
-  });
+  const named = Object.keys(values).flatMap((key) => styleOf(key) ?? []);
   const styles = [...new Set(named.map(({ style }) => style))];
   if (!styles.length) return space;
   const extended: Record<string, readonly DesignValue[]> = { ...space };
@@ -255,7 +240,7 @@ type Resolved = { value: DesignValue; from?: string };
  * kind's own value; else what it inherits, a style's value for the prop or another kind's, as
  * resolved; else the kind's own starting look, from what its nodes do (see structuralLook), where the
  * scales allow it; else its
- * base's value (`bases`, as `<Value>` for a value's kind); else the prop's neutral value. A value
+ * base's value (`bases`, as `<Node>` for a node's kind); else the prop's neutral value. A value
  * naming a token takes the token's. A kind inheriting a kind that inherits it back is an error
  * naming the round.
  */
@@ -455,17 +440,15 @@ export function designSpace(
         propsOf(kind).map((prop) => [`${kind.key}.${prop}`, kindOptions(kind, prop)])
       )
     ),
-    // What a kind inherits over its role's look: a kind of its role; the styles a variant names
-    // join these (see withStyles). The starter sets none, so a kind follows its role's look.
+    // What a kind inherits over its base: any other kind, and the styles the design names (see
+    // withStyles).
     ...Object.fromEntries(
       kinds
         .filter(({ key }) => !isLinkEnd(key))
         .map((kind) => [
           inheritKey(kind.key),
           kinds
-            .filter(
-              (other) => other.role === kind.role && other.key !== kind.key && !isLinkEnd(other.key)
-            )
+            .filter((other) => other.key !== kind.key && !isLinkEnd(other.key))
             .map(({ key }) => key)
         ])
     ),
@@ -483,7 +466,7 @@ export function designSpace(
 }
 
 /**
- * A kind's options for a prop: its role's, the layered form only where its links make layers, the
+ * A kind's options for a prop: the prop's, the layered form only where its links make layers, the
  * one structure dagre's layered engine lays out (library/node/layered-engine.ts).
  */
 function kindOptions(kind: DesignKind, prop: DesignProp): readonly DesignValue[] {
@@ -655,16 +638,13 @@ export function buildVariant(
     throw new DesignValueError(
       `${optedOut.join(', ')}: "...": "none" is gone, as every kind follows its base; leave "..." out, and set the props that differ on the kind itself.`
     );
-  // A built-in name is written in angle brackets, `$` being only for tokens and styles.
+  // The roles' styles are gone: a kind links a template's style, or follows its base.
   const renamed = [
     ...new Set(
       Object.entries(chosenValues).flatMap(([key, value]) => {
         const named =
           oldBuiltIn(key) ?? (typeof value === 'string' ? oldBuiltIn(value) : undefined);
-        if (!named) return [];
-        return named.old === '<Node>'
-          ? [`${key}: the <Node> group is gone; set the role styles ${named.now}, or the kinds.`]
-          : [`${named.old} is written ${named.now}, as every built-in name is.`];
+        return named ? [`${named.old} is gone: write ${named.now}.`] : [];
       })
     )
   ];
@@ -852,7 +832,14 @@ const kept = new Set<string>([
   'layer'
 ]);
 const colourProps = new Set<string>(colourPropList);
-const lengthProps = new Set<string>(['strokeWidth', 'textSize', 'padding', 'radius', 'gap']);
+const lengthProps = new Set<string>([
+  'strokeWidth',
+  'textSize',
+  'iconSize',
+  'padding',
+  'radius',
+  'gap'
+]);
 /** How a box sits in its slot, and how a row spaces its children: drawn afresh for each kind. */
 const slotProps = new Set<string>(['width', 'height', 'xAnchor', 'yAnchor', 'spacing']);
 
@@ -899,7 +886,7 @@ function drawOne(
   stream = key
 ): DesignValue {
   const prop = propOf(key);
-  // A role level naming a token keeps naming it: the token is drawn instead.
+  // A base or style naming a token keeps naming it: the token is drawn instead.
   if (isToken(value) || isPlaceLabel(key)) return value;
   const options = space[key].filter((option) => !isToken(option));
   const pick = (candidates: readonly DesignValue[]) =>
